@@ -64,10 +64,7 @@ impl Tx {
     ///
     /// Returns [`Error::Sqlx`] if the transaction cannot be started or the
     /// level cannot be set.
-    pub async fn begin_with_isolation(
-        pool: &Pool,
-        level: IsolationLevel,
-    ) -> Result<Self, Error> {
+    pub async fn begin_with_isolation(pool: &Pool, level: IsolationLevel) -> Result<Self, Error> {
         let this = Self::begin(pool).await?;
         if this.provider == Provider::Postgres {
             this.execute(
@@ -277,9 +274,7 @@ pub(crate) struct DeferredRowStream<'a> {
 }
 
 impl<'a> DeferredRowStream<'a> {
-    pub(crate) fn new(
-        fut: crate::BoxFuture<'a, Result<Vec<sqlx::any::AnyRow>, Error>>,
-    ) -> Self {
+    pub(crate) fn new(fut: crate::BoxFuture<'a, Result<Vec<sqlx::any::AnyRow>, Error>>) -> Self {
         Self {
             fut,
             done: false,

@@ -299,13 +299,26 @@ migration applies and pre-existing rows survive.
   - Dependency ordering for `CREATE`/`DROP` and `ALTER` statements is in place.
   - Mutual-FK cycles and heuristic rename prompting are **not** implemented.
 - [ ] P6-02 round-trip property test passing
-- [ ] P6-03 reverse-diff `down.sql` with honest irreversibility notes
-- [ ] P6-04 backfill hook preserved across regeneration
-- [~] P6-05 runner with advisory lock + embeddable migrations
+- [x] P6-03 reverse-diff `down.sql` with honest irreversibility notes
+  - `ruprizzle_migrate::down_sql` diffs `next` back to `prev` and prefaces the
+    output with notes about data that cannot be restored.  Each destructive
+    statement is also annotated inline.
+- [x] P6-04 backfill hook preserved across regeneration
+  - `plan` emits a marked, editable `RUPRIZZLE:BACKFILL` block when adding a
+    NOT NULL column that has no default, splitting the operation into nullable
+    add -> user backfill -> NOT NULL alter.
+  - `Migrator::apply_all` rejects migrations that still contain the placeholder
+    commented `UPDATE`, so the hook is exercised before destructive failures.
+- [x] P6-05 runner with advisory lock + embeddable migrations
   - `Migrator::{pending,apply_all,status,verify_checksums,rollback}` work and
     run each migration in a transaction with per-statement error reporting.
-  - Advisory locking and `embed!` are **not** implemented.
-- [ ] P6-06 drift detection via lightweight introspection
+  - `apply_all` acquires a Postgres `pg_advisory_xact_lock` per migration;
+    SQLite locking is left to the engine's default transaction locking.
+  - `embed!` compile-time embedding is **not** implemented.
+- [x] P6-06 drift detection via lightweight introspection
+  - `ruprizzle_migrate::detect` introspects the live database (SQLite via
+    `sqlite_master`/`PRAGMA table_info`, Postgres via `information_schema`)
+    and reports table/column/nullability drift as human-readable strings.
 - [ ] All 12 change classes green on both dialects
   - Currently verified: add model, add nullable/NOT-NULL column with default,
     add index/unique, add FK (Postgres), create enum (Postgres).

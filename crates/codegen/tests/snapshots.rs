@@ -30,8 +30,8 @@ fn workspace_root() -> std::path::PathBuf {
 fn generate(example: &str, provider: Provider) -> std::collections::BTreeMap<String, String> {
     let path = workspace_root().join(format!("examples/{example}/schema.ruprizzle"));
     let src = fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {path:?}: {e}"));
-    let mut schema = parse("schema.ruprizzle", &src)
-        .unwrap_or_else(|e| panic!("{example} should parse: {e:?}"));
+    let mut schema =
+        parse("schema.ruprizzle", &src).unwrap_or_else(|e| panic!("{example} should parse: {e:?}"));
     schema.datasource.provider = provider;
     generate_all(&schema)
 }
@@ -39,7 +39,10 @@ fn generate(example: &str, provider: Provider) -> std::collections::BTreeMap<Str
 #[test]
 fn all_examples_both_dialects() {
     for example in EXAMPLES {
-        for (label, provider) in [("postgres", Provider::Postgres), ("sqlite", Provider::Sqlite)] {
+        for (label, provider) in [
+            ("postgres", Provider::Postgres),
+            ("sqlite", Provider::Sqlite),
+        ] {
             let files = generate(example, provider);
             assert!(
                 !files.is_empty(),
@@ -76,8 +79,7 @@ fn rust_api_is_identical_across_dialects() {
                 continue;
             }
             assert_eq!(
-                pg_content,
-                &sqlite[name],
+                pg_content, &sqlite[name],
                 "{example}/{name} differs between Postgres and SQLite; the \
                  application-facing API must not change when `provider` changes"
             );

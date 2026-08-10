@@ -9,10 +9,10 @@ use crate::BoxFuture;
 use crate::col::Column;
 use crate::compile::select_partitioned;
 use crate::error::Error;
+use crate::executor::Executor;
 use crate::filter::Filter;
 use crate::model::Model;
 use crate::order::OrderBy;
-use crate::executor::Executor;
 use crate::query::SelectQuery;
 use crate::related::Related;
 use crate::value::Encodable;
@@ -130,8 +130,11 @@ fn dedup<Key: Eq + Hash + Clone>(keys: Vec<Key>) -> Vec<Key> {
 /// relations are chained through the relation builder's own `.include()` method.
 pub trait IncludeSet<M: Model> {
     /// Loads the related data and attaches it to `parents` in place.
-    fn load<'a>(&'a self, exec: &'a dyn Executor, parents: &'a mut [M])
-    -> BoxFuture<'a, Result<(), Error>>;
+    fn load<'a>(
+        &'a self,
+        exec: &'a dyn Executor,
+        parents: &'a mut [M],
+    ) -> BoxFuture<'a, Result<(), Error>>;
 }
 
 impl<M: Model> IncludeSet<M> for () {

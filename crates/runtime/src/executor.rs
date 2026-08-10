@@ -33,8 +33,11 @@ pub trait Executor: Send + Sync {
     /// borrowing the query text would force every caller into a
     /// self-referential struct. One allocation per statement is irrelevant
     /// beside a database round trip.
-    fn fetch_all_raw(&self, sql: String, binds: Vec<Value>)
-        -> BoxFuture<'_, Result<Vec<AnyRow>, Error>>;
+    fn fetch_all_raw(
+        &self,
+        sql: String,
+        binds: Vec<Value>,
+    ) -> BoxFuture<'_, Result<Vec<AnyRow>, Error>>;
 
     /// Runs a statement and returns the number of affected rows.
     fn execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>>;

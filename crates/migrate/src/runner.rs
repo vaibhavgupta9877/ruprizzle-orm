@@ -200,6 +200,11 @@ impl Migrator {
         self.ensure_table(pool).await?;
         self.verify_checksums(pool).await?;
 
+        // Use a transaction-scoped advisory lock on Postgres to stop another
+        // `apply_all` from running concurrently.  SQLite and other backends are
+        // not handled here because they require different locking primitives.
+        let is_postgres = pool.acquire().await?.backend_name() == "PostgreSQL";
+
         let applied = self.applied_ids(pool).await?;
         let pending: Vec<Migration> = self
             .migrations()?
@@ -218,11 +223,21 @@ impl Migrator {
         let mut applied_ids = Vec::new();
 
         for m in pending {
+            if m.up.contains("RUPRIZZLE:BACKFILL") && m.up.contains("-- UPDATE") {
+                return Err(Error::BackfillRequired { id: m.id });
+            }
+
             if m.meta.destructive && !accept_data_loss {
                 return Err(Error::DestructiveBlocked { id: m.id });
             }
 
             let mut tx = pool.begin().await?;
+
+            if is_postgres {
+                sqlx::query("SELECT pg_advisory_xact_lock(42)")
+                    .execute(&mut *tx)
+                    .await?;
+            }
 
             let statements = split_statements(&m.up);
             for (idx, stmt) in statements.iter().enumerate() {

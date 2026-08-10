@@ -1,7 +1,7 @@
 //! Tests for the schema diff engine.
 
 use ruprizzle_dialect::dialect_for;
-use ruprizzle_migrate::{diff, plan};
+use ruprizzle_migrate::{diff, down_sql, plan, up_sql};
 use ruprizzle_parser::parse;
 
 fn schema_v1() -> ruprizzle_core::ir::Schema {
@@ -96,4 +96,38 @@ fn diff_and_plan_is_idempotent_for_unchanged_schema() {
     let dialect = dialect_for(v1.datasource.provider);
     let stmts = plan(&v1, &v1, dialect.as_ref(), &changes);
     assert!(stmts.is_empty());
+}
+
+#[test]
+fn down_sql_reverses_added_column() {
+    let v1 = schema_v1();
+    let v2 = schema_v2();
+    let dialect = dialect_for(v2.datasource.provider);
+    let sql = down_sql(&v1, &v2, dialect.as_ref());
+
+    assert!(
+        sql.contains("DROP COLUMN") && sql.contains("age"),
+        "expected down.sql to drop the age column: {sql}"
+    );
+    assert!(
+        sql.contains("cannot restore data"),
+        "expected honest irreversibility note: {sql}"
+    );
+}
+
+#[test]
+fn up_sql_emits_backfill_hook_for_not_null_column_without_default() {
+    let v1 = schema_v1();
+    let v2 = schema_v2();
+    let dialect = dialect_for(v2.datasource.provider);
+    let sql = up_sql(&v1, &v2, dialect.as_ref());
+
+    assert!(
+        sql.contains("RUPRIZZLE:BACKFILL"),
+        "expected backfill marker: {sql}"
+    );
+    assert!(
+        sql.contains("ADD COLUMN") && sql.contains("age"),
+        "expected ADD COLUMN age: {sql}"
+    );
 }

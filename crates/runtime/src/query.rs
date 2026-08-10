@@ -7,11 +7,11 @@ use crate::col::{Column, Projection};
 use crate::compile::{
     CompiledSql, delete, dialect_for_pool, insert, insert_many, select, update, upsert,
 };
+use crate::executor::Executor;
 use crate::filter::{Filter, FilterNode};
 use crate::include::IncludeSet;
 use crate::model::Model;
 use crate::order::OrderBy;
-use crate::executor::Executor;
 use crate::page::Page;
 use crate::pool::Pool;
 use crate::value::{Encodable, Ordered, Value};
@@ -198,7 +198,11 @@ where
             .fetch_all_raw(compiled.sql, compiled.binds)
             .await?;
         crate::executor::decode_rows(rows).map(|mut v: Vec<Out>| {
-            if v.is_empty() { None } else { Some(v.remove(0)) }
+            if v.is_empty() {
+                None
+            } else {
+                Some(v.remove(0))
+            }
         })
     }
 
