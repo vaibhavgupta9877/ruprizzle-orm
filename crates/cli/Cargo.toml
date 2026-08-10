@@ -21,6 +21,11 @@ ruprizzle-codegen = { workspace = true }
 ruprizzle-migrate = { workspace = true }
 ruprizzle-dialect = { workspace = true }
 clap              = { workspace = true }
+dotenvy           = { workspace = true }
+
 miette            = { workspace = true, features = ["fancy"] }
+notify            = { workspace = true }
 sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"] }
-tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio             = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+serde_json        = { workspace = true }
+indexmap          = { workspace = true }

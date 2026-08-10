@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use ruprizzle_dialect::DbDialect;
 use sha2::{Digest, Sha256};
 use sqlx::AnyPool;
 
@@ -328,6 +329,77 @@ impl Migrator {
         })
     }
 
+    /// Records a migration as applied without executing its `up.sql`.
+    pub async fn resolve(&self, pool: &AnyPool, id: &str) -> Result<(), Error> {
+        self.ensure_table(pool).await?;
+
+        let m = self
+            .migrations()?
+            .into_iter()
+            .find(|m| m.id == id)
+            .ok_or_else(|| Error::MissingUp { id: id.to_owned() })?;
+
+        let checksum = compute_checksum(&m.up);
+        sqlx::query(
+            "INSERT INTO _ruprizzle_migrations (id, checksum, applied_at, execution_ms) \
+             VALUES ($1, $2, CURRENT_TIMESTAMP, 0) \
+             ON CONFLICT (id) DO UPDATE SET \
+               checksum = EXCLUDED.checksum, \
+               applied_at = CURRENT_TIMESTAMP, \
+               rolled_back_at = NULL, \
+               execution_ms = EXCLUDED.execution_ms",
+        )
+        .bind(id)
+        .bind(&checksum)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Drops all user tables (except `_ruprizzle_migrations`) and clears the
+    /// migration tracking table so the full migration history can be replayed.
+    pub async fn reset(&self, pool: &AnyPool, dialect: &dyn DbDialect) -> Result<(), Error> {
+        self.ensure_table(pool).await?;
+
+        let tables = user_tables(pool).await?;
+        if tables.is_empty() {
+            sqlx::query("DELETE FROM _ruprizzle_migrations")
+                .execute(pool)
+                .await?;
+            return Ok(());
+        }
+
+        let backend = pool.acquire().await?.backend_name().to_owned();
+
+        if backend == "SQLite" {
+            let mut conn = pool.acquire().await?;
+            sqlx::query("PRAGMA foreign_keys = OFF")
+                .execute(&mut *conn)
+                .await?;
+            for table in &tables {
+                let sql = format!("DROP TABLE {};", dialect.quote_ident(table));
+                sqlx::query(&sql).execute(&mut *conn).await?;
+            }
+            sqlx::query("PRAGMA foreign_keys = ON")
+                .execute(&mut *conn)
+                .await?;
+        } else {
+            let mut tx = pool.begin().await?;
+            for table in &tables {
+                let sql = format!("DROP TABLE {} CASCADE;", dialect.quote_ident(table));
+                sqlx::query(&sql).execute(&mut *tx).await?;
+            }
+            tx.commit().await?;
+        }
+
+        sqlx::query("DELETE FROM _ruprizzle_migrations")
+            .execute(pool)
+            .await?;
+
+        Ok(())
+    }
+
     async fn applied_ids(&self, pool: &AnyPool) -> Result<HashSet<String>, Error> {
         let rows: Vec<(String,)> =
             sqlx::query_as("SELECT id FROM _ruprizzle_migrations WHERE rolled_back_at IS NULL")
@@ -337,7 +409,34 @@ impl Migrator {
     }
 }
 
-fn compute_checksum(up: &str) -> String {
+async fn user_tables(pool: &AnyPool) -> Result<Vec<String>, Error> {
+    let backend = pool.acquire().await?.backend_name().to_owned();
+
+    if backend == "SQLite" {
+        sqlx::query_scalar(
+            "SELECT name FROM sqlite_master \
+             WHERE type = 'table' \
+               AND name NOT LIKE 'sqlite_%' \
+               AND name != '_ruprizzle_migrations'",
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(Error::from)
+    } else {
+        sqlx::query_scalar(
+            "SELECT table_name::text FROM information_schema.tables \
+             WHERE table_schema = current_schema() \
+               AND table_type = 'BASE TABLE' \
+               AND table_name != '_ruprizzle_migrations'",
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(Error::from)
+    }
+}
+
+/// Computes the SHA-256 checksum of a migration's `up.sql`.
+pub fn compute_checksum(up: &str) -> String {
     let normalized = up.replace("\r\n", "\n");
     let digest = Sha256::digest(normalized.as_bytes());
     digest.iter().fold(String::with_capacity(64), |mut acc, b| {
@@ -347,8 +446,9 @@ fn compute_checksum(up: &str) -> String {
     })
 }
 
-fn split_statements(sql: &str) -> Vec<String> {
-    // Simple SQL-aware splitter.  It ignores `;` inside `--` comments, `/* */`
+/// Splits SQL text into individual statements, respecting comments and literals.
+pub fn split_statements(sql: &str) -> Vec<String> {
+    // Simple SQL-aware splitter.  It ignores `;` inside `--` comments, `/* */
     // block comments, and single-quoted string literals, so generated markers and
     // down.sql notes do not break statement boundaries.  Comments are stripped
     // from the returned statements.

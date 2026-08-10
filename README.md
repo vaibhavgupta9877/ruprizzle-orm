@@ -1,30 +1,36 @@
-# ruprizzle-orm
+# ruprizzle
 
-A schema-first ORM for Rust, taking the best of Prisma and Drizzle:
+A schema-first ORM for Rust that combines the best parts of Prisma and Drizzle:
 
 - **Prisma's** declarative schema as the single source of truth, with a generated
-  client, automatic migration diffing, and nested relation loading.
+  typed client, automatic migration diffing, and nested relation loading.
 - **Drizzle's** SQL transparency — no hidden query engine, no sidecar binary, and
-  `.to_sql()` on every query.
+  `.to_sql()` on every builder so you always know what is being sent to the
+  database.
 
-Postgres and SQLite from day one, behind a dialect trait so more are additive.
-Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and
-pooling; we do not write a driver.
+Postgres and SQLite are supported from day one behind a dialect trait, so more
+backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for
+the wire protocol and pooling; we do not write a driver.
 
-> **Status: pre-alpha, under construction.** The workspace foundation (phase P0)
-> is complete. The parser, dialects, codegen, query builder, relations, and
-> migration engine are phases P1 through P6 and are **not implemented yet**.
-> Nothing here is usable as an ORM today. See the
-> [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md) for the
-> phase-by-phase state.
+## Status
 
-## What it will look like
+Pre-alpha. Parser, dialects, codegen, query builder, relations, and the migration
+engine (phases P1–P6) are implemented. CLI and developer experience (phase P7)
+is the current focus. See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md)
+for the phase-by-phase state.
+
+## Quick example
 
 ```prisma
 // schema.ruprizzle
 datasource db {
   provider = "postgres"
   url      = env("DATABASE_URL")
+}
+
+generator client {
+  output      = "src/db"
+  module_name = "db"
 }
 
 model User {
@@ -48,7 +54,8 @@ model Post {
 
 ```rust
 // Drizzle flavour: the call shape mirrors the SQL.
-let admins = db.select::<User>()
+let admins = db.user()
+    .select()
     .filter(user::EMAIL.ends_with("@acme.com"))
     .order_by(user::CREATED_AT.desc())
     .limit(20)
@@ -67,24 +74,82 @@ Wrong-typed and cross-model filters are compile errors, not runtime ones:
 
 ```rust
 user::EMAIL.eq(42)                              // error: expected String, found i32
-db.select::<Post>().filter(user::EMAIL.eq(""))  // error: expected Filter<Post>, found Filter<User>
+db.post().select().filter(user::EMAIL.eq(""))  // error: expected Filter<Post>, found Filter<User>
 ```
+
+## Install
+
+```bash
+cargo install ruprizzle-cli    # the `ruprizzle` command
+cargo add ruprizzle            # the runtime crate your app uses
+```
+
+In a new or existing project:
+
+```bash
+ruprizzle init --provider postgres
+# Edit schema.ruprizzle, then:
+ruprizzle migrate dev --name init
+```
+
+Add the generated module to `src/lib.rs` or `src/main.rs`:
+
+```rust
+mod db;
+```
+
+## Workflow
+
+| Step | Command |
+|---|---|
+| Scaffold a project | `ruprizzle init --provider postgres\|sqlite` |
+| Generate the client | `ruprizzle generate` |
+| Auto-watch in dev | `ruprizzle generate --watch` |
+| Create & apply a migration | `ruprizzle migrate dev --name <name>` |
+| Apply migrations in CI/prod | `ruprizzle migrate deploy` |
+| Validate for CI | `ruprizzle validate` |
+
+`migrate dev` and `migrate deploy` are deliberately separate: the production
+command never diffs or writes migration files, so habit cannot carry a dangerous
+prototyping invocation into CI.
+
+## Why another Rust ORM?
+
+| Feature | ruprizzle | Diesel | SeaORM | sqlx |
+|---|---|---|---|---|
+| Schema-first code generation | ✅ | partial | ❌ | ❌ |
+| Type-safe nested `include` | ✅ | ❌ | partial | ❌ |
+| SQL-first query API | ✅ | ❌ | ❌ | ✅ |
+| Migrations from schema diff | ✅ | ❌ | partial | ❌ |
+| Compile-time query checking | planned | ✅ | ❌ | ✅ |
+
+The trade-off is intentional: ruprizzle targets teams that want a single source
+of truth in the schema file, compile-time type safety across relations, and the
+ability to drop down to raw SQL without leaving the query builder.
 
 ## Repository layout
 
 | Crate | Role | Phase |
 |---|---|---|
-| `crates/core` | IR, spans, diagnostics — the contract every crate speaks | ✅ P0 |
-| `crates/parser` | Schema DSL → validated IR | P1 |
-| `crates/dialect` | `DbDialect` trait, Postgres + SQLite | P2 |
-| `crates/codegen` | IR → Rust source | P3 |
-| `crates/runtime` | `ruprizzle`, the crate your app depends on | P4 |
-| `crates/migrate` | Snapshot, diff, plan, apply | P6 |
-| `crates/cli` | The `ruprizzle` binary | P7 |
+| `crates/core`    | IR, spans, diagnostics | ✅ P0 |
+| `crates/parser`  | Schema DSL → validated IR | ✅ P1 |
+| `crates/dialect` | `DbDialect` trait, Postgres + SQLite | ✅ P2 |
+| `crates/codegen` | IR → Rust source | ✅ P3 |
+| `crates/runtime` | `ruprizzle`, the crate your app depends on | ✅ P4 |
+| `crates/migrate` | Snapshot, diff, plan, apply | ✅ P6 |
+| `crates/cli`     | The `ruprizzle` binary | ✅ P7 |
 | `crates/testkit` | Dual-database test harness | ✅ P0 |
 
-The parser and code generator are **not** in your application's dependency graph.
-They run in the CLI, so your builds never compile them.
+## Documentation
+
+- [Quickstart](docs/quickstart.md) — empty directory to a working query
+- [Schema reference](docs/schema-reference.md) — types, attributes, and functions
+- [Query guide](docs/query-guide.md) — filters, projections, pagination, transactions
+- [Relations guide](docs/relations-guide.md) — `include`, nested filters, N+1
+- [Migrations guide](docs/migrations-guide.md) — `dev` vs `deploy`, drift, backfills
+- [Dialect notes](docs/dialect-notes.md) — Postgres vs SQLite differences
+- [Known limitations](docs/known-limitations.md) — what is intentionally out of scope
+- [Migrating from …](docs/migrating-from.md) — cheat-sheets for SeaORM / Diesel / sqlx
 
 ## Development
 
@@ -96,18 +161,6 @@ cargo xtask ci            # everything CI runs: fmt, clippy, test, docs
 Without Docker, `cargo test` still passes: the Postgres half of each dual-database
 test skips with a printed notice. CI sets `RUPRIZZLE_REQUIRE_DB=1`, which turns
 that skip into a failure, so the skip can never hide real breakage.
-
-Integration tests are written once and run against every backend:
-
-```rust
-both_dbs! {
-    setup = SMOKE_DDL;
-    async fn insert_then_select(db: TestDb) {
-        db.execute("INSERT INTO widget (id, name, price) VALUES (1, 'bolt', 250)").await?;
-        assert_eq!(db.fetch_i64("SELECT count(*) FROM widget").await?, 1);
-    }
-}
-```
 
 ## Planning documents
 
