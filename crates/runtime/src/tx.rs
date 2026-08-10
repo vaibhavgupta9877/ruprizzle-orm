@@ -257,7 +257,7 @@ impl crate::executor::Executor for Tx {
                     sql = %sql,
                     binds = bind_count,
                     elapsed_ms,
-                    error = %error,
+                    error = error.kind(),
                     "query failed"
                 ),
             }
@@ -289,7 +289,7 @@ impl crate::executor::Executor for Tx {
                     sql = %sql,
                     binds = bind_count,
                     elapsed_ms,
-                    error = %error,
+                    error = error.kind(),
                     "execute failed"
                 ),
             }
@@ -306,7 +306,7 @@ impl crate::executor::Executor for Tx {
     /// the pool, not inside a transaction.
     fn stream_raw(&self, sql: String, binds: Vec<Value>) -> crate::executor::BoxRowStream<'_> {
         Box::pin(DeferredRowStream::new(Box::pin(async move {
-            self.fetch_all_rows(&sql, binds).await
+            crate::executor::Executor::fetch_all_raw(self, sql, binds).await
         })))
     }
 }
