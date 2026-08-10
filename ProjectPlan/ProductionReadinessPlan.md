@@ -946,8 +946,8 @@ Bind values are not logged: they are user data. Only the count is."
 
 `crates/runtime/src/pool.rs` is seventeen lines. `connect(url)` accepts a URL and
 nothing else, so a deployment cannot size the pool to its database's `max_connections`,
-cannot recycle connections through a failover, and cannot set a statement timeout — one
-pathological query holds a connection indefinitely.
+cannot recycle connections through a failover, and cannot bound how long it waits
+for a connection — one pathological query can exhaust the pool.
 
 Defaults below mirror sqlx's own (`max_connections` 10, `min_connections` 0,
 `acquire_timeout` 30s, `idle_timeout` 10min, `max_lifetime` 30min,
@@ -1153,10 +1153,8 @@ async fn stats_and_ping_report_a_live_pool() {
 
 #[tokio::test]
 async fn ping_fails_against_an_unreachable_database() {
-    let config = PoolConfig {
-        acquire_timeout: Duration::from_millis(200),
-        ..PoolConfig::default()
-    };
+    let mut config = PoolConfig::default();
+    config.acquire_timeout = Duration::from_millis(200);
     // Lazy connect so construction succeeds and the failure surfaces at ping.
     let Ok(pool) = connect_with("postgres://127.0.0.1:1/nope", &config).await else {
         return; // eager connect already refused, which is also a pass
@@ -1840,11 +1838,9 @@ fn bench_end_to_end(c: &mut Criterion) {
     };
 
     let rt = Runtime::new().expect("tokio runtime");
-    let config = PoolConfig {
-        min_connections: 4,
-        max_connections: 4,
-        ..PoolConfig::default()
-    };
+    let mut config = PoolConfig::default();
+    config.min_connections = 4;
+    config.max_connections = 4;
     let pool = rt
         .block_on(connect_with(&url, &config))
         .expect("connect for benches");

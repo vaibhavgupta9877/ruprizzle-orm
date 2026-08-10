@@ -398,12 +398,10 @@ fn defaults_match_sqlx() {
 
 #[tokio::test]
 async fn configured_pool_connects() {
-    let config = PoolConfig {
-        max_connections: 3,
-        ..PoolConfig::default()
-    };
+    let mut config = PoolConfig::default();
+    config.max_connections = 3;
     let pool = connect_with("sqlite::memory:", &config).await.expect("connect");
-    assert!(pool.options().get_max_connections() <= 3);
+    assert_eq!(pool.options().get_max_connections(), 3);
 }
 ```
 
@@ -522,11 +520,9 @@ Use `PoolConfig` when the application needs limits different from sqlx defaults:
 use std::time::Duration;
 use ruprizzle::pool::{connect_with, PoolConfig};
 
-let config = PoolConfig {
-    max_connections: 8,
-    acquire_timeout: Duration::from_secs(5),
-    ..PoolConfig::default()
-};
+let mut config = PoolConfig::default();
+config.max_connections = 8;
+config.acquire_timeout = Duration::from_secs(5);
 let pool = connect_with("postgres://...", &config).await?;
 ```
 
@@ -592,10 +588,8 @@ async fn stats_and_ping_report_a_live_pool() {
 
 #[tokio::test]
 async fn ping_reports_an_unreachable_database() {
-    let config = PoolConfig {
-        acquire_timeout: Duration::from_millis(200),
-        ..PoolConfig::default()
-    };
+    let mut config = PoolConfig::default();
+    config.acquire_timeout = Duration::from_millis(200);
     let Ok(pool) = connect_with("postgres://127.0.0.1:1/nope", &config).await else {
         return;
     };
