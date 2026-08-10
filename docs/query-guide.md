@@ -160,3 +160,11 @@ let pool = connect_with("postgres://...", &config).await?;
 
 Set `max_connections` below the database's `max_connections` after accounting for
 the number of application instances and other database clients.
+
+## Error handling and sensitive values
+
+Constraint errors include table and column context in their default `Display`
+text, but conflicting values are deliberately omitted because they may contain
+PII. If an application has an explicit policy for using the value, call
+`Error::conflicting_value()` and handle the returned data deliberately rather
+than logging the complete error blindly.

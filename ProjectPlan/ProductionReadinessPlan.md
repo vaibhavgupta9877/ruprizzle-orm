@@ -637,6 +637,8 @@ breaking change. Free before 0.1.0; a major version after."
 
 **Exit gate:** A running service can see every query it issues with timing, tune its pool to its database, expose pool saturation to a metrics endpoint, and answer a readiness probe. No user data reaches logs by default.
 
+**Status: COMPLETE.** Verified 2026-08-11: PR-04 query/migration tracing, PR-05 pool configuration, PR-06 pool stats/readiness, and PR-07 default error redaction are implemented and tested.
+
 ---
 
 ## PR-04 · Instrument query execution with `tracing`
@@ -1252,6 +1254,8 @@ answerable from outside the crate."
 
 ## PR-07 · Keep user data out of error messages by default
 
+**Status: COMPLETE.** Verified 2026-08-11 with redaction/accessor tests and the full workspace gate. `UniqueViolation` keeps the captured value available explicitly but omits it from `Display`.
+
 **Est:** 1d · **Severity:** MEDIUM — compliance
 
 `Error::UniqueViolation` interpolates the conflicting value into its `Display` output
@@ -1269,7 +1273,7 @@ Verified safe: no test in the workspace asserts on this message.
 - Consumes: `Error` with `#[non_exhaustive]` from PR-03.
 - Produces: `UniqueViolation` `Display` no longer contains `value`. New method `Error::conflicting_value(&self) -> Option<&str>` for callers that want it.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `crates/runtime/tests/error_redaction.rs`:
 
@@ -1305,14 +1309,14 @@ fn conflicting_value_is_available_on_request() {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cargo test -p ruprizzle --test error_redaction`
 
 Expected: `unique_violation_display_omits_the_value` FAILS (value is present);
 `conflicting_value_is_available_on_request` fails to compile.
 
-- [ ] **Step 3: Redact the Display and add the accessor**
+- [x] **Step 3: Redact the Display and add the accessor**
 
 In `crates/runtime/src/error.rs`, replace the `UniqueViolation` variant's error
 attribute:
@@ -1350,11 +1354,11 @@ impl Error {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cargo test -p ruprizzle --test error_redaction`. Expected: 2 passed.
 
-- [ ] **Step 5: Document and commit**
+- [x] **Step 5: Document and commit**
 
 Add a note to `docs/query-guide.md` under error handling explaining the policy.
 

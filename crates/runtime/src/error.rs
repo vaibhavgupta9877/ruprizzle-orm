@@ -9,7 +9,7 @@
 #[allow(missing_docs)]
 #[non_exhaustive]
 pub enum Error {
-    #[error("unique constraint violated on `{table}.{columns}`{}", value.as_ref().map(|v| format!(" (value: {v})")).unwrap_or_default())]
+    #[error("unique constraint violated on `{table}.{columns}`")]
     UniqueViolation {
         table: String,
         columns: String,
@@ -59,6 +59,19 @@ impl Error {
             Self::Sqlx(_) => "sqlx",
             Self::NotImplemented => "not_implemented",
             Self::Message(_) => "message",
+        }
+    }
+}
+
+impl Error {
+    /// Returns the captured value that violated a unique constraint, if any.
+    ///
+    /// This is user data and is intentionally not part of [`Display`].
+    #[must_use]
+    pub fn conflicting_value(&self) -> Option<&str> {
+        match self {
+            Self::UniqueViolation { value, .. } => value.as_deref(),
+            _ => None,
         }
     }
 }
