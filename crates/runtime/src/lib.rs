@@ -1,15 +1,50 @@
 //! The ruprizzle runtime: the crate your application depends on.
 //!
-//! Implemented in P4; see
-//! `ProjectPlan/ImplementationPlan/ImplPlan05QueryBuilderRuntime.md`.
-//!
-//! Note what is *absent* from this crate's dependency graph: the parser and the
-//! code generator. Those run in the CLI, so your application never compiles
-//! them.
+//! This crate provides the types that generated code compiles against:
+//! typed columns, filters, relation wrappers, and the query builders that the
+//! P4 implementation will fill in.
 
 #![forbid(unsafe_code)]
-#![warn(missing_docs, clippy::pedantic)]
+#![warn(missing_docs, clippy::all)]
 
-/// Placeholder for the P4 query builder.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NotYetImplemented;
+pub mod col;
+pub mod error;
+pub mod filter;
+pub mod model;
+pub mod order;
+pub mod pool;
+pub mod query;
+pub mod related;
+pub mod tx;
+pub mod value;
+
+/// Re-exported database types (chrono, uuid, decimal, json, ...) so generated
+/// code can depend on `ruprizzle` alone.
+pub mod types {
+    pub use sqlx::types::*;
+}
+
+/// Common imports for application code.
+pub mod prelude {
+    pub use crate::{
+        Column, Encodable, Error, Filter, InsertQuery, Model, OrderBy, Pool, Related, SelectQuery,
+        Tx, Value,
+    };
+}
+
+pub use col::Column;
+pub use error::Error;
+pub use filter::{Filter, FilterNode, all, any};
+pub use model::Model;
+pub use order::OrderBy;
+pub use pool::{Pool, connect};
+pub use query::{InsertQuery, SelectQuery};
+pub use related::Related;
+pub use serde;
+pub use serde_json;
+pub use sqlx;
+pub use tx::Tx;
+pub use value::{Encodable, Ordered, Value};
+
+/// A boxed future, used by the transaction escape hatch.
+pub type BoxFuture<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;

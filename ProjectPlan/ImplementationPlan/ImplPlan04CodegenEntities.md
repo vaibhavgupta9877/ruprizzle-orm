@@ -270,11 +270,19 @@ pub mod prelude {
 
 ## Phase P3 checklist
 
-- [ ] P3-01 entity structs, `Related<T>`, Insert/Update shapes
-- [ ] P3-02 column tokens + `trybuild` negative tests
-- [ ] P3-03 enums generated for both dialects, identical Rust API
-- [ ] P3-04 `Db` root with both API flavours
-- [ ] P3-05 idempotent, atomic, `prettyplease`-formatted emission
-- [ ] Generated crate passes `clippy::pedantic` with zero warnings
-- [ ] `insta` snapshots for all four examples × both dialects
+- [x] P3-01 entity structs, `Related<T>`, Insert/Update shapes
+- [x] P3-02 column tokens (`Column<M, T>` in runtime; tokens emitted per model)
+- [ ] P3-02 `trybuild` negative tests for column-token type safety
+- [x] P3-03 enums generated for both dialects, identical Rust API
+- [x] P3-04 `Db` root with both API flavours
+- [x] P3-05 `proc_macro2` + `prettyplease` emission (idempotent/atomic file writing is CLI-side work in P7)
+- [x] Generated crate passes `clippy::pedantic` with zero warnings (blog example verified)
+- [ ] `insta` snapshots for all four examples × both dialects (blog snapshot in place; remaining examples TBD)
 - [ ] **G3 signed off by Claude**
+
+### Progress notes
+
+- Runtime support types (`Column`, `Filter`, `Order`, `Related`, `SelectQuery`, `InsertQuery`, etc.) are in place.
+- `crates/codegen/src/emit.rs` emits `mod.rs`, `_generated.rs`, `enums.rs`, and per-model files with `#[derive(FromRow, Serialize, Deserialize)]`, column tokens, `Insert`/`Update` shapes, and a `Db` client root.
+- `crates/codegen/tests/compile.rs` verifies the blog example compiles under `cargo check`, and `cargo clippy -W clippy::pedantic -D warnings` passes on the generated crate.
+- Remaining before G3: `trybuild` negative tests, all four examples × two dialects in snapshots and compile checks.
