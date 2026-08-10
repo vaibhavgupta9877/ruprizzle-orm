@@ -1,6 +1,6 @@
 ---
 source: crates/codegen/tests/snapshots.rs
-expression: post_rs
+expression: content
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
 use ::ruprizzle::serde::{Deserialize, Serialize};
@@ -10,163 +10,158 @@ use ::ruprizzle::types::{Decimal, Uuid};
 use ::ruprizzle::serde_json::Value as JsonValue;
 use ::ruprizzle::Related;
 use ::ruprizzle::Column;
-///An article, published or not.
 #[derive(Debug, Clone, PartialEq, FromRow, Serialize, Deserialize)]
 #[serde(crate = "::ruprizzle::serde")]
-pub struct Post {
+pub struct Customer {
     pub id: Uuid,
-    pub title: String,
-    pub body: Option<String>,
-    pub published: bool,
-    pub author_id: Uuid,
+    pub email: String,
+    pub name: String,
     #[sqlx(skip)]
     #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
-    pub author: ::ruprizzle::Related<Option<super::user::User>>,
+    pub orders: ::ruprizzle::Related<Vec<super::order::Order>>,
     pub created_at: DateTime<Utc>,
 }
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(crate = "::ruprizzle::serde")]
-pub struct PostInsert {
+pub struct CustomerInsert {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<Uuid>,
-    pub title: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub body: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub published: Option<bool>,
-    pub author_id: Uuid,
+    pub email: String,
+    pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at: Option<DateTime<Utc>>,
 }
 /// Update shape: every field is `Option` to support explicit nulls.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(crate = "::ruprizzle::serde")]
-pub struct PostUpdate {
+pub struct CustomerUpdate {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
+    pub email: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub body: Option<Option<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub published: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub author_id: Option<Uuid>,
+    pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at: Option<DateTime<Utc>>,
 }
-impl ::ruprizzle::Model for Post {
-    const TABLE: &'static str = "posts";
+impl ::ruprizzle::Model for Customer {
+    const TABLE: &'static str = "customers";
 }
 /// Table name for this model.
-pub const TABLE: &str = "posts";
-pub const ID: Column<Post, Uuid> = Column::new("posts", "id");
-pub const TITLE: Column<Post, String> = Column::new("posts", "title");
-pub const BODY: Column<Post, String> = Column::new("posts", "body");
-pub const PUBLISHED: Column<Post, bool> = Column::new("posts", "published");
-pub const AUTHOR_ID: Column<Post, Uuid> = Column::new("posts", "author_id");
-pub const CREATED_AT: Column<Post, DateTime<Utc>> = Column::new("posts", "created_at");
-/// Returns an `IncludeOne` for this relation.
-pub fn author() -> ::ruprizzle::IncludeOne<'static, Post, super::user::User, Uuid, ()> {
-    ::ruprizzle::IncludeOne::new(
-        |parent| parent.author_id,
-        |parent, author| parent.author = author,
-        super::user::ID,
-        |child| child.id,
+pub const TABLE: &str = "customers";
+pub const ID: Column<Customer, Uuid> = Column::new("customers", "id");
+pub const EMAIL: Column<Customer, String> = Column::new("customers", "email");
+pub const NAME: Column<Customer, String> = Column::new("customers", "name");
+pub const CREATED_AT: Column<Customer, DateTime<Utc>> = Column::new(
+    "customers",
+    "created_at",
+);
+/// Returns an `IncludeList` for this relation.
+pub fn orders() -> ::ruprizzle::IncludeList<
+    'static,
+    Customer,
+    super::order::Order,
+    Uuid,
+    (),
+> {
+    ::ruprizzle::IncludeList::new(
+        |parent| parent.id,
+        |parent, orders| parent.orders = orders,
+        super::order::CUSTOMER_ID,
+        |child| child.customer_id,
     )
 }
 /// Returns a filter for parents that have at least one matching child.
-pub fn author_some(
-    f: ::ruprizzle::Filter<super::user::User>,
-) -> ::ruprizzle::Filter<Post> {
+pub fn orders_some(
+    f: ::ruprizzle::Filter<super::order::Order>,
+) -> ::ruprizzle::Filter<Customer> {
     ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
-        child_table: "users",
-        child_col: "id",
-        parent_table: "posts",
-        parent_col: "author_id",
+        child_table: "orders",
+        child_col: "customer_id",
+        parent_table: "customers",
+        parent_col: "id",
         filter: Box::new(f.node),
         negated: false,
     })
 }
 /// Returns a filter for parents that have no matching child.
-pub fn author_none(
-    f: ::ruprizzle::Filter<super::user::User>,
-) -> ::ruprizzle::Filter<Post> {
+pub fn orders_none(
+    f: ::ruprizzle::Filter<super::order::Order>,
+) -> ::ruprizzle::Filter<Customer> {
     ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
-        child_table: "users",
-        child_col: "id",
-        parent_table: "posts",
-        parent_col: "author_id",
+        child_table: "orders",
+        child_col: "customer_id",
+        parent_table: "customers",
+        parent_col: "id",
         filter: Box::new(f.node),
         negated: true,
     })
 }
 /// Returns a filter for parents where every matching child satisfies `f`.
 /// Vacuously true for parents with no children.
-pub fn author_every(
-    f: ::ruprizzle::Filter<super::user::User>,
-) -> ::ruprizzle::Filter<Post> {
+pub fn orders_every(
+    f: ::ruprizzle::Filter<super::order::Order>,
+) -> ::ruprizzle::Filter<Customer> {
     ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
-        child_table: "users",
-        child_col: "id",
-        parent_table: "posts",
-        parent_col: "author_id",
+        child_table: "orders",
+        child_col: "customer_id",
+        parent_table: "customers",
+        parent_col: "id",
         filter: Box::new((!f).node),
         negated: true,
     })
 }
 /// Prisma-flavoured repository for `#model_name`.
 #[derive(Debug, Clone, Copy)]
-pub struct PostRepo<'a> {
+pub struct CustomerRepo<'a> {
     db: &'a super::Db,
 }
-impl<'a> PostRepo<'a> {
+impl<'a> CustomerRepo<'a> {
     /// Creates a new repository handle.
     pub(crate) fn new(db: &'a super::Db) -> Self {
         Self { db }
     }
     /// Start a `find_many` query.
-    pub fn find_many(&self) -> ::ruprizzle::SelectQuery<'a, Post> {
+    pub fn find_many(&self) -> ::ruprizzle::SelectQuery<'a, Customer> {
         ::ruprizzle::SelectQuery::new(self.db.raw_pool())
     }
     /// Start an `insert` query.
-    pub fn create(&self, _data: PostInsert) -> ::ruprizzle::InsertQuery<'a, Post> {
+    pub fn create(
+        &self,
+        _data: CustomerInsert,
+    ) -> ::ruprizzle::InsertQuery<'a, Customer> {
         let mut insert = ::ruprizzle::InsertQuery::new(self.db.raw_pool());
         insert = insert.set_optional(ID, _data.id);
-        insert = insert.set(TITLE, _data.title);
-        insert = insert.set_optional(BODY, _data.body);
-        insert = insert.set_optional(PUBLISHED, _data.published);
-        insert = insert.set(AUTHOR_ID, _data.author_id);
+        insert = insert.set(EMAIL, _data.email);
+        insert = insert.set(NAME, _data.name);
         insert = insert.set_optional(CREATED_AT, _data.created_at);
         insert
     }
     /// Start a multi-row `insert` query.
     pub fn create_many(
         &self,
-        _data: Vec<PostInsert>,
-    ) -> ::ruprizzle::InsertManyQuery<'a, Post> {
+        _data: Vec<CustomerInsert>,
+    ) -> ::ruprizzle::InsertManyQuery<'a, Customer> {
         let mut q = ::ruprizzle::InsertManyQuery::new(self.db.raw_pool());
         for _row in _data {
             q = q
                 .row([
                     ("id", ::ruprizzle::Encodable::to_value(&_row.id)),
-                    ("title", ::ruprizzle::Encodable::to_value(&_row.title)),
-                    ("body", ::ruprizzle::Encodable::to_value(&_row.body)),
-                    ("published", ::ruprizzle::Encodable::to_value(&_row.published)),
-                    ("author_id", ::ruprizzle::Encodable::to_value(&_row.author_id)),
+                    ("email", ::ruprizzle::Encodable::to_value(&_row.email)),
+                    ("name", ::ruprizzle::Encodable::to_value(&_row.name)),
                     ("created_at", ::ruprizzle::Encodable::to_value(&_row.created_at)),
                 ]);
         }
         q
     }
     /// Start an `update` query.
-    pub fn update(&self) -> ::ruprizzle::UpdateQuery<'a, Post> {
+    pub fn update(&self) -> ::ruprizzle::UpdateQuery<'a, Customer> {
         ::ruprizzle::UpdateQuery::new(self.db.raw_pool())
     }
     /// Start a `delete` query.
-    pub fn delete(&self) -> ::ruprizzle::DeleteQuery<'a, Post> {
+    pub fn delete(&self) -> ::ruprizzle::DeleteQuery<'a, Customer> {
         ::ruprizzle::DeleteQuery::new(self.db.raw_pool())
     }
 }
