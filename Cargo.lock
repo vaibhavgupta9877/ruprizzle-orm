@@ -1473,8 +1473,12 @@ dependencies = [
 name = "ruprizzle-dialect"
 version = "0.1.0-alpha.1"
 dependencies = [
+ "insta",
  "ruprizzle-core",
+ "ruprizzle-parser",
+ "ruprizzle-testkit",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

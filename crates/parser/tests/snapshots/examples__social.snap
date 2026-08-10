@@ -659,6 +659,7 @@ expression: schema
       ],
       "owner_field": "follower",
       "target": "Person",
+      "target_table": "people",
       "target_cols": [
         "id"
       ],
@@ -681,6 +682,7 @@ expression: schema
       ],
       "owner_field": "followee",
       "target": "Person",
+      "target_table": "people",
       "target_cols": [
         "id"
       ],
@@ -703,6 +705,7 @@ expression: schema
       ],
       "owner_field": "author",
       "target": "Person",
+      "target_table": "people",
       "target_cols": [
         "id"
       ],
@@ -725,6 +728,7 @@ expression: schema
       ],
       "owner_field": "parent",
       "target": "Thread",
+      "target_table": "threads",
       "target_cols": [
         "id"
       ],

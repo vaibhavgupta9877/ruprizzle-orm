@@ -646,6 +646,7 @@ expression: schema
       ],
       "owner_field": "organisation",
       "target": "Organisation",
+      "target_table": "organisations",
       "target_cols": [
         "id"
       ],
@@ -668,6 +669,7 @@ expression: schema
       ],
       "owner_field": "account",
       "target": "Account",
+      "target_table": "accounts",
       "target_cols": [
         "id"
       ],

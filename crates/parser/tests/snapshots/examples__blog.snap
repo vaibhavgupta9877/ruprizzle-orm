@@ -509,6 +509,7 @@ expression: schema
       ],
       "owner_field": "author",
       "target": "User",
+      "target_table": "users",
       "target_cols": [
         "id"
       ],

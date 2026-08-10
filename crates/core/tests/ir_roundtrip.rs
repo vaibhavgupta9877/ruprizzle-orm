@@ -192,6 +192,7 @@ fn blog_schema() -> Schema {
             owner_cols: vec!["author_id".to_owned()],
             owner_field: FieldName::new("author"),
             target: ModelName::new("User"),
+            target_table: "users".to_owned(),
             target_cols: vec!["id".to_owned()],
             target_field: Some(FieldName::new("posts")),
             on_delete: ReferentialAction::Cascade,
@@ -282,8 +283,10 @@ fn column_bearing_fields_are_distinguished_from_navigation_properties() {
     assert_eq!(relations, ["posts"]);
     assert!(!user.field("posts").unwrap().has_column());
 
-    // `Post.author` owns the foreign key, so it does have a column.
+    // `Post.author` is a navigation property; the FK lives on the `authorId`
+    // scalar field.
     let post = schema.model("Post").unwrap();
-    assert!(post.field("author").unwrap().has_column());
-    assert_eq!(post.field("author").unwrap().column, "author_id");
+    assert!(!post.field("author").unwrap().has_column());
+    assert!(post.field("authorId").unwrap().has_column());
+    assert_eq!(post.field("authorId").unwrap().column, "author_id");
 }

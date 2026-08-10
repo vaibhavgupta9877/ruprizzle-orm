@@ -1094,6 +1094,8 @@ fn build_relation(
         RelationKind::OneToOne
     };
 
+    let target_table = target_model.table.clone();
+
     Some(ResolvedRelation {
         name: rel
             .name
@@ -1104,6 +1106,7 @@ fn build_relation(
         owner_cols: owner_cols.clone(),
         owner_field: owner.field.clone(),
         target: owner.target.clone(),
+        target_table,
         target_cols,
         target_field: back.map(|b| b.field.clone()),
         // Prisma's defaults, and the right ones: deleting a row out from under a
