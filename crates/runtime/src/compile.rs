@@ -136,6 +136,114 @@ pub fn insert<M: Model>(
     c.finish()
 }
 
+/// Compile a multi-row `INSERT` for `M`.
+#[must_use]
+pub fn insert_many<M: Model>(
+    dialect: &dyn DbDialect,
+    table: &str,
+    rows: &[Vec<(&'static str, Value)>],
+    returning: &[&str],
+) -> CompiledSql {
+    let mut c = Compiler::new(dialect);
+    let Some(first) = rows.first() else {
+        return c.finish();
+    };
+    let columns: Vec<_> = first.iter().map(|(col, _)| *col).collect();
+
+    c.push_str("INSERT INTO ");
+    c.push_quoted(table);
+    c.push_str(" (");
+    for (i, col) in columns.iter().enumerate() {
+        if i > 0 {
+            c.push_str(", ");
+        }
+        c.push_quoted(col);
+    }
+    c.push_str(") VALUES ");
+
+    for (r, row) in rows.iter().enumerate() {
+        if r > 0 {
+            c.push_str(", ");
+        }
+        c.push('(');
+        for (i, (_, val)) in row.iter().enumerate() {
+            if i > 0 {
+                c.push_str(", ");
+            }
+            c.push_bind(val.clone());
+        }
+        c.push(')');
+    }
+
+    if dialect.returning_supported() && !returning.is_empty() {
+        c.push_str(" RETURNING ");
+        for (i, col) in returning.iter().enumerate() {
+            if i > 0 {
+                c.push_str(", ");
+            }
+            if *col == "*" {
+                c.push('*');
+            } else {
+                c.push_quoted(col);
+            }
+        }
+    }
+
+    c.finish()
+}
+
+/// Compile an `INSERT ... ON CONFLICT` (upsert) for `M`.
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn upsert<M: Model>(
+    dialect: &dyn DbDialect,
+    table: &str,
+    values: &[(&'static str, Value)],
+    conflict: &[&str],
+    update: &[&str],
+    returning: &[&str],
+) -> CompiledSql {
+    let mut c = Compiler::new(dialect);
+
+    c.push_str("INSERT INTO ");
+    c.push_quoted(table);
+    c.push_str(" (");
+    for (i, (col, _)) in values.iter().enumerate() {
+        if i > 0 {
+            c.push_str(", ");
+        }
+        c.push_quoted(col);
+    }
+    c.push_str(") VALUES (");
+    for (i, (_, val)) in values.iter().enumerate() {
+        if i > 0 {
+            c.push_str(", ");
+        }
+        c.push_bind(val.clone());
+    }
+    c.push_str(") ");
+
+    let conflict = conflict.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+    let update = update.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+    c.push_str(&dialect.upsert_clause(&conflict, &update));
+
+    if dialect.returning_supported() && !returning.is_empty() {
+        c.push_str(" RETURNING ");
+        for (i, col) in returning.iter().enumerate() {
+            if i > 0 {
+                c.push_str(", ");
+            }
+            if *col == "*" {
+                c.push('*');
+            } else {
+                c.push_quoted(col);
+            }
+        }
+    }
+
+    c.finish()
+}
+
 /// Compile an `UPDATE` for `M`.
 #[must_use]
 pub fn update<M: Model>(
@@ -576,5 +684,25 @@ mod tests {
 
         let d = delete::<User>(pg().as_ref(), "users", &FilterNode::And(vec![]), &[]);
         assert!(d.sql.starts_with(r#"DELETE FROM "users""#));
+    }
+
+    #[test]
+    fn upsert_sql() {
+        let c = upsert::<User>(
+            pg().as_ref(),
+            "users",
+            &[
+                ("email", Value::Str("a@b.c".into())),
+                ("age", Value::I32(30)),
+            ],
+            &["email"],
+            &["age"],
+            &[],
+        );
+        assert_eq!(
+            c.sql,
+            r#"INSERT INTO "users" ("email", "age") VALUES ($1, $2) ON CONFLICT (email) DO UPDATE SET "age" = EXCLUDED."age""#
+        );
+        assert_eq!(c.binds, vec![Value::Str("a@b.c".into()), Value::I32(30)]);
     }
 }

@@ -106,3 +106,31 @@ async fn projection_round_trip() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].0, 1);
 }
+
+#[tokio::test]
+async fn transaction_raw_round_trip() {
+    let pool = fresh_pool().await;
+
+    let tx = ruprizzle::Tx::begin(&pool).await.unwrap();
+
+    let rows_affected = tx
+        .execute(
+            "INSERT INTO tasks (name) VALUES (?)",
+            vec![ruprizzle::Value::Str("in-tx".into())],
+        )
+        .await
+        .unwrap();
+    assert_eq!(rows_affected, 1);
+
+    let rows: Vec<(i64, String)> = tx
+        .fetch_all("SELECT id, name FROM tasks", vec![])
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].1, "in-tx");
+
+    tx.commit().await.unwrap();
+
+    let count = SelectQuery::<Task>::new(&pool).count().await.unwrap();
+    assert_eq!(count, 1);
+}

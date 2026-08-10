@@ -171,6 +171,7 @@ impl DbDialect for SqliteDialect {
             partial_indexes: true,
             deferrable_fks: true,
             json_type: JsonSupport::TextEncoded,
+            max_query_params: 32_766,
         }
     }
 }

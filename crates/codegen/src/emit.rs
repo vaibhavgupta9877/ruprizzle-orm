@@ -291,16 +291,26 @@ fn mod_rs(schema: &Schema) -> String {
             }
 
             /// Run a closure inside a transaction.
-            pub async fn transaction<F, T>(
-                &self,
-                _f: F,
-            ) -> Result<T, ::ruprizzle::Error>
+            ///
+            /// The closure receives a `&mut ::ruprizzle::Tx` and can execute raw
+            /// SQL through it. The transaction is committed if the closure returns
+            /// `Ok`, and rolled back if it returns `Err`.
+            pub async fn transaction<F, T>(&self, f: F) -> Result<T, ::ruprizzle::Error>
             where
                 F: for<'t> FnOnce(&'t mut ::ruprizzle::Tx)
                     -> ::ruprizzle::BoxFuture<'t, Result<T, ::ruprizzle::Error>>,
             {
-                let () = std::future::ready(()).await;
-                Err(::ruprizzle::Error::NotImplemented)
+                let mut tx = ::ruprizzle::Tx::begin(self.raw_pool()).await?;
+                match f(&mut tx).await {
+                    Ok(v) => {
+                        tx.commit().await?;
+                        Ok(v)
+                    }
+                    Err(e) => {
+                        tx.rollback().await?;
+                        Err(e)
+                    }
+                }
             }
         }
 
@@ -356,6 +366,13 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         .values()
         .filter(|f| f.has_column())
         .map(|f| emit_insert_set(schema, model, f))
+        .collect();
+
+    let insert_many_fields: Vec<_> = model
+        .fields
+        .values()
+        .filter(|f| f.has_column())
+        .map(emit_insert_many_field)
         .collect();
 
     let header = header();
@@ -423,6 +440,18 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
                 let mut insert = ::ruprizzle::InsertQuery::new(self.db.raw_pool());
                 #( #insert_sets )*
                 insert
+            }
+
+            /// Start a multi-row `insert` query.
+            pub fn create_many(
+                &self,
+                _data: Vec<#insert_name>,
+            ) -> ::ruprizzle::InsertManyQuery<'a, #model_name> {
+                let mut q = ::ruprizzle::InsertManyQuery::new(self.db.raw_pool());
+                for _row in _data {
+                    q = q.row([ #( #insert_many_fields )* ]);
+                }
+                q
             }
 
             /// Start an `update` query.
@@ -520,6 +549,13 @@ fn emit_insert_set(_schema: &Schema, _model: &Model, field: &Field) -> TokenStre
     } else {
         quote! { insert = insert.set(#col, _data.#field_ident); }
     }
+}
+
+fn emit_insert_many_field(field: &Field) -> TokenStream {
+    let field_ident = safe_field_ident(field.name.as_str());
+    let col_name = field.column.as_str();
+
+    quote! { (#col_name, ::ruprizzle::Encodable::to_value(&_row.#field_ident)), }
 }
 
 fn rust_type_tokens(

@@ -270,9 +270,9 @@ appends the primary key to `ORDER BY` to guarantee determinism. Returns
 - [x] P4-01 filter algebra + flattening + documented empty semantics
 - [x] P4-02 SQL compiler, 100% parameterised, `.to_sql()` everywhere
 - [x] P4-03 `SelectQuery` incl. tuple projections (1-8 column tuples supported; `stream` and `exists` not yet)
-- [~] P4-04 Insert/Update/Delete, chunking, delete guard (builders + `exec` work; runtime guard requires `.all_rows()`; upsert, bulk chunking, and typestate delete guard not yet)
-- [ ] P4-05 `Executor` trait, pool, transactions, retry helper (pool connect + `Any` drivers installed; `Executor`/`Tx` not yet)
-- [ ] P4-06 offset + cursor pagination
+- [x] P4-04 Insert/Update/Delete, upsert, chunking, delete guard (`InsertManyQuery` with driver parameter-limit chunking; upsert via `ON CONFLICT`; typestate delete guard)
+- [~] P4-05 `Executor` trait, pool, transactions, retry helper (`Tx` with raw execute/fetch; generated `Db::transaction` with commit/rollback; `Executor` trait and retry helper not yet)
+- [x] P4-06 offset + cursor pagination (`offset`/`limit`; `after`/`before` cursor methods)
 - [x] `both_dbs!` CRUD suite green on Postgres and SQLite
-- [ ] `trybuild` tests for delete-without-filter and cross-model filters
+- [x] `trybuild` tests for delete-without-filter and cross-model filters
 - [x] **G4 signed off** — full CRUD round-trips pass on Postgres and SQLite via `both_dbs!`
