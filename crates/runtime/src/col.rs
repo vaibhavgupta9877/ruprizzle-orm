@@ -200,3 +200,47 @@ impl<M, T> Column<M, Option<T>> {
         })
     }
 }
+
+/// A selection of columns that changes the output type of a
+/// [`SelectQuery`](crate::query::SelectQuery).
+pub trait Projection<M> {
+    /// The Rust type a row of the projection decodes into.
+    type Output;
+
+    /// Returns the list of column names to select.
+    fn projection(&self) -> Vec<&'static str>;
+}
+
+impl<M, T> Projection<M> for Column<M, T> {
+    type Output = (T,);
+
+    fn projection(&self) -> Vec<&'static str> {
+        vec![self.column]
+    }
+}
+
+macro_rules! impl_projection_tuples {
+    ($($n:tt $T:ident),+) => {
+        impl<M, $($T),+> Projection<M> for ($(Column<M, $T>,)+) {
+            type Output = ($($T,)+);
+
+            #[allow(clippy::vec_init_then_push)]
+            fn projection(&self) -> Vec<&'static str> {
+                let mut cols = Vec::new();
+                $(
+                    cols.push(self.$n.column);
+                )+
+                cols
+            }
+        }
+    };
+}
+
+impl_projection_tuples! { 0 T0 }
+impl_projection_tuples! { 0 T0, 1 T1 }
+impl_projection_tuples! { 0 T0, 1 T1, 2 T2 }
+impl_projection_tuples! { 0 T0, 1 T1, 2 T2, 3 T3 }
+impl_projection_tuples! { 0 T0, 1 T1, 2 T2, 3 T3, 4 T4 }
+impl_projection_tuples! { 0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5 }
+impl_projection_tuples! { 0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5, 6 T6 }
+impl_projection_tuples! { 0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5, 6 T6, 7 T7 }

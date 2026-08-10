@@ -12,6 +12,7 @@ impl Model for Task {
     const TABLE: &'static str = "tasks";
 }
 
+const ID: Column<Task, i64> = Column::new("tasks", "id");
 const NAME: Column<Task, String> = Column::new("tasks", "name");
 
 async fn fresh_pool() -> Pool {
@@ -84,4 +85,24 @@ async fn update_and_delete_round_trip() {
 
     let count = SelectQuery::<Task>::new(&pool).count().await.unwrap();
     assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn projection_round_trip() {
+    let pool = fresh_pool().await;
+
+    InsertQuery::<Task>::new(&pool)
+        .set(NAME, "ada")
+        .exec()
+        .await
+        .unwrap();
+
+    let rows: Vec<(i64,)> = SelectQuery::<Task>::new(&pool)
+        .columns((ID,))
+        .fetch_all()
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].0, 1);
 }

@@ -433,6 +433,25 @@ mod tests {
     }
 
     #[test]
+    fn select_projection() {
+        let c = select::<User>(
+            pg().as_ref(),
+            "users",
+            &["id", "email"],
+            &FilterNode::And(vec![]),
+            &[],
+            None,
+            None,
+            false,
+        );
+        assert_eq!(
+            c.sql,
+            r#"SELECT "users"."id", "users"."email" FROM "users""#
+        );
+        assert!(c.binds.is_empty());
+    }
+
+    #[test]
     fn select_with_filter() {
         let f = ID.eq(1);
         let c = select::<User>(pg().as_ref(), "users", &[], &f.node, &[], None, None, false);

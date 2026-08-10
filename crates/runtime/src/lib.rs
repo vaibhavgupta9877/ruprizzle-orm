@@ -33,7 +33,7 @@ pub mod prelude {
     };
 }
 
-pub use col::Column;
+pub use col::{Column, Projection};
 pub use compile::{CompiledSql, delete, dialect_for_pool, insert, select, update};
 pub use error::Error;
 pub use filter::{Filter, FilterNode, all, any};

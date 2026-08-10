@@ -37,6 +37,10 @@
 
 use std::time::Duration;
 
+use sqlx::any::AnyPoolOptions;
+
+/// A `sqlx` pool over the `Any` driver.
+pub type AnyPool = sqlx::Pool<sqlx::Any>;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use tempfile::TempDir;
@@ -115,12 +119,14 @@ pub struct TestDb {
 #[derive(Debug)]
 enum Inner {
     Postgres {
-        pool: PgPool,
+        pg_pool: PgPool,
+        any_pool: AnyPool,
         schema: String,
         admin_url: String,
     },
     Sqlite {
-        pool: SqlitePool,
+        sqlite_pool: SqlitePool,
+        any_pool: AnyPool,
         // Held so the directory outlives the pool; removed on drop.
         _dir: TempDir,
     },
@@ -141,6 +147,8 @@ impl TestDb {
         backend: Backend,
         setup_sql: &str,
     ) -> std::result::Result<Self, TestDbError> {
+        sqlx::any::install_default_drivers();
+
         let db = match backend {
             Backend::Postgres => Self::connect_postgres().await?,
             Backend::Sqlite => Self::connect_sqlite().await?,
@@ -186,7 +194,27 @@ impl TestDb {
         // the first one, or a test that outgrows one connection starts writing to
         // `public` halfway through.
         let search_path = schema.clone();
-        let pool = PgPoolOptions::new()
+        let pg_pool = PgPoolOptions::new()
+            .max_connections(4)
+            .acquire_timeout(Duration::from_secs(5))
+            .after_connect(move |conn, _meta| {
+                let schema = search_path.clone();
+                Box::pin(async move {
+                    sqlx::query(&format!(r#"SET search_path TO "{schema}""#))
+                        .execute(&mut *conn)
+                        .await?;
+                    Ok(())
+                })
+            })
+            .connect(&url)
+            .await
+            .map_err(|e| TestDbError::Unavailable {
+                backend: Backend::Postgres,
+                reason: e.to_string(),
+            })?;
+
+        let search_path = schema.clone();
+        let any_pool = AnyPoolOptions::new()
             .max_connections(4)
             .acquire_timeout(Duration::from_secs(5))
             .after_connect(move |conn, _meta| {
@@ -208,7 +236,8 @@ impl TestDb {
         Ok(TestDb {
             backend: Backend::Postgres,
             inner: Inner::Postgres {
-                pool,
+                pg_pool,
+                any_pool,
                 schema,
                 admin_url: url,
             },
@@ -218,6 +247,8 @@ impl TestDb {
     async fn connect_sqlite() -> std::result::Result<Self, TestDbError> {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("test.sqlite");
+        let file = path.to_str().unwrap().replace('\\', "/");
+        let url = format!("sqlite:///{file}");
 
         let opts = SqliteConnectOptions::new()
             .filename(&path)
@@ -226,7 +257,7 @@ impl TestDb {
             // silently pass. Matches what the runtime will set in P4.
             .foreign_keys(true);
 
-        let pool = SqlitePoolOptions::new()
+        let sqlite_pool = SqlitePoolOptions::new()
             .max_connections(4)
             .acquire_timeout(Duration::from_secs(5))
             .connect_with(opts)
@@ -236,17 +267,39 @@ impl TestDb {
                 reason: e.to_string(),
             })?;
 
+        let any_pool = AnyPoolOptions::new()
+            .max_connections(4)
+            .acquire_timeout(Duration::from_secs(5))
+            .after_connect(|conn, _meta| {
+                Box::pin(async move {
+                    sqlx::query("PRAGMA foreign_keys = ON")
+                        .execute(&mut *conn)
+                        .await?;
+                    Ok(())
+                })
+            })
+            .connect(&url)
+            .await
+            .map_err(|e| TestDbError::Unavailable {
+                backend: Backend::Sqlite,
+                reason: e.to_string(),
+            })?;
+
         Ok(TestDb {
             backend: Backend::Sqlite,
-            inner: Inner::Sqlite { pool, _dir: dir },
+            inner: Inner::Sqlite {
+                sqlite_pool,
+                any_pool,
+                _dir: dir,
+            },
         })
     }
 
     async fn run_setup(&self, sql: &str) -> std::result::Result<(), sqlx::Error> {
-        match &self.inner {
-            Inner::Postgres { pool, .. } => sqlx::raw_sql(sql).execute(pool).await.map(|_| ()),
-            Inner::Sqlite { pool, .. } => sqlx::raw_sql(sql).execute(pool).await.map(|_| ()),
-        }
+        sqlx::raw_sql(sql)
+            .execute(self.any_pool())
+            .await
+            .map(|_| ())
     }
 
     /// Which backend this database is.
@@ -255,11 +308,19 @@ impl TestDb {
         self.backend
     }
 
+    /// The database-agnostic `Any` pool, for tests that go through the runtime.
+    #[must_use]
+    pub fn any_pool(&self) -> &AnyPool {
+        match &self.inner {
+            Inner::Postgres { any_pool, .. } | Inner::Sqlite { any_pool, .. } => any_pool,
+        }
+    }
+
     /// The Postgres pool, for tests that need driver-specific access.
     #[must_use]
     pub fn pg_pool(&self) -> Option<&PgPool> {
         match &self.inner {
-            Inner::Postgres { pool, .. } => Some(pool),
+            Inner::Postgres { pg_pool, .. } => Some(pg_pool),
             Inner::Sqlite { .. } => None,
         }
     }
@@ -268,7 +329,7 @@ impl TestDb {
     #[must_use]
     pub fn sqlite_pool(&self) -> Option<&SqlitePool> {
         match &self.inner {
-            Inner::Sqlite { pool, .. } => Some(pool),
+            Inner::Sqlite { sqlite_pool, .. } => Some(sqlite_pool),
             Inner::Postgres { .. } => None,
         }
     }
@@ -279,16 +340,10 @@ impl TestDb {
     ///
     /// Propagates any driver error.
     pub async fn execute(&self, sql: &str) -> std::result::Result<u64, sqlx::Error> {
-        match &self.inner {
-            Inner::Postgres { pool, .. } => sqlx::raw_sql(sql)
-                .execute(pool)
-                .await
-                .map(|r| r.rows_affected()),
-            Inner::Sqlite { pool, .. } => sqlx::raw_sql(sql)
-                .execute(pool)
-                .await
-                .map(|r| r.rows_affected()),
-        }
+        sqlx::raw_sql(sql)
+            .execute(self.any_pool())
+            .await
+            .map(|r| r.rows_affected())
     }
 
     /// Runs a query expected to yield exactly one integer.
@@ -297,10 +352,7 @@ impl TestDb {
     ///
     /// Propagates any driver error, including a row/column shape mismatch.
     pub async fn fetch_i64(&self, sql: &str) -> std::result::Result<i64, sqlx::Error> {
-        match &self.inner {
-            Inner::Postgres { pool, .. } => sqlx::query_scalar(sql).fetch_one(pool).await,
-            Inner::Sqlite { pool, .. } => sqlx::query_scalar(sql).fetch_one(pool).await,
-        }
+        sqlx::query_scalar(sql).fetch_one(self.any_pool()).await
     }
 
     /// Runs a query expected to yield exactly one string.
@@ -309,10 +361,7 @@ impl TestDb {
     ///
     /// Propagates any driver error, including a row/column shape mismatch.
     pub async fn fetch_string(&self, sql: &str) -> std::result::Result<String, sqlx::Error> {
-        match &self.inner {
-            Inner::Postgres { pool, .. } => sqlx::query_scalar(sql).fetch_one(pool).await,
-            Inner::Sqlite { pool, .. } => sqlx::query_scalar(sql).fetch_one(pool).await,
-        }
+        sqlx::query_scalar(sql).fetch_one(self.any_pool()).await
     }
 }
 

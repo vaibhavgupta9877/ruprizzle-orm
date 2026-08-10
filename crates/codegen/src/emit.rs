@@ -424,6 +424,16 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
                 #( #insert_sets )*
                 insert
             }
+
+            /// Start an `update` query.
+            pub fn update(&self) -> ::ruprizzle::UpdateQuery<'a, #model_name> {
+                ::ruprizzle::UpdateQuery::new(self.db.raw_pool())
+            }
+
+            /// Start a `delete` query.
+            pub fn delete(&self) -> ::ruprizzle::DeleteQuery<'a, #model_name> {
+                ::ruprizzle::DeleteQuery::new(self.db.raw_pool())
+            }
         }
     };
     format(tokens)

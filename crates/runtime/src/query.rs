@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use crate::Error;
-use crate::col::Column;
+use crate::col::{Column, Projection};
 use crate::compile::{CompiledSql, delete, dialect_for_pool, insert, select, update};
 use crate::filter::{Filter, FilterNode};
 use crate::model::Model;
@@ -17,6 +17,7 @@ use crate::value::{Encodable, Value};
 pub struct SelectQuery<'db, M: Model, Out = M> {
     pool: &'db Pool,
     filter: Filter<M>,
+    projection: Vec<&'static str>,
     order: Vec<OrderBy<M>>,
     limit: Option<u64>,
     offset: Option<u64>,
@@ -34,6 +35,7 @@ where
         Self {
             pool,
             filter: Filter::new(FilterNode::And(Vec::new())),
+            projection: Vec::new(),
             order: Vec::new(),
             limit: None,
             offset: None,
@@ -89,13 +91,27 @@ where
         }
     }
 
+    /// Restricts the selected columns and changes the output type.
+    pub fn columns<P: Projection<M>>(self, p: P) -> SelectQuery<'db, M, P::Output> {
+        SelectQuery {
+            pool: self.pool,
+            filter: self.filter,
+            projection: p.projection(),
+            order: self.order,
+            limit: self.limit,
+            offset: self.offset,
+            distinct: self.distinct,
+            _out: PhantomData,
+        }
+    }
+
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> CompiledSql {
         let dialect = dialect_for_pool(self.pool);
         select::<M>(
             dialect.as_ref(),
             M::TABLE,
-            &[],
+            &self.projection,
             &self.filter.node,
             &self.order,
             self.limit,

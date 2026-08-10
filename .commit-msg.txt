@@ -1,0 +1,25 @@
+P4 continuation: tuple projections, repo update/delete, and full G4 CRUD suite.
+
+Implemented `Projection` on `Column` and tuples up to 8 columns, letting
+`SelectQuery::columns` change the output type while producing a quoted column
+list (`SELECT "users"."id", "users"."email" ...`).
+
+Added `update()` and `delete()` repository methods to generated `User`/`Post`
+repos so `db.user().update()` and `db.user().delete()` build the corresponding
+`UpdateQuery`/`DeleteQuery`.
+
+Extended `ruprizzle-testkit` with an `Any` pool (`TestDb::any_pool()`) and the
+`Any` driver feature, so the same `both_dbs!` harness now gives the runtime an
+`Any` pool ready for the ORM. Postgres `Any` pool sets `search_path` to the
+isolated test schema on every connection; SQLite `Any` pool enables foreign keys
+on every connection.
+
+Added `tests/integration/tests/crud.rs`, a `both_dbs!` test that exercises
+INSERT (with `RETURNING *`), SELECT, projection, UPDATE, DELETE, and COUNT
+against live Postgres and SQLite. This is the G4 exit gate.
+
+Updated ImplPlan05 to reflect completed projection, CRUD suite, and G4 sign-off.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
