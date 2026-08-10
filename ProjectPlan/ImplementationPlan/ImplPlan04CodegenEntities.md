@@ -280,6 +280,35 @@ pub mod prelude {
 - [ ] `insta` snapshots for all four examples × both dialects (blog snapshot in place; remaining examples TBD)
 - [ ] **G3 signed off by Claude**
 
+### G3 sign-off: **withheld** (2026-08-10)
+
+G3 is **not signed**. The build and lint halves of the gate pass — `cargo build
+--workspace` clean, `cargo clippy --workspace --all-targets -- -D warnings`
+clean — but the gate reads "compiles with zero warnings under `clippy::pedantic`,
+**for all four example schemas, on both dialects**," and coverage is one schema on
+one dialect. Three concrete blockers, each verified rather than assumed:
+
+1. **P3-02 `trybuild` negative tests do not exist.** `crates/runtime/tests/trybuild/`
+   contains exactly two cases — `delete_without_filter` and
+   `delete_by_other_model` — which are the *P4-04* delete-guard tests, not the
+   column-token tests. None of the five mistakes in the P3-02 table
+   (`EMAIL.eq(42)`, `EMAIL.gt(..)`, `ID.contains(..)`, `EMAIL.is_null()`,
+   cross-model `Filter`) is pinned by a test. The type-safety core — the headline
+   claim of this phase — is currently unverified.
+2. **Snapshots cover `blog` only.** `snapshots.rs` has a single `blog_snapshot`
+   test with 4 `.snap` files, against one dialect. `ecommerce`, `saas`, and
+   `social` are absent, so the schemas carrying composite `@@id`, SQLite, `Json`,
+   named relations, and self-relations never reach codegen in CI.
+3. **The compile check is `#[ignore]`d.** `compile.rs:13` carries
+   `#[ignore = "runs cargo check; expensive"]`, so `blog_generated_compiles` did
+   **not** run in the workspace test pass (reported as "1 ignored"). The one
+   compile guarantee this phase has is off by default and needs an explicit
+   `--ignored` run in CI.
+
+To close G3: add the five column-token `trybuild` cases, extend snapshots and the
+compile check to four examples × both dialects, and put the ignored test behind a
+CI job that runs `cargo test -p ruprizzle-codegen -- --ignored`.
+
 ### Progress notes
 
 - Runtime support types (`Column`, `Filter`, `Order`, `Related`, `SelectQuery`, `InsertQuery`, etc.) are in place.

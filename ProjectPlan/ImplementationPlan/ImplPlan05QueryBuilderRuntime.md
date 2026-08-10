@@ -271,8 +271,31 @@ appends the primary key to `ORDER BY` to guarantee determinism. Returns
 - [x] P4-02 SQL compiler, 100% parameterised, `.to_sql()` everywhere
 - [x] P4-03 `SelectQuery` incl. tuple projections (1-8 column tuples supported; `stream` and `exists` not yet)
 - [x] P4-04 Insert/Update/Delete, upsert, chunking, delete guard (`InsertManyQuery` with driver parameter-limit chunking; upsert via `ON CONFLICT`; typestate delete guard)
-- [~] P4-05 `Executor` trait, pool, transactions, retry helper (`Tx` with raw execute/fetch; generated `Db::transaction` with commit/rollback; `Executor` trait and retry helper not yet)
-- [x] P4-06 offset + cursor pagination (`offset`/`limit`; `after`/`before` cursor methods)
-- [x] `both_dbs!` CRUD suite green on Postgres and SQLite
+- [~] P4-05 `Executor` trait, pool, transactions, retry helper (`Tx` with raw execute/fetch; generated `Db::transaction` with commit/rollback). **Still absent, confirmed by grep over `crates/runtime/src`: the `Executor` trait itself, `transaction_retrying`, and per-transaction isolation levels.** Every query is therefore still bound to its concrete executor rather than generic over pool-vs-tx.
+- [~] P4-06 offset + cursor pagination (`offset`/`limit`; `after`/`before` cursor methods). `Page<T> { items, has_next, next_cursor }` and the automatic primary-key suffix on `ORDER BY` are not yet implemented.
+- [~] `both_dbs!` CRUD suite green on **SQLite**; Postgres skipped, not run
 - [x] `trybuild` tests for delete-without-filter and cross-model filters
-- [x] **G4 signed off** — full CRUD round-trips pass on Postgres and SQLite via `both_dbs!`
+- [~] **G4 conditionally signed off** — see the qualification below.
+
+Also still open from P4-03: `SelectQuery::stream` and `SelectQuery::exists` are
+not implemented (`count` is). Tuple projections remain 1-8 columns against the
+planned 12.
+
+### G4 sign-off qualification (2026-08-10)
+
+Verified: `cargo build --workspace` clean, `cargo clippy --workspace --all-targets
+-- -D warnings` clean, runtime suites green (12 lib + 4 `crud.rs` + 3
+`relations.rs` + 1 `trybuild.rs`), integration `crud.rs` 8 tests and `relations.rs`
+4 tests reporting ok.
+
+Those integration results are **SQLite-only**. Each suite finished in ~5.01s — the
+Postgres connection timeout — and `both_dbs!` skips an unreachable backend rather
+than failing it. Under `RUPRIZZLE_REQUIRE_DB=1` the Postgres halves panic with
+`pool timed out`. Since G4's exit gate is explicitly "full CRUD round-trips
+against live Postgres **and** SQLite," the Postgres half is unproven here.
+
+Condition, same as G2 — one CI run against a live Postgres:
+
+```
+RUPRIZZLE_REQUIRE_DB=1 cargo test -p ruprizzle-integration-tests
+```

@@ -339,7 +339,10 @@ All four lower warning-free, which is itself asserted.
       V18 deliberately deferred — see Known gaps)
 - [x] P1-04 friendly parse errors for the top 5 mistakes
 - [x] Multi-error reporting confirmed (3 errors → 3 diagnostics, one run)
-- [x] **G1 signed off by Claude**
+- [x] **G1 signed off by Claude** — re-verified 2026-08-10: `cargo build --workspace`
+      clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, parser
+      suites green (11 lib + 6 `examples.rs` + 3 `invalid.rs` + 1 doctest). G1 needs
+      no live database, so this sign-off is complete and unqualified.
 
 ## Fallback (per RealityCheck kill criteria) — not needed
 

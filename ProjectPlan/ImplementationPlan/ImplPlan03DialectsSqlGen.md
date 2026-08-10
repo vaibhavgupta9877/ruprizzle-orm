@@ -308,7 +308,30 @@ safety without rediscovering dialect quirks.
 - [x] P2-02 type matrix implemented in both dialects
 - [x] P2-03 Postgres dialect complete
 - [x] P2-04 SQLite dialect complete, incl. correct 12-step rebuild
-- [x] P2-05 conformance suite green on both engines
+- [~] P2-05 conformance suite green on **SQLite**; Postgres unverified — see below
 - [x] P2-06 capability warnings emitted at generate time
 - [x] "Adding a new dialect" guide written (proves the seam is real)
-- [x] **G2 signed off by Claude** (implementation verified by `cargo test` and `cargo clippy -- -D warnings`)
+- [~] **G2 conditionally signed off by Claude** — see the qualification below.
+
+### G2 sign-off qualification (2026-08-10)
+
+Verified: `cargo build --workspace` clean, `cargo clippy --workspace --all-targets
+-- -D warnings` clean, `crates/dialect` 17 unit tests green, `conformance.rs` 6
+tests — **3 SQLite passed, 3 Postgres skipped.**
+
+The skip is the point. `both_dbs!` calls `eprintln!("skipping {backend}")` and
+returns when a backend is unreachable, so an unqualified `cargo test` reports
+"ok" whether or not Postgres was ever contacted. Re-running with
+`RUPRIZZLE_REQUIRE_DB=1` turns the skip into a panic and the Postgres half fails
+with `pool timed out while waiting for an open connection`.
+
+G2's stated exit gate is "both dialects emit DDL that **actually applies to a live
+database**." Half of that is currently unproven, so the sign-off is conditional on
+one CI run with a live Postgres at `RUPRIZZLE_TEST_PG_URL`:
+
+```
+RUPRIZZLE_REQUIRE_DB=1 cargo test -p ruprizzle-dialect
+```
+
+Promote to a full `[x]` only once that run is green. Until then, treat the
+Postgres dialect as compile-verified and unit-verified but not engine-verified.
