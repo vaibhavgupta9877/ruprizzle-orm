@@ -11,5 +11,6 @@ pub type Pool = sqlx::Pool<sqlx::Any>;
 ///
 /// Returns an error if the URL cannot be parsed or the connection fails.
 pub async fn connect(url: &str) -> Result<Pool, crate::Error> {
+    sqlx::any::install_default_drivers();
     Pool::connect(url).await.map_err(Into::into)
 }

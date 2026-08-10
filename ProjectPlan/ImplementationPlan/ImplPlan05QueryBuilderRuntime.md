@@ -267,12 +267,12 @@ appends the primary key to `ORDER BY` to guarantee determinism. Returns
 
 ## Phase P4 checklist
 
-- [ ] P4-01 filter algebra + flattening + documented empty semantics
-- [ ] P4-02 SQL compiler, 100% parameterised, `.to_sql()` everywhere
-- [ ] P4-03 `SelectQuery` incl. tuple projections
-- [ ] P4-04 Insert/Update/Delete/Upsert, chunking, delete guard
-- [ ] P4-05 `Executor` trait, pool, transactions, retry helper
+- [x] P4-01 filter algebra + flattening + documented empty semantics
+- [x] P4-02 SQL compiler, 100% parameterised, `.to_sql()` everywhere
+- [~] P4-03 `SelectQuery` incl. tuple projections (core builders + fetch execute; projections, stream, `exists` not yet)
+- [~] P4-04 Insert/Update/Delete, chunking, delete guard (insert/update/delete builders + exec work; upsert, bulk chunking, and typestate delete guard not yet)
+- [ ] P4-05 `Executor` trait, pool, transactions, retry helper (pool connect + `Any` drivers installed; `Executor`/`Tx` not yet)
 - [ ] P4-06 offset + cursor pagination
-- [ ] `both_dbs!` CRUD suite green on Postgres and SQLite
+- [~] `both_dbs!` CRUD suite green on Postgres and SQLite (SQLite round-trip passes in `crates/runtime/tests/crud.rs`; Postgres + `both_dbs!` harness not yet)
 - [ ] `trybuild` tests for delete-without-filter and cross-model filters
 - [ ] **G4 signed off by Claude**

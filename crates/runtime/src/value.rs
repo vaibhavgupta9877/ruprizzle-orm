@@ -25,6 +25,7 @@ pub trait Ordered: Ord + Encodable {}
 #[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub enum Value {
+    /// SQL `NULL`.
     Null,
     Bool(bool),
     I32(i32),
@@ -39,6 +40,14 @@ pub enum Value {
     Json(serde_json::Value),
     Bytes(Arc<[u8]>),
     Array(Vec<Value>),
+}
+
+impl Value {
+    /// Returns `true` for `Value::Null`.
+    #[must_use]
+    pub const fn is_null(&self) -> bool {
+        matches!(self, Value::Null)
+    }
 }
 
 impl Encodable for bool {
@@ -135,5 +144,84 @@ impl<T: Ordered> Ordered for Option<T> {}
 impl<T: Encodable> Encodable for Arc<T> {
     fn to_value(&self) -> Value {
         (**self).to_value()
+    }
+}
+
+impl sqlx::Type<sqlx::Any> for Value {
+    fn type_info() -> <sqlx::Any as sqlx::Database>::TypeInfo {
+        // The concrete type is reported through `Encode::produces`; this
+        // default is a harmless placeholder for `Value::Null`.
+        <String as sqlx::Type<sqlx::Any>>::type_info()
+    }
+}
+
+impl<'q> sqlx::Encode<'q, sqlx::Any> for Value {
+    fn encode_by_ref(
+        &self,
+        buf: &mut <sqlx::Any as sqlx::Database>::ArgumentBuffer<'q>,
+    ) -> Result<sqlx::encode::IsNull, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        match self {
+            Value::Null => Ok(sqlx::encode::IsNull::Yes),
+            Value::Bool(b) => sqlx::Encode::<sqlx::Any>::encode_by_ref(b, buf),
+            Value::I32(i) => sqlx::Encode::<sqlx::Any>::encode_by_ref(i, buf),
+            Value::I64(i) => sqlx::Encode::<sqlx::Any>::encode_by_ref(i, buf),
+            Value::F64(f) => sqlx::Encode::<sqlx::Any>::encode_by_ref(f, buf),
+            // The `Any` driver does not have `Encode<Any>` for chrono/uuid/decimal/json,
+            // so we serialize these to a type the `Any` driver understands and let the
+            // database cast from text/bytes.
+            Value::Decimal(d) => {
+                let s = d.to_string();
+                sqlx::Encode::<sqlx::Any>::encode_by_ref(&s, buf)
+            }
+            Value::Str(s) => {
+                let s = s.to_string();
+                sqlx::Encode::<sqlx::Any>::encode_by_ref(&s, buf)
+            }
+            Value::Uuid(u) => {
+                let s = u.to_string();
+                sqlx::Encode::<sqlx::Any>::encode_by_ref(&s, buf)
+            }
+            Value::DateTime(dt) => {
+                let s = dt.to_rfc3339();
+                sqlx::Encode::<sqlx::Any>::encode_by_ref(&s, buf)
+            }
+            Value::Date(d) => {
+                let s = d.to_string();
+                sqlx::Encode::<sqlx::Any>::encode_by_ref(&s, buf)
+            }
+            Value::Time(t) => {
+                let s = t.to_string();
+                sqlx::Encode::<sqlx::Any>::encode_by_ref(&s, buf)
+            }
+            Value::Json(v) => {
+                let s = v.to_string();
+                sqlx::Encode::<sqlx::Any>::encode_by_ref(&s, buf)
+            }
+            Value::Bytes(b) => {
+                let v: Vec<u8> = b.iter().copied().collect();
+                sqlx::Encode::<sqlx::Any>::encode_by_ref(&v, buf)
+            }
+            Value::Array(_) => Err("array bind values are not supported yet".into()),
+        }
+    }
+
+    fn produces(&self) -> Option<<sqlx::Any as sqlx::Database>::TypeInfo> {
+        Some(match self {
+            Value::Null => <String as sqlx::Type<sqlx::Any>>::type_info(),
+            Value::Bool(_) => <bool as sqlx::Type<sqlx::Any>>::type_info(),
+            Value::I32(_) => <i32 as sqlx::Type<sqlx::Any>>::type_info(),
+            Value::I64(_) => <i64 as sqlx::Type<sqlx::Any>>::type_info(),
+            Value::F64(_) => <f64 as sqlx::Type<sqlx::Any>>::type_info(),
+            // These are bound as text/bytes; the database casts as needed.
+            Value::Decimal(_)
+            | Value::Str(_)
+            | Value::Uuid(_)
+            | Value::DateTime(_)
+            | Value::Date(_)
+            | Value::Time(_)
+            | Value::Json(_) => <String as sqlx::Type<sqlx::Any>>::type_info(),
+            Value::Bytes(_) => <Vec<u8> as sqlx::Type<sqlx::Any>>::type_info(),
+            Value::Array(_) => return None,
+        })
     }
 }

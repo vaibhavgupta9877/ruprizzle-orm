@@ -8,6 +8,7 @@
 #![warn(missing_docs, clippy::all)]
 
 pub mod col;
+pub mod compile;
 pub mod error;
 pub mod filter;
 pub mod model;
@@ -33,12 +34,13 @@ pub mod prelude {
 }
 
 pub use col::Column;
+pub use compile::{CompiledSql, delete, dialect_for_pool, insert, select, update};
 pub use error::Error;
 pub use filter::{Filter, FilterNode, all, any};
 pub use model::Model;
 pub use order::OrderBy;
 pub use pool::{Pool, connect};
-pub use query::{InsertQuery, SelectQuery};
+pub use query::{DeleteQuery, InsertQuery, SelectQuery, UpdateQuery};
 pub use related::Related;
 pub use serde;
 pub use serde_json;

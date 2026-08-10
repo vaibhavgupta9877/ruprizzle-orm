@@ -351,6 +351,13 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         .map(|f| emit_column_const(schema, model, f, table))
         .collect();
 
+    let insert_sets: Vec<_> = model
+        .fields
+        .values()
+        .filter(|f| f.has_column())
+        .map(|f| emit_insert_set(schema, model, f))
+        .collect();
+
     let header = header();
     let tokens = quote! {
         #header
@@ -413,8 +420,9 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
 
             /// Start an `insert` query.
             pub fn create(&self, _data: #insert_name) -> ::ruprizzle::InsertQuery<'a, #model_name> {
-                let _ = _data;
-                ::ruprizzle::InsertQuery::new(self.db.raw_pool())
+                let mut insert = ::ruprizzle::InsertQuery::new(self.db.raw_pool());
+                #( #insert_sets )*
+                insert
             }
         }
     };
@@ -489,6 +497,18 @@ fn emit_column_const(schema: &Schema, model: &Model, field: &Field, table: &str)
 
     quote! {
         pub const #name: Column<#model_name, #ty> = Column::new(#table, #column);
+    }
+}
+
+fn emit_insert_set(_schema: &Schema, _model: &Model, field: &Field) -> TokenStream {
+    let field_ident = safe_field_ident(field.name.as_str());
+    let col = format_ident!("{}", shouty_snake(field.name.as_str()));
+    let optional = field.optional || field.default.is_some() || field.attrs.is_updated_at;
+
+    if optional {
+        quote! { insert = insert.set_optional(#col, _data.#field_ident); }
+    } else {
+        quote! { insert = insert.set(#col, _data.#field_ident); }
     }
 }
 
