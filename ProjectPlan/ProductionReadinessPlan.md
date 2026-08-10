@@ -641,6 +641,8 @@ breaking change. Free before 0.1.0; a major version after."
 
 ## PR-04 · Instrument query execution with `tracing`
 
+**Status: COMPLETE.** Verified 2026-08-11 with focused tracing tests and the full workspace gate. Query events cover pool and transaction execution; bind values are not emitted.
+
 **Est:** 2d · **Severity:** CRITICAL for operations
 
 A workspace search for `tracing::` and `log::` across `crates/runtime/src` and
@@ -667,7 +669,7 @@ The `Executor` trait is the correct choke point: every builder runs through
 - Consumes: `Executor` trait as defined at `crates/runtime/src/executor.rs:23-47` — `fetch_all_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<Vec<AnyRow>, Error>>`, `execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>>`, `stream_raw(&self, sql: String, binds: Vec<Value>) -> BoxRowStream<'_>`.
 - Produces: events on target `ruprizzle::query` at `DEBUG` (success) and `WARN` (failure), with fields `sql`, `binds`, `rows`, `elapsed_ms`, `error`. Events on target `ruprizzle::migrate` at `INFO` per migration.
 
-- [ ] **Step 1: Add the dependency**
+- [x] **Step 1: Add the dependency**
 
 In `crates/runtime/Cargo.toml`, under `[dependencies]`:
 
@@ -679,7 +681,7 @@ tracing           = { version = "0.1", default-features = false, features = ["st
 
 Add the same line to `crates/migrate/Cargo.toml`.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `crates/runtime/tests/tracing.rs`:
 
@@ -767,13 +769,13 @@ Add to `crates/runtime/Cargo.toml` under `[dev-dependencies]`:
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [x] **Step 3: Run the test to verify it fails**
 
 Run: `cargo test -p ruprizzle --test tracing`
 
 Expected: FAIL — `no ruprizzle::query event was emitted`.
 
-- [ ] **Step 4: Instrument the `Pool` implementation**
+- [x] **Step 4: Instrument the `Pool` implementation**
 
 In `crates/runtime/src/executor.rs`, replace the three method bodies in
 `impl Executor for Pool`:
@@ -857,7 +859,7 @@ In `crates/runtime/src/executor.rs`, replace the three method bodies in
 **Bind values are deliberately not logged.** They are user data; see PR-07. Only the
 count is emitted.
 
-- [ ] **Step 5: Instrument the `Tx` implementation**
+- [x] **Step 5: Instrument the `Tx` implementation**
 
 Apply the identical treatment to the `impl Executor for Tx` block in
 `crates/runtime/src/tx.rs`, and add one event each to `Tx::commit` and `Tx::rollback`:
@@ -870,7 +872,7 @@ Apply the identical treatment to the `impl Executor for Tx` block in
         tracing::debug!(target: "ruprizzle::query", "transaction rolled back");
 ```
 
-- [ ] **Step 6: Instrument migration application**
+- [x] **Step 6: Instrument migration application**
 
 In `crates/migrate/src/runner.rs`, inside the `for m in pending` loop, immediately after
 `let statements = split_statements(&m.up);` — the count is not in scope before that line,
@@ -896,13 +898,13 @@ and immediately before `applied_ids.push(m.id);`:
             );
 ```
 
-- [ ] **Step 7: Run the test to verify it passes**
+- [x] **Step 7: Run the test to verify it passes**
 
 Run: `cargo test -p ruprizzle --test tracing`
 
 Expected: PASS.
 
-- [ ] **Step 8: Document it**
+- [x] **Step 8: Document it**
 
 Add a `## Observability` section to `docs/query-guide.md` showing a `tracing-subscriber`
 setup and the two targets:
@@ -916,7 +918,7 @@ tracing_subscriber::fmt()
 Remove the *"connection pool metrics and query logging"* bullet from the 0.2 deferral
 list in `docs/known-limitations.md`.
 
-- [ ] **Step 9: Run the full gate and commit**
+- [x] **Step 9: Run the full gate and commit**
 
 ```bash
 git add crates/runtime crates/migrate docs/

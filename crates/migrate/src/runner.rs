@@ -276,6 +276,12 @@ impl Migrator {
             let stmt_start = Instant::now();
 
             let statements = split_statements(&m.up);
+            tracing::info!(
+                target: "ruprizzle::migrate",
+                migration = %m.id,
+                statements = statements.len(),
+                "applying migration"
+            );
             for (idx, stmt) in statements.iter().enumerate() {
                 let sql = stmt.trim();
                 if sql.is_empty() {
@@ -312,6 +318,12 @@ impl Migrator {
             .await?;
 
             tx.commit().await?;
+            tracing::info!(
+                target: "ruprizzle::migrate",
+                migration = %m.id,
+                elapsed_ms = elapsed,
+                "migration applied"
+            );
             applied_ids.push(m.id);
         }
 
