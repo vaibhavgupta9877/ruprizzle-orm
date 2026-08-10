@@ -11,7 +11,6 @@ use crate::value::{Encodable, Ordered, Value};
 /// The `M` phantom type prevents mixing columns from different models into one
 /// query. The `T` phantom type is the Rust type stored in the column, which is
 /// used to type-check filter values at compile time.
-#[derive(Debug, PartialEq, Eq)]
 pub struct Column<M, T> {
     /// The SQL table name.
     pub table: &'static str,
@@ -20,12 +19,29 @@ pub struct Column<M, T> {
     _marker: PhantomData<fn() -> (M, T)>,
 }
 
+impl<M, T> std::fmt::Debug for Column<M, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Column")
+            .field("table", &self.table)
+            .field("column", &self.column)
+            .finish()
+    }
+}
+
 impl<M, T> Copy for Column<M, T> {}
 impl<M, T> Clone for Column<M, T> {
     fn clone(&self) -> Self {
         *self
     }
 }
+
+impl<M, T> PartialEq for Column<M, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.table == other.table && self.column == other.column
+    }
+}
+
+impl<M, T> Eq for Column<M, T> {}
 
 impl<M, T> Column<M, T> {
     /// Creates a new column token.
@@ -69,6 +85,26 @@ impl<M, T: Encodable> Column<M, T> {
             column: self.column,
             values: values.into_iter().map(|v| v.into().to_value()).collect(),
             negated: false,
+        })
+    }
+
+    /// `column IN (values)`.
+    pub fn in_set(self, values: impl IntoIterator<Item = impl Into<T>>) -> Filter<M> {
+        Filter::new(FilterNode::In {
+            table: self.table,
+            column: self.column,
+            values: values.into_iter().map(|v| v.into().to_value()).collect(),
+            negated: false,
+        })
+    }
+
+    /// `column NOT IN (values)`.
+    pub fn not_in_set(self, values: impl IntoIterator<Item = impl Into<T>>) -> Filter<M> {
+        Filter::new(FilterNode::In {
+            table: self.table,
+            column: self.column,
+            values: values.into_iter().map(|v| v.into().to_value()).collect(),
+            negated: true,
         })
     }
 

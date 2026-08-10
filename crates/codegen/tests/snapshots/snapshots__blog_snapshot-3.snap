@@ -1,6 +1,5 @@
 ---
 source: crates/codegen/tests/snapshots.rs
-assertion_line: 23
 expression: user_rs
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
@@ -70,6 +69,15 @@ pub const NAME: Column<User, String> = Column::new("users", "name");
 pub const ROLE: Column<User, super::enums::Role> = Column::new("users", "role");
 pub const CREATED_AT: Column<User, DateTime<Utc>> = Column::new("users", "created_at");
 pub const UPDATED_AT: Column<User, DateTime<Utc>> = Column::new("users", "updated_at");
+/// Returns an `IncludeList` for this relation.
+pub fn posts() -> ::ruprizzle::IncludeList<'static, User, super::post::Post, Uuid, ()> {
+    ::ruprizzle::IncludeList::new(
+        |parent| parent.id,
+        |parent, posts| parent.posts = posts,
+        super::post::AUTHOR_ID,
+        |child| child.author_id,
+    )
+}
 /// Prisma-flavoured repository for `#model_name`.
 #[derive(Debug, Clone, Copy)]
 pub struct UserRepo<'a> {

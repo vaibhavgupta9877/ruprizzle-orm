@@ -1,9 +1,10 @@
 //! Order-by tokens.
 
+use std::fmt;
 use std::marker::PhantomData;
 
 /// A typed order-by clause.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct OrderBy<M> {
     /// The SQL table name.
     pub table: &'static str,
@@ -12,6 +13,16 @@ pub struct OrderBy<M> {
     /// `true` for `DESC`, `false` for `ASC`.
     pub desc: bool,
     _marker: PhantomData<fn() -> M>,
+}
+
+impl<M> fmt::Debug for OrderBy<M> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OrderBy")
+            .field("table", &self.table)
+            .field("column", &self.column)
+            .field("desc", &self.desc)
+            .finish()
+    }
 }
 
 impl<M> Copy for OrderBy<M> {}

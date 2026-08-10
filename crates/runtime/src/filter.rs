@@ -5,11 +5,31 @@ use std::marker::PhantomData;
 use crate::value::Value;
 
 /// A predicate that is tied to a model `M`.
-#[derive(Debug, Clone, PartialEq)]
 pub struct Filter<M> {
     /// The root filter node.
     pub node: FilterNode,
     _marker: PhantomData<fn() -> M>,
+}
+
+impl<M> std::fmt::Debug for Filter<M> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Filter").field("node", &self.node).finish()
+    }
+}
+
+impl<M> Clone for Filter<M> {
+    fn clone(&self) -> Self {
+        Self {
+            node: self.node.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<M> PartialEq for Filter<M> {
+    fn eq(&self, other: &Self) -> bool {
+        self.node == other.node
+    }
 }
 
 impl<M> Filter<M> {
