@@ -1,5 +1,11 @@
 # ruprizzle
 
+[![Crates.io](https://img.shields.io/crates/v/ruprizzle.svg)](https://crates.io/crates/ruprizzle)
+[![docs.rs](https://docs.rs/ruprizzle/badge.svg)](https://docs.rs/ruprizzle)
+[![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](./Cargo.toml)
+[![License](https://img.shields.io/crates/l/ruprizzle.svg)](./LICENSE-MIT)
+[![CI](https://img.shields.io/badge/CI-cargo%20xtask%20ci-success)](./xtask/src/main.rs)
+
 A schema-first ORM for Rust that combines the best parts of Prisma and Drizzle:
 
 - **Prisma's** declarative schema as the single source of truth, with a generated
@@ -14,9 +20,8 @@ the wire protocol and pooling; we do not write a driver.
 
 ## Status
 
-Pre-alpha. Parser, dialects, codegen, query builder, relations, and the migration
-engine (phases P1–P6) are implemented. CLI and developer experience (phase P7)
-is the current focus. See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md)
+Pre-alpha. Phases P1–P7 are implemented and P8 (testing, benchmarks, release
+hardening) is the current focus. See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md)
 for the phase-by-phase state.
 
 ## Quick example

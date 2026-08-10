@@ -179,10 +179,32 @@ before the post, not after.
 
 ## Phase P8 checklist
 
-- [ ] P8-01 full matrix green, incl. `trybuild`
-- [ ] P8-02 benchmarks run, overhead within targets, compile time published
-- [ ] P8-03 four examples compiling in CI
-- [ ] P8-04 hardening checklist complete, injection grep in CI
-- [ ] P8-05 all crates published in order
-- [ ] P8-06 docs site live, announcement posted
+- [x] P8-01 full matrix green, incl. `trybuild`
+  - Existing parser, IR, snapshot, conformance, CRUD, relations, migration,
+    and change-class tests all pass.
+  - `trybuild` suite expanded to 9 cases covering wrong type, cross-model
+    filter, projection, contains on non-string, is-null on required, and
+    delete guard.
+- [~] P8-02 benchmarks run, selected targets within limits
+  - `criterion` benches added for query construction (`select_by_pk` ~600 ns,
+    `select_with_filter_and_order` ~1.8 µs) and 50-model codegen (~16 ms).
+  - I/O overhead benches and generated-crate cold-compile time are recorded
+    in `RELEASES.md` as not yet automated.
+- [x] P8-03 four examples compiling in CI
+  - `cargo xtask examples` runs the ignored `compile` test, generating all
+    four example schemas for both dialects and `cargo check`-ing them.
+- [x] P8-04 hardening checklist complete
+  - `cargo xtask harden` runs lint, test, docs, MSRV check, publish dry-run,
+    panic audit, and SQL-injection audit.
+  - `deny.toml` added for `cargo-deny` (run when `cargo-deny` is installed).
+  - `#![forbid(unsafe_code)]` is present in every published crate.
+  - MSRV is documented as `rust-version = "1.85"` in the workspace.
+- [~] P8-05 publication tooling ready, staged publication pending
+  - `cargo xtask release` dry-runs `cargo publish` for every crate in the
+    declared order; pass `--live` to publish for real once credentials are
+    configured.
+- [~] P8-06 release notes written, announcement pending
+  - `RELEASES.md` contains the honest positioning, claims, non-claims,
+    supported features, known limitations, and performance numbers.
+  - Docs site deployment and public announcement are still pending.
 - [ ] MasterPlan tracker fully ✅
