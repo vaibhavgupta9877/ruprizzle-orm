@@ -1,7 +1,7 @@
 //! SQLite dialect.
 
 use ruprizzle_core::ir::{
-    EnumDef, Field, FieldKind, IndexDef, Model, ResolvedRelation, ScalarType, Schema,
+    EnumDef, Field, FieldKind, IndexDef, Model, ResolvedRelation, ScalarType, Schema, UniqueDef,
 };
 
 use crate::common::{
@@ -105,11 +105,33 @@ impl DbDialect for SqliteDialect {
         ))]
     }
 
+    fn add_unique(&self, m: &Model, uq: &UniqueDef) -> Vec<Stmt> {
+        let table = self.quote_ident(&m.table);
+        let name = self.quote_ident(&uq.db_name);
+        let cols = quote_field_columns(self, m, &uq.fields).join(", ");
+        vec![Stmt::new(format!(
+            "CREATE UNIQUE INDEX {name} ON {table} ({cols});"
+        ))]
+    }
+
+    fn drop_unique(&self, _table: &str, name: &str) -> Vec<Stmt> {
+        vec![Stmt::new(format!(
+            "DROP INDEX IF EXISTS {};",
+            self.quote_ident(name)
+        ))]
+    }
+
     fn add_foreign_key(&self, m: &Model, r: &ResolvedRelation) -> Vec<Stmt> {
         // SQLite cannot add a foreign key with ALTER TABLE. Return the inline
         // constraint so `full_create_table` can embed it in CREATE TABLE.
         let _ = m;
         vec![Stmt::new(fk_constraint_sql(self, r))]
+    }
+
+    fn drop_foreign_key(&self, _m: &Model, _r: &ResolvedRelation) -> Vec<Stmt> {
+        // SQLite cannot drop a foreign key with ALTER TABLE. A full table
+        // rebuild is required; the migration planner emits that separately.
+        Vec::new()
     }
 
     fn create_enum(&self, _e: &EnumDef) -> Vec<Stmt> {

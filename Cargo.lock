@@ -1460,6 +1460,8 @@ dependencies = [
  "ruprizzle-dialect",
  "ruprizzle-migrate",
  "ruprizzle-parser",
+ "sqlx",
+ "tokio",
 ]
 
 [[package]]
@@ -1508,8 +1510,12 @@ dependencies = [
  "miette",
  "ruprizzle",
  "ruprizzle-core",
+ "ruprizzle-dialect",
+ "ruprizzle-migrate",
+ "ruprizzle-parser",
  "ruprizzle-testkit",
  "sqlx",
+ "tempfile",
  "tokio",
 ]
 
@@ -1526,11 +1532,17 @@ dependencies = [
 name = "ruprizzle-migrate"
 version = "0.1.0-alpha.1"
 dependencies = [
+ "chrono",
  "ruprizzle-core",
  "ruprizzle-dialect",
+ "ruprizzle-parser",
  "serde",
  "serde_json",
+ "sha2",
+ "sqlx",
+ "tempfile",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

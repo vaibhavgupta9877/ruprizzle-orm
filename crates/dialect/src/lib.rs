@@ -36,7 +36,9 @@ mod common;
 mod postgres;
 mod sqlite;
 
-use ruprizzle_core::ir::{EnumDef, Field, IndexDef, Model, ResolvedRelation, ScalarType, Schema};
+use ruprizzle_core::ir::{
+    EnumDef, Field, IndexDef, Model, ResolvedRelation, ScalarType, Schema, UniqueDef,
+};
 
 pub use common::{check_schema_capabilities, dialect_for, full_alter_column, full_create_table};
 pub use postgres::PostgresDialect;
@@ -246,12 +248,21 @@ pub trait DbDialect: Send + Sync {
     /// `DROP INDEX`.
     fn drop_index(&self, table: &str, name: &str) -> Vec<Stmt>;
 
+    /// `CREATE UNIQUE INDEX` or `ALTER TABLE ... ADD CONSTRAINT ... UNIQUE`.
+    fn add_unique(&self, m: &Model, uq: &UniqueDef) -> Vec<Stmt>;
+
+    /// `DROP INDEX` or `ALTER TABLE ... DROP CONSTRAINT ...`.
+    fn drop_unique(&self, table: &str, name: &str) -> Vec<Stmt>;
+
     /// Add a foreign key for a resolved relation.
     ///
     /// * PostgreSQL returns a standalone `ALTER TABLE ... ADD CONSTRAINT`.
     /// * SQLite returns the inline `CONSTRAINT ... FOREIGN KEY` clause that
     ///   must be embedded in `CREATE TABLE`.
     fn add_foreign_key(&self, m: &Model, r: &ResolvedRelation) -> Vec<Stmt>;
+
+    /// `ALTER TABLE ... DROP CONSTRAINT` (PostgreSQL) or a no-op (SQLite).
+    fn drop_foreign_key(&self, m: &Model, r: &ResolvedRelation) -> Vec<Stmt>;
 
     /// `CREATE TYPE ... AS ENUM` (PostgreSQL) or a no-op (SQLite).
     fn create_enum(&self, e: &EnumDef) -> Vec<Stmt>;

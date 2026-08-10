@@ -5,13 +5,14 @@
 //! keeps a prototyping command away from production data — is structural rather
 //! than something bolted on later.
 //!
-//! Subcommands are implemented in P7; see
-//! `ProjectPlan/ImplementationPlan/ImplPlan08CliDx.md`. Until then each one exits
-//! non-zero with the phase that will deliver it, rather than pretending to work.
+//! Subcommands are implemented incrementally: P6 delivers `migrate deploy`,
+//! `migrate status`, and `db push` (schema push without migration files).
+//! The remaining commands are still placeholders.
 
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
 
+use std::path::Path;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
@@ -120,35 +121,150 @@ enum DbCommand {
     Seed,
 }
 
-/// Which phase delivers a given command, so the message can say so.
-fn owning_phase(command: &Command) -> (&'static str, &'static str) {
+fn owning_phase(command: &Command) -> Option<(&'static str, &'static str)> {
     match command {
-        Command::Generate { .. } | Command::Validate => ("P1-P3", "ImplPlan02SchemaDslParser.md"),
-        Command::Migrate(_) | Command::Db(DbCommand::Push { .. }) => {
-            ("P6", "ImplPlan07Migrations.md")
+        Command::Generate { .. } | Command::Validate => {
+            Some(("P1-P3", "ImplPlan02SchemaDslParser.md"))
         }
+        Command::Migrate(MigrateCommand::Dev { .. }) | Command::Db(DbCommand::Push { .. }) => {
+            // `migrate dev` and `db push` still rely on codegen/round-trip polish.
+            Some(("P6-P7", "ImplPlan07Migrations.md"))
+        }
+        Command::Migrate(
+            MigrateCommand::Deploy
+            | MigrateCommand::Status
+            | MigrateCommand::Resolve { .. }
+            | MigrateCommand::Reset { .. },
+        ) => None,
         Command::Init { .. } | Command::Format | Command::Db(DbCommand::Seed) => {
-            ("P7", "ImplPlan08CliDx.md")
+            Some(("P7", "ImplPlan08CliDx.md"))
         }
     }
 }
 
-fn main() -> ExitCode {
+#[tokio::main]
+async fn main() -> ExitCode {
     let cli = Cli::parse();
 
     if cli.verbose {
         eprintln!("schema path: {}", cli.schema);
     }
 
-    let (phase, doc) = owning_phase(&cli.command);
-    eprintln!(
-        "ruprizzle: this command is not implemented yet.\n\
-         \n\
-         The workspace foundation (phase P0) is in place; this command arrives in \
-         phase {phase}.\n\
-         See ProjectPlan/ImplementationPlan/{doc} for what it will do."
-    );
-    ExitCode::FAILURE
+    match run(cli).await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("ruprizzle: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    match &cli.command {
+        Command::Validate => {
+            validate(&cli.schema)?;
+            Ok(())
+        }
+        Command::Migrate(MigrateCommand::Deploy) => {
+            migrate_deploy(&cli.schema, "migrations", false).await
+        }
+        Command::Migrate(MigrateCommand::Status) => migrate_status(&cli.schema, "migrations").await,
+        _ => {
+            if let Some((phase, doc)) = owning_phase(&cli.command) {
+                Err(format!(
+                    "this command is not implemented yet. It arrives in phase {phase}. \
+                     See ProjectPlan/ImplementationPlan/{doc} for details."
+                )
+                .into())
+            } else {
+                Err("this command is implemented but failed to dispatch".into())
+            }
+        }
+    }
+}
+
+fn validate(schema_path: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let source = std::fs::read_to_string(schema_path)?;
+    let _ = ruprizzle_parser::parse(schema_path, &source)?;
+    println!("{schema_path} is valid.");
+    Ok(())
+}
+
+fn resolve_database_url(
+    schema_path: &str,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let source = std::fs::read_to_string(schema_path)?;
+    let schema = ruprizzle_parser::parse(schema_path, &source)?;
+
+    match &schema.datasource.url {
+        ruprizzle_core::ir::DatasourceUrl::Literal(url) => Ok(url.clone()),
+        ruprizzle_core::ir::DatasourceUrl::Env(var) => std::env::var(var).map_err(|_| {
+            format!("environment variable {var} (from datasource.url) is not set").into()
+        }),
+    }
+}
+
+async fn connect(url: &str) -> Result<sqlx::AnyPool, Box<dyn std::error::Error + Send + Sync>> {
+    sqlx::any::install_default_drivers();
+    Ok(sqlx::AnyPool::connect(url).await?)
+}
+
+async fn migrate_deploy(
+    schema_path: &str,
+    migrations_dir: &str,
+    accept_data_loss: bool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    validate(schema_path)?;
+
+    let url = resolve_database_url(schema_path)?;
+    let pool = connect(&url).await?;
+
+    if !Path::new(migrations_dir).exists() {
+        return Err(format!("migrations directory not found: {migrations_dir}").into());
+    }
+
+    let migrator = ruprizzle_migrate::Migrator::new(migrations_dir);
+    let report = migrator.apply_all(&pool, accept_data_loss).await?;
+
+    if report.applied.is_empty() {
+        println!("No pending migrations.");
+    } else {
+        for id in &report.applied {
+            println!("Applied {id}");
+        }
+        println!("Done in {:?}", report.duration);
+    }
+
+    Ok(())
+}
+
+async fn migrate_status(
+    schema_path: &str,
+    migrations_dir: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    validate(schema_path)?;
+
+    let url = resolve_database_url(schema_path)?;
+    let pool = connect(&url).await?;
+
+    let migrator = ruprizzle_migrate::Migrator::new(migrations_dir);
+    let status = migrator.status(&pool).await?;
+
+    println!("Applied ({}):", status.applied.len());
+    for id in &status.applied {
+        println!("  {id}");
+    }
+
+    if status.pending.is_empty() {
+        println!("No pending migrations.");
+    } else {
+        println!("Pending ({}):", status.pending.len());
+        for id in &status.pending {
+            println!("  {id}");
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

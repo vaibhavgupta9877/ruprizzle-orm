@@ -1,12 +1,12 @@
 //! PostgreSQL dialect.
 
 use ruprizzle_core::ir::{
-    EnumDef, Field, FieldKind, IndexDef, Model, ResolvedRelation, ScalarType, Schema,
+    EnumDef, Field, FieldKind, IndexDef, Model, ResolvedRelation, ScalarType, Schema, UniqueDef,
 };
 
 use crate::common::{
-    base_column_type, create_table_body, default_sql, fk_constraint_sql, render_index_columns,
-    rust_type_for,
+    base_column_type, create_table_body, default_sql, fk_constraint_sql, quote_field_columns,
+    render_index_columns, rust_type_for,
 };
 use crate::{Capabilities, DbDialect, DialectError, JsonSupport, RustType, Stmt};
 
@@ -175,10 +175,35 @@ impl DbDialect for PostgresDialect {
         ))]
     }
 
+    fn add_unique(&self, m: &Model, uq: &UniqueDef) -> Vec<Stmt> {
+        let table = self.quote_ident(&m.table);
+        let name = self.quote_ident(&uq.db_name);
+        let cols = quote_field_columns(self, m, &uq.fields).join(", ");
+        vec![Stmt::new(format!(
+            "ALTER TABLE {table} ADD CONSTRAINT {name} UNIQUE ({cols});"
+        ))]
+    }
+
+    fn drop_unique(&self, table: &str, name: &str) -> Vec<Stmt> {
+        vec![Stmt::new(format!(
+            "ALTER TABLE {} DROP CONSTRAINT {};",
+            self.quote_ident(table),
+            self.quote_ident(name)
+        ))]
+    }
+
     fn add_foreign_key(&self, m: &Model, r: &ResolvedRelation) -> Vec<Stmt> {
         let table = self.quote_ident(&m.table);
         let constraint = fk_constraint_sql(self, r);
         vec![Stmt::new(format!("ALTER TABLE {table} ADD {constraint};"))]
+    }
+
+    fn drop_foreign_key(&self, m: &Model, r: &ResolvedRelation) -> Vec<Stmt> {
+        let table = self.quote_ident(&m.table);
+        let name = self.quote_ident(&r.constraint_name);
+        vec![Stmt::new(format!(
+            "ALTER TABLE {table} DROP CONSTRAINT {name};"
+        ))]
     }
 
     fn create_enum(&self, e: &EnumDef) -> Vec<Stmt> {
