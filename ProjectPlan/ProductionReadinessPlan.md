@@ -59,6 +59,14 @@ Baseline at plan start: **167 tests passing, 0 failing, 0 clippy warnings.** Any
 
 **Exit gate:** No known defect in the migration engine. A migration containing non-ASCII text or a `plpgsql` body applies byte-for-byte correctly on both backends, and two concurrent `migrate deploy` invocations both succeed.
 
+**Status: COMPLETE.** Verified 2026-08-11 against PostgreSQL 17.10 and SQLite with
+`RUPRIZZLE_REQUIRE_DB=1`: **178 tests passing, 0 failing, 0 clippy warnings,
+`cargo fmt --check` clean.** (The plan's stated 167 baseline was 166 on this tree;
+the 12 new tests are 8 splitter + 2 dual-backend idempotency + 1 ten-way race +
+1 advisory-lock-key.) Ten concurrent deployers now all succeed with each migration
+applied exactly once, which was **not** true before PR-02 — see the note there on
+the `ensure_table` race the plan did not identify.
+
 ---
 
 ## PR-01 · Fix the migration statement splitter
@@ -572,7 +580,7 @@ test asserts on their variant set.
 **Interfaces:**
 - Produces: both enums gain `#[non_exhaustive]`. Downstream matches must add a `_ => …` arm; in-crate matches are unaffected.
 
-- [ ] **Step 1: Add the attribute to the runtime error**
+- [x] **Step 1: Add the attribute to the runtime error**
 
 In `crates/runtime/src/error.rs`, above `pub enum Error {`:
 
@@ -587,7 +595,7 @@ In `crates/runtime/src/error.rs`, above `pub enum Error {`:
 pub enum Error {
 ```
 
-- [ ] **Step 2: Add the attribute to the migration error**
+- [x] **Step 2: Add the attribute to the migration error**
 
 In `crates/migrate/src/error.rs`, replace the derive block above `pub enum Error {`:
 
@@ -601,18 +609,18 @@ In `crates/migrate/src/error.rs`, replace the derive block above `pub enum Error
 pub enum Error {
 ```
 
-- [ ] **Step 3: Verify nothing in the workspace broke**
+- [x] **Step 3: Verify nothing in the workspace broke**
 
 Run: `cargo build --workspace --all-targets`
 
 Expected: clean build. If any in-workspace match fails, it was cross-crate and needs a
 `_ =>` arm — add one that returns the error unchanged rather than swallowing it.
 
-- [ ] **Step 4: Run the full gate**
+- [x] **Step 4: Run the full gate**
 
 Run the Verification Command. Expected: 0 failures.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/runtime/src/error.rs crates/migrate/src/error.rs
