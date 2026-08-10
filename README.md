@@ -20,8 +20,9 @@ the wire protocol and pooling; we do not write a driver.
 
 ## Status
 
-Pre-alpha. Phases P1–P7 are implemented and P8 (testing, benchmarks, release
-hardening) is the current focus. See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md)
+P0–P8 are complete and `0.1.0-alpha.1` is published on crates.io. Docs site
+deployment and public announcement are the only remaining items. See the
+[implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md)
 for the phase-by-phase state.
 
 ## Quick example
