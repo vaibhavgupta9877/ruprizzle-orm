@@ -1,8 +1,13 @@
 //! Runtime errors.
 
 /// Errors that can be returned by ruprizzle operations.
+///
+/// `#[non_exhaustive]`: new database backends and new constraint classes will
+/// add variants, and that must not be a breaking change. Match with a trailing
+/// `_ =>` arm.
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
+#[non_exhaustive]
 pub enum Error {
     #[error("unique constraint violated on `{table}.{columns}`{}", value.as_ref().map(|v| format!(" (value: {v})")).unwrap_or_default())]
     UniqueViolation {

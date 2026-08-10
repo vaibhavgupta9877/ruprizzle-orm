@@ -3,8 +3,11 @@
 use std::path::PathBuf;
 
 /// Errors from the migration engine.
+///
+/// `#[non_exhaustive]`: see the note on `ruprizzle::Error`.
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
+#[non_exhaustive]
 pub enum Error {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
