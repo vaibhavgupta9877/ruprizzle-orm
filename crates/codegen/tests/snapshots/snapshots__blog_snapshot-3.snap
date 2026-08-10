@@ -94,4 +94,12 @@ impl<'a> UserRepo<'a> {
         insert = insert.set_optional(UPDATED_AT, _data.updated_at);
         insert
     }
+    /// Start an `update` query.
+    pub fn update(&self) -> ::ruprizzle::UpdateQuery<'a, User> {
+        ::ruprizzle::UpdateQuery::new(self.db.raw_pool())
+    }
+    /// Start a `delete` query.
+    pub fn delete(&self) -> ::ruprizzle::DeleteQuery<'a, User> {
+        ::ruprizzle::DeleteQuery::new(self.db.raw_pool())
+    }
 }

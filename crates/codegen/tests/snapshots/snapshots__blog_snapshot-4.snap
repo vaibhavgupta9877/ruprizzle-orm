@@ -93,4 +93,12 @@ impl<'a> PostRepo<'a> {
         insert = insert.set_optional(CREATED_AT, _data.created_at);
         insert
     }
+    /// Start an `update` query.
+    pub fn update(&self) -> ::ruprizzle::UpdateQuery<'a, Post> {
+        ::ruprizzle::UpdateQuery::new(self.db.raw_pool())
+    }
+    /// Start a `delete` query.
+    pub fn delete(&self) -> ::ruprizzle::DeleteQuery<'a, Post> {
+        ::ruprizzle::DeleteQuery::new(self.db.raw_pool())
+    }
 }
