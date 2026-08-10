@@ -288,12 +288,28 @@ migration applies and pre-existing rows survive.
 
 ## Phase P6 checklist
 
-- [ ] P6-01 directory format, `_ruprizzle_migrations`, checksum enforcement
-- [ ] P6-02 diff engine, dependency ordering, cycle handling, rename policy
+- [x] P6-01 directory format, `_ruprizzle_migrations`, checksum enforcement
+  - `Migrator` reads `migrations/<id>/{up.sql,down.sql,meta.json}`, computes and
+    verifies SHA-256 checksums, and creates the `_ruprizzle_migrations` tracking
+    table on first use.
+- [~] P6-02 diff engine, dependency ordering, cycle handling, rename policy
+  - Core `diff`/`plan` implemented for: create/drop model, add/drop column,
+    alter column, create/drop index, create/drop unique, create/drop enum,
+    add/drop FK, and authoritative `@renamedFrom` rename hints.
+  - Dependency ordering for `CREATE`/`DROP` and `ALTER` statements is in place.
+  - Mutual-FK cycles and heuristic rename prompting are **not** implemented.
 - [ ] P6-02 round-trip property test passing
 - [ ] P6-03 reverse-diff `down.sql` with honest irreversibility notes
 - [ ] P6-04 backfill hook preserved across regeneration
-- [ ] P6-05 runner with advisory lock + embeddable migrations
+- [~] P6-05 runner with advisory lock + embeddable migrations
+  - `Migrator::{pending,apply_all,status,verify_checksums,rollback}` work and
+    run each migration in a transaction with per-statement error reporting.
+  - Advisory locking and `embed!` are **not** implemented.
 - [ ] P6-06 drift detection via lightweight introspection
 - [ ] All 12 change classes green on both dialects
+  - Currently verified: add model, add nullable/NOT-NULL column with default,
+    add index/unique, add FK (Postgres), create enum (Postgres).
+  - SQLite FK additions after `CREATE TABLE` and destructive changes that need
+    table rebuilds are limited.
+- [x] CLI wiring for `migrate deploy` and `migrate status`
 - [ ] **G6 signed off by Claude**

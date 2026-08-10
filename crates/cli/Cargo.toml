@@ -22,3 +22,5 @@ ruprizzle-migrate = { workspace = true }
 ruprizzle-dialect = { workspace = true }
 clap              = { workspace = true }
 miette            = { workspace = true, features = ["fancy"] }
+sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"] }
+tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }

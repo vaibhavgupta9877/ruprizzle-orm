@@ -12,8 +12,12 @@ ruprizzle-core = { workspace = true }
 
 [dev-dependencies]
 ruprizzle         = { workspace = true }
+ruprizzle-dialect = { workspace = true }
+ruprizzle-migrate = { workspace = true }
+ruprizzle-parser  = { workspace = true }
 ruprizzle-testkit = { workspace = true }
 insta             = { workspace = true }
 miette            = { workspace = true, features = ["fancy"] }
 sqlx              = { workspace = true }
+tempfile          = { workspace = true }
 tokio             = { workspace = true }

@@ -13,7 +13,15 @@ categories  = ["database"]
 [dependencies]
 ruprizzle-core    = { workspace = true }
 ruprizzle-dialect = { workspace = true }
+ruprizzle-parser  = { workspace = true }
 serde             = { workspace = true }
 serde_json        = { workspace = true }
 thiserror         = { workspace = true }
+sha2              = { workspace = true }
+chrono            = { workspace = true }
+sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"] }
+
+[dev-dependencies]
+tokio  = { workspace = true }
+tempfile = { workspace = true }
 
