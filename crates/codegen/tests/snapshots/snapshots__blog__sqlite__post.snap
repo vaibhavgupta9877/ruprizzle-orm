@@ -29,7 +29,7 @@ impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Post {
             id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
             title: ::ruprizzle::decode::direct::<String>(row, "title")?,
             body: ::ruprizzle::decode::direct_opt::<String>(row, "body")?,
-            published: ::ruprizzle::decode::direct::<bool>(row, "published")?,
+            published: ::ruprizzle::decode::boolean(row, "published")?,
             author_id: ::ruprizzle::decode::text::<Uuid>(row, "author_id")?,
             author: ::ruprizzle::Related::default(),
             created_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "created_at")?,

@@ -106,3 +106,24 @@ where
 {
     row.try_get(col)
 }
+
+/// Decode a boolean column.
+///
+/// SQLite stores booleans as `INTEGER` (0/1), while Postgres has a native
+/// `BOOL` type, so this helper tries the integer path first and falls back to
+/// a native boolean decode.
+pub fn boolean(row: &AnyRow, col: &str) -> Result<bool, sqlx::Error> {
+    if let Ok(i) = row.try_get::<i64, _>(col) {
+        return Ok(i != 0);
+    }
+    row.try_get::<bool, _>(col)
+}
+
+/// Decode an optional boolean column.
+pub fn boolean_opt(row: &AnyRow, col: &str) -> Result<Option<bool>, sqlx::Error> {
+    match row.try_get::<Option<i64>, _>(col) {
+        Ok(Some(i)) => Ok(Some(i != 0)),
+        Ok(None) => Ok(None),
+        Err(_) => row.try_get::<Option<bool>, _>(col),
+    }
+}

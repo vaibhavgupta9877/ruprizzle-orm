@@ -32,7 +32,7 @@ impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Membership {
             organisation: ::ruprizzle::Related::default(),
             account_id: ::ruprizzle::decode::text::<Uuid>(row, "account_id")?,
             account: ::ruprizzle::Related::default(),
-            is_owner: ::ruprizzle::decode::direct::<bool>(row, "is_owner")?,
+            is_owner: ::ruprizzle::decode::boolean(row, "is_owner")?,
             updated_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "updated_at")?,
         })
     }

@@ -619,10 +619,13 @@ fn emit_from_row_field(schema: &Schema, owner: &str, field: &Field) -> TokenStre
             ruprizzle_core::ir::ScalarType::String
             | ruprizzle_core::ir::ScalarType::Int
             | ruprizzle_core::ir::ScalarType::BigInt
-            | ruprizzle_core::ir::ScalarType::Float
-            | ruprizzle_core::ir::ScalarType::Boolean => {
+            | ruprizzle_core::ir::ScalarType::Float => {
                 let helper = format_ident!("{}", if optional { "direct_opt" } else { "direct" });
                 quote! { ::ruprizzle::decode::#helper::<#inner>(row, #column)? }
+            }
+            ruprizzle_core::ir::ScalarType::Boolean => {
+                let helper = format_ident!("{}", if optional { "boolean_opt" } else { "boolean" });
+                quote! { ::ruprizzle::decode::#helper(row, #column)? }
             }
             ruprizzle_core::ir::ScalarType::Decimal
             | ruprizzle_core::ir::ScalarType::DateTime
