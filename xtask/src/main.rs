@@ -274,6 +274,11 @@ fn run_release(args: &[String]) -> ExitCode {
         .and_then(|i| args.get(i + 1))
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
+    let from = args
+        .iter()
+        .position(|a| a == "--from")
+        .and_then(|i| args.get(i + 1))
+        .map(String::as_str);
     let mut flags = vec!["publish"];
     if !live {
         flags.push("--dry-run");
@@ -282,16 +287,24 @@ fn run_release(args: &[String]) -> ExitCode {
         flags.push("--no-verify");
     }
 
-    for package in [
+    // Dependency order for first-time publish. `parser` is a dev-dependency
+    // of `dialect`, so it must be indexed before `dialect` can package.
+    let packages = [
         "ruprizzle-core",
+        "ruprizzle-parser",
         "ruprizzle-dialect",
         "ruprizzle-macros",
         "ruprizzle",
-        "ruprizzle-parser",
-        "ruprizzle-codegen",
         "ruprizzle-migrate",
+        "ruprizzle-codegen",
         "ruprizzle-cli",
-    ] {
+    ];
+    let start = packages
+        .iter()
+        .position(|p| from.map_or(true, |f| *p == f))
+        .unwrap_or(0);
+
+    for package in packages[start..].iter().copied() {
         eprintln!("--- xtask: release {package} ---");
         let mut cmd = Command::new("cargo");
         cmd.args(&flags).args(["-p", package]);

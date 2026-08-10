@@ -135,7 +135,7 @@ generated nested-create helpers; see the gaps section of
 | P5 | Relations + nested include batched | ✅ | G5 ✅ |
 | P6 | Migration diff + runner | ✅ | G6 ✅ |
 | P7 | CLI complete, error UX polished | ✅ | — |
-| P8 | Tests, benches, docs, published | 🟡 | Ship |
+| P8 | Tests, benches, docs, published | ✅ | Ship |
 
 ---
 
@@ -157,7 +157,7 @@ Deferred to 0.2+ — full reasoning in ImplPlan10.
 
 ## Definition of done for v1
 
-- [ ] `cargo install ruprizzle-cli` works
+- [x] `cargo install ruprizzle-cli` works
 - [x] Quickstart: empty dir → running query in under 5 minutes
 - [x] Postgres **and** SQLite pass the identical integration suite
 - [x] Migration diff handles the 12 change classes in ImplPlan07

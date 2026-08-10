@@ -207,14 +207,16 @@ before the post, not after.
     parse from `String`/`Vec<u8>`.
   - Fixed SQLite `AUTOINCREMENT` column rendering and `Db::connect` so it
     routes through `ruprizzle::connect` and installs the `Any` drivers.
-- [~] P8-05 publication tooling ready, staged publication pending
+- [x] P8-05 publication tooling ready, staged publication completed
   - `cargo xtask release` dry-runs the first crate; it supports
     `--live --no-verify --wait <seconds>` for the staged first-time publish.
   - `RELEASES.md` documents the first-publish command and why `--no-verify`
     and a wait are needed for workspace crates.
-  - Actual upload is blocked on a `cargo login` token; `CARGO_REGISTRY_TOKEN`
-    or `cargo login` must be configured before `--live` will succeed.
+  - `cargo xtask release --live --no-verify --wait <seconds>` published all
+    eight workspace crates to crates.io; install verified with
+    `cargo install ruprizzle-cli` and an empty-directory quicktest.
 - [~] P8-06 release notes written, docs site ready, deployment pending
+    (published crates are live; GitHub remote + Pages enablement still needed)
   - `RELEASES.md` and `docs/announcement.md` contain the honest positioning,
     claims, non-claims, supported features, known limitations, and performance
     numbers.
