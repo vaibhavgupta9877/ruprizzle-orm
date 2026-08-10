@@ -1,5 +1,6 @@
 ---
 source: crates/codegen/tests/snapshots.rs
+assertion_line: 21
 expression: mod_rs
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
@@ -50,14 +51,27 @@ impl Db {
         ::ruprizzle::InsertQuery::new(self.raw_pool())
     }
     /// Run a closure inside a transaction.
-    pub async fn transaction<F, T>(&self, _f: F) -> Result<T, ::ruprizzle::Error>
+    ///
+    /// The closure receives a `&mut ::ruprizzle::Tx` and can execute raw
+    /// SQL through it. The transaction is committed if the closure returns
+    /// `Ok`, and rolled back if it returns `Err`.
+    pub async fn transaction<F, T>(&self, f: F) -> Result<T, ::ruprizzle::Error>
     where
         F: for<'t> FnOnce(
             &'t mut ::ruprizzle::Tx,
         ) -> ::ruprizzle::BoxFuture<'t, Result<T, ::ruprizzle::Error>>,
     {
-        let () = std::future::ready(()).await;
-        Err(::ruprizzle::Error::NotImplemented)
+        let mut tx = ::ruprizzle::Tx::begin(self.raw_pool()).await?;
+        match f(&mut tx).await {
+            Ok(v) => {
+                tx.commit().await?;
+                Ok(v)
+            }
+            Err(e) => {
+                tx.rollback().await?;
+                Err(e)
+            }
+        }
     }
 }
 /// Common imports for this generated module.

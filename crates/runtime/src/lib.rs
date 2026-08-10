@@ -34,13 +34,13 @@ pub mod prelude {
 }
 
 pub use col::{Column, Projection};
-pub use compile::{CompiledSql, delete, dialect_for_pool, insert, select, update};
+pub use compile::{CompiledSql, delete, dialect_for_pool, insert, insert_many, select, update};
 pub use error::Error;
 pub use filter::{Filter, FilterNode, all, any};
 pub use model::Model;
 pub use order::OrderBy;
 pub use pool::{Pool, connect};
-pub use query::{DeleteQuery, InsertQuery, SelectQuery, UpdateQuery};
+pub use query::{DeleteQuery, InsertManyQuery, InsertQuery, SelectQuery, UpdateQuery};
 pub use related::Related;
 pub use serde;
 pub use serde_json;

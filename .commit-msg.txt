@@ -1,0 +1,29 @@
+P4 completion: upsert, bulk insert chunking, transactions, pagination, typestate delete guard, and trybuild tests.
+
+P4-04 Upsert & bulk insert chunking
+- Added `InsertQuery::on_conflict` and `do_update` to produce `INSERT ... ON CONFLICT DO UPDATE/NOTHING`.
+- Added `InsertManyQuery` and `compile::insert_many`, chunking rows by each dialect's `max_query_params`.
+- Exposed `max_query_params` in `dialect::Capabilities` (Postgres 65,535; SQLite 32,766).
+- Generated repos now have `create_many(Vec<Insert>)` mapping `Encodable` fields into bulk rows.
+
+P4-05 Transactions
+- Implemented `ruprizzle::Tx` wrapping `sqlx::Transaction<'static, Any>` with `execute`, `fetch_all`, `fetch_one`, `fetch_optional`, `commit`, and `rollback`.
+- Generated `Db::transaction` now begins a transaction, runs the closure, and commits on success / rolls back on error.
+
+P4-06 Offset + cursor pagination
+- `SelectQuery` already supported `limit`/`offset`; added `after` and `before` cursor methods that combine a comparison filter, ordering, and limit.
+- Added `runtime_pagination_round_trip` to the dual-database integration suite.
+
+P4-04 typestate delete guard
+- `DeleteQuery` now carries `UnfilteredDelete`/`FilteredDelete` state markers. `exec` is only available after `.filter(...)` or `.all_rows()`.
+
+P4-08 trybuild tests
+- Added `trybuild` compile-fail tests verifying a `DeleteQuery` cannot be executed without a filter and cannot be filtered by a column from a different model.
+
+Cross-cutting
+- Updated codegen snapshots for `Db::transaction` and `Repo::create_many`.
+- Updated `ImplPlan05` to reflect completed P4 tasks and G4 sign-off.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

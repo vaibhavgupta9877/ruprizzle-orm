@@ -1,5 +1,6 @@
 ---
 source: crates/codegen/tests/snapshots.rs
+assertion_line: 23
 expression: user_rs
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
@@ -93,6 +94,25 @@ impl<'a> UserRepo<'a> {
         insert = insert.set_optional(CREATED_AT, _data.created_at);
         insert = insert.set_optional(UPDATED_AT, _data.updated_at);
         insert
+    }
+    /// Start a multi-row `insert` query.
+    pub fn create_many(
+        &self,
+        _data: Vec<UserInsert>,
+    ) -> ::ruprizzle::InsertManyQuery<'a, User> {
+        let mut q = ::ruprizzle::InsertManyQuery::new(self.db.raw_pool());
+        for _row in _data {
+            q = q
+                .row([
+                    ("id", ::ruprizzle::Encodable::to_value(&_row.id)),
+                    ("email", ::ruprizzle::Encodable::to_value(&_row.email)),
+                    ("name", ::ruprizzle::Encodable::to_value(&_row.name)),
+                    ("role", ::ruprizzle::Encodable::to_value(&_row.role)),
+                    ("created_at", ::ruprizzle::Encodable::to_value(&_row.created_at)),
+                    ("updated_at", ::ruprizzle::Encodable::to_value(&_row.updated_at)),
+                ]);
+        }
+        q
     }
     /// Start an `update` query.
     pub fn update(&self) -> ::ruprizzle::UpdateQuery<'a, User> {

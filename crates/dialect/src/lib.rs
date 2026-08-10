@@ -110,6 +110,8 @@ pub struct Capabilities {
     pub deferrable_fks: bool,
     /// How `Json` is stored.
     pub json_type: JsonSupport,
+    /// Maximum number of bind parameters in a single statement.
+    pub max_query_params: u32,
 }
 
 /// How a dialect stores JSON.
