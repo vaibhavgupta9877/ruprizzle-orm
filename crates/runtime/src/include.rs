@@ -1,12 +1,13 @@
 //! Batched relation `include` loading.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
 use crate::BoxFuture;
 use crate::col::Column;
+use crate::compile::select_partitioned;
 use crate::error::Error;
 use crate::filter::Filter;
 use crate::model::Model;
@@ -16,6 +17,14 @@ use crate::query::SelectQuery;
 use crate::related::Related;
 use crate::value::Encodable;
 
+/// Loads every child row belonging to any of `keys`, in a bounded number of
+/// queries.
+///
+/// `limit` is a **per-parent** limit, not a limit on the batch: `take(5)` means
+/// five children for each parent, which is what the caller asked for and what a
+/// plain `LIMIT` would silently fail to deliver. It is compiled to a
+/// `ROW_NUMBER() OVER (PARTITION BY ...)` window; only if the dialect cannot do
+/// windows does this degrade to one query per parent.
 async fn fetch_children<C, Key>(
     exec: &dyn Executor,
     child_key: Column<C, Key>,
@@ -26,44 +35,93 @@ async fn fetch_children<C, Key>(
 ) -> Result<Vec<C>, Error>
 where
     C: Model + Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
-    Key: Encodable + Clone + Send + Sync + 'static,
+    Key: Encodable + Eq + Hash + Clone + Send + Sync + 'static,
 {
+    // The parent set repeats keys whenever several parents point at the same
+    // child (every many-to-one relation does). Sending the duplicates would
+    // inflate the `IN` list and burn the parameter budget for nothing.
+    let keys = dedup(keys);
     if keys.is_empty() {
         return Ok(Vec::new());
     }
 
-    let cap = exec.dialect().capabilities().max_query_params as usize;
-    let chunk_size = cap.saturating_sub(10).max(1);
+    let dialect = exec.dialect();
+    let caps = dialect.capabilities();
+    // Leave headroom for the binds the relation filter itself contributes.
+    let chunk_size = (caps.max_query_params as usize).saturating_sub(10).max(1);
 
-    let should_chunk = limit.is_none() && keys.len() > chunk_size;
+    if let Some(n) = limit {
+        if !caps.window_functions {
+            return fetch_children_per_parent(exec, child_key, filter, order, n, &keys).await;
+        }
 
-    if !should_chunk {
-        let mut q = SelectQuery::<C>::new(exec).filter(child_key.in_set(keys));
+        let mut all = Vec::new();
+        for chunk in keys.chunks(chunk_size) {
+            let combined = filter.clone().and(child_key.in_set(chunk.to_vec()));
+            let compiled = select_partitioned::<C>(
+                dialect.as_ref(),
+                C::TABLE,
+                child_key.column,
+                &combined.node,
+                order,
+                n,
+            );
+            let rows = exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            all.extend(crate::executor::decode_rows::<C>(rows)?);
+        }
+        return Ok(all);
+    }
+
+    let mut all = Vec::new();
+    for chunk in keys.chunks(chunk_size) {
+        let mut q = SelectQuery::<C>::new(exec).filter(child_key.in_set(chunk.to_vec()));
         if filter.node != crate::filter::FilterNode::And(Vec::new()) {
             q = q.filter(filter.clone());
         }
         for o in order {
             q = q.order_by(*o);
         }
-        if let Some(n) = limit {
-            q = q.limit(n);
-        }
-        q.fetch_all().await
-    } else {
-        let mut all = Vec::new();
-        for chunk in keys.chunks(chunk_size) {
-            let chunk = chunk.to_vec();
-            let mut q = SelectQuery::<C>::new(exec).filter(child_key.in_set(chunk));
-            if filter.node != crate::filter::FilterNode::And(Vec::new()) {
-                q = q.filter(filter.clone());
-            }
-            for o in order {
-                q = q.order_by(*o);
-            }
-            all.extend(q.fetch_all().await?);
-        }
-        Ok(all)
+        all.extend(q.fetch_all().await?);
     }
+    Ok(all)
+}
+
+/// The no-window-function fallback: one `LIMIT`ed query per parent key.
+///
+/// Correct, but linear in the parent count — the very shape the batched loader
+/// exists to avoid. No dialect shipped today takes this path.
+async fn fetch_children_per_parent<C, Key>(
+    exec: &dyn Executor,
+    child_key: Column<C, Key>,
+    filter: &Filter<C>,
+    order: &[OrderBy<C>],
+    limit: u64,
+    keys: &[Key],
+) -> Result<Vec<C>, Error>
+where
+    C: Model + Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    Key: Encodable + Clone + Send + Sync + 'static,
+{
+    let mut all = Vec::new();
+    for key in keys {
+        let mut q = SelectQuery::<C>::new(exec).filter(child_key.eq(key.clone()));
+        if filter.node != crate::filter::FilterNode::And(Vec::new()) {
+            q = q.filter(filter.clone());
+        }
+        for o in order {
+            q = q.order_by(*o);
+        }
+        all.extend(q.limit(limit).fetch_all().await?);
+    }
+    Ok(all)
+}
+
+/// Removes duplicates while keeping first-seen order.
+fn dedup<Key: Eq + Hash + Clone>(keys: Vec<Key>) -> Vec<Key> {
+    let mut seen = HashSet::with_capacity(keys.len());
+    keys.into_iter()
+        .filter(|k| seen.insert(k.clone()))
+        .collect()
 }
 
 /// A set of includes to attach to a parent model.
@@ -375,7 +433,9 @@ where
 impl<'db, M, C, Key, NI> IncludeSet<M> for IncludeOne<'db, M, C, Key, NI>
 where
     M: Model + Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
-    C: Model + Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    // `Clone` because a many-to-one relation is many-to-one: several parents
+    // routinely share one child row, and each parent owns its own copy.
+    C: Model + Clone + Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
     Key: Encodable + Eq + Hash + Clone + Send + Sync + 'static,
     NI: IncludeSet<C> + Sync,
 {
@@ -401,19 +461,18 @@ where
             .await?;
             self.nested.load(exec, &mut children).await?;
 
-            let mut map: HashMap<Key, Vec<C>> = HashMap::new();
+            // Only the first child per key can be attached, so keep just that
+            // one rather than a `Vec` that is always length 1 in practice.
+            let mut map: HashMap<Key, C> = HashMap::new();
             for child in children {
-                let key = (self.child_key_get)(&child);
-                map.entry(key).or_default().push(child);
+                // First, not last: rows arrive in the relation's `ORDER BY`, so
+                // the first match is the one the ordering selected.
+                map.entry((self.child_key_get)(&child)).or_insert(child);
             }
 
             for parent in parents.iter_mut() {
                 let key = (self.get)(parent);
-                let related = map
-                    .remove(&key)
-                    .and_then(|mut v| v.pop())
-                    .map(|c| Related::Loaded(Some(c)))
-                    .unwrap_or(Related::Loaded(None));
+                let related = Related::Loaded(map.get(&key).cloned());
                 (self.set)(parent, related);
             }
 

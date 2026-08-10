@@ -116,15 +116,24 @@ snapshot-verified IR; 16 of 18 validation rules are enforced with a fixture each
 a span and a fix. Deviations:
 [P1 deviation log](ImplPlan10AppendixDecisions.md#p1-deviation-log).
 
+**P2-P5 landed.** G2, G3, G4 and G5 are signed off in their own plans, each with
+evidence recorded there. The whole workspace is green against a live PostgreSQL
+17.10 and SQLite under `RUPRIZZLE_REQUIRE_DB=1`. G5's bound is now asserted, not
+asserted-by-inspection: `include_is_bounded` counts the statements a two-level
+include issues and fails if it is ever more than one per level. Two P5 checklist
+items are explicitly **not** signed off — composite-key relations and the
+generated nested-create helpers; see the gaps section of
+[ImplPlan06](ImplPlan06RelationsInclude.md#remaining-known-gaps).
+
 | Phase | Deliverable | Status | Gate |
 |---|---|---|---|
 | P0 | Workspace, core IR, CI green | ✅ | — |
 | P1 | `schema.ruprizzle` parses + validates | ✅ | G1 ✅ |
-| P2 | Postgres + SQLite DDL generation | ⬜ | G2 |
-| P3 | Entity/enum/token codegen compiles | ⬜ | G3 |
-| P4 | Query builder CRUD on both DBs | ⬜ | G4 |
-| P5 | Relations + nested include batched | ⬜ | G5 |
-| P6 | Migration diff + runner | ⬜ | G6 |
+| P2 | Postgres + SQLite DDL generation | ✅ | G2 ✅ |
+| P3 | Entity/enum/token codegen compiles | ✅ | G3 ✅ |
+| P4 | Query builder CRUD on both DBs | ✅ | G4 ✅ |
+| P5 | Relations + nested include batched | ✅ | G5 ✅ |
+| P6 | Migration diff + runner | 🟡 | G6 |
 | P7 | CLI complete, error UX polished | ⬜ | — |
 | P8 | Tests, benches, docs, published | ⬜ | Ship |
 

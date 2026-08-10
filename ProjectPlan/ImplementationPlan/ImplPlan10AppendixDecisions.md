@@ -126,7 +126,7 @@ Result<ir::Schema>` boundary is unchanged.
 | R5 | `trybuild` error messages become unreadable as generics grow | 30% | 🟠 med | Keep `Column` bounds shallow; resist adding type parameters; ADR-005 exists to hold this line | any `trybuild` expected-output over 20 lines |
 | R6 | sqlx 0.9 breaks the runtime mid-build | 20% | 🟠 med | Exact pin; `Executor` trait already isolates sqlx behind our own interface | sqlx 0.9 release during P4–P8 |
 | R7 | Scope creep from the consuming application project | 50% | 🟠 med | This repo is ORM-only. Application needs go to the deferral list, not into v1 | any request referencing UI, auth, or RPC |
-| R8 | Relation loader goes accidentally quadratic | 25% | 🟡 low | Query-count *and* timing assertions in P5-06; `HashMap` attachment specified explicitly | include bench > 15% overhead |
+| R8 | ~~Relation loader goes accidentally quadratic~~ **retired at G5** | — | 🟡 low | Query-count assertion landed (`include_is_bounded`, both dialects); `HashMap` attachment in place. Timing assertions still owed to P8-02 | include bench > 15% overhead |
 
 **R1 is the one to watch.** It is the highest-value feature and the highest-risk
 task, which is a bad combination. It is scheduled in week 6 with a buffer week
@@ -159,6 +159,17 @@ Two consecutive failed gates means re-scoping the release, not adding weeks.
 
 Nothing here is a bug or an oversight. Each is a scoping decision, and the
 Known Limitations doc (P7-05) publishes this list verbatim.
+
+**Carried out of P5 at G5 sign-off** — these two were on the P5 checklist and
+did not land. They are recorded here rather than quietly ticked:
+- **Composite-key relations.** `Encodable` has no tuple impl and the codegen
+  reads `owner_cols.first()`, so a multi-column relation would use only its
+  first column. No example schema declares one, so nothing generated today is
+  wrong — but the row-value `IN` (Postgres) / `OR` chain (SQLite) described in
+  P5-01 is unwritten, and a schema that needs it must wait.
+- **Generated `.with_posts()` nested-create helpers.** The runtime mechanism
+  (`with_related` + `NestedSetter`) is done and tested; only the codegen sugar
+  over it is missing, so nested create is a hand-written call for now.
 
 **0.2 — the obvious next increment**
 - MySQL / MariaDB dialects (additive behind `DbDialect`)

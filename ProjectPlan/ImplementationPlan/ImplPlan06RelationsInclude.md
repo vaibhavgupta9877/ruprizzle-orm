@@ -253,9 +253,71 @@ refactor that reintroduces N+1 fails here loudly.
 
 - [x] P5-01 `ResolvedRelation` canonicalised, both sides share one instance
 - [x] P5-02 `include` codegen, nesting to depth 3, per-relation filter/order/take
-- [x] P5-03 batched loader, chunked keys, O(n) attachment, window-function `take` (window-function `take` not yet)
+- [x] P5-03 batched loader, chunked keys, O(n) attachment, window-function `take`
 - [x] P5-04 `some`/`every`/`none` with correct vacuous-truth semantics
-- [x] P5-05 one-level nested create in a transaction (runtime `with_related` + `NestedSetter`; generated `.with_posts()` helpers not emitted)
-- [x] P5-06 query-count assertions green on both dialects (bounded-load verified by two-level integration test; formal counter not wired)
-- [~] Composite-key relations covered by tests (runtime supports composite keys by making the join key a tuple; generated helpers and dedicated tests not yet wired)
-- [ ] **G5 signed off by Claude**
+- [x] P5-05 one-level nested create in a transaction (runtime `with_related` + `NestedSetter`; generated `.with_posts()` helpers not emitted — see gaps)
+- [x] P5-06 query-count assertions green on both dialects
+- [ ] Composite-key relations covered by tests — **not implemented**, see gaps
+- [x] **G5 signed off by Claude** — see the evidence below.
+
+### G5 sign-off evidence (2026-08-10)
+
+Verified against a live PostgreSQL 17.10 and SQLite. `cargo build --workspace`
+clean, `cargo clippy --workspace --all-targets` clean, and the whole workspace
+green under `RUPRIZZLE_REQUIRE_DB=1`, which turns an unreachable backend into a
+hard failure rather than a silent skip.
+
+The gate asks for *"two-level nested include returns correct data in a bounded
+number of queries, proven by a query-count assertion test."* That test now
+exists, on both dialects:
+`tests/integration/tests/relations.rs::include_is_bounded` seeds 10 users × 5
+posts × 3 comments, loads `users → posts → comments`, and asserts
+`counter.count() == 3` — one query per *level*, against the 61 an N+1 loader
+would issue. A second assertion in the same test loads 50 posts with their
+author in **2** queries, which is the many-to-one direction.
+
+The counter is `CountingExecutor` in the runtime crate (not the test harness):
+it wraps any `&dyn Executor` and counts statements. Keeping it in the library
+means an application profiling its own hot path can use the same tool.
+
+#### Three defects the sign-off work uncovered
+
+Writing the gate test found bugs that the previous "verified by inspection"
+status had missed. Each is fixed, and each is now covered:
+
+- **`take` was a batch `LIMIT`, not a per-parent one.** `posts().take(5)` over
+  100 users returned 5 posts *total*. It now compiles to
+  `ROW_NUMBER() OVER (PARTITION BY <fk> ORDER BY ...)` filtered to `<= n`, via
+  `compile::select_partitioned`, so it stays one query per level.
+  `per_relation_take_is_per_parent` asserts each parent gets exactly its `take`,
+  in the relation's own order.
+- **Many-to-one includes attached the child to one parent only.** The grouping
+  map used `remove`, so the second post sharing an author got `None`. The
+  many-to-one path now keeps one child per key and clones per parent, which is
+  what a many-to-one relation means.
+- **Parent keys were not de-duplicated.** Every many-to-one include sent one
+  bind per parent row instead of one per distinct key, burning the parameter
+  budget and forcing needless chunking.
+
+`Capabilities::window_functions` was added as P5-03 specified. Both shipped
+dialects set it true (SQLite has had windows since 3.25); the loader keeps an
+honest per-parent fallback for a dialect that does not, and that fallback is the
+only path that is not bounded.
+
+#### Remaining known gaps
+
+- **Composite-key relations are not supported end to end.** `Encodable` has no
+  tuple implementation and the codegen takes `owner_cols.first()`, so a relation
+  over more than one column silently uses only its first. The row-value `IN` on
+  Postgres and `OR` chain on SQLite that P5-01 describes are unwritten. Nothing
+  in `examples/` uses one, so no generated code is currently wrong — but the
+  checklist item is not done and is not signed off.
+- **Generated `.with_posts()` nested-create helpers are not emitted.** The
+  runtime mechanism (`with_related` + `NestedSetter`) works and is tested; the
+  codegen sugar over it is missing, so nested create is currently a hand-written
+  call.
+- **`stream`/`page` + `include` do not compose.** Both are implemented only for
+  `SelectQuery<_, _, ()>`, so the type system rejects the combination rather
+  than loading it wrongly. Batching needs the whole parent set up front, which
+  is inherently at odds with streaming; `page` could support includes by loading
+  them after truncation, and is the one worth revisiting.
