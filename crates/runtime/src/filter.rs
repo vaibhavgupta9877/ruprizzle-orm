@@ -90,6 +90,15 @@ pub enum FilterNode {
         values: Vec<Value>,
         negated: bool,
     },
+    /// Correlated `EXISTS (SELECT 1 FROM child_table WHERE child_fk = parent_pk AND filter)`.
+    Exists {
+        child_table: &'static str,
+        child_col: &'static str,
+        parent_table: &'static str,
+        parent_col: &'static str,
+        filter: Box<FilterNode>,
+        negated: bool,
+    },
     And(Vec<FilterNode>),
     Or(Vec<FilterNode>),
     Not(Box<FilterNode>),

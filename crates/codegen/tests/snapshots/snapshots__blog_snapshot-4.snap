@@ -77,6 +77,46 @@ pub fn author() -> ::ruprizzle::IncludeOne<'static, Post, super::user::User, Uui
         |child| child.id,
     )
 }
+/// Returns a filter for parents that have at least one matching child.
+pub fn author_some(
+    f: ::ruprizzle::Filter<super::user::User>,
+) -> ::ruprizzle::Filter<Post> {
+    ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+        child_table: "users",
+        child_col: "id",
+        parent_table: "posts",
+        parent_col: "author_id",
+        filter: Box::new(f.node),
+        negated: false,
+    })
+}
+/// Returns a filter for parents that have no matching child.
+pub fn author_none(
+    f: ::ruprizzle::Filter<super::user::User>,
+) -> ::ruprizzle::Filter<Post> {
+    ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+        child_table: "users",
+        child_col: "id",
+        parent_table: "posts",
+        parent_col: "author_id",
+        filter: Box::new(f.node),
+        negated: true,
+    })
+}
+/// Returns a filter for parents where every matching child satisfies `f`.
+/// Vacuously true for parents with no children.
+pub fn author_every(
+    f: ::ruprizzle::Filter<super::user::User>,
+) -> ::ruprizzle::Filter<Post> {
+    ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+        child_table: "users",
+        child_col: "id",
+        parent_table: "posts",
+        parent_col: "author_id",
+        filter: Box::new((!f).node),
+        negated: true,
+    })
+}
 /// Prisma-flavoured repository for `#model_name`.
 #[derive(Debug, Clone, Copy)]
 pub struct PostRepo<'a> {

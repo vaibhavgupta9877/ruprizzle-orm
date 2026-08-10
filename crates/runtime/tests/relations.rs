@@ -1,4 +1,7 @@
-use ruprizzle::{Column, IncludeList, IncludeOne, InsertQuery, Model, Pool, Related, SelectQuery};
+use ruprizzle::{
+    Column, Encodable, IncludeList, IncludeOne, InsertManyQuery, InsertQuery, Model, NestedSetter,
+    Pool, Related, SelectQuery, Value,
+};
 use sqlx::FromRow;
 
 #[derive(Debug, Clone, FromRow)]
@@ -160,4 +163,53 @@ async fn include_with_filter_and_take_round_trip() {
     assert_eq!(users[0].posts.get().len(), 2);
     assert_eq!(users[0].posts.get()[0].id, 1);
     assert_eq!(users[0].posts.get()[1].id, 2);
+}
+
+#[tokio::test]
+async fn nested_create_round_trip() {
+    let pool = fresh_pool().await;
+
+    sqlx::query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    struct SetPosts;
+    impl NestedSetter<User> for SetPosts {
+        fn set(&self, parent: &mut User, rows: Vec<sqlx::any::AnyRow>) {
+            parent.posts = Related::Loaded(
+                rows.into_iter()
+                    .map(|r| Post::from_row(&r).unwrap())
+                    .collect(),
+            );
+        }
+    }
+
+    let user: User = InsertQuery::new(&pool)
+        .set(USER_ID, 1)
+        .set(USER_NAME, "alice")
+        .with_related(
+            |u| u.id.to_value(),
+            "author_id",
+            InsertManyQuery::<Post>::new(&pool)
+                .row([("title", Value::Str("first".to_string().into()))])
+                .row([("title", Value::Str("second".to_string().into()))]),
+            SetPosts,
+        )
+        .exec()
+        .await
+        .unwrap();
+
+    assert_eq!(user.id, 1);
+    assert_eq!(user.name, "alice");
+    assert_eq!(user.posts.get().len(), 2);
+    assert_eq!(user.posts.get()[0].title, "first");
+    assert_eq!(user.posts.get()[1].title, "second");
+    assert!(user.posts.get().iter().all(|p| p.author_id == 1));
 }

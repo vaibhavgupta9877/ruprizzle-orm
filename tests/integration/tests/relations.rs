@@ -1,7 +1,11 @@
 //! Batched relation `include` round-trips over Postgres and SQLite.
 
-use ruprizzle::{Column, IncludeList, IncludeOne, InsertQuery, Model, Related, SelectQuery};
+use ruprizzle::{
+    Column, Encodable, Filter, FilterNode, IncludeList, IncludeOne, InsertManyQuery, InsertQuery,
+    Model, NestedSetter, Related, SelectQuery, Value,
+};
 use ruprizzle_testkit::both_dbs;
+use sqlx::FromRow;
 
 #[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
 struct User {
@@ -16,10 +20,10 @@ impl Model for User {
 }
 
 #[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
-#[allow(dead_code)]
 struct Post {
     id: i64,
     title: String,
+    published: i64,
     author_id: i64,
     #[sqlx(skip)]
     author: Related<Option<User>>,
@@ -48,6 +52,7 @@ const USER_NAME: Column<User, String> = Column::new("users", "name");
 
 const POST_ID: Column<Post, i64> = Column::new("posts", "id");
 const POST_TITLE: Column<Post, String> = Column::new("posts", "title");
+const POST_PUBLISHED: Column<Post, i64> = Column::new("posts", "published");
 const POST_AUTHOR_ID: Column<Post, i64> = Column::new("posts", "author_id");
 
 const COMMENT_ID: Column<Comment, i64> = Column::new("comments", "id");
@@ -83,7 +88,7 @@ fn comments() -> IncludeList<'static, Post, Comment, i64, ()> {
 
 both_dbs! {
     setup = "CREATE TABLE users (id BIGINT PRIMARY KEY, name TEXT NOT NULL);
-             CREATE TABLE posts (id BIGINT PRIMARY KEY, title TEXT NOT NULL, author_id BIGINT NOT NULL);
+             CREATE TABLE posts (id BIGINT PRIMARY KEY, title TEXT NOT NULL, published INTEGER NOT NULL, author_id BIGINT NOT NULL);
              CREATE TABLE comments (id BIGINT PRIMARY KEY, body TEXT NOT NULL, post_id BIGINT NOT NULL)";
     async fn runtime_include_round_trip(db: TestDb) {
         let pool = db.any_pool();
@@ -96,10 +101,15 @@ both_dbs! {
                 .await?;
         }
 
-        for (id, title, author_id) in [(1, "first", 1), (2, "second", 1), (3, "third", 2)] {
+        for (id, title, published, author_id) in [
+            (1, "first", 1, 1),
+            (2, "second", 1, 1),
+            (3, "third", 0, 2),
+        ] {
             InsertQuery::<Post>::new(pool)
                 .set(POST_ID, id)
                 .set(POST_TITLE, title)
+                .set(POST_PUBLISHED, published)
                 .set(POST_AUTHOR_ID, author_id)
                 .exec()
                 .await?;
@@ -137,5 +147,118 @@ both_dbs! {
         let first = posts.iter().find(|p| p.id == 1).unwrap();
         assert!(first.author.get().is_some());
         assert_eq!(first.author.get().as_ref().unwrap().name, "alice");
+
+        // --- P5-04: relation quantifier filters ---
+
+        // Users with at least one published post (alice has 2, bob has 0)
+        let child_published = POST_PUBLISHED.eq(1);
+        let users_with_posts: Vec<User> = SelectQuery::<User>::new(pool)
+            .filter(Filter::<User>::new(FilterNode::Exists {
+                child_table: "posts",
+                child_col: "author_id",
+                parent_table: "users",
+                parent_col: "id",
+                filter: Box::new(child_published.node.clone()),
+                negated: false,
+            }))
+            .fetch_all()
+            .await?;
+        assert_eq!(users_with_posts.len(), 1);
+        assert_eq!(users_with_posts[0].id, 1);
+
+        // Users with no published posts (bob)
+        let users_no_posts: Vec<User> = SelectQuery::<User>::new(pool)
+            .filter(Filter::<User>::new(FilterNode::Exists {
+                child_table: "posts",
+                child_col: "author_id",
+                parent_table: "users",
+                parent_col: "id",
+                filter: Box::new(child_published.node.clone()),
+                negated: true,
+            }))
+            .fetch_all()
+            .await?;
+        assert_eq!(users_no_posts.len(), 1);
+        assert_eq!(users_no_posts[0].id, 2);
+
+        // Users where every post is published (alice: all published, bob: has an unpublished post)
+        let users_every: Vec<User> = SelectQuery::<User>::new(pool)
+            .filter(Filter::<User>::new(FilterNode::Exists {
+                child_table: "posts",
+                child_col: "author_id",
+                parent_table: "users",
+                parent_col: "id",
+                filter: Box::new((!child_published).node),
+                negated: true,
+            }))
+            .fetch_all()
+            .await?;
+        assert_eq!(users_every.len(), 1);
+        assert_eq!(users_every[0].id, 1);
+
+        // Posts whose author is named "alice"
+        let author_alice = USER_NAME.eq("alice");
+        let posts_by_alice: Vec<Post> = SelectQuery::<Post>::new(pool)
+            .filter(Filter::<Post>::new(FilterNode::Exists {
+                child_table: "users",
+                child_col: "id",
+                parent_table: "posts",
+                parent_col: "author_id",
+                filter: Box::new(author_alice.node),
+                negated: false,
+            }))
+            .fetch_all()
+            .await?;
+        assert_eq!(posts_by_alice.len(), 2);
+        assert!(posts_by_alice.iter().all(|p| p.author_id == 1));
+    }
+}
+
+both_dbs! {
+    setup = "CREATE TABLE users (id BIGINT PRIMARY KEY, name TEXT NOT NULL);
+             CREATE TABLE posts (id BIGINT PRIMARY KEY, title TEXT NOT NULL, published INTEGER NOT NULL, author_id BIGINT NOT NULL);
+             CREATE TABLE comments (id BIGINT PRIMARY KEY, body TEXT NOT NULL, post_id BIGINT NOT NULL)";
+    async fn nested_create_round_trip(db: TestDb) {
+        let pool = db.any_pool();
+
+        struct SetPosts;
+        impl NestedSetter<User> for SetPosts {
+            fn set(&self, parent: &mut User, rows: Vec<sqlx::any::AnyRow>) {
+                parent.posts = Related::Loaded(
+                    rows.into_iter()
+                        .map(|r| Post::from_row(&r).unwrap())
+                        .collect(),
+                );
+            }
+        }
+
+        let user: User = InsertQuery::new(pool)
+            .set(USER_ID, 1)
+            .set(USER_NAME, "alice")
+            .with_related(
+                |u| u.id.to_value(),
+                "author_id",
+                InsertManyQuery::<Post>::new(pool)
+                    .row([
+                        ("id", Value::I64(10)),
+                        ("title", Value::Str("first".to_string().into())),
+                        ("published", Value::I64(1)),
+                    ])
+                    .row([
+                        ("id", Value::I64(11)),
+                        ("title", Value::Str("second".to_string().into())),
+                        ("published", Value::I64(1)),
+                    ]),
+                SetPosts,
+            )
+            .exec()
+            .await?;
+
+        assert_eq!(user.id, 1);
+        assert_eq!(user.name, "alice");
+        assert_eq!(user.posts.get().len(), 2);
+        assert_eq!(user.posts.get()[0].title, "first");
+        assert_eq!(user.posts.get()[1].title, "second");
+        assert!(user.posts.get().iter().all(|p| p.author_id == 1));
     }
 }

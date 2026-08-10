@@ -479,6 +479,33 @@ impl<'d> Compiler<'d> {
                 self.push_filter(n);
                 self.push(')');
             }
+            FilterNode::Exists {
+                child_table,
+                child_col,
+                parent_table,
+                parent_col,
+                filter,
+                negated,
+            } => {
+                if *negated {
+                    self.push_str("NOT ");
+                }
+                self.push_str("EXISTS (SELECT 1 FROM ");
+                self.push_quoted(child_table);
+                self.push_str(" WHERE ");
+                self.push_quoted(child_table);
+                self.push('.');
+                self.push_quoted(child_col);
+                self.push_str(" = ");
+                self.push_quoted(parent_table);
+                self.push('.');
+                self.push_quoted(parent_col);
+                if !matches!(filter.as_ref(), FilterNode::And(v) if v.is_empty()) {
+                    self.push_str(" AND ");
+                    self.push_filter(filter);
+                }
+                self.push(')');
+            }
         }
     }
 
@@ -641,6 +668,50 @@ mod tests {
         assert_eq!(
             c.binds,
             vec![Value::I64(1), Value::I32(1), Value::I32(2), Value::I32(3)]
+        );
+    }
+
+    #[test]
+    fn relation_exists_filter() {
+        struct Post;
+        impl Model for Post {
+            const TABLE: &'static str = "posts";
+        }
+
+        let child = Filter::<Post>::new(FilterNode::Cmp {
+            table: "posts",
+            column: "published",
+            op: CmpOp::Eq,
+            value: Value::Bool(true),
+        });
+
+        let f = Filter::<User>::new(FilterNode::Exists {
+            child_table: "posts",
+            child_col: "author_id",
+            parent_table: "users",
+            parent_col: "id",
+            filter: Box::new(child.node.clone()),
+            negated: false,
+        });
+        let c = select::<User>(pg().as_ref(), "users", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r#"SELECT * FROM "users" WHERE EXISTS (SELECT 1 FROM "posts" WHERE "posts"."author_id" = "users"."id" AND "posts"."published" = $1)"#
+        );
+        assert_eq!(c.binds, vec![Value::Bool(true)]);
+
+        let f = Filter::<User>::new(FilterNode::Exists {
+            child_table: "posts",
+            child_col: "author_id",
+            parent_table: "users",
+            parent_col: "id",
+            filter: Box::new(child.node.clone()),
+            negated: true,
+        });
+        let c = select::<User>(pg().as_ref(), "users", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r#"SELECT * FROM "users" WHERE NOT EXISTS (SELECT 1 FROM "posts" WHERE "posts"."author_id" = "users"."id" AND "posts"."published" = $1)"#
         );
     }
 
