@@ -265,6 +265,7 @@ pub(crate) fn default_sql(dialect: &dyn DbDialect, f: &Field) -> String {
         DefaultValue::Function(func) => match (func, dialect.name()) {
             (DefaultFn::Uuid4, "postgres") => "gen_random_uuid()".to_owned(),
             (DefaultFn::Now, "postgres") => "NOW()".to_owned(),
+            (DefaultFn::Now, "sqlite") => "(datetime('now'))".to_owned(),
             (DefaultFn::Now, _) => "datetime('now')".to_owned(),
             (
                 DefaultFn::Uuid4

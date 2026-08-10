@@ -1,6 +1,6 @@
 [book]
 title = "ruprizzle-orm"
-authors = ["Claude Code + Devin"]
+authors = ["Vaibhav Gupta"]
 description = "Documentation for ruprizzle-orm, a schema-first ORM for Rust."
 src = "docs"
 language = "en"
