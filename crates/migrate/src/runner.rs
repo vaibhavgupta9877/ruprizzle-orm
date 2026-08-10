@@ -235,10 +235,29 @@ impl Migrator {
             let mut tx = pool.begin().await?;
 
             if is_postgres {
-                sqlx::query("SELECT pg_advisory_xact_lock(42)")
+                sqlx::query("SELECT pg_advisory_xact_lock($1)")
+                    .bind(advisory_lock_key())
                     .execute(&mut *tx)
                     .await?;
             }
+
+            // Re-read inside the lock. Our pending set was computed before the
+            // lock was held, so a concurrent deployer may have applied this
+            // migration in between; re-running its DDL would fail on
+            // "already exists" for what is really a no-op.
+            let already: Option<(String,)> = sqlx::query_as(
+                "SELECT id FROM _ruprizzle_migrations \
+                 WHERE id = $1 AND rolled_back_at IS NULL",
+            )
+            .bind(&m.id)
+            .fetch_optional(&mut *tx)
+            .await?;
+            if already.is_some() {
+                tx.rollback().await?;
+                continue;
+            }
+
+            let stmt_start = Instant::now();
 
             let statements = split_statements(&m.up);
             for (idx, stmt) in statements.iter().enumerate() {
@@ -260,7 +279,7 @@ impl Migrator {
                 }
             }
 
-            let elapsed = start.elapsed().as_millis() as i64;
+            let elapsed = stmt_start.elapsed().as_millis() as i64;
             sqlx::query(
                 "INSERT INTO _ruprizzle_migrations (id, checksum, applied_at, execution_ms)
                  VALUES ($1, $2, CURRENT_TIMESTAMP, $3)
@@ -446,6 +465,16 @@ pub fn compute_checksum(up: &str) -> String {
     })
 }
 
+/// The advisory lock key for migration application.
+///
+/// Derived from the tracking table name rather than a literal, because advisory
+/// lock keys share one namespace per database: a hardcoded small integer will
+/// eventually contend with an unrelated application that picked the same one.
+fn advisory_lock_key() -> i64 {
+    let digest = Sha256::digest(b"_ruprizzle_migrations");
+    i64::from_be_bytes(digest[..8].try_into().unwrap_or([0; 8]))
+}
+
 /// Splits SQL text into individual statements, respecting comments and literals.
 pub fn split_statements(sql: &str) -> Vec<String> {
     // Simple SQL-aware splitter.  It ignores `;` inside `--` comments, `/* */
@@ -560,4 +589,19 @@ fn dollar_tag_len(chars: &[char], i: usize) -> Option<usize> {
 /// Whether `tag` occurs at `i` in `chars`.
 fn matches_at(chars: &[char], i: usize, tag: &[char]) -> bool {
     chars.len() >= i + tag.len() && chars[i..i + tag.len()] == *tag
+}
+
+#[cfg(test)]
+mod tests {
+    use super::advisory_lock_key;
+
+    #[test]
+    fn lock_key_is_stable_and_not_a_small_literal() {
+        let k = advisory_lock_key();
+        assert_eq!(k, advisory_lock_key(), "key must be deterministic");
+        assert!(
+            k.unsigned_abs() > u64::from(u16::MAX),
+            "key {k} is small enough to collide with a hand-picked literal"
+        );
+    }
 }
