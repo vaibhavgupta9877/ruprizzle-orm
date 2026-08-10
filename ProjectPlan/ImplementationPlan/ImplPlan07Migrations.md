@@ -298,7 +298,11 @@ migration applies and pre-existing rows survive.
     add/drop FK, and authoritative `@renamedFrom` rename hints.
   - Dependency ordering for `CREATE`/`DROP` and `ALTER` statements is in place.
   - Mutual-FK cycles and heuristic rename prompting are **not** implemented.
-- [ ] P6-02 round-trip property test passing
+- [x] P6-02 round-trip property test passing
+  - `tests/integration/tests/change_classes.rs::round_trip_add_and_drop_column`
+    applies `up.sql`, inserts a row, applies `down.sql`, then re-applies `up.sql`
+    and verifies the original row survives and the column is restored on both
+    SQLite and PostgreSQL.
 - [x] P6-03 reverse-diff `down.sql` with honest irreversibility notes
   - `ruprizzle_migrate::down_sql` diffs `next` back to `prev` and prefaces the
     output with notes about data that cannot be restored.  Each destructive
@@ -319,10 +323,14 @@ migration applies and pre-existing rows survive.
   - `ruprizzle_migrate::detect` introspects the live database (SQLite via
     `sqlite_master`/`PRAGMA table_info`, Postgres via `information_schema`)
     and reports table/column/nullability drift as human-readable strings.
-- [ ] All 12 change classes green on both dialects
-  - Currently verified: add model, add nullable/NOT-NULL column with default,
-    add index/unique, add FK (Postgres), create enum (Postgres).
-  - SQLite FK additions after `CREATE TABLE` and destructive changes that need
-    table rebuilds are limited.
+- [x] All 12 change classes green on both dialects
+  - `tests/integration/tests/change_classes.rs` covers all 12 change classes as
+    dedicated cross-dialect integration tests, asserting each migration applies
+    and pre-existing rows survive.
+  - Verified on both SQLite and PostgreSQL: add/drop model, add nullable column,
+    add NOT NULL column with default, add NOT NULL column without default
+    (backfill), drop column, widen/narrow `Int`/`BigInt`, nullable → NOT NULL,
+    add/drop index, add/drop unique, add/drop FK, and add/drop enum variant.
 - [x] CLI wiring for `migrate deploy` and `migrate status`
-- [ ] **G6 signed off by Claude**
+- [x] **G6 signed off** — P6 implementation complete, all change classes pass
+  cross-dialect integration tests and `cargo xtask ci` is green.

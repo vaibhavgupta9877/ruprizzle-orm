@@ -267,7 +267,7 @@ impl<'a> Planner<'a> {
             let table = self.dialect.quote_ident(&m.table);
             let col = self.dialect.quote_ident(&field.column);
             stmts.push(Stmt::new(format!(
-                "-- ▼▼▼ RUPRIZZLE:BACKFILL — edit this block; it is preserved on regeneration ▼▼▼\n\
+                "-- ▼▼▼ RUPRIZZLE:BACKFILL — edit this block (preserved on regeneration) ▼▼▼\n\
                  -- Column {table}.{col} is NOT NULL with no default and the table may have rows.\n\
                  -- Provide a backfill, then the NOT NULL constraint below will succeed.\n\
                  -- UPDATE {table} SET {col} = <expr> WHERE {col} IS NULL;\n\
