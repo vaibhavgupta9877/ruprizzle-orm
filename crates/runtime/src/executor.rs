@@ -65,7 +65,7 @@ impl Executor for Pool {
             for b in binds {
                 q = q.bind(b);
             }
-            q.fetch_all(self).await.map_err(Error::Sqlx)
+            q.fetch_all(self).await.map_err(Error::from)
         })
     }
 
@@ -78,7 +78,7 @@ impl Executor for Pool {
             q.execute(self)
                 .await
                 .map(|r| r.rows_affected())
-                .map_err(Error::Sqlx)
+                .map_err(Error::from)
         })
     }
 

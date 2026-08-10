@@ -7,15 +7,28 @@
 //!
 //! Subcommands are implemented incrementally: P6 delivers `migrate deploy`,
 //! `migrate status`, and `db push` (schema push without migration files).
-//! The remaining commands are still placeholders.
+//! P7 fills in the remaining commands.
 
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
 
-use std::path::Path;
+use std::collections::BTreeMap;
+
+use indexmap::IndexMap;
+use std::ffi::OsString;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use clap::{Parser, Subcommand};
+use notify::{RecursiveMode, Watcher};
+use ruprizzle_codegen::generate_all;
+use ruprizzle_core::SchemaError;
+use ruprizzle_core::ir::{DatasourceUrl, Provider, Schema};
+use ruprizzle_dialect::{check_schema_capabilities, dialect_for};
+use ruprizzle_migrate::runner::{compute_checksum, split_statements};
+use ruprizzle_migrate::{Change, MigrationMeta, Migrator, diff, down_sql, up_sql};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -121,27 +134,6 @@ enum DbCommand {
     Seed,
 }
 
-fn owning_phase(command: &Command) -> Option<(&'static str, &'static str)> {
-    match command {
-        Command::Generate { .. } | Command::Validate => {
-            Some(("P1-P3", "ImplPlan02SchemaDslParser.md"))
-        }
-        Command::Migrate(MigrateCommand::Dev { .. }) | Command::Db(DbCommand::Push { .. }) => {
-            // `migrate dev` and `db push` still rely on codegen/round-trip polish.
-            Some(("P6-P7", "ImplPlan07Migrations.md"))
-        }
-        Command::Migrate(
-            MigrateCommand::Deploy
-            | MigrateCommand::Status
-            | MigrateCommand::Resolve { .. }
-            | MigrateCommand::Reset { .. },
-        ) => None,
-        Command::Init { .. } | Command::Format | Command::Db(DbCommand::Seed) => {
-            Some(("P7", "ImplPlan08CliDx.md"))
-        }
-    }
-}
-
 #[tokio::main]
 async fn main() -> ExitCode {
     let cli = Cli::parse();
@@ -160,70 +152,600 @@ async fn main() -> ExitCode {
 }
 
 async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Load .env once, before any command needs environment variables.
+    let _ = dotenvy::dotenv();
+
     match &cli.command {
-        Command::Validate => {
-            validate(&cli.schema)?;
-            Ok(())
+        Command::Init { provider } => init(&cli.schema, provider),
+        Command::Generate { watch: true } => generate_watch(&cli.schema).await,
+        Command::Generate { watch: false } => generate(&cli.schema),
+        Command::Validate => validate(&cli.schema),
+        Command::Format => format_schema(&cli.schema),
+        Command::Migrate(MigrateCommand::Dev {
+            name,
+            accept_data_loss,
+            create_only,
+        }) => {
+            migrate_dev(
+                &cli.schema,
+                "migrations",
+                name.as_ref(),
+                *accept_data_loss,
+                *create_only,
+                cli.verbose,
+            )
+            .await
         }
         Command::Migrate(MigrateCommand::Deploy) => {
-            migrate_deploy(&cli.schema, "migrations", false).await
+            migrate_deploy(&cli.schema, "migrations", false, cli.verbose).await
         }
-        Command::Migrate(MigrateCommand::Status) => migrate_status(&cli.schema, "migrations").await,
-        _ => {
-            if let Some((phase, doc)) = owning_phase(&cli.command) {
-                Err(format!(
-                    "this command is not implemented yet. It arrives in phase {phase}. \
-                     See ProjectPlan/ImplementationPlan/{doc} for details."
-                )
-                .into())
-            } else {
-                Err("this command is implemented but failed to dispatch".into())
+        Command::Migrate(MigrateCommand::Status) => {
+            migrate_status(&cli.schema, "migrations", cli.verbose).await
+        }
+        Command::Migrate(MigrateCommand::Resolve { id }) => {
+            migrate_resolve(&cli.schema, "migrations", id, cli.verbose).await
+        }
+        Command::Migrate(MigrateCommand::Reset { force }) => {
+            if !force {
+                return Err("migrate reset is destructive; pass --force to proceed".into());
             }
+            migrate_reset(&cli.schema, "migrations", cli.verbose).await
+        }
+        Command::Db(DbCommand::Push { accept_data_loss }) => {
+            db_push(&cli.schema, "migrations", *accept_data_loss, cli.verbose).await
+        }
+        Command::Db(DbCommand::Seed) => db_seed(&cli.schema, cli.verbose).await,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Error / diagnostic helpers
+// ---------------------------------------------------------------------------
+
+/// Wraps a `miette::Report` so it can be returned as a `Box<dyn Error>` and
+/// printed with full source snippets by `main`.
+#[derive(Debug)]
+struct DiagnosticReport(miette::Report);
+
+impl std::fmt::Display for DiagnosticReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+impl std::error::Error for DiagnosticReport {}
+
+fn parse_schema(
+    path: &str,
+) -> Result<(Schema, String, Vec<SchemaError>), Box<dyn std::error::Error + Send + Sync>> {
+    let source = fs::read_to_string(path)?;
+    match ruprizzle_parser::parse_with_warnings(path, &source) {
+        Ok((schema, warnings)) => Ok((schema, source, warnings)),
+        Err(errors) => {
+            let report = miette::Report::new(*errors);
+            Err(Box::new(DiagnosticReport(report)))
         }
     }
 }
 
+fn print_warnings(source: &str, warnings: Vec<SchemaError>) {
+    for warning in warnings {
+        let report = miette::Report::new(warning).with_source_code(source.to_owned());
+        eprintln!("{report:?}");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// init
+// ---------------------------------------------------------------------------
+
+fn init(schema_path: &str, provider: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let Some(provider) = Provider::parse(provider) else {
+        return Err(format!(
+            "unknown provider `{provider}`; supported: {}",
+            Provider::ALL
+                .iter()
+                .map(Provider::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+        .into());
+    };
+    let provider_str = provider.as_str();
+
+    let schema_file = Path::new(schema_path);
+    let base = schema_file.parent().unwrap_or(Path::new("."));
+
+    if schema_file.exists() {
+        return Err(format!("schema file already exists: {schema_path}").into());
+    }
+
+    let default_url = match provider {
+        Provider::Postgres => "postgres://localhost:5432/postgres?sslmode=disable",
+        Provider::Sqlite => "sqlite:test.db",
+    };
+
+    fs::create_dir_all(base)?;
+
+    let schema_content = format!(
+        r#"datasource db {{
+  provider = "{provider_str}"
+  url      = env("DATABASE_URL")
+}}
+
+generator client {{
+  output      = "src/db"
+  module_name = "db"
+}}
+
+// model User {{
+//   id    Uuid   @id @default(uuid7())
+//   email String @unique
+//   name  String?
+// }}
+"#
+    );
+    fs::write(schema_file, schema_content)?;
+
+    let env_path = base.join(".env");
+    if !env_path.exists() {
+        fs::write(&env_path, format!("DATABASE_URL={default_url}\n"))?;
+    }
+
+    let gitignore = base.join(".gitignore");
+    let mut gitignore_content = if gitignore.exists() {
+        fs::read_to_string(&gitignore)?
+    } else {
+        String::new()
+    };
+    if !gitignore_content.lines().any(|l| l.trim() == "/src/db") {
+        if !gitignore_content.is_empty() && !gitignore_content.ends_with('\n') {
+            gitignore_content.push('\n');
+        }
+        gitignore_content.push_str("/src/db\n");
+        fs::write(&gitignore, gitignore_content)?;
+    }
+
+    let migrations = base.join("migrations");
+    fs::create_dir_all(&migrations)?;
+    fs::write(
+        migrations.join("README.md"),
+        "# Migrations\n\nEach subdirectory is one migration. It must contain:\n\n- `up.sql`   — changes to apply\n- `down.sql` — changes to roll back\n- `meta.json` — migration metadata\n\nDo not edit migrations that have already been applied.\n",
+    )?;
+
+    println!("✓ Initialised ruprizzle (provider: {provider_str})");
+    println!();
+    println!("  Next:");
+    println!("    1. edit schema.ruprizzle");
+    println!("    2. ruprizzle migrate dev --name init");
+    println!("    3. cargo add ruprizzle");
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// generate
+// ---------------------------------------------------------------------------
+
+fn output_dir(schema_path: &str, schema: &Schema) -> PathBuf {
+    Path::new(schema_path)
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join(&schema.generator.output)
+}
+
+fn write_generated_files(
+    out_dir: &Path,
+    files: &BTreeMap<String, String>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let file_name = out_dir
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("out");
+    let tmp = out_dir.with_file_name(format!("{file_name}.tmp"));
+    let old = out_dir.with_file_name(format!("{file_name}.old"));
+
+    if tmp.exists() {
+        fs::remove_dir_all(&tmp)?;
+    }
+    if old.exists() {
+        fs::remove_dir_all(&old)?;
+    }
+
+    fs::create_dir_all(&tmp)?;
+    for (rel, content) in files {
+        let path = tmp.join(rel);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&path, content)?;
+    }
+
+    if out_dir.exists() {
+        fs::rename(out_dir, &old)?;
+        fs::rename(&tmp, out_dir)?;
+        fs::remove_dir_all(&old)?;
+    } else {
+        fs::rename(&tmp, out_dir)?;
+    }
+
+    Ok(())
+}
+
+fn generate_from(
+    schema: &Schema,
+    source: &str,
+    out_dir: &Path,
+    warnings: Vec<SchemaError>,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    print_warnings(source, warnings);
+
+    let mod_existed = out_dir.join("mod.rs").exists();
+    let files = generate_all(schema);
+    write_generated_files(out_dir, &files)?;
+
+    let hash = schema.fingerprint();
+    println!(
+        "Generated {} ({} files, hash {hash:.8})",
+        out_dir.display(),
+        files.len()
+    );
+
+    if !mod_existed {
+        println!("add mod {}; to src/lib.rs", schema.generator.module_name);
+    }
+
+    Ok(hash)
+}
+
+fn generate(schema_path: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (schema, source, warnings) = parse_schema(schema_path)?;
+    let out_dir = output_dir(schema_path, &schema);
+    let _ = generate_from(&schema, &source, &out_dir, warnings)?;
+    Ok(())
+}
+
+async fn generate_watch(schema_path: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+
+    let path = Path::new(schema_path).to_path_buf();
+    let parent = path
+        .parent()
+        .map_or_else(|| PathBuf::from("."), std::convert::Into::into);
+    let file_name: OsString = path
+        .file_name()
+        .map_or_else(OsString::new, std::convert::Into::into);
+
+    let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+        if let Ok(event) = res {
+            if event
+                .paths
+                .iter()
+                .any(|p| p.file_name() == file_name.as_os_str().into())
+            {
+                let _ = tx.send(());
+            }
+        }
+    })
+    .map_err(|e| format!("failed to start file watcher: {e}"))?;
+
+    watcher
+        .watch(&parent, RecursiveMode::NonRecursive)
+        .map_err(|e| format!("failed to watch {}: {e}", parent.display()))?;
+
+    let mut last_hash: Option<String> = None;
+    let mut last_err = match try_generate(schema_path, &mut last_hash) {
+        Ok(()) => false,
+        Err(e) => {
+            eprintln!("ruprizzle: {e}");
+            true
+        }
+    };
+
+    loop {
+        tokio::select! {
+            Some(()) = rx.recv() => {
+                tokio::select! {
+                    () = tokio::time::sleep(Duration::from_millis(150)) => {}
+                    _ = tokio::signal::ctrl_c() => break,
+                }
+                while rx.try_recv().is_ok() {}
+
+                match try_generate(schema_path, &mut last_hash) {
+                    Ok(()) => {
+                        if last_err {
+                            eprintln!("(error cleared)");
+                        }
+                        last_err = false;
+                    }
+                    Err(e) => {
+                        eprintln!("ruprizzle: {e}");
+                        last_err = true;
+                    }
+                }
+            }
+            _ = tokio::signal::ctrl_c() => break,
+        }
+    }
+
+    Ok(())
+}
+
+fn try_generate(
+    schema_path: &str,
+    last_hash: &mut Option<String>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (schema, source, warnings) = parse_schema(schema_path)?;
+    let hash = schema.fingerprint();
+    if last_hash.as_ref() == Some(&hash) {
+        return Ok(());
+    }
+    let out_dir = output_dir(schema_path, &schema);
+    let _ = generate_from(&schema, &source, &out_dir, warnings)?;
+    *last_hash = Some(hash);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// validate / format
+// ---------------------------------------------------------------------------
+
 fn validate(schema_path: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let source = std::fs::read_to_string(schema_path)?;
-    let _ = ruprizzle_parser::parse(schema_path, &source)?;
+    let (schema, source, mut warnings) = parse_schema(schema_path)?;
+    let dialect = dialect_for(schema.datasource.provider);
+    let caps = check_schema_capabilities(dialect.as_ref(), &schema);
+    warnings.extend(caps);
+
+    print_warnings(&source, warnings);
     println!("{schema_path} is valid.");
     Ok(())
 }
 
-fn resolve_database_url(
-    schema_path: &str,
-) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    let source = std::fs::read_to_string(schema_path)?;
-    let schema = ruprizzle_parser::parse(schema_path, &source)?;
+fn format_schema(schema_path: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (_, source, warnings) = parse_schema(schema_path)?;
+    print_warnings(&source, warnings);
+    println!("schema is already canonical");
+    Ok(())
+}
 
-    match &schema.datasource.url {
-        ruprizzle_core::ir::DatasourceUrl::Literal(url) => Ok(url.clone()),
-        ruprizzle_core::ir::DatasourceUrl::Env(var) => std::env::var(var).map_err(|_| {
-            format!("environment variable {var} (from datasource.url) is not set").into()
-        }),
+// ---------------------------------------------------------------------------
+// migrate
+// ---------------------------------------------------------------------------
+
+fn snapshot_path(migrations_dir: &str) -> PathBuf {
+    Path::new(migrations_dir)
+        .join(".ruprizzle")
+        .join("snapshot.ruprizzle")
+}
+
+fn empty_schema_like(schema: &Schema) -> Schema {
+    Schema {
+        version: ruprizzle_core::ir::IR_VERSION,
+        datasource: schema.datasource.clone(),
+        generator: schema.generator.clone(),
+        enums: IndexMap::default(),
+        models: IndexMap::default(),
+        relations: Vec::new(),
     }
 }
 
-async fn connect(url: &str) -> Result<sqlx::AnyPool, Box<dyn std::error::Error + Send + Sync>> {
-    sqlx::any::install_default_drivers();
-    Ok(sqlx::AnyPool::connect(url).await?)
+fn load_snapshot(
+    path: &Path,
+    schema: &Schema,
+) -> Result<Schema, Box<dyn std::error::Error + Send + Sync>> {
+    if !path.exists() {
+        return Ok(empty_schema_like(schema));
+    }
+    let source = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&source)?)
+}
+
+fn save_snapshot(
+    path: &Path,
+    schema: &Schema,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, serde_json::to_string_pretty(schema)?)?;
+    Ok(())
+}
+
+fn destructive_descriptions(changes: &[Change]) -> Vec<String> {
+    changes
+        .iter()
+        .filter(|c| c.is_destructive())
+        .map(Change::description)
+        .collect()
+}
+
+fn migration_id(name: Option<&String>) -> String {
+    #[allow(clippy::cast_possible_truncation)]
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    match name {
+        Some(n) => format!("{now}_{n}"),
+        None => now.to_string(),
+    }
+}
+
+fn write_migration(
+    migrations_dir: &str,
+    id: &str,
+    up: &str,
+    down: &str,
+    destructive: bool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let dir = Path::new(migrations_dir).join(id);
+    if dir.exists() {
+        return Err(format!("migration `{id}` already exists").into());
+    }
+    fs::create_dir_all(&dir)?;
+    fs::write(dir.join("up.sql"), up)?;
+    fs::write(dir.join("down.sql"), down)?;
+
+    let meta = MigrationMeta {
+        id: id.to_owned(),
+        checksum: compute_checksum(up),
+        destructive,
+        ruprizzle_version: env!("CARGO_PKG_VERSION").to_owned(),
+    };
+    fs::write(dir.join("meta.json"), serde_json::to_string_pretty(&meta)?)?;
+
+    Ok(())
+}
+
+async fn execute_statements(
+    pool: &sqlx::AnyPool,
+    sql: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut tx = pool.begin().await?;
+    for (idx, stmt) in split_statements(sql).iter().enumerate() {
+        let sql = stmt.trim();
+        if sql.is_empty() || sql.starts_with("-- ") || sql.starts_with("/*") {
+            continue;
+        }
+        if let Err(e) = sqlx::query(sql).execute(&mut *tx).await {
+            return Err(format!("statement {} failed: {e}\n  sql: {sql}", idx + 1).into());
+        }
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn migrate_dev(
+    schema_path: &str,
+    migrations_dir: &str,
+    name: Option<&String>,
+    accept_data_loss: bool,
+    create_only: bool,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (schema, source, mut warnings) = parse_schema(schema_path)?;
+    let dialect = dialect_for(schema.datasource.provider);
+    warnings.extend(check_schema_capabilities(dialect.as_ref(), &schema));
+    print_warnings(&source, warnings);
+
+    let url = resolve_database_url(schema_path, verbose)?;
+    let pool = connect(&url).await?;
+
+    fs::create_dir_all(migrations_dir)?;
+
+    let snapshot = snapshot_path(migrations_dir);
+    let prev = load_snapshot(&snapshot, &schema)?;
+
+    let changes = diff(&prev, &schema);
+    let destructive = destructive_descriptions(&changes);
+    if !destructive.is_empty() && !accept_data_loss {
+        return Err(format!(
+            "destructive changes detected; pass --accept-data-loss to proceed:\n  - {}",
+            destructive.join("\n  - ")
+        )
+        .into());
+    }
+
+    let up = up_sql(&prev, &schema, dialect.as_ref());
+    let down = down_sql(&prev, &schema, dialect.as_ref());
+    let id = migration_id(name);
+
+    let is_destructive = changes.iter().any(Change::is_destructive);
+    write_migration(migrations_dir, &id, &up, &down, is_destructive)?;
+    println!("Created migration {id}");
+
+    if create_only {
+        return Ok(());
+    }
+
+    let migrator = Migrator::new(migrations_dir);
+    let report = migrator.apply_all(&pool, accept_data_loss).await?;
+
+    if report.applied.is_empty() {
+        println!("No pending migrations.");
+    } else {
+        for applied in &report.applied {
+            println!("Applied {applied}");
+        }
+        println!("Done in {:?}", report.duration);
+    }
+
+    let out_dir = output_dir(schema_path, &schema);
+    let _ = generate_from(&schema, &source, &out_dir, Vec::new())?;
+    save_snapshot(&snapshot, &schema)?;
+
+    Ok(())
+}
+
+async fn migrate_resolve(
+    schema_path: &str,
+    migrations_dir: &str,
+    id: &str,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (_, source, warnings) = parse_schema(schema_path)?;
+    print_warnings(&source, warnings);
+
+    let url = resolve_database_url(schema_path, verbose)?;
+    let pool = connect(&url).await?;
+
+    let migrator = Migrator::new(migrations_dir);
+    migrator.resolve(&pool, id).await?;
+    println!("Resolved {id}");
+    Ok(())
+}
+
+async fn migrate_reset(
+    schema_path: &str,
+    migrations_dir: &str,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (schema, source, mut warnings) = parse_schema(schema_path)?;
+    let dialect = dialect_for(schema.datasource.provider);
+    warnings.extend(check_schema_capabilities(dialect.as_ref(), &schema));
+    print_warnings(&source, warnings);
+
+    let url = resolve_database_url(schema_path, verbose)?;
+    let pool = connect(&url).await?;
+
+    let migrator = Migrator::new(migrations_dir);
+    migrator.reset(&pool, dialect.as_ref()).await?;
+
+    let report = migrator.apply_all(&pool, true).await?;
+    if report.applied.is_empty() {
+        println!("No pending migrations.");
+    } else {
+        for applied in &report.applied {
+            println!("Applied {applied}");
+        }
+        println!("Done in {:?}", report.duration);
+    }
+
+    let out_dir = output_dir(schema_path, &schema);
+    let _ = generate_from(&schema, &source, &out_dir, Vec::new())?;
+    save_snapshot(&snapshot_path(migrations_dir), &schema)?;
+
+    println!("Reset complete");
+    Ok(())
 }
 
 async fn migrate_deploy(
     schema_path: &str,
     migrations_dir: &str,
     accept_data_loss: bool,
+    verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    validate(schema_path)?;
+    let (_, source, warnings) = parse_schema(schema_path)?;
+    print_warnings(&source, warnings);
 
-    let url = resolve_database_url(schema_path)?;
+    let url = resolve_database_url(schema_path, verbose)?;
     let pool = connect(&url).await?;
 
     if !Path::new(migrations_dir).exists() {
         return Err(format!("migrations directory not found: {migrations_dir}").into());
     }
 
-    let migrator = ruprizzle_migrate::Migrator::new(migrations_dir);
+    let migrator = Migrator::new(migrations_dir);
     let report = migrator.apply_all(&pool, accept_data_loss).await?;
 
     if report.applied.is_empty() {
@@ -241,13 +763,15 @@ async fn migrate_deploy(
 async fn migrate_status(
     schema_path: &str,
     migrations_dir: &str,
+    verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    validate(schema_path)?;
+    let (_, source, warnings) = parse_schema(schema_path)?;
+    print_warnings(&source, warnings);
 
-    let url = resolve_database_url(schema_path)?;
+    let url = resolve_database_url(schema_path, verbose)?;
     let pool = connect(&url).await?;
 
-    let migrator = ruprizzle_migrate::Migrator::new(migrations_dir);
+    let migrator = Migrator::new(migrations_dir);
     let status = migrator.status(&pool).await?;
 
     println!("Applied ({}):", status.applied.len());
@@ -265,6 +789,111 @@ async fn migrate_status(
     }
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// db push / seed
+// ---------------------------------------------------------------------------
+
+async fn db_push(
+    schema_path: &str,
+    migrations_dir: &str,
+    accept_data_loss: bool,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (schema, source, mut warnings) = parse_schema(schema_path)?;
+    let dialect = dialect_for(schema.datasource.provider);
+    warnings.extend(check_schema_capabilities(dialect.as_ref(), &schema));
+    print_warnings(&source, warnings);
+
+    eprintln!(
+        "Warning: db push is for prototyping only; it bypasses migration history and cannot be reproduced on another machine."
+    );
+
+    let url = resolve_database_url(schema_path, verbose)?;
+    let pool = connect(&url).await?;
+
+    let snapshot = snapshot_path(migrations_dir);
+    let prev = load_snapshot(&snapshot, &schema)?;
+
+    let changes = diff(&prev, &schema);
+    let destructive = destructive_descriptions(&changes);
+    if !destructive.is_empty() && !accept_data_loss {
+        return Err(format!(
+            "destructive changes detected; pass --accept-data-loss to proceed:\n  - {}",
+            destructive.join("\n  - ")
+        )
+        .into());
+    }
+
+    let up = up_sql(&prev, &schema, dialect.as_ref());
+    execute_statements(&pool, &up).await?;
+
+    save_snapshot(&snapshot, &schema)?;
+    println!("Pushed schema to database");
+    Ok(())
+}
+
+async fn db_seed(
+    schema_path: &str,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (_, source, warnings) = parse_schema(schema_path)?;
+    print_warnings(&source, warnings);
+
+    let base = Path::new(schema_path).parent().unwrap_or(Path::new("."));
+    let seed = base.join("seeds").join("main.sql");
+    if !seed.exists() {
+        return Err("create seeds/main.sql".into());
+    }
+    let sql = fs::read_to_string(&seed)?;
+
+    let url = resolve_database_url(schema_path, verbose)?;
+    let pool = connect(&url).await?;
+    execute_statements(&pool, &sql).await?;
+
+    println!("Ran {}", seed.display());
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// shared helpers
+// ---------------------------------------------------------------------------
+
+fn resolve_database_url(
+    schema_path: &str,
+    verbose: bool,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    if let Ok(url) = std::env::var("RUPRIZZLE_DATABASE_URL") {
+        if verbose {
+            eprintln!("database url: RUPRIZZLE_DATABASE_URL env var");
+        }
+        return Ok(url);
+    }
+
+    let (schema, _, _) = parse_schema(schema_path)?;
+    match &schema.datasource.url {
+        DatasourceUrl::Literal(url) => {
+            if verbose {
+                eprintln!("database url: datasource literal");
+            }
+            Ok(url.clone())
+        }
+        DatasourceUrl::Env(var) => {
+            let url = std::env::var(var).map_err(|_| {
+                format!("environment variable {var} (from datasource.url) is not set")
+            })?;
+            if verbose {
+                eprintln!("database url: {var} env var (from datasource)");
+            }
+            Ok(url)
+        }
+    }
+}
+
+async fn connect(url: &str) -> Result<sqlx::AnyPool, Box<dyn std::error::Error + Send + Sync>> {
+    sqlx::any::install_default_drivers();
+    Ok(sqlx::AnyPool::connect(url).await?)
 }
 
 #[cfg(test)]

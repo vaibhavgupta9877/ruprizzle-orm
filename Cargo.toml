@@ -42,6 +42,8 @@ sha2         = "0.10"
 uuid         = { version = "1", features = ["v4", "serde"] }
 tempfile     = "3"
 insta        = { version = "1", features = ["json"] }
+dotenvy      = "0.15"
+notify       = "7"
 
 [profile.dev]
 # Codegen output and sqlx make debug builds heavy; this trims link time without

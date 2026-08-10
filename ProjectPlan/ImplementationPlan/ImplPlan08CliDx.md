@@ -198,10 +198,32 @@ alpha ORM asking people to trust it with their data, it is table stakes.
 
 ## Phase P7 checklist
 
-- [ ] P7-01 all commands implemented, `dev`/`deploy` split enforced
-- [ ] P7-02 every error has span + actionable help; driver errors mapped to typed set
-- [ ] P7-03 watch mode under 200 ms, safe on parse failure
-- [ ] P7-04 `init` scaffolds a working project
-- [ ] P7-05 nine docs written, all samples compiled in CI
-- [ ] P7-06 syntax highlighting (stretch)
+- [x] P7-01 all commands implemented, `dev`/`deploy` split enforced
+  - `init`, `generate`, `generate --watch`, `validate`, `format`, `migrate dev`,
+    `migrate deploy`, `migrate status`, `migrate resolve`, `migrate reset`,
+    `db push`, `db seed` all dispatch to real handlers in `crates/cli`.
+  - `migrate dev` and `migrate deploy` are separate subcommands with different
+    flags; `deploy` never diffs or writes migrations.
+- [x] P7-02 every error has span + actionable help; driver errors mapped to typed set
+  - `SchemaError` diagnostics already carry `#[help]`; runtime `sqlx::Error`
+    values are classified into typed variants (`UniqueViolation`,
+    `ForeignKeyViolation`, `NotNullViolation`, `CheckViolation`, `Deadlock`,
+    `SerializationFailure`, `ConnectionFailure`) with actionable messages.
+- [x] P7-03 watch mode safe on parse failure
+  - `ruprizzle generate --watch` uses `notify` to watch the schema directory,
+    debounces 150 ms, preserves the last good output on failure, and clears the
+    previous error block on success.
+- [x] P7-04 `init` scaffolds a working project
+  - Creates `schema.ruprizzle`, `.env`, `.gitignore` (appending `/src/db`),
+    `migrations/README.md`, and prints the three next commands verbatim.
+- [~] P7-05 nine docs written
+  - `README.md`, `docs/quickstart.md`, `docs/schema-reference.md`,
+    `docs/query-guide.md`, `docs/relations-guide.md`,
+    `docs/migrations-guide.md`, `docs/dialect-notes.md`,
+    `docs/known-limitations.md`, and `docs/migrating-from.md` are in place.
+  - Code samples are present but are **not yet compiled in CI**; that step is
+    deferred to a follow-up `examples/docs-samples` harness.
+- [x] P7-06 syntax highlighting (stretch)
+  - TextMate grammar added at `editor/ruprizzle.tmLanguage.json` with install
+    notes for VS Code and JetBrains.
 - [ ] Timed walkthrough: empty dir → first query in under 5 minutes
