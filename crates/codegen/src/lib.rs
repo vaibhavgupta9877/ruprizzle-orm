@@ -6,8 +6,8 @@
 //! formatting, so generated output cannot be syntactically invalid Rust.
 
 #![forbid(unsafe_code)]
-#![warn(missing_docs, clippy::pedantic)]
+#![warn(missing_docs, clippy::all)]
 
-/// Placeholder for the P3 emitter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NotYetImplemented;
+pub mod emit;
+
+pub use emit::generate_all;

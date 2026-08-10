@@ -14,6 +14,10 @@ categories  = ["database"]
 ruprizzle-core    = { workspace = true }
 ruprizzle-dialect = { workspace = true }
 ruprizzle-macros  = { workspace = true }
-sqlx              = { workspace = true }
+chrono            = { workspace = true }
+rust_decimal      = { workspace = true }
+serde             = { workspace = true }
+serde_json        = { workspace = true }
+sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"] }
 thiserror         = { workspace = true }
-
+uuid              = { workspace = true }
