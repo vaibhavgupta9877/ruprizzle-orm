@@ -91,6 +91,7 @@ impl Tx {
         let tx = self.inner.lock().await.take();
         if let Some(tx) = tx {
             tx.commit().await.map_err(Error::Sqlx)?;
+            tracing::debug!(target: "ruprizzle::query", "transaction committed");
         }
         Ok(())
     }
@@ -104,6 +105,7 @@ impl Tx {
         let tx = self.inner.lock().await.take();
         if let Some(tx) = tx {
             tx.rollback().await.map_err(Error::Sqlx)?;
+            tracing::debug!(target: "ruprizzle::query", "transaction rolled back");
         }
         Ok(())
     }
@@ -236,7 +238,31 @@ impl crate::executor::Executor for Tx {
         sql: String,
         binds: Vec<Value>,
     ) -> crate::BoxFuture<'_, Result<Vec<sqlx::any::AnyRow>, Error>> {
-        Box::pin(async move { self.fetch_all_rows(&sql, binds).await })
+        Box::pin(async move {
+            let bind_count = binds.len();
+            let started = std::time::Instant::now();
+            let result = self.fetch_all_rows(&sql, binds).await;
+            let elapsed_ms = started.elapsed().as_millis() as u64;
+            match &result {
+                Ok(rows) => tracing::debug!(
+                    target: "ruprizzle::query",
+                    sql = %sql,
+                    binds = bind_count,
+                    rows = rows.len(),
+                    elapsed_ms,
+                    "query"
+                ),
+                Err(error) => tracing::warn!(
+                    target: "ruprizzle::query",
+                    sql = %sql,
+                    binds = bind_count,
+                    elapsed_ms,
+                    error = %error,
+                    "query failed"
+                ),
+            }
+            result
+        })
     }
 
     fn execute_raw(
@@ -244,7 +270,31 @@ impl crate::executor::Executor for Tx {
         sql: String,
         binds: Vec<Value>,
     ) -> crate::BoxFuture<'_, Result<u64, Error>> {
-        Box::pin(async move { self.execute(&sql, binds).await })
+        Box::pin(async move {
+            let bind_count = binds.len();
+            let started = std::time::Instant::now();
+            let result = self.execute(&sql, binds).await;
+            let elapsed_ms = started.elapsed().as_millis() as u64;
+            match &result {
+                Ok(rows_affected) => tracing::debug!(
+                    target: "ruprizzle::query",
+                    sql = %sql,
+                    binds = bind_count,
+                    rows_affected,
+                    elapsed_ms,
+                    "execute"
+                ),
+                Err(error) => tracing::warn!(
+                    target: "ruprizzle::query",
+                    sql = %sql,
+                    binds = bind_count,
+                    elapsed_ms,
+                    error = %error,
+                    "execute failed"
+                ),
+            }
+            result
+        })
     }
 
     /// Buffers rather than streaming incrementally.

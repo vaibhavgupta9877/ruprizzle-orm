@@ -122,3 +122,18 @@ let rows = db.fetch_all_raw(
     vec![Value::from("%@example.com")],
 ).await?;
 ```
+
+## Observability
+
+Install a `tracing` subscriber in the application to see database activity:
+
+```rust
+tracing_subscriber::fmt()
+    .with_env_filter("ruprizzle::query=debug,ruprizzle::migrate=info")
+    .init();
+```
+
+`ruprizzle::query` reports SQL text, bind count, result counts, and elapsed
+milliseconds. Bind values are not logged. `ruprizzle::migrate` reports migration
+start and completion events with the migration ID and elapsed time. Avoid embedding
+sensitive literals in raw SQL because raw SQL text is intentionally observable.

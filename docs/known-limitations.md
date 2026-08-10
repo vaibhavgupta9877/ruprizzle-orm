@@ -24,7 +24,6 @@ whether the tool is right for your project.
 
 - Full LSP (completion, diagnostics, go-to-definition).
 - Migration squashing.
-- Connection pool metrics and query logging.
 - Support for additional databases (MySQL, MSSQL).
 
 ## When to choose something else

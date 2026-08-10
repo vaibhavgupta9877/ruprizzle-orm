@@ -61,24 +61,69 @@ impl Executor for Pool {
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<Vec<AnyRow>, Error>> {
         Box::pin(async move {
+            let bind_count = binds.len();
+            let started = std::time::Instant::now();
             let mut q = sqlx::query::<sqlx::Any>(&sql);
-            for b in binds {
-                q = q.bind(b);
+            for bind in binds {
+                q = q.bind(bind);
             }
-            q.fetch_all(self).await.map_err(Error::from)
+            let result = q.fetch_all(self).await.map_err(Error::from);
+            let elapsed_ms = started.elapsed().as_millis() as u64;
+            match &result {
+                Ok(rows) => tracing::debug!(
+                    target: "ruprizzle::query",
+                    sql = %sql,
+                    binds = bind_count,
+                    rows = rows.len(),
+                    elapsed_ms,
+                    "query"
+                ),
+                Err(error) => tracing::warn!(
+                    target: "ruprizzle::query",
+                    sql = %sql,
+                    binds = bind_count,
+                    elapsed_ms,
+                    error = %error,
+                    "query failed"
+                ),
+            }
+            result
         })
     }
 
     fn execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>> {
         Box::pin(async move {
+            let bind_count = binds.len();
+            let started = std::time::Instant::now();
             let mut q = sqlx::query::<sqlx::Any>(&sql);
-            for b in binds {
-                q = q.bind(b);
+            for bind in binds {
+                q = q.bind(bind);
             }
-            q.execute(self)
+            let result = q
+                .execute(self)
                 .await
-                .map(|r| r.rows_affected())
-                .map_err(Error::from)
+                .map(|result| result.rows_affected())
+                .map_err(Error::from);
+            let elapsed_ms = started.elapsed().as_millis() as u64;
+            match &result {
+                Ok(rows_affected) => tracing::debug!(
+                    target: "ruprizzle::query",
+                    sql = %sql,
+                    binds = bind_count,
+                    rows_affected,
+                    elapsed_ms,
+                    "execute"
+                ),
+                Err(error) => tracing::warn!(
+                    target: "ruprizzle::query",
+                    sql = %sql,
+                    binds = bind_count,
+                    elapsed_ms,
+                    error = %error,
+                    "execute failed"
+                ),
+            }
+            result
         })
     }
 
