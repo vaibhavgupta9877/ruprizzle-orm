@@ -22,12 +22,14 @@
 
 pub mod change;
 pub mod diff;
+pub mod drift;
 pub mod error;
 pub mod plan;
 pub mod runner;
 
 pub use change::{Change, ColumnAspect};
 pub use diff::diff;
+pub use drift::detect;
 pub use error::Error;
-pub use plan::plan;
+pub use plan::{down_sql, plan, up_sql};
 pub use runner::{Migration, MigrationMeta, Migrator, Report, Status};

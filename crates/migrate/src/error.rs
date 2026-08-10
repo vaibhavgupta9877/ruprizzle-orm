@@ -24,6 +24,11 @@ pub enum Error {
     #[error("migration {id} contains no up.sql")]
     MissingUp { id: String },
 
+    #[error(
+        "migration {id} contains an unfilled RUPRIZZLE:BACKFILL block; edit the backfill and try again"
+    )]
+    BackfillRequired { id: String },
+
     #[error("migration {id} failed at statement {line}: {message}")]
     StatementFailed {
         id: String,

@@ -133,3 +133,39 @@ both_dbs! {
         assert_eq!(age, 0);
     }
 }
+
+both_dbs! {
+    async fn drift_detects_missing_and_extra_tables(db: TestDb) {
+        let provider = db.backend().as_str();
+
+        let v1 = ruprizzle_parser::parse("v1", &schema_v1(provider)).expect("v1 parses");
+
+        // Create the initial table manually so the DB matches the snapshot.
+        let dir = tempfile::tempdir()?;
+        let mig = dir.path().join("20260810_000000_init");
+        fs::create_dir_all(&mig)?;
+        fs::write(
+            mig.join("up.sql"),
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL);",
+        )?;
+        fs::write(mig.join("down.sql"), "DROP TABLE users;")?;
+
+        let migrator = Migrator::new(dir.path());
+        migrator.apply_all(db.any_pool(), false).await?;
+
+        // Snapshot should initially match.
+        let snapshot = ruprizzle_migrate::detect(db.any_pool(), &v1).await?;
+        assert!(snapshot.is_empty(), "expected no drift: {snapshot:?}");
+
+        // Manually add an unexpected table.
+        sqlx::query("CREATE TABLE drift_test (id INTEGER PRIMARY KEY)")
+            .execute(db.any_pool())
+            .await?;
+
+        let drift = ruprizzle_migrate::detect(db.any_pool(), &v1).await?;
+        assert!(
+            drift.iter().any(|d| d.contains("drift_test")),
+            "expected drift to report extra table: {drift:?}"
+        );
+    }
+}
