@@ -11,14 +11,21 @@ use crate::filter::{Filter, FilterNode};
 use crate::include::IncludeSet;
 use crate::model::Model;
 use crate::order::OrderBy;
+use crate::executor::Executor;
+use crate::page::Page;
 use crate::pool::Pool;
 use crate::value::{Encodable, Ordered, Value};
 
 /// A typed `SELECT` query.
-#[derive(Debug, Clone)]
+///
+/// Not `Debug`: the executor behind it is a trait object, and requiring
+/// `Debug` on `Executor` would exclude perfectly good executors for no gain.
+/// Use [`to_sql`](SelectQuery::to_sql) to inspect a query instead — that is the
+/// representation anyone debugging actually wants.
+#[derive(Clone)]
 #[allow(dead_code)]
 pub struct SelectQuery<'db, M: Model, Out = M, I = ()> {
-    pool: &'db Pool,
+    exec: &'db dyn Executor,
     filter: Filter<M>,
     projection: Vec<&'static str>,
     order: Vec<OrderBy<M>>,
@@ -34,10 +41,13 @@ where
     M: Model,
 {
     /// Creates a new query.
+    ///
+    /// Accepts anything that can execute SQL, so the same query runs against a
+    /// pool or inside a transaction. `&Pool` and `&Tx` both coerce here.
     #[must_use]
-    pub const fn new(pool: &'db Pool) -> Self {
+    pub fn new(exec: &'db dyn Executor) -> Self {
         Self {
-            pool,
+            exec,
             filter: Filter::new(FilterNode::And(Vec::new())),
             projection: Vec::new(),
             order: Vec::new(),
@@ -114,7 +124,7 @@ where
     /// Includes a related model, loaded in a second batched query.
     pub fn include<J: IncludeSet<M>>(self, include: J) -> SelectQuery<'db, M, Out, J> {
         SelectQuery {
-            pool: self.pool,
+            exec: self.exec,
             filter: self.filter,
             projection: self.projection,
             order: self.order,
@@ -129,7 +139,7 @@ where
     /// Restricts the selected columns and changes the output type.
     pub fn columns<P: Projection<M>>(self, p: P) -> SelectQuery<'db, M, P::Output> {
         SelectQuery {
-            pool: self.pool,
+            exec: self.exec,
             filter: self.filter,
             projection: p.projection(),
             order: self.order,
@@ -143,7 +153,7 @@ where
 
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> CompiledSql {
-        let dialect = dialect_for_pool(self.pool);
+        let dialect = self.exec.dialect();
         select::<M>(
             dialect.as_ref(),
             M::TABLE,
@@ -166,11 +176,11 @@ where
         Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
     {
         let compiled = self.to_sql();
-        let mut q = sqlx::query_as::<sqlx::Any, Out>(compiled.sql.as_str());
-        for v in compiled.binds {
-            q = q.bind(v);
-        }
-        q.fetch_all(self.pool).await.map_err(Error::Sqlx)
+        let rows = self
+            .exec
+            .fetch_all_raw(compiled.sql, compiled.binds)
+            .await?;
+        crate::executor::decode_rows(rows)
     }
 
     /// Executes the query and returns the first row, if any.
@@ -183,11 +193,13 @@ where
         Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
     {
         let compiled = self.to_sql();
-        let mut q = sqlx::query_as::<sqlx::Any, Out>(compiled.sql.as_str());
-        for v in compiled.binds {
-            q = q.bind(v);
-        }
-        q.fetch_optional(self.pool).await.map_err(Error::Sqlx)
+        let rows = self
+            .exec
+            .fetch_all_raw(compiled.sql, compiled.binds)
+            .await?;
+        crate::executor::decode_rows(rows).map(|mut v: Vec<Out>| {
+            if v.is_empty() { None } else { Some(v.remove(0)) }
+        })
     }
 
     /// Executes the query and returns exactly one row.
@@ -218,11 +230,115 @@ where
             compiled.sql = format!("SELECT COUNT(*) {rest}");
         }
 
-        let mut q = sqlx::query_scalar::<sqlx::Any, i64>(compiled.sql.as_str());
-        for v in compiled.binds {
-            q = q.bind(v);
+        let rows = self
+            .exec
+            .fetch_all_raw(compiled.sql, compiled.binds)
+            .await?;
+        let row = rows
+            .first()
+            .ok_or_else(|| Error::Message("COUNT(*) returned no row".into()))?;
+        sqlx::Row::try_get::<i64, _>(row, 0).map_err(Error::Sqlx)
+    }
+
+    /// Whether any row matches.
+    ///
+    /// Compiles to `SELECT 1 ... LIMIT 1` rather than counting: the database
+    /// can stop at the first match, which on a large table is the difference
+    /// between an index probe and a full scan.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors.
+    pub async fn exists(self) -> Result<bool, Error> {
+        let mut compiled = Self {
+            limit: Some(1),
+            ..self
         }
-        q.fetch_one(self.pool).await.map_err(Error::Sqlx)
+        .to_sql();
+        if let Some(from_pos) = compiled.sql.find(" FROM ") {
+            let rest = compiled.sql.split_off(from_pos);
+            compiled.sql = format!("SELECT 1 {rest}");
+        }
+
+        let rows = self
+            .exec
+            .fetch_all_raw(compiled.sql, compiled.binds)
+            .await?;
+        Ok(!rows.is_empty())
+    }
+
+    /// Streams matching rows instead of collecting them.
+    ///
+    /// Rows are decoded one at a time as the stream is polled. The underlying
+    /// fetch is currently buffered by both executors (see
+    /// [`Executor::stream_raw`]), so this bounds decode cost rather than peak
+    /// memory; the buffering lives behind the executor so it can be replaced
+    /// with a true cursor without touching this API.
+    #[must_use]
+    pub fn stream(self) -> RowStream<'db, Out>
+    where
+        Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    {
+        let compiled = self.to_sql();
+        RowStream {
+            inner: self.exec.stream_raw(compiled.sql, compiled.binds),
+            _out: PhantomData,
+        }
+    }
+}
+
+/// A stream of decoded rows, returned by [`SelectQuery::stream`].
+pub struct RowStream<'db, Out> {
+    inner: crate::executor::BoxRowStream<'db>,
+    _out: PhantomData<fn() -> Out>,
+}
+
+impl<Out> futures_core::Stream for RowStream<'_, Out>
+where
+    Out: Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+{
+    type Item = Result<Out, Error>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        // Both fields are `Unpin`, so no `unsafe` projection is needed.
+        let this = self.get_mut();
+        std::pin::Pin::new(&mut this.inner)
+            .poll_next(cx)
+            .map(|o| o.map(|r| r.and_then(|row| Out::from_row(&row).map_err(Error::Sqlx))))
+    }
+}
+
+impl<'db, M, Out> SelectQuery<'db, M, Out, ()>
+where
+    M: Model,
+{
+    /// Fetches one page, reporting whether another page follows.
+    ///
+    /// Fetches `size + 1` rows and discards the extra, so `has_next` is exact
+    /// rather than inferred from a full page. The model's primary key is
+    /// appended to `ORDER BY` so the total order is deterministic — without a
+    /// unique tiebreaker, rows sharing an ordering value can repeat across
+    /// pages or be skipped entirely.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors.
+    pub async fn page(self, size: u64) -> Result<Page<Out>, Error>
+    where
+        Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    {
+        let pk: Column<M, i64> = Column::new(M::TABLE, M::PRIMARY_KEY);
+        let q = self.order_by(pk.asc()).limit(size.saturating_add(1));
+
+        let mut items: Vec<Out> = q.fetch_all().await?;
+        let has_next = items.len() as u64 > size;
+        if has_next {
+            items.truncate(size as usize);
+        }
+        Ok(Page::new(items, has_next, None))
     }
 }
 
@@ -238,12 +354,12 @@ where
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exec(self) -> Result<Vec<M>, Error> {
         let compiled = self.to_sql();
-        let mut q = sqlx::query_as::<sqlx::Any, M>(compiled.sql.as_str());
-        for v in compiled.binds {
-            q = q.bind(v);
-        }
-        let mut rows = q.fetch_all(self.pool).await.map_err(Error::Sqlx)?;
-        self.includes.load(self.pool, &mut rows).await?;
+        let raw = self
+            .exec
+            .fetch_all_raw(compiled.sql, compiled.binds)
+            .await?;
+        let mut rows: Vec<M> = crate::executor::decode_rows(raw)?;
+        self.includes.load(self.exec, &mut rows).await?;
         Ok(rows)
     }
 }

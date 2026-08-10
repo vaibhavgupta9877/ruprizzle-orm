@@ -15,11 +15,16 @@ ruprizzle-core    = { workspace = true }
 ruprizzle-dialect = { workspace = true }
 ruprizzle-macros  = { workspace = true }
 chrono            = { workspace = true }
+futures-core      = "0.3"
 rust_decimal      = { workspace = true }
 serde             = { workspace = true }
 serde_json        = { workspace = true }
 sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"] }
 thiserror         = { workspace = true }
+# Only for `sync::Mutex`, whose guard is `Send` across an await. The std guard
+# is not, which makes `Executor`'s boxed futures un-`Send`. sqlx already pulls
+# tokio in via `runtime-tokio`, so this adds no new dependency to the tree.
+tokio             = { version = "1", default-features = false, features = ["sync"] }
 uuid              = { workspace = true }
 
 [dev-dependencies]

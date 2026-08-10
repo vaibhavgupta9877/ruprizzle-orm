@@ -16,6 +16,7 @@ ruprizzle-dialect = { workspace = true }
 ruprizzle-migrate = { workspace = true }
 ruprizzle-parser  = { workspace = true }
 ruprizzle-testkit = { workspace = true }
+futures-core      = "0.3"
 insta             = { workspace = true }
 miette            = { workspace = true, features = ["fancy"] }
 sqlx              = { workspace = true }

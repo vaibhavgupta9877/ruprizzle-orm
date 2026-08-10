@@ -312,6 +312,77 @@ fn mod_rs(schema: &Schema) -> String {
                     }
                 }
             }
+
+            /// Run a closure inside a transaction with an explicit isolation level.
+            pub async fn transaction_with<F, T>(
+                &self,
+                level: ::ruprizzle::IsolationLevel,
+                f: F,
+            ) -> Result<T, ::ruprizzle::Error>
+            where
+                F: for<'t> FnOnce(&'t mut ::ruprizzle::Tx)
+                    -> ::ruprizzle::BoxFuture<'t, Result<T, ::ruprizzle::Error>>,
+            {
+                let mut tx =
+                    ::ruprizzle::Tx::begin_with_isolation(self.raw_pool(), level).await?;
+                match f(&mut tx).await {
+                    Ok(v) => {
+                        tx.commit().await?;
+                        Ok(v)
+                    }
+                    Err(e) => {
+                        tx.rollback().await?;
+                        Err(e)
+                    }
+                }
+            }
+
+            /// Run a transaction, retrying transient serialization failures.
+            ///
+            /// Retries only errors [`ruprizzle::is_retryable`] recognises —
+            /// Postgres `40001`/`40P01` and SQLite lock contention. A genuine
+            /// constraint violation is returned immediately rather than
+            /// retried, because retrying it only repeats the work before
+            /// failing the same way. `attempts` counts total tries, so
+            /// `attempts = 1` disables retrying.
+            ///
+            /// The closure is `FnMut` because it runs once per attempt.
+            pub async fn transaction_retrying<F, T>(
+                &self,
+                attempts: u32,
+                mut f: F,
+            ) -> Result<T, ::ruprizzle::Error>
+            where
+                F: for<'t> FnMut(&'t mut ::ruprizzle::Tx)
+                    -> ::ruprizzle::BoxFuture<'t, Result<T, ::ruprizzle::Error>>,
+            {
+                let mut attempt = 0;
+                loop {
+                    attempt += 1;
+                    let mut tx = ::ruprizzle::Tx::begin(self.raw_pool()).await?;
+                    let result = f(&mut tx).await;
+                    match result {
+                        Ok(v) => {
+                            match tx.commit().await {
+                                Ok(()) => return Ok(v),
+                                Err(e) => {
+                                    if attempt >= attempts.max(1)
+                                        || !::ruprizzle::is_retryable(&e)
+                                    {
+                                        return Err(e);
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tx.rollback().await?;
+                            if attempt >= attempts.max(1) || !::ruprizzle::is_retryable(&e) {
+                                return Err(e);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         /// Common imports for this generated module.
@@ -337,21 +408,21 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
     let entity_fields: Vec<_> = model
         .fields
         .values()
-        .map(|f| emit_entity_field(schema, f))
+        .map(|f| emit_entity_field(schema, model.name.as_str(), f))
         .collect();
 
     let insert_fields: Vec<_> = model
         .fields
         .values()
         .filter(|f| f.has_column())
-        .map(|f| emit_insert_field(schema, f))
+        .map(|f| emit_insert_field(schema, model.name.as_str(), f))
         .collect();
 
     let update_fields: Vec<_> = model
         .fields
         .values()
         .filter(|f| f.has_column())
-        .map(|f| emit_update_field(schema, f))
+        .map(|f| emit_update_field(schema, model.name.as_str(), f))
         .collect();
 
     let column_consts: Vec<_> = model
@@ -360,6 +431,18 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         .filter(|f| f.has_column())
         .map(|f| emit_column_const(schema, model, f, table))
         .collect();
+
+    // The tiebreaker column for deterministic ordering. For a composite key the
+    // first column is used: it is not unique on its own, but it is the leading
+    // column of the primary-key index, so it is the cheapest useful ordering
+    // suffix. Callers needing a total order on a composite key must order by the
+    // remaining key columns themselves.
+    let primary_key = model
+        .primary_key
+        .fields
+        .first()
+        .and_then(|name| model.fields.get(name))
+        .map_or_else(|| "id".to_owned(), |f| f.column.clone());
 
     let relation_helpers: Vec<_> = model
         .fields
@@ -425,6 +508,7 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
 
         impl ::ruprizzle::Model for #model_name {
             const TABLE: &'static str = #table;
+            const PRIMARY_KEY: &'static str = #primary_key;
         }
 
         /// Table name for this model.
@@ -486,9 +570,9 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
     format(tokens)
 }
 
-fn emit_entity_field(schema: &Schema, field: &Field) -> TokenStream {
+fn emit_entity_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream {
     let name = safe_field_ident(field.name.as_str());
-    let ty = rust_type_tokens(schema, field, field.optional, false);
+    let ty = rust_type_tokens(schema, owner, field, field.optional, false);
     let doc = doc_attrs(field.docs.as_deref());
 
     if !field.has_column() {
@@ -514,9 +598,9 @@ fn emit_entity_field(schema: &Schema, field: &Field) -> TokenStream {
     }
 }
 
-fn emit_insert_field(schema: &Schema, field: &Field) -> TokenStream {
+fn emit_insert_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream {
     let name = safe_field_ident(field.name.as_str());
-    let ty = rust_type_tokens(schema, field, false, true);
+    let ty = rust_type_tokens(schema, owner, field, false, true);
     let optional = field.optional || field.default.is_some() || field.attrs.is_updated_at;
     let ty = if optional {
         quote! { Option<#ty> }
@@ -535,9 +619,9 @@ fn emit_insert_field(schema: &Schema, field: &Field) -> TokenStream {
     }
 }
 
-fn emit_update_field(schema: &Schema, field: &Field) -> TokenStream {
+fn emit_update_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream {
     let name = safe_field_ident(field.name.as_str());
-    let ty = rust_type_tokens(schema, field, field.optional, false);
+    let ty = rust_type_tokens(schema, owner, field, field.optional, false);
     let ty = quote! { Option<#ty> };
 
     quote! {
@@ -548,7 +632,7 @@ fn emit_update_field(schema: &Schema, field: &Field) -> TokenStream {
 
 fn emit_column_const(schema: &Schema, model: &Model, field: &Field, table: &str) -> TokenStream {
     let name = format_ident!("{}", shouty_snake(field.name.as_str()));
-    let ty = rust_type_tokens(schema, field, false, false);
+    let ty = rust_type_tokens(schema, model.name.as_str(), field, false, false);
     let column = &field.column;
     let model_name = format_ident!("{}", model.name.as_str());
 
@@ -578,6 +662,7 @@ fn emit_insert_many_field(field: &Field) -> TokenStream {
 
 fn rust_type_tokens(
     schema: &Schema,
+    owner: &str,
     field: &Field,
     wrap_optional: bool,
     base_only: bool,
@@ -597,13 +682,13 @@ fn rust_type_tokens(
                 let name = format_ident!("{}", name.as_str());
                 quote! { Vec<super::enums::#name> }
             }
-            FieldKind::Relation(r) => relation_inner_tokens(schema, r.target.as_str(), true),
+            FieldKind::Relation(r) => relation_inner_tokens(schema, owner, r.target.as_str(), true),
             FieldKind::List(_) => {
                 // Nested lists are unsupported in v1.
                 quote! { () }
             }
         },
-        FieldKind::Relation(r) => relation_inner_tokens(schema, r.target.as_str(), false),
+        FieldKind::Relation(r) => relation_inner_tokens(schema, owner, r.target.as_str(), false),
     };
 
     let is_relation = matches!(field.kind, FieldKind::Relation(_) | FieldKind::List(_));
@@ -621,16 +706,29 @@ fn rust_type_tokens(
     }
 }
 
-fn relation_inner_tokens(_schema: &Schema, target: &str, is_list: bool) -> TokenStream {
+fn relation_inner_tokens(
+    _schema: &Schema,
+    owner: &str,
+    target: &str,
+    is_list: bool,
+) -> TokenStream {
+    let is_self = owner == target;
     let target_module = safe_module_name(target);
-    let target = format_ident!("{}", target);
+    let target_ident = format_ident!("{}", target);
     let module = format_ident!("{}", target_module);
     if is_list {
-        quote! { Vec<super::#module::#target> }
+        // `Vec` is already a pointer, so a self-referential list is finite.
+        quote! { Vec<super::#module::#target_ident> }
+    } else if is_self {
+        // A self-relation stored inline would make the struct infinitely
+        // sized (`Thread` containing a `Thread`). `Box` breaks the cycle; it
+        // is only reached on the self-referential case, so no other model
+        // pays for the indirection.
+        quote! { Option<Box<super::#module::#target_ident>> }
     } else {
         // Single relations are always `Option` because a row might not have a
         // matching child (LEFT JOIN semantics). `Related` wraps the `Option`.
-        quote! { Option<super::#module::#target> }
+        quote! { Option<super::#module::#target_ident> }
     }
 }
 
@@ -762,11 +860,11 @@ fn find_field_by_column<'a>(model: &'a Model, column: &str) -> Option<&'a Field>
         .find(|f| f.has_column() && f.column.as_str() == column)
 }
 
-fn relation_key_type(schema: &Schema, field: &Field) -> TokenStream {
+fn relation_key_type(schema: &Schema, owner: &str, field: &Field) -> TokenStream {
     // Return the inner, non-optional type of a column-bearing key field.
     // Optional relation keys are not supported for generated include helpers
     // in v1; callers will get a type error at compile time.
-    rust_type_tokens(schema, field, false, true)
+    rust_type_tokens(schema, owner, field, false, true)
 }
 
 fn emit_relation_helper(schema: &Schema, model: &Model, field: &Field) -> Option<TokenStream> {
@@ -808,9 +906,21 @@ fn emit_relation_helper(schema: &Schema, model: &Model, field: &Field) -> Option
     let parent_key_field = find_field_by_column(parent_model, parent_key_col)?;
     let child_key_field = find_field_by_column(child_model, child_key_col)?;
 
-    // Key types must match; optional FKs are not yet handled.
-    let key_type = relation_key_type(schema, parent_key_field);
-    let child_key_type = relation_key_type(schema, child_key_field);
+    // Optional foreign keys are not supported by the include machinery in v1:
+    // `Key` must be `Encodable + Hash + Eq` for the batched load, and
+    // `Option<T>` is not `Encodable`. Skip the helper rather than emitting a
+    // getter whose type cannot line up — generated code that does not compile
+    // is a far worse failure than a missing convenience method, and it is what
+    // this used to do (`social`'s optional `Thread.parentId` broke the build).
+    // The relation field, its column token, and hand-written queries all still
+    // work; only the generated `include` helper is absent.
+    if parent_key_field.optional || child_key_field.optional {
+        return None;
+    }
+
+    // Key types must match.
+    let key_type = relation_key_type(schema, model.name.as_str(), parent_key_field);
+    let child_key_type = relation_key_type(schema, model.name.as_str(), child_key_field);
     if key_type.to_string() != child_key_type.to_string() {
         return None;
     }
@@ -826,15 +936,34 @@ fn emit_relation_helper(schema: &Schema, model: &Model, field: &Field) -> Option
 
     let helper_name = safe_field_ident(field.name.as_str());
 
+    // A self-referential to-one field is stored boxed (see
+    // `relation_inner_tokens`), so the setter has to box the loaded value to
+    // match. Every other relation assigns straight through.
+    let is_self_to_one = !is_list && child_name.as_str() == model.name.as_str();
+    let one_setter = if is_self_to_one {
+        quote! {
+            |__row, __loaded| {
+                __row.#parent_field_ident = match __loaded {
+                    ::ruprizzle::Related::Absent => ::ruprizzle::Related::Absent,
+                    ::ruprizzle::Related::Loaded(__v) => {
+                        ::ruprizzle::Related::Loaded(__v.map(Box::new))
+                    }
+                };
+            }
+        }
+    } else {
+        quote! { |__row, __loaded| __row.#parent_field_ident = __loaded }
+    };
+
     Some(if is_list {
         quote! {
             /// Returns an `IncludeList` for this relation.
             pub fn #helper_name() -> ::ruprizzle::IncludeList<'static, #model_name, super::#child_module_ident::#child_type, #key_type, ()> {
                 ::ruprizzle::IncludeList::new(
-                    |parent| parent.#parent_key_ident,
-                    |parent, #parent_field_ident| parent.#parent_field_ident = #parent_field_ident,
+                    |__row| __row.#parent_key_ident,
+                    |__row, __loaded| __row.#parent_field_ident = __loaded,
                     super::#child_module_ident::#child_key_const,
-                    |child| child.#child_key_ident,
+                    |__child| __child.#child_key_ident,
                 )
             }
         }
@@ -843,10 +972,10 @@ fn emit_relation_helper(schema: &Schema, model: &Model, field: &Field) -> Option
             /// Returns an `IncludeOne` for this relation.
             pub fn #helper_name() -> ::ruprizzle::IncludeOne<'static, #model_name, super::#child_module_ident::#child_type, #key_type, ()> {
                 ::ruprizzle::IncludeOne::new(
-                    |parent| parent.#parent_key_ident,
-                    |parent, #parent_field_ident| parent.#parent_field_ident = #parent_field_ident,
+                    |__row| __row.#parent_key_ident,
+                    #one_setter,
                     super::#child_module_ident::#child_key_const,
-                    |child| child.#child_key_ident,
+                    |__child| __child.#child_key_ident,
                 )
             }
         }

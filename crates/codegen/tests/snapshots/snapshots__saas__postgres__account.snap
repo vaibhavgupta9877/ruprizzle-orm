@@ -50,6 +50,7 @@ pub struct AccountUpdate {
 }
 impl ::ruprizzle::Model for Account {
     const TABLE: &'static str = "accounts";
+    const PRIMARY_KEY: &'static str = "id";
 }
 /// Table name for this model.
 pub const TABLE: &str = "accounts";
@@ -72,10 +73,10 @@ pub fn memberships() -> ::ruprizzle::IncludeList<
     (),
 > {
     ::ruprizzle::IncludeList::new(
-        |parent| parent.id,
-        |parent, memberships| parent.memberships = memberships,
+        |__row| __row.id,
+        |__row, __loaded| __row.memberships = __loaded,
         super::membership::ACCOUNT_ID,
-        |child| child.account_id,
+        |__child| __child.account_id,
     )
 }
 /// Returns a filter for parents that have at least one matching child.
