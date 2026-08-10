@@ -20,9 +20,9 @@ the wire protocol and pooling; we do not write a driver.
 
 ## Status
 
-Pre-alpha. Phases P1–P7 are implemented and P8 (testing, benchmarks, release
-hardening) is the current focus. See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md)
-for the phase-by-phase state.
+`0.1.0-alpha.1` is published on crates.io. Phases P0–P8 are implemented; see the
+[implementation plan](../ProjectPlan/ImplementationPlan/MasterPlan.md) for the
+phase-by-phase state.
 
 ## Quick example
 
@@ -81,7 +81,7 @@ Wrong-typed and cross-model filters are compile errors, not runtime ones:
 
 ```rust
 user::EMAIL.eq(42)                              // error: expected String, found i32
-db.post().select().filter(user::EMAIL.eq(""))  // error: expected Filter<Post>, found Filter<User>
+db.post().find_many().filter(user::EMAIL.eq(""))  // error: expected Filter<Post>, found Filter<User>
 ```
 
 ## Install
@@ -146,34 +146,3 @@ ability to drop down to raw SQL without leaving the query builder.
 | `crates/migrate` | Snapshot, diff, plan, apply | ✅ P6 |
 | `crates/cli`     | The `ruprizzle` binary | ✅ P7 |
 | `crates/testkit` | Dual-database test harness | ✅ P0 |
-
-## Documentation
-
-- [Quickstart](docs/quickstart.md) — empty directory to a working query
-- [Schema reference](docs/schema-reference.md) — types, attributes, and functions
-- [Query guide](docs/query-guide.md) — filters, projections, pagination, transactions
-- [Relations guide](docs/relations-guide.md) — `include`, nested filters, N+1
-- [Migrations guide](docs/migrations-guide.md) — `dev` vs `deploy`, drift, backfills
-- [Dialect notes](docs/dialect-notes.md) — Postgres vs SQLite differences
-- [Known limitations](docs/known-limitations.md) — what is intentionally out of scope
-- [Migrating from …](docs/migrating-from.md) — cheat-sheets for SeaORM / Diesel / sqlx
-
-## Development
-
-```bash
-docker compose up -d      # Postgres for the integration suite
-cargo xtask ci            # everything CI runs: fmt, clippy, test, docs
-```
-
-Without Docker, `cargo test` still passes: the Postgres half of each dual-database
-test skips with a printed notice. CI sets `RUPRIZZLE_REQUIRE_DB=1`, which turns
-that skip into a failure, so the skip can never hide real breakage.
-
-## Planning documents
-
-- [MasterPlan](ProjectPlan/ImplementationPlan/MasterPlan.md) — scope, timeline, progress tracker
-- [Decisions and risks](ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md) — ADRs, kill criteria, what is deferred to 0.2
-
-## Licence
-
-Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your option.
