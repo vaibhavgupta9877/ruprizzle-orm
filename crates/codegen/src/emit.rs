@@ -368,6 +368,13 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         .filter_map(|f| emit_relation_helper(schema, model, f))
         .collect();
 
+    let relation_filter_helpers: Vec<_> = model
+        .fields
+        .values()
+        .filter(|f| matches!(f.kind, FieldKind::Relation(_) | FieldKind::List(_)))
+        .filter_map(|f| emit_relation_filter_helpers(schema, model, f))
+        .collect();
+
     let insert_sets: Vec<_> = model
         .fields
         .values()
@@ -426,6 +433,8 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         #( #column_consts )*
 
         #( #relation_helpers )*
+
+        #( #relation_filter_helpers )*
 
         /// Prisma-flavoured repository for `#model_name`.
         #[derive(Debug, Clone, Copy)]
@@ -840,6 +849,92 @@ fn emit_relation_helper(schema: &Schema, model: &Model, field: &Field) -> Option
                     |child| child.#child_key_ident,
                 )
             }
+        }
+    })
+}
+
+fn emit_relation_filter_helpers(
+    schema: &Schema,
+    model: &Model,
+    field: &Field,
+) -> Option<TokenStream> {
+    let model_name = format_ident!("{}", model.name.as_str());
+    let rel_ref = match &field.kind {
+        FieldKind::Relation(r) => r,
+        FieldKind::List(inner) => match inner.as_ref() {
+            FieldKind::Relation(r) => r,
+            _ => return None,
+        },
+        _ => return None,
+    };
+
+    let rel_index = rel_ref.resolved?;
+    let rel = schema.relations.get(rel_index)?;
+    let is_owner = model.name == rel.owner;
+
+    let (parent_table, parent_col, child, child_col) = if is_owner {
+        (
+            &model.table,
+            rel.owner_cols.first()?,
+            &rel.target,
+            rel.target_cols.first()?,
+        )
+    } else {
+        (
+            &model.table,
+            rel.target_cols.first()?,
+            &rel.owner,
+            rel.owner_cols.first()?,
+        )
+    };
+
+    let child_model = schema.models.get(child)?;
+    let child_table = &child_model.table;
+    let child_module = safe_module_name(child.as_str());
+    let child_module_ident = format_ident!("{}", child_module);
+    let child_type = format_ident!("{}", child.as_str());
+
+    let base = safe_field_ident(field.name.as_str());
+    let some_name = format_ident!("{}_some", base);
+    let none_name = format_ident!("{}_none", base);
+    let every_name = format_ident!("{}_every", base);
+
+    Some(quote! {
+        /// Returns a filter for parents that have at least one matching child.
+        pub fn #some_name(f: ::ruprizzle::Filter<super::#child_module_ident::#child_type>) -> ::ruprizzle::Filter<#model_name> {
+            ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+                child_table: #child_table,
+                child_col: #child_col,
+                parent_table: #parent_table,
+                parent_col: #parent_col,
+                filter: Box::new(f.node),
+                negated: false,
+            })
+        }
+
+        /// Returns a filter for parents that have no matching child.
+        pub fn #none_name(f: ::ruprizzle::Filter<super::#child_module_ident::#child_type>) -> ::ruprizzle::Filter<#model_name> {
+            ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+                child_table: #child_table,
+                child_col: #child_col,
+                parent_table: #parent_table,
+                parent_col: #parent_col,
+                filter: Box::new(f.node),
+                negated: true,
+            })
+        }
+
+        /// Returns a filter for parents where every matching child satisfies `f`.
+        /// Vacuously true for parents with no children.
+        pub fn #every_name(f: ::ruprizzle::Filter<super::#child_module_ident::#child_type>) -> ::ruprizzle::Filter<#model_name> {
+            ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+                child_table: #child_table,
+                child_col: #child_col,
+                parent_table: #parent_table,
+                parent_col: #parent_col,
+                filter: Box::new((!f).node),
+                negated: true,
+            })
         }
     })
 }

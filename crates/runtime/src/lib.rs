@@ -42,7 +42,9 @@ pub use include::{IncludeList, IncludeOne, IncludeSet};
 pub use model::Model;
 pub use order::OrderBy;
 pub use pool::{Pool, connect};
-pub use query::{DeleteQuery, InsertManyQuery, InsertQuery, SelectQuery, UpdateQuery};
+pub use query::{
+    DeleteQuery, InsertManyQuery, InsertQuery, NestedSetter, SelectQuery, UpdateQuery,
+};
 pub use related::Related;
 pub use serde;
 pub use serde_json;

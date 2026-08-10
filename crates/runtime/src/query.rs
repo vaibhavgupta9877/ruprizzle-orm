@@ -249,17 +249,33 @@ where
 }
 
 /// A typed `INSERT` query.
-#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct InsertQuery<'db, M: Model> {
     pool: &'db Pool,
     values: Vec<(&'static str, Value)>,
     on_conflict: Option<Vec<&'static str>>,
     do_update: Option<Vec<&'static str>>,
+    nested: Option<NestedInsert<'db, M>>,
     _marker: PhantomData<fn() -> M>,
 }
 
+impl<'db, M: Model> std::fmt::Debug for InsertQuery<'db, M> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InsertQuery")
+            .field("values", &self.values)
+            .field("on_conflict", &self.on_conflict)
+            .field("do_update", &self.do_update)
+            .field("nested", &self.nested.is_some())
+            .finish()
+    }
+}
+
 impl<'db, M: Model> InsertQuery<'db, M> {
+    /// Returns the underlying pool.
+    pub fn pool(&self) -> &'db Pool {
+        self.pool
+    }
+
     /// Creates a new query.
     #[must_use]
     pub const fn new(pool: &'db Pool) -> Self {
@@ -268,6 +284,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
             values: Vec::new(),
             on_conflict: None,
             do_update: None,
+            nested: None,
             _marker: PhantomData,
         }
     }
@@ -302,6 +319,30 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         self
     }
 
+    /// Attaches a one-level nested create to this insert.
+    ///
+    /// `get_parent_pk` extracts the parent primary key from the inserted row;
+    /// `child_fk_col` is the child's foreign-key column; `children` is the set
+    /// of child rows to insert; and `setter` attaches the returned child rows
+    /// to the parent model.
+    pub fn with_related<C: Model>(
+        mut self,
+        get_parent_pk: fn(&M) -> Value,
+        child_fk_col: &'static str,
+        children: InsertManyQuery<'db, C>,
+        setter: impl NestedSetter<M> + 'static,
+    ) -> Self {
+        self.nested = Some(NestedInsert {
+            get_parent_pk,
+            child_table: C::TABLE,
+            child_fk_col,
+            child_rows: children.rows,
+            setter: Box::new(setter),
+            _marker: PhantomData,
+        });
+        self
+    }
+
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> CompiledSql {
         let dialect = dialect_for_pool(self.pool);
@@ -325,7 +366,18 @@ impl<'db, M: Model> InsertQuery<'db, M> {
     /// # Errors
     ///
     /// Returns [`Error::Sqlx`] for database errors.
-    pub async fn exec(self) -> Result<M, Error>
+    pub async fn exec(mut self) -> Result<M, Error>
+    where
+        M: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    {
+        let nested = self.nested.take();
+        match nested {
+            None => self.exec_single().await,
+            Some(nested) => self.exec_nested(nested).await,
+        }
+    }
+
+    async fn exec_single(self) -> Result<M, Error>
     where
         M: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
     {
@@ -349,6 +401,81 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         }
         q.fetch_one(self.pool).await.map_err(Error::Sqlx)
     }
+
+    async fn exec_nested(self, nested: NestedInsert<'db, M>) -> Result<M, Error>
+    where
+        M: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    {
+        let mut tx = self.pool.begin().await.map_err(Error::Sqlx)?;
+
+        let dialect = dialect_for_pool(self.pool);
+        let compiled = insert::<M>(dialect.as_ref(), M::TABLE, &self.values, &["*"]);
+        let mut q = sqlx::query_as::<sqlx::Any, M>(compiled.sql.as_str());
+        for v in compiled.binds {
+            q = q.bind(v);
+        }
+        let mut parent = q.fetch_one(&mut *tx).await.map_err(Error::Sqlx)?;
+
+        let pk_value = (nested.get_parent_pk)(&parent);
+
+        if !nested.child_rows.is_empty() {
+            let mut rows: Vec<Vec<(&'static str, Value)>> = nested.child_rows;
+            for row in &mut rows {
+                row.push((nested.child_fk_col, pk_value.clone()));
+            }
+
+            let max = dialect.capabilities().max_query_params;
+            let cols_per_row = rows[0].len() as u32;
+            let chunk_size = (max / cols_per_row).max(1) as usize;
+
+            let mut child_rows = Vec::new();
+            for chunk in rows.chunks(chunk_size) {
+                let compiled =
+                    insert_many::<M>(dialect.as_ref(), nested.child_table, chunk, &["*"]);
+                let mut q = sqlx::query(compiled.sql.as_str());
+                for v in compiled.binds {
+                    q = q.bind(v);
+                }
+                let mut chunk_rows = q.fetch_all(&mut *tx).await.map_err(Error::Sqlx)?;
+                child_rows.append(&mut chunk_rows);
+            }
+
+            nested.setter.set(&mut parent, child_rows);
+        } else {
+            nested.setter.set(&mut parent, Vec::new());
+        }
+
+        tx.commit().await.map_err(Error::Sqlx)?;
+        Ok(parent)
+    }
+}
+
+/// Trait for attaching nested child rows to a freshly inserted parent.
+///
+/// Generated code provides one implementation per relation.
+pub trait NestedSetter<M: Model> {
+    /// Attaches the loaded child rows to the parent model.
+    fn set(&self, parent: &mut M, rows: Vec<sqlx::any::AnyRow>);
+}
+
+/// Specification for a one-level nested create.
+struct NestedInsert<'db, M: Model> {
+    get_parent_pk: fn(&M) -> Value,
+    child_table: &'static str,
+    child_fk_col: &'static str,
+    child_rows: Vec<Vec<(&'static str, Value)>>,
+    setter: Box<dyn NestedSetter<M>>,
+    _marker: PhantomData<&'db ()>,
+}
+
+impl<'db, M: Model> std::fmt::Debug for NestedInsert<'db, M> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NestedInsert")
+            .field("child_table", &self.child_table)
+            .field("child_fk_col", &self.child_fk_col)
+            .field("child_rows", &self.child_rows)
+            .finish()
+    }
 }
 
 /// A typed multi-row `INSERT` query.
@@ -356,7 +483,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
 #[allow(dead_code)]
 pub struct InsertManyQuery<'db, M: Model> {
     pool: &'db Pool,
-    rows: Vec<Vec<(&'static str, Value)>>,
+    pub(crate) rows: Vec<Vec<(&'static str, Value)>>,
     _marker: PhantomData<fn() -> M>,
 }
 
@@ -374,6 +501,17 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
     /// Adds a row to insert.
     pub fn row(mut self, columns: impl IntoIterator<Item = (&'static str, Value)>) -> Self {
         self.rows.push(columns.into_iter().collect());
+        self
+    }
+
+    /// Adds multiple rows to insert.
+    pub fn rows(
+        mut self,
+        rows: impl IntoIterator<Item = impl IntoIterator<Item = (&'static str, Value)>>,
+    ) -> Self {
+        for r in rows {
+            self.rows.push(r.into_iter().collect());
+        }
         self
     }
 
