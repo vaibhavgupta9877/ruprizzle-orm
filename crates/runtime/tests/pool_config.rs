@@ -42,17 +42,24 @@ async fn stats_and_ping_report_a_live_pool() {
     let pool = ruprizzle::connect("sqlite::memory:")
         .await
         .expect("connect");
-    ruprizzle::pool::ping(&pool).await.expect("ping");
-    let stats = ruprizzle::pool::stats(&pool);
-    assert_eq!(stats.in_use + stats.idle, stats.size as usize);
+    ruprizzle::ping(&pool).await.expect("ping");
+
+    let connection = pool.acquire().await.expect("acquire");
+    let busy = ruprizzle::stats(&pool);
+    assert!(busy.in_use >= 1);
+    drop(connection);
+
+    let idle = ruprizzle::stats(&pool);
+    assert!(idle.idle >= 1);
+    assert_eq!(idle.in_use + idle.idle, idle.size as usize);
 }
 
 #[tokio::test]
 async fn ping_reports_an_unreachable_database() {
-    let mut config = PoolConfig::default();
-    config.acquire_timeout = Duration::from_millis(200);
-    let Ok(pool) = connect_with("postgres://127.0.0.1:1/nope", &config).await else {
-        return;
-    };
-    assert!(ruprizzle::pool::ping(&pool).await.is_err());
+    ruprizzle::sqlx::any::install_default_drivers();
+    let pool = ruprizzle::sqlx::any::AnyPoolOptions::new()
+        .acquire_timeout(Duration::from_millis(200))
+        .connect_lazy("postgres://127.0.0.1:1/nope")
+        .expect("lazy pool");
+    assert!(ruprizzle::ping(&pool).await.is_err());
 }
