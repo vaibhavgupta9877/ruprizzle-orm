@@ -342,7 +342,30 @@ smaller, has no lifetime hazard, and makes the operation idempotent by construct
 - Consumes: `split_statements` from PR-01 (unchanged signature).
 - Produces: `apply_all(&self, pool: &AnyPool, accept_data_loss: bool) -> Result<Report, Error>` — unchanged signature, now idempotent. New private `fn advisory_lock_key() -> i64`.
 
-- [ ] **Step 1: Write the failing test**
+> **Implementation notes (as executed):**
+>
+> - The test lives at `tests/integration/tests/concurrency.rs`, not
+>   `crates/migrate/tests/`. `ruprizzle-migrate` has no dev-dependency on
+>   `ruprizzle-testkit` (nor on `ruprizzle`, which PR-14's test needs), and both
+>   are `publish = false`; `tests/integration` already depends on all of them.
+> - The plan's `both_dbs!(name, |db: TestDb| async move { … })` form does not
+>   exist. The real macro is `both_dbs! { async fn name(db: TestDb) { … } }`, and
+>   the pool accessor is `db.any_pool()`, not `db.pool()`.
+> - **A third defect was found and fixed here, which the plan did not identify.**
+>   `ensure_table` runs *before* the advisory lock, and Postgres's
+>   `CREATE TABLE IF NOT EXISTS` is not race-safe: ten concurrent deployers
+>   collide on `pg_type_typname_nsp_index` (SQLSTATE 23505) before any of them
+>   reaches the lock, so every deployer but one fails. This is exactly the Phase A
+>   exit gate, so it is fixed in this task: a failed create now succeeds if the
+>   table is queryable afterwards.
+> - **PR-14's Step 1 was brought forward.** The sequential test cannot reach the
+>   in-lock re-check, so committing the re-check without the racing test would
+>   have left it with no coverage at all. `ten_concurrent_deployers_all_succeed`
+>   is therefore already in `concurrency.rs`; PR-14 is reduced to its remaining
+>   steps.
+
+
+- [x] **Step 1: Write the failing test**
 
 Create `crates/migrate/tests/concurrency.rs`:
 
@@ -388,7 +411,7 @@ both_dbs!(apply_all_twice_is_idempotent, |db: TestDb| async move {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify current behaviour**
+- [x] **Step 2: Run the test to verify current behaviour**
 
 Run:
 ```bash
@@ -410,7 +433,7 @@ race by deleting rows from `_ruprizzle_migrations` — that produces a genuinely
 tracking table, which the re-check reads correctly and which no concurrent deployer ever
 sees. It would test a state that cannot occur.
 
-- [ ] **Step 3: Add a unit test for the lock key**
+- [x] **Step 3: Add a unit test for the lock key**
 
 Append to the bottom of `crates/migrate/src/runner.rs`:
 
@@ -435,7 +458,7 @@ Run: `cargo test -p ruprizzle-migrate --lib`
 
 Expected: fails to compile — `advisory_lock_key` does not exist yet.
 
-- [ ] **Step 4: Add the in-lock re-check and the derived lock key**
+- [x] **Step 4: Add the in-lock re-check and the derived lock key**
 
 In `crates/migrate/src/runner.rs`, inside the `for m in pending` loop, immediately after
 the advisory-lock query and before `let statements = split_statements(&m.up);`:
@@ -491,7 +514,7 @@ fn advisory_lock_key() -> i64 {
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run:
 ```bash
@@ -503,11 +526,11 @@ RUPRIZZLE_REQUIRE_DB=1 \
 Expected: all concurrency tests pass on both backends; the 6 pre-existing
 `tests/integration/tests/migrations.rs` tests still pass.
 
-- [ ] **Step 6: Run the full gate**
+- [x] **Step 6: Run the full gate**
 
 Run the Verification Command. Expected: 0 failures, 0 clippy warnings.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add crates/migrate/src/runner.rs crates/migrate/tests/concurrency.rs
