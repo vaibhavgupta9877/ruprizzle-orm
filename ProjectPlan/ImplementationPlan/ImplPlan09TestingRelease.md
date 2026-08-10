@@ -208,13 +208,21 @@ before the post, not after.
   - Fixed SQLite `AUTOINCREMENT` column rendering and `Db::connect` so it
     routes through `ruprizzle::connect` and installs the `Any` drivers.
 - [~] P8-05 publication tooling ready, staged publication pending
-  - `cargo xtask release` dry-runs `cargo publish` for every crate in the
-    declared order; pass `--live` to publish for real once credentials are
-    configured.
-- [~] P8-06 release notes written, announcement pending
-  - `RELEASES.md` contains the honest positioning, claims, non-claims,
-    supported features, known limitations, and performance numbers.
-  - Docs site deployment and public announcement are still pending.
+  - `cargo xtask release` dry-runs the first crate; it supports
+    `--live --no-verify --wait <seconds>` for the staged first-time publish.
+  - `RELEASES.md` documents the first-publish command and why `--no-verify`
+    and a wait are needed for workspace crates.
+  - Actual upload is blocked on a `cargo login` token; `CARGO_REGISTRY_TOKEN`
+    or `cargo login` must be configured before `--live` will succeed.
+- [~] P8-06 release notes written, docs site ready, deployment pending
+  - `RELEASES.md` and `docs/announcement.md` contain the honest positioning,
+    claims, non-claims, supported features, known limitations, and performance
+    numbers.
+  - `book.toml`, `docs/SUMMARY.md`, `docs/README.md`, and
+    `.github/workflows/pages.yml` set up mdBook + GitHub Pages.
+  - Deployment is pending: the repository needs a GitHub remote and Pages
+    enabled, and the crates must be on crates.io before the public
+    announcement.
 - [x] MasterPlan tracker fully ✅
   - `MasterPlan.md` updated: P0–P7 are ✅, P8 is 🟡 (pending actual crates.io
     publication and docs site deployment).

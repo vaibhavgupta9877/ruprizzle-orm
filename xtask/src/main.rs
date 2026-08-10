@@ -14,7 +14,10 @@ const TASKS: &[(&str, &str)] = &[
     ("docs", "build documentation with warnings denied"),
     ("examples", "compile generated code for all example schemas"),
     ("harden", "pre-release hardening checks"),
-    ("release", "dry-run (or live) publish every crate in order"),
+    (
+        "release",
+        "dry-run (or live) publish every crate in order; --live --no-verify --wait 60",
+    ),
 ];
 
 fn main() -> ExitCode {
@@ -264,9 +267,19 @@ fn injection_audit() -> Result<(), std::io::Error> {
 
 fn run_release(args: &[String]) -> ExitCode {
     let live = args.iter().any(|a| a == "--live");
+    let no_verify = args.iter().any(|a| a == "--no-verify");
+    let wait: u64 = args
+        .iter()
+        .position(|a| a == "--wait")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
     let mut flags = vec!["publish"];
     if !live {
         flags.push("--dry-run");
+    }
+    if no_verify {
+        flags.push("--no-verify");
     }
 
     for package in [
@@ -297,6 +310,14 @@ fn run_release(args: &[String]) -> ExitCode {
                 eprintln!("xtask: could not run cargo publish: {e}");
                 return ExitCode::FAILURE;
             }
+        }
+
+        // Give the crates.io index time to update between live publishes,
+        // otherwise the next package cannot resolve its freshly uploaded
+        // dependency.
+        if live && wait > 0 {
+            eprintln!("xtask: waiting {wait}s for index update");
+            std::thread::sleep(std::time::Duration::from_secs(wait));
         }
     }
 

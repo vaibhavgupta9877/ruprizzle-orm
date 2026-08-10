@@ -1,0 +1,14 @@
+[book]
+title = "ruprizzle-orm"
+authors = ["Claude Code + Devin"]
+description = "Documentation for ruprizzle-orm, a schema-first ORM for Rust."
+src = "docs"
+language = "en"
+multilingual = false
+
+[build]
+build-dir = "book"
+
+[output.html]
+cname = "ruprizzle.dev"
+git-repository-url = "https://github.com/ruprizzle/ruprizzle-orm"
