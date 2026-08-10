@@ -82,7 +82,7 @@ semicolons inside it.
 
 > **Note:** the implementation below has been prototyped against this working tree. It compiles, passes all eight tests, is clippy-clean under `clippy::pedantic`, and leaves the existing 167-test suite green.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `crates/migrate/tests/splitter.rs`:
 
@@ -151,7 +151,7 @@ fn semicolon_inside_string_literal_does_not_split() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p ruprizzle-migrate --test splitter`
 
@@ -161,7 +161,7 @@ vs 1). `keeps_tagged_dollar_quote_intact` and `comment_inside_dollar_quote_is_no
 also fail. The remaining three pass, which confirms the tests do not over-constrain
 behaviour that already works.
 
-- [ ] **Step 3: Replace the scanner body**
+- [x] **Step 3: Replace the scanner body**
 
 In `crates/migrate/src/runner.rs`, replace the body of `split_statements` from
 `let mut statements = Vec::new();` through the closing brace of the `while` loop:
@@ -239,7 +239,7 @@ In `crates/migrate/src/runner.rs`, replace the body of `split_statements` from
     }
 ```
 
-- [ ] **Step 4: Add the two private helpers**
+- [x] **Step 4: Add the two private helpers**
 
 Append immediately after `split_statements` in the same file:
 
@@ -277,19 +277,19 @@ fn matches_at(chars: &[char], i: usize, tag: &[char]) -> bool {
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cargo test -p ruprizzle-migrate`
 
 Expected: `splitter.rs` — 8 passed, 0 failed. `diff.rs` — 5 passed (unchanged).
 
-- [ ] **Step 6: Run the full gate**
+- [x] **Step 6: Run the full gate**
 
 Run the Verification Command from the plan header.
 
 Expected: 175 tests passing (167 baseline + 8 new), 0 clippy warnings.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add crates/migrate/src/runner.rs crates/migrate/tests/splitter.rs
