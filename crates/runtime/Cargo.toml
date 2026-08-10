@@ -1,0 +1,19 @@
+[package]
+name        = "ruprizzle"
+description = "A schema-first ORM for Rust: typed queries, relations, and automatic migrations"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+authors.workspace      = true
+keywords    = ["orm", "sql", "database"]
+categories  = ["database"]
+
+[dependencies]
+ruprizzle-core    = { workspace = true }
+ruprizzle-dialect = { workspace = true }
+ruprizzle-macros  = { workspace = true }
+sqlx              = { workspace = true }
+thiserror         = { workspace = true }
+
