@@ -85,7 +85,13 @@ impl<'a> UserRepo<'a> {
     }
     /// Start an `insert` query.
     pub fn create(&self, _data: UserInsert) -> ::ruprizzle::InsertQuery<'a, User> {
-        let _ = _data;
-        ::ruprizzle::InsertQuery::new(self.db.raw_pool())
+        let mut insert = ::ruprizzle::InsertQuery::new(self.db.raw_pool());
+        insert = insert.set_optional(ID, _data.id);
+        insert = insert.set(EMAIL, _data.email);
+        insert = insert.set_optional(NAME, _data.name);
+        insert = insert.set_optional(ROLE, _data.role);
+        insert = insert.set_optional(CREATED_AT, _data.created_at);
+        insert = insert.set_optional(UPDATED_AT, _data.updated_at);
+        insert
     }
 }

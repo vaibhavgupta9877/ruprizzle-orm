@@ -84,7 +84,13 @@ impl<'a> PostRepo<'a> {
     }
     /// Start an `insert` query.
     pub fn create(&self, _data: PostInsert) -> ::ruprizzle::InsertQuery<'a, Post> {
-        let _ = _data;
-        ::ruprizzle::InsertQuery::new(self.db.raw_pool())
+        let mut insert = ::ruprizzle::InsertQuery::new(self.db.raw_pool());
+        insert = insert.set_optional(ID, _data.id);
+        insert = insert.set(TITLE, _data.title);
+        insert = insert.set_optional(BODY, _data.body);
+        insert = insert.set_optional(PUBLISHED, _data.published);
+        insert = insert.set(AUTHOR_ID, _data.author_id);
+        insert = insert.set_optional(CREATED_AT, _data.created_at);
+        insert
     }
 }
