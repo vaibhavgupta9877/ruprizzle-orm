@@ -67,16 +67,16 @@ times stay low. This directly answers the RealityCheck concern about build times
 
 | File | Covers | Phase |
 |---|---|---|
-| [ImplPlan01-Foundation.md](ImplPlan01-Foundation.md) | Workspace, core IR, diagnostics, CI, test harness | P0 |
-| [ImplPlan02-SchemaDSL-Parser.md](ImplPlan02-SchemaDSL-Parser.md) | DSL spec, Pest grammar, AST lowering, validation | P1 |
-| [ImplPlan03-Dialects-SQLGen.md](ImplPlan03-Dialects-SQLGen.md) | `DbDialect` trait, Postgres, SQLite, type mapping | P2 |
-| [ImplPlan04-Codegen-Entities.md](ImplPlan04-Codegen-Entities.md) | Entity structs, enums, column tokens, client root | P3 |
-| [ImplPlan05-QueryBuilder-Runtime.md](ImplPlan05-QueryBuilder-Runtime.md) | Select/Insert/Update/Delete, filters, pagination, tx | P4 |
-| [ImplPlan06-Relations-Include.md](ImplPlan06-Relations-Include.md) | Relation IR, `include`, batched loading, N+1 defense | P5 |
-| [ImplPlan07-Migrations.md](ImplPlan07-Migrations.md) | Snapshots, diff engine, DDL planner, runner, drift | P6 |
-| [ImplPlan08-CLI-DX.md](ImplPlan08-CLI-DX.md) | CLI commands, error UX, formatter, introspection | P7 |
-| [ImplPlan09-Testing-Release.md](ImplPlan09-Testing-Release.md) | Test matrix, benchmarks, docs, crates.io release | P8 |
-| [ImplPlan10-Appendix-Decisions.md](ImplPlan10-Appendix-Decisions.md) | ADRs, risk register, explicit v2 deferrals | — |
+| [ImplPlan01Foundation.md](ImplPlan01Foundation.md) | Workspace, core IR, diagnostics, CI, test harness | P0 |
+| [ImplPlan02SchemaDslParser.md](ImplPlan02SchemaDslParser.md) | DSL spec, Pest grammar, AST lowering, validation | P1 |
+| [ImplPlan03DialectsSqlGen.md](ImplPlan03DialectsSqlGen.md) | `DbDialect` trait, Postgres, SQLite, type mapping | P2 |
+| [ImplPlan04CodegenEntities.md](ImplPlan04CodegenEntities.md) | Entity structs, enums, column tokens, client root | P3 |
+| [ImplPlan05QueryBuilderRuntime.md](ImplPlan05QueryBuilderRuntime.md) | Select/Insert/Update/Delete, filters, pagination, tx | P4 |
+| [ImplPlan06RelationsInclude.md](ImplPlan06RelationsInclude.md) | Relation IR, `include`, batched loading, N+1 defense | P5 |
+| [ImplPlan07Migrations.md](ImplPlan07Migrations.md) | Snapshots, diff engine, DDL planner, runner, drift | P6 |
+| [ImplPlan08CliDx.md](ImplPlan08CliDx.md) | CLI commands, error UX, formatter, introspection | P7 |
+| [ImplPlan09TestingRelease.md](ImplPlan09TestingRelease.md) | Test matrix, benchmarks, docs, crates.io release | P8 |
+| [ImplPlan10AppendixDecisions.md](ImplPlan10AppendixDecisions.md) | ADRs, risk register, explicit v2 deferrals | — |
 
 ---
 
