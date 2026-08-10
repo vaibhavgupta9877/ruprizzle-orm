@@ -209,7 +209,7 @@ fn fetch_all_raw(
                 sql = %sql,
                 binds = bind_count,
                 elapsed_ms,
-                error = %error,
+                error = error.kind(),
                 "query failed"
             ),
         }
@@ -245,7 +245,7 @@ fn execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u6
                 sql = %sql,
                 binds = bind_count,
                 elapsed_ms,
-                error = %error,
+                error = error.kind(),
                 "execute failed"
             ),
         }

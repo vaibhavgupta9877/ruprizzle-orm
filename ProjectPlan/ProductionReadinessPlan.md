@@ -809,7 +809,7 @@ In `crates/runtime/src/executor.rs`, replace the three method bodies in
                     sql = %sql,
                     binds = bind_count,
                     elapsed_ms,
-                    error = %e,
+                    error = e.kind(),
                     "query failed"
                 ),
             }
@@ -845,7 +845,7 @@ In `crates/runtime/src/executor.rs`, replace the three method bodies in
                     sql = %sql,
                     binds = bind_count,
                     elapsed_ms,
-                    error = %e,
+                    error = e.kind(),
                     "execute failed"
                 ),
             }
