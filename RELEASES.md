@@ -1,5 +1,19 @@
 # Release notes
 
+## 0.1.0-alpha.2
+
+A quick follow-up to `0.1.0-alpha.1` that adds README files and SEO metadata to
+every workspace crate, improves the docs site with structured data, sitemap, and
+`robots.txt`, and refreshes the `book.toml` homepage URL.
+
+- Added `README.md` to each crate for crates.io.
+- Added `homepage`, `documentation`, and `readme` metadata to every
+  `Cargo.toml`.
+- Added `theme/head.hbs` with schema.org JSON-LD, Open Graph, and Twitter Card
+  metadata.
+- Added `docs/faq.md` with an FAQPage schema.
+- Added `sitemap.xml` and `robots.txt` and wired them into the Pages workflow.
+
 ## 0.1.0-alpha.1
 
 **ruprizzle-orm 0.1.0-alpha** — a schema-first ORM for Rust. Write a Prisma-style
