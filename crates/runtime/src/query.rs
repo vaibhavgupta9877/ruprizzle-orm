@@ -8,6 +8,7 @@ use crate::compile::{
     CompiledSql, delete, dialect_for_pool, insert, insert_many, select, update, upsert,
 };
 use crate::filter::{Filter, FilterNode};
+use crate::include::IncludeSet;
 use crate::model::Model;
 use crate::order::OrderBy;
 use crate::pool::Pool;
@@ -16,7 +17,7 @@ use crate::value::{Encodable, Ordered, Value};
 /// A typed `SELECT` query.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub struct SelectQuery<'db, M: Model, Out = M> {
+pub struct SelectQuery<'db, M: Model, Out = M, I = ()> {
     pool: &'db Pool,
     filter: Filter<M>,
     projection: Vec<&'static str>,
@@ -24,10 +25,11 @@ pub struct SelectQuery<'db, M: Model, Out = M> {
     limit: Option<u64>,
     offset: Option<u64>,
     distinct: bool,
+    includes: I,
     _out: PhantomData<fn() -> Out>,
 }
 
-impl<'db, M, Out> SelectQuery<'db, M, Out>
+impl<'db, M> SelectQuery<'db, M, M, ()>
 where
     M: Model,
 {
@@ -42,10 +44,16 @@ where
             limit: None,
             offset: None,
             distinct: false,
+            includes: (),
             _out: PhantomData,
         }
     }
+}
 
+impl<'db, M, Out, I> SelectQuery<'db, M, Out, I>
+where
+    M: Model,
+{
     /// Adds a filter (`AND`).
     pub fn filter(self, f: Filter<M>) -> Self {
         Self {
@@ -103,6 +111,21 @@ where
         }
     }
 
+    /// Includes a related model, loaded in a second batched query.
+    pub fn include<J: IncludeSet<M>>(self, include: J) -> SelectQuery<'db, M, Out, J> {
+        SelectQuery {
+            pool: self.pool,
+            filter: self.filter,
+            projection: self.projection,
+            order: self.order,
+            limit: self.limit,
+            offset: self.offset,
+            distinct: self.distinct,
+            includes: include,
+            _out: PhantomData,
+        }
+    }
+
     /// Restricts the selected columns and changes the output type.
     pub fn columns<P: Projection<M>>(self, p: P) -> SelectQuery<'db, M, P::Output> {
         SelectQuery {
@@ -113,6 +136,7 @@ where
             limit: self.limit,
             offset: self.offset,
             distinct: self.distinct,
+            includes: (),
             _out: PhantomData,
         }
     }
@@ -199,6 +223,28 @@ where
             q = q.bind(v);
         }
         q.fetch_one(self.pool).await.map_err(Error::Sqlx)
+    }
+}
+
+impl<'db, M, I> SelectQuery<'db, M, M, I>
+where
+    M: Model + Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    I: IncludeSet<M>,
+{
+    /// Executes the query, then loads any requested includes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors.
+    pub async fn exec(self) -> Result<Vec<M>, Error> {
+        let compiled = self.to_sql();
+        let mut q = sqlx::query_as::<sqlx::Any, M>(compiled.sql.as_str());
+        for v in compiled.binds {
+            q = q.bind(v);
+        }
+        let mut rows = q.fetch_all(self.pool).await.map_err(Error::Sqlx)?;
+        self.includes.load(self.pool, &mut rows).await?;
+        Ok(rows)
     }
 }
 

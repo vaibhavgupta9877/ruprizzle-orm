@@ -361,6 +361,13 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         .map(|f| emit_column_const(schema, model, f, table))
         .collect();
 
+    let relation_helpers: Vec<_> = model
+        .fields
+        .values()
+        .filter(|f| matches!(f.kind, FieldKind::Relation(_) | FieldKind::List(_)))
+        .filter_map(|f| emit_relation_helper(schema, model, f))
+        .collect();
+
     let insert_sets: Vec<_> = model
         .fields
         .values()
@@ -417,6 +424,8 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         pub const TABLE: &str = #table;
 
         #( #column_consts )*
+
+        #( #relation_helpers )*
 
         /// Prisma-flavoured repository for `#model_name`.
         #[derive(Debug, Clone, Copy)]
@@ -588,13 +597,15 @@ fn rust_type_tokens(
         FieldKind::Relation(r) => relation_inner_tokens(schema, r.target.as_str(), false),
     };
 
-    let wrapped = if !base_only && wrap_optional {
+    let is_relation = matches!(field.kind, FieldKind::Relation(_) | FieldKind::List(_));
+
+    let wrapped = if !base_only && wrap_optional && !is_relation {
         quote! { Option<#inner> }
     } else {
         inner
     };
 
-    if matches!(field.kind, FieldKind::Relation(_) | FieldKind::List(_)) {
+    if is_relation {
         quote! { ::ruprizzle::Related<#wrapped> }
     } else {
         wrapped
@@ -608,8 +619,9 @@ fn relation_inner_tokens(_schema: &Schema, target: &str, is_list: bool) -> Token
     if is_list {
         quote! { Vec<super::#module::#target> }
     } else {
-        // `optional` is applied to `Related` later by the caller.
-        quote! { super::#module::#target }
+        // Single relations are always `Option` because a row might not have a
+        // matching child (LEFT JOIN semantics). `Related` wraps the `Option`.
+        quote! { Option<super::#module::#target> }
     }
 }
 
@@ -732,4 +744,102 @@ fn pascal(s: &str) -> String {
             }
         })
         .collect()
+}
+
+fn find_field_by_column<'a>(model: &'a Model, column: &str) -> Option<&'a Field> {
+    model
+        .fields
+        .values()
+        .find(|f| f.has_column() && f.column.as_str() == column)
+}
+
+fn relation_key_type(schema: &Schema, field: &Field) -> TokenStream {
+    // Return the inner, non-optional type of a column-bearing key field.
+    // Optional relation keys are not supported for generated include helpers
+    // in v1; callers will get a type error at compile time.
+    rust_type_tokens(schema, field, false, true)
+}
+
+fn emit_relation_helper(schema: &Schema, model: &Model, field: &Field) -> Option<TokenStream> {
+    let model_name = format_ident!("{}", model.name.as_str());
+    let rel_ref = match &field.kind {
+        FieldKind::Relation(r) => r,
+        FieldKind::List(inner) => match inner.as_ref() {
+            FieldKind::Relation(r) => r,
+            _ => return None,
+        },
+        _ => return None,
+    };
+
+    let rel_index = rel_ref.resolved?;
+    let rel = schema.relations.get(rel_index)?;
+    let is_list = matches!(field.kind, FieldKind::List(_));
+    let is_owner = model.name == rel.owner;
+
+    let (parent_name, child_name, parent_key_col, child_key_col) = if is_owner {
+        (
+            &rel.owner,
+            &rel.target,
+            rel.owner_cols.first()?,
+            rel.target_cols.first()?,
+        )
+    } else {
+        (
+            &rel.target,
+            &rel.owner,
+            rel.target_cols.first()?,
+            rel.owner_cols.first()?,
+        )
+    };
+
+    // The parent model is always the model we are generating code for.
+    let parent_model = schema.models.get(parent_name)?;
+    let child_model = schema.models.get(child_name)?;
+
+    let parent_key_field = find_field_by_column(parent_model, parent_key_col)?;
+    let child_key_field = find_field_by_column(child_model, child_key_col)?;
+
+    // Key types must match; optional FKs are not yet handled.
+    let key_type = relation_key_type(schema, parent_key_field);
+    let child_key_type = relation_key_type(schema, child_key_field);
+    if key_type.to_string() != child_key_type.to_string() {
+        return None;
+    }
+
+    let parent_field_ident = safe_field_ident(field.name.as_str());
+    let parent_key_ident = safe_field_ident(parent_key_field.name.as_str());
+    let child_key_ident = safe_field_ident(child_key_field.name.as_str());
+    let child_key_const = format_ident!("{}", shouty_snake(child_key_field.name.as_str()));
+
+    let child_module = safe_module_name(child_name.as_str());
+    let child_module_ident = format_ident!("{}", child_module);
+    let child_type = format_ident!("{}", child_name.as_str());
+
+    let helper_name = safe_field_ident(field.name.as_str());
+
+    Some(if is_list {
+        quote! {
+            /// Returns an `IncludeList` for this relation.
+            pub fn #helper_name() -> ::ruprizzle::IncludeList<'static, #model_name, super::#child_module_ident::#child_type, #key_type, ()> {
+                ::ruprizzle::IncludeList::new(
+                    |parent| parent.#parent_key_ident,
+                    |parent, #parent_field_ident| parent.#parent_field_ident = #parent_field_ident,
+                    super::#child_module_ident::#child_key_const,
+                    |child| child.#child_key_ident,
+                )
+            }
+        }
+    } else {
+        quote! {
+            /// Returns an `IncludeOne` for this relation.
+            pub fn #helper_name() -> ::ruprizzle::IncludeOne<'static, #model_name, super::#child_module_ident::#child_type, #key_type, ()> {
+                ::ruprizzle::IncludeOne::new(
+                    |parent| parent.#parent_key_ident,
+                    |parent, #parent_field_ident| parent.#parent_field_ident = #parent_field_ident,
+                    super::#child_module_ident::#child_key_const,
+                    |child| child.#child_key_ident,
+                )
+            }
+        }
+    })
 }

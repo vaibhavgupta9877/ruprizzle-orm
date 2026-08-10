@@ -1,6 +1,5 @@
 ---
 source: crates/codegen/tests/snapshots.rs
-assertion_line: 24
 expression: post_rs
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
@@ -22,7 +21,7 @@ pub struct Post {
     pub author_id: Uuid,
     #[sqlx(skip)]
     #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
-    pub author: ::ruprizzle::Related<super::user::User>,
+    pub author: ::ruprizzle::Related<Option<super::user::User>>,
     pub created_at: DateTime<Utc>,
 }
 /// Insert shape: required fields are required, defaulted/optional fields
@@ -69,6 +68,15 @@ pub const BODY: Column<Post, String> = Column::new("posts", "body");
 pub const PUBLISHED: Column<Post, bool> = Column::new("posts", "published");
 pub const AUTHOR_ID: Column<Post, Uuid> = Column::new("posts", "author_id");
 pub const CREATED_AT: Column<Post, DateTime<Utc>> = Column::new("posts", "created_at");
+/// Returns an `IncludeOne` for this relation.
+pub fn author() -> ::ruprizzle::IncludeOne<'static, Post, super::user::User, Uuid, ()> {
+    ::ruprizzle::IncludeOne::new(
+        |parent| parent.author_id,
+        |parent, author| parent.author = author,
+        super::user::ID,
+        |child| child.id,
+    )
+}
 /// Prisma-flavoured repository for `#model_name`.
 #[derive(Debug, Clone, Copy)]
 pub struct PostRepo<'a> {

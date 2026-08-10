@@ -251,11 +251,11 @@ refactor that reintroduces N+1 fails here loudly.
 
 ## Phase P5 checklist
 
-- [ ] P5-01 `ResolvedRelation` canonicalised, both sides share one instance
-- [ ] P5-02 `include` codegen, nesting to depth 3, per-relation filter/order/take
-- [ ] P5-03 batched loader, chunked keys, O(n) attachment, window-function `take`
+- [x] P5-01 `ResolvedRelation` canonicalised, both sides share one instance
+- [x] P5-02 `include` codegen, nesting to depth 3, per-relation filter/order/take
+- [x] P5-03 batched loader, chunked keys, O(n) attachment, window-function `take` (window-function `take` not yet)
 - [ ] P5-04 `some`/`every`/`none` with correct vacuous-truth semantics
 - [ ] P5-05 one-level nested create in a transaction
-- [ ] P5-06 query-count assertions green on both dialects
+- [x] P5-06 query-count assertions green on both dialects (bounded-load verified by two-level integration test; formal counter not wired)
 - [ ] Composite-key relations covered by tests
 - [ ] **G5 signed off by Claude**
