@@ -114,7 +114,7 @@ impl Migrator {
 
     /// Creates the `_ruprizzle_migrations` tracking table if it does not exist.
     pub async fn ensure_table(&self, pool: &AnyPool) -> Result<(), Error> {
-        sqlx::query(
+        let created = sqlx::query(
             "CREATE TABLE IF NOT EXISTS _ruprizzle_migrations (
                 id TEXT PRIMARY KEY,
                 checksum TEXT NOT NULL,
@@ -124,8 +124,24 @@ impl Migrator {
             )",
         )
         .execute(pool)
-        .await?;
-        Ok(())
+        .await;
+
+        match created {
+            Ok(_) => Ok(()),
+            // `CREATE TABLE IF NOT EXISTS` is not race-safe on Postgres: two
+            // sessions that pass the existence check together both insert into
+            // `pg_type`, and the loser fails on a duplicate key rather than
+            // becoming a no-op. This runs before the advisory lock is taken, so
+            // concurrent deployers reach it first; treat "the table exists now"
+            // as the success it is.
+            Err(e) => {
+                if tracking_table_exists(pool).await {
+                    Ok(())
+                } else {
+                    Err(Error::from(e))
+                }
+            }
+        }
     }
 
     /// Returns the IDs of migrations that have not yet been applied.
@@ -426,6 +442,15 @@ impl Migrator {
                 .await?;
         Ok(rows.into_iter().map(|(id,)| id).collect())
     }
+}
+
+/// Whether the tracking table is queryable, used to tell a lost `CREATE TABLE`
+/// race apart from a genuine failure.
+async fn tracking_table_exists(pool: &AnyPool) -> bool {
+    sqlx::query("SELECT 1 FROM _ruprizzle_migrations WHERE 1 = 0")
+        .execute(pool)
+        .await
+        .is_ok()
 }
 
 async fn user_tables(pool: &AnyPool) -> Result<Vec<String>, Error> {

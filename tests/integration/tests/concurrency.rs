@@ -44,3 +44,57 @@ both_dbs! {
         );
     }
 }
+
+/// Ten deployers racing on the same directory: exactly one applies each
+/// migration, none error, and the schema ends up correct.
+///
+/// This is the only test that reaches the re-check inside the advisory lock.
+/// The sequential case above cannot: once `apply_all` returns, the tracking
+/// table holds the record, so the outer pending filter excludes it before the
+/// lock is ever taken. Postgres only, because the advisory lock is Postgres
+/// only.
+#[tokio::test]
+async fn ten_concurrent_deployers_all_succeed() {
+    let Ok(url) = std::env::var("RUPRIZZLE_TEST_PG_URL") else {
+        assert!(
+            std::env::var("RUPRIZZLE_REQUIRE_DB").is_err(),
+            "RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not"
+        );
+        eprintln!("skipping: no RUPRIZZLE_TEST_PG_URL");
+        return;
+    };
+
+    let dir = fixture();
+    let pool = ruprizzle::connect(&url).await.expect("connect");
+
+    for stmt in [
+        "DROP TABLE IF EXISTS conc_a",
+        "DROP TABLE IF EXISTS conc_b",
+        "DROP TABLE IF EXISTS _ruprizzle_migrations",
+    ] {
+        sqlx::query(stmt).execute(&pool).await.expect("clean slate");
+    }
+
+    let mut handles = Vec::new();
+    for _ in 0..10 {
+        let path = dir.path().to_path_buf();
+        let pool = pool.clone();
+        handles.push(tokio::spawn(async move {
+            Migrator::new(path).apply_all(&pool, false).await
+        }));
+    }
+
+    let mut total_applied = 0;
+    for h in handles {
+        let report = h
+            .await
+            .expect("task panicked")
+            .expect("apply must not error");
+        total_applied += report.applied.len();
+    }
+
+    assert_eq!(
+        total_applied, 2,
+        "each migration must be applied exactly once across all deployers"
+    );
+}
