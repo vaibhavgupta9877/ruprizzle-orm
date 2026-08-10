@@ -4,25 +4,37 @@ expression: content
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
 use ::ruprizzle::serde::{Deserialize, Serialize};
-use ::ruprizzle::sqlx::FromRow;
+use ::ruprizzle::sqlx::any::AnyRow;
 use ::ruprizzle::types::chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use ::ruprizzle::types::{Decimal, Uuid};
 use ::ruprizzle::serde_json::Value as JsonValue;
 use ::ruprizzle::Related;
 use ::ruprizzle::Column;
-#[derive(Debug, Clone, PartialEq, FromRow, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(crate = "::ruprizzle::serde")]
 pub struct Order {
     pub id: Uuid,
     pub status: super::enums::OrderStatus,
     pub customer_id: Uuid,
-    #[sqlx(skip)]
     #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
     pub customer: ::ruprizzle::Related<Option<super::customer::Customer>>,
-    #[sqlx(skip)]
     #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
     pub items: ::ruprizzle::Related<Vec<super::order_item::OrderItem>>,
     pub placed_at: DateTime<Utc>,
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Order {
+    fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
+            status: ::ruprizzle::decode::text::<
+                super::enums::OrderStatus,
+            >(row, "status")?,
+            customer_id: ::ruprizzle::decode::text::<Uuid>(row, "customer_id")?,
+            customer: ::ruprizzle::Related::default(),
+            items: ::ruprizzle::Related::default(),
+            placed_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "placed_at")?,
+        })
+    }
 }
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.

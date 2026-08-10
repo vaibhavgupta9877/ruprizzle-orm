@@ -29,6 +29,9 @@ pub mod types {
     pub use sqlx::types::*;
 }
 
+/// Decoding helpers for generated `FromRow` implementations.
+pub mod decode;
+
 /// Common imports for application code.
 pub mod prelude {
     pub use crate::{

@@ -78,22 +78,25 @@ use ruprizzle::prelude::*;
 ## 6. Run your first query
 
 ```rust
-use my_app::db;
+mod db;
 
 #[tokio::main]
 async fn main() -> Result<(), ruprizzle::Error> {
-    let db = ruprizzle::Pool::connect(std::env::var("DATABASE_URL")?).await?;
+    let db = db::Db::connect(&std::env::var("DATABASE_URL")?).await?;
 
     db.user()
-        .insert()
-        .set(user::EMAIL, "alice@example.com")
-        .set(user::NAME, "Alice")
+        .create(db::UserInsert {
+            id: None,
+            email: "alice@example.com".into(),
+            name: "Alice".into(),
+        })
         .exec()
         .await?;
 
-    let users = db.user()
-        .select()
-        .filter(user::EMAIL.ends_with("@example.com"))
+    let users = db
+        .user()
+        .find_many()
+        .filter(db::user::EMAIL.ends_with("@example.com"))
         .fetch_all()
         .await?;
 

@@ -28,7 +28,7 @@ impl Db {
     ///
     /// Returns an error if the URL cannot be parsed or the connection fails.
     pub async fn connect(url: &str) -> Result<Self, ::ruprizzle::Error> {
-        let pool = ::ruprizzle::Pool::connect(url).await?;
+        let pool = ::ruprizzle::connect(url).await?;
         Ok(Self { pool })
     }
     /// Wrap an existing pool.

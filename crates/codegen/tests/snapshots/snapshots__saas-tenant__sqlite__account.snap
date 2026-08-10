@@ -4,23 +4,35 @@ expression: content
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
 use ::ruprizzle::serde::{Deserialize, Serialize};
-use ::ruprizzle::sqlx::FromRow;
+use ::ruprizzle::sqlx::any::AnyRow;
 use ::ruprizzle::types::chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use ::ruprizzle::types::{Decimal, Uuid};
 use ::ruprizzle::serde_json::Value as JsonValue;
 use ::ruprizzle::Related;
 use ::ruprizzle::Column;
 ///A person, independent of any tenant they belong to.
-#[derive(Debug, Clone, PartialEq, FromRow, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(crate = "::ruprizzle::serde")]
 pub struct Account {
     pub id: Uuid,
     pub email: String,
     pub display_name: Option<String>,
-    #[sqlx(skip)]
     #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
     pub memberships: ::ruprizzle::Related<Vec<super::membership::Membership>>,
     pub created_at: DateTime<Utc>,
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Account {
+    fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
+            email: ::ruprizzle::decode::direct::<String>(row, "email")?,
+            display_name: ::ruprizzle::decode::direct_opt::<
+                String,
+            >(row, "display_name")?,
+            memberships: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "created_at")?,
+        })
+    }
 }
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.

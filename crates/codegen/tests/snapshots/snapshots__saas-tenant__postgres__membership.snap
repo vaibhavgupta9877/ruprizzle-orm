@@ -4,27 +4,38 @@ expression: content
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
 use ::ruprizzle::serde::{Deserialize, Serialize};
-use ::ruprizzle::sqlx::FromRow;
+use ::ruprizzle::sqlx::any::AnyRow;
 use ::ruprizzle::types::chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use ::ruprizzle::types::{Decimal, Uuid};
 use ::ruprizzle::serde_json::Value as JsonValue;
 use ::ruprizzle::Related;
 use ::ruprizzle::Column;
 ///One account's place in one organisation.
-#[derive(Debug, Clone, PartialEq, FromRow, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(crate = "::ruprizzle::serde")]
 pub struct Membership {
     pub id: Uuid,
     pub org_id: Uuid,
-    #[sqlx(skip)]
     #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
     pub organisation: ::ruprizzle::Related<Option<super::organisation::Organisation>>,
     pub account_id: Uuid,
-    #[sqlx(skip)]
     #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
     pub account: ::ruprizzle::Related<Option<super::account::Account>>,
     pub is_owner: bool,
     pub updated_at: DateTime<Utc>,
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Membership {
+    fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
+            org_id: ::ruprizzle::decode::text::<Uuid>(row, "org_id")?,
+            organisation: ::ruprizzle::Related::default(),
+            account_id: ::ruprizzle::decode::text::<Uuid>(row, "account_id")?,
+            account: ::ruprizzle::Related::default(),
+            is_owner: ::ruprizzle::decode::direct::<bool>(row, "is_owner")?,
+            updated_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "updated_at")?,
+        })
+    }
 }
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.
