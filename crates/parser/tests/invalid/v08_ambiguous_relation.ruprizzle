@@ -1,0 +1,17 @@
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id    Uuid   @id
+  posts Post[]
+}
+
+model Post {
+  id       Uuid @id
+  authorId Uuid
+  author   User @relation(fields: [authorId], references: [id])
+  editorId Uuid
+  editor   User @relation(fields: [editorId], references: [id])
+}

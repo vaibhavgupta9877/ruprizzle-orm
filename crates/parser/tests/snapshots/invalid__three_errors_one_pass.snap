@@ -1,0 +1,42 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: render(bundle.as_ref())
+---
+3 problem(s) found in schema.ruprizzle
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: unknown type `Strng`
+    Diagnostic severity: error
+
+Begin snippet for schema.ruprizzle starting at line 8, column 1
+
+snippet line 8:   id    Uuid  @id
+snippet line 9:   email Strng
+    label at line 9, columns 9 to 13: not a known scalar, enum, or model
+snippet line 10: }
+diagnostic help: did you mean `String`?
+diagnostic code: ruprizzle::unknown_type
+Error: enum `Role` has no variants
+    Diagnostic severity: error
+
+Begin snippet for schema.ruprizzle starting at line 15, column 1
+
+snippet line 15: 
+snippet line 16: enum Role {
+    label starting at line 16, column 1: no variants declared
+snippet line 17: }
+    label ending at line 17, column 1: no variants declared
+diagnostic help: an enum needs at least one variant to be usable as a column type
+diagnostic code: ruprizzle::empty_enum
+Error: model `Post` has no primary key
+    Diagnostic severity: error
+
+Begin snippet for schema.ruprizzle starting at line 11, column 1
+
+snippet line 11: 
+snippet line 12: model Post {
+    label at line 12, columns 7 to 10: this model needs a primary key
+snippet line 13:   title String
+diagnostic help: add `@id` to a field, or `@@id([a, b])` for a composite key
+diagnostic code: ruprizzle::missing_primary_key

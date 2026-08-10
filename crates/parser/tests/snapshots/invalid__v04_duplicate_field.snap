@@ -1,0 +1,23 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v04_duplicate_field
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: field `email` is declared twice on model `User`
+    Diagnostic severity: error
+
+Begin snippet for v04_duplicate_field starting at line 7, column 1
+
+snippet line 7:   id    Uuid   @id
+snippet line 8:   email String
+    label starting at line 8, column 3: first declared here
+snippet line 9:   email String
+    label ending at line 9, column 2: first declared here
+    label starting at line 9, column 3: redeclared here
+snippet line 10: }
+    label ending at line 10, column 0: redeclared here
+diagnostic help: remove one of them, or rename it and add `@map("email")` if both must map to the same column name
+diagnostic code: ruprizzle::duplicate_field

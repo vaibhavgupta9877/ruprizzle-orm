@@ -108,7 +108,12 @@ pub enum SchemaError {
 
     /// V04 — two fields in one model share a name.
     #[error("field `{field}` is declared twice on model `{model}`")]
-    #[diagnostic(code(ruprizzle::duplicate_field))]
+    #[diagnostic(
+        code(ruprizzle::duplicate_field),
+        help(
+            "remove one of them, or rename it and add `@map(\"{field}\")` if both must map to the same column name"
+        )
+    )]
     DuplicateField {
         model: String,
         field: String,
@@ -293,7 +298,10 @@ pub enum SchemaError {
 
     /// V14 — duplicate enum variant.
     #[error("enum `{name}` declares variant `{variant}` twice")]
-    #[diagnostic(code(ruprizzle::duplicate_variant))]
+    #[diagnostic(
+        code(ruprizzle::duplicate_variant),
+        help("remove the repeat, or give one variant a distinct name and `@map(\"{variant}\")`")
+    )]
     DuplicateVariant {
         name: String,
         variant: String,

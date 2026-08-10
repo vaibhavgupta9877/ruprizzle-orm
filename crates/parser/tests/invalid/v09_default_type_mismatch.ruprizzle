@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id    Uuid @id
+  count Int  @default("many")
+}

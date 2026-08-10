@@ -1,0 +1,13 @@
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  USER
+}
+
+model User {
+  id Uuid @id
+}

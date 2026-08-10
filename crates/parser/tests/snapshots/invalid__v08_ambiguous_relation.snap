@@ -1,0 +1,22 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v08_ambiguous_relation
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: two relations from `Post` to `User` need explicit names
+    Diagnostic severity: error
+
+Begin snippet for v08_ambiguous_relation starting at line 13, column 1
+
+snippet line 13:   authorId Uuid
+snippet line 14:   author   User @relation(fields: [authorId], references: [id])
+    label at line 14, columns 17 to 63: first relation to `User`
+snippet line 15:   editorId Uuid
+snippet line 16:   editor   User @relation(fields: [editorId], references: [id])
+    label at line 16, columns 17 to 63: second relation to `User`
+snippet line 17: }
+diagnostic help: name each relation, e.g. `@relation("PostUser", fields: [...], references: [...])`, and give the matching name on the other side
+diagnostic code: ruprizzle::relation::ambiguous

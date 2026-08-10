@@ -1,0 +1,742 @@
+---
+source: crates/parser/tests/examples.rs
+expression: schema
+---
+{
+  "version": 1,
+  "datasource": {
+    "name": "db",
+    "provider": "postgres",
+    "url": {
+      "Env": "DATABASE_URL"
+    },
+    "span": {
+      "start": 344,
+      "end": 418
+    }
+  },
+  "generator": {
+    "name": "client",
+    "output": "src/db",
+    "module_name": "db",
+    "max_include_depth": 3,
+    "span": {
+      "start": 420,
+      "end": 486
+    }
+  },
+  "enums": {},
+  "models": {
+    "Person": {
+      "name": "Person",
+      "table": "people",
+      "fields": {
+        "id": {
+          "name": "id",
+          "column": "id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Uuid7"
+          },
+          "attrs": {
+            "is_id": true,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 505,
+            "end": 545
+          }
+        },
+        "handle": {
+          "name": "handle",
+          "column": "handle",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": true,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 548,
+            "end": 577
+          }
+        },
+        "following": {
+          "name": "following",
+          "column": "following",
+          "kind": {
+            "List": {
+              "Relation": {
+                "target": "Follow",
+                "name": "follower",
+                "fields": [],
+                "references": [],
+                "on_delete": null,
+                "on_update": null,
+                "resolved": 0,
+                "span": {
+                  "start": 596,
+                  "end": 617
+                }
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 577,
+            "end": 617
+          }
+        },
+        "followers": {
+          "name": "followers",
+          "column": "followers",
+          "kind": {
+            "List": {
+              "Relation": {
+                "target": "Follow",
+                "name": "followee",
+                "fields": [],
+                "references": [],
+                "on_delete": null,
+                "on_update": null,
+                "resolved": 1,
+                "span": {
+                  "start": 639,
+                  "end": 660
+                }
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 620,
+            "end": 660
+          }
+        },
+        "threads": {
+          "name": "threads",
+          "column": "threads",
+          "kind": {
+            "List": {
+              "Relation": {
+                "target": "Thread",
+                "name": "threadAuthor",
+                "fields": [],
+                "references": [],
+                "on_delete": null,
+                "on_update": null,
+                "resolved": 2,
+                "span": {
+                  "start": 682,
+                  "end": 707
+                }
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 663,
+            "end": 707
+          }
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "column": "created_at",
+          "kind": {
+            "Scalar": "DateTime"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Now"
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 710,
+            "end": 763
+          }
+        }
+      },
+      "primary_key": {
+        "fields": [
+          "id"
+        ],
+        "name": null,
+        "span": {
+          "start": 505,
+          "end": 545
+        }
+      },
+      "indexes": [],
+      "uniques": [],
+      "docs": null,
+      "span": {
+        "start": 488,
+        "end": 784
+      }
+    },
+    "Follow": {
+      "name": "Follow",
+      "table": "follows",
+      "fields": {
+        "followerId": {
+          "name": "followerId",
+          "column": "follower_id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 831,
+            "end": 870
+          }
+        },
+        "follower": {
+          "name": "follower",
+          "column": "follower",
+          "kind": {
+            "Relation": {
+              "target": "Person",
+              "name": "follower",
+              "fields": [
+                "followerId"
+              ],
+              "references": [
+                "id"
+              ],
+              "on_delete": "Cascade",
+              "on_update": null,
+              "resolved": 0,
+              "span": {
+                "start": 893,
+                "end": 973
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 873,
+            "end": 973
+          }
+        },
+        "followeeId": {
+          "name": "followeeId",
+          "column": "followee_id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 976,
+            "end": 1015
+          }
+        },
+        "followee": {
+          "name": "followee",
+          "column": "followee",
+          "kind": {
+            "Relation": {
+              "target": "Person",
+              "name": "followee",
+              "fields": [
+                "followeeId"
+              ],
+              "references": [
+                "id"
+              ],
+              "on_delete": "Cascade",
+              "on_update": null,
+              "resolved": 1,
+              "span": {
+                "start": 1038,
+                "end": 1118
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1018,
+            "end": 1118
+          }
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "column": "created_at",
+          "kind": {
+            "Scalar": "DateTime"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Now"
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1121,
+            "end": 1175
+          }
+        }
+      },
+      "primary_key": {
+        "fields": [
+          "followerId",
+          "followeeId"
+        ],
+        "name": null,
+        "span": {
+          "start": 1179,
+          "end": 1209
+        }
+      },
+      "indexes": [],
+      "uniques": [],
+      "docs": "A directed follow edge.",
+      "span": {
+        "start": 786,
+        "end": 1211
+      }
+    },
+    "Thread": {
+      "name": "Thread",
+      "table": "threads",
+      "fields": {
+        "id": {
+          "name": "id",
+          "column": "id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Uuid7"
+          },
+          "attrs": {
+            "is_id": true,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1278,
+            "end": 1317
+          }
+        },
+        "body": {
+          "name": "body",
+          "column": "body",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1320,
+            "end": 1338
+          }
+        },
+        "authorId": {
+          "name": "authorId",
+          "column": "author_id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1338,
+            "end": 1373
+          }
+        },
+        "author": {
+          "name": "author",
+          "column": "author",
+          "kind": {
+            "Relation": {
+              "target": "Person",
+              "name": "threadAuthor",
+              "fields": [
+                "authorId"
+              ],
+              "references": [
+                "id"
+              ],
+              "on_delete": "Cascade",
+              "on_update": null,
+              "resolved": 2,
+              "span": {
+                "start": 1394,
+                "end": 1476
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1376,
+            "end": 1476
+          }
+        },
+        "parentId": {
+          "name": "parentId",
+          "column": "parent_id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": true,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1479,
+            "end": 1514
+          }
+        },
+        "parent": {
+          "name": "parent",
+          "column": "parent",
+          "kind": {
+            "Relation": {
+              "target": "Thread",
+              "name": "threadParent",
+              "fields": [
+                "parentId"
+              ],
+              "references": [
+                "id"
+              ],
+              "on_delete": null,
+              "on_update": null,
+              "resolved": 3,
+              "span": {
+                "start": 1535,
+                "end": 1598
+              }
+            }
+          },
+          "optional": true,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1517,
+            "end": 1598
+          }
+        },
+        "replies": {
+          "name": "replies",
+          "column": "replies",
+          "kind": {
+            "List": {
+              "Relation": {
+                "target": "Thread",
+                "name": "threadParent",
+                "fields": [],
+                "references": [],
+                "on_delete": null,
+                "on_update": null,
+                "resolved": 3,
+                "span": {
+                  "start": 1619,
+                  "end": 1644
+                }
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1601,
+            "end": 1644
+          }
+        }
+      },
+      "primary_key": {
+        "fields": [
+          "id"
+        ],
+        "name": null,
+        "span": {
+          "start": 1278,
+          "end": 1317
+        }
+      },
+      "indexes": [
+        {
+          "db_name": "threads_author_id_idx",
+          "fields": [
+            {
+              "field": "authorId",
+              "order": "Asc"
+            }
+          ],
+          "span": {
+            "start": 1648,
+            "end": 1667
+          }
+        },
+        {
+          "db_name": "threads_parent_id_idx",
+          "fields": [
+            {
+              "field": "parentId",
+              "order": "Asc"
+            }
+          ],
+          "span": {
+            "start": 1670,
+            "end": 1689
+          }
+        }
+      ],
+      "uniques": [],
+      "docs": "A post, optionally a reply to another post.",
+      "span": {
+        "start": 1213,
+        "end": 1691
+      }
+    }
+  },
+  "relations": [
+    {
+      "name": "follower",
+      "kind": "ManyToOne",
+      "owner": "Follow",
+      "owner_cols": [
+        "follower_id"
+      ],
+      "owner_field": "follower",
+      "target": "Person",
+      "target_cols": [
+        "id"
+      ],
+      "target_field": "following",
+      "on_delete": "Cascade",
+      "on_update": "Cascade",
+      "optional": false,
+      "constraint_name": "follows_follower_id_fkey",
+      "span": {
+        "start": 893,
+        "end": 973
+      }
+    },
+    {
+      "name": "followee",
+      "kind": "ManyToOne",
+      "owner": "Follow",
+      "owner_cols": [
+        "followee_id"
+      ],
+      "owner_field": "followee",
+      "target": "Person",
+      "target_cols": [
+        "id"
+      ],
+      "target_field": "followers",
+      "on_delete": "Cascade",
+      "on_update": "Cascade",
+      "optional": false,
+      "constraint_name": "follows_followee_id_fkey",
+      "span": {
+        "start": 1038,
+        "end": 1118
+      }
+    },
+    {
+      "name": "threadAuthor",
+      "kind": "ManyToOne",
+      "owner": "Thread",
+      "owner_cols": [
+        "author_id"
+      ],
+      "owner_field": "author",
+      "target": "Person",
+      "target_cols": [
+        "id"
+      ],
+      "target_field": "threads",
+      "on_delete": "Cascade",
+      "on_update": "Cascade",
+      "optional": false,
+      "constraint_name": "threads_author_id_fkey",
+      "span": {
+        "start": 1394,
+        "end": 1476
+      }
+    },
+    {
+      "name": "threadParent",
+      "kind": "ManyToOne",
+      "owner": "Thread",
+      "owner_cols": [
+        "parent_id"
+      ],
+      "owner_field": "parent",
+      "target": "Thread",
+      "target_cols": [
+        "id"
+      ],
+      "target_field": "replies",
+      "on_delete": "SetNull",
+      "on_update": "Cascade",
+      "optional": true,
+      "constraint_name": "threads_parent_id_fkey",
+      "span": {
+        "start": 1535,
+        "end": 1598
+      }
+    }
+  ]
+}

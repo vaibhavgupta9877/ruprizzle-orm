@@ -1,0 +1,21 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v13_relation_nullability_mismatch
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: optional relation `Post.author` has a required foreign key
+    Diagnostic severity: error
+
+Begin snippet for v13_relation_nullability_mismatch starting at line 12, column 1
+
+snippet line 12:   id       Uuid  @id
+snippet line 13:   authorId Uuid
+    label starting at line 13, column 3: relation is optional but its foreign key is not
+snippet line 14:   author   User? @relation(fields: [authorId], references: [id])
+    label ending at line 14, column 2: relation is optional but its foreign key is not
+snippet line 15: }
+diagnostic help: make `Post.authorId` optional (`authorId Uuid?`) so the relation can be absent
+diagnostic code: ruprizzle::relation_nullability_mismatch
