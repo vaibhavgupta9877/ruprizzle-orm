@@ -96,6 +96,25 @@ architecture.
 
 ---
 
+## P1 deviation log
+
+Deviations from [ImplPlan02SchemaDslParser.md](ImplPlan02SchemaDslParser.md) made
+while implementing P1. None change the architecture, and the `parse(&str) ->
+Result<ir::Schema>` boundary is unchanged.
+
+| # | Deviation | Why |
+|---|---|---|
+| **D-101** | Keyword rules are atomic (`@{ "model" ~ !ident_char }`), not silent | A silent rule has implicit whitespace inserted between the word and its boundary check, so `model` happily matched the start of `modelish`. Atomic emits one pair per keyword, which the AST walk drops. |
+| **D-102** | `field_type` is atomic, and the arity marker is read from its text | Pest reports the innermost rule it wanted. With a non-atomic `field_type`, a missing type surfaced as "expected `ident`", which no P1-04 phrasing can rescue. Atomic makes the failure report `field_type`, which is what lets the error say "expected a field type". |
+| **D-103** | Validation is split: rules needing attribute spans run in `lower.rs` (V02–V10, V12–V15), the rest in `validate.rs` (V01, V11, V14-empty, V16, V17) | A rule can only point at `@updatedAt` if it can see that attribute, and the IR deliberately does not keep per-attribute spans. Splitting on "what does this rule need to point at" keeps every diagnostic's label accurate. |
+| **D-104** | `references:` defaults to the target's primary key when omitted | It is the primary key in every schema that bothers to write it out, and the alternative is an error for something we can resolve unambiguously. |
+| **D-105** | Referential defaults are `onDelete: Restrict` (required) / `SetNull` (optional), `onUpdate: Cascade` | Prisma's defaults, and the right ones: deleting out from under a required foreign key must fail, while an optional one can simply be cleared. The IR's `ReferentialAction::default()` (`NoAction`) is a SQL-level default, not a schema-level one. |
+| **D-106** | Added `help(...)` to `DuplicateField` and `DuplicateVariant` in `ruprizzle-core` | They were the only two variants without one. The P1-03 fixtures assert the P0-03 standard mechanically against real parser output, and these two failed it. |
+| **D-107** | V03's `PascalCase` naming check is not implemented | There is no `NamingConvention` variant in `SchemaError`, and a warning that fires on every deliberately-lowercase model name is worse than none. Duplicate-declaration detection, the part of V03 that matters, is enforced. |
+| **D-108** | V18 (dialect capability) is not implemented | It is defined by P2's capability matrix, which does not exist yet. `SchemaError::DialectDegraded` is in place waiting for it. |
+
+---
+
 ## Risk register
 
 | # | Risk | Prob | Impact | Mitigation | Trigger to act |

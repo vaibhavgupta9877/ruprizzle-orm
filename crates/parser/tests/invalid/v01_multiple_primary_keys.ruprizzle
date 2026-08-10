@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id    Uuid   @id
+  email String @id
+}

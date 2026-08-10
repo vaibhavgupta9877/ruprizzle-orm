@@ -1,0 +1,65 @@
+// Exercises the shapes an ordering system forces on you: money, a status enum,
+// and an explicit join model with a composite primary key.
+//
+// v1 has no implicit many-to-many. `OrderItem` is written out because a hidden
+// join table would contradict the "the SQL is predictable" promise — and because
+// a real order line carries quantity and price, which an implicit table cannot.
+
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  output      = "src/db"
+  module_name = "db"
+}
+
+/// Where an order is in its lifecycle.
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  CANCELLED
+}
+
+model Customer {
+  id        Uuid     @id @default(uuid7())
+  email     String   @unique
+  name      String
+  orders    Order[]
+  createdAt DateTime @default(now()) @map("created_at")
+}
+
+model Product {
+  id    Uuid        @id @default(uuid7())
+  sku   String      @unique
+  name  String      @db.VarChar(120)
+  /// Exact, because floating point money is a bug waiting for an audit.
+  price Decimal
+  items OrderItem[]
+}
+
+model Order {
+  id         Uuid        @id @default(uuid7())
+  status     OrderStatus @default(PENDING)
+  customerId Uuid        @map("customer_id")
+  customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items      OrderItem[]
+  placedAt   DateTime    @default(now()) @map("placed_at")
+
+  @@index([customerId, status])
+}
+
+/// One line of an order.
+model OrderItem {
+  orderId   Uuid    @map("order_id")
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId Uuid    @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity  Int     @default(1)
+  /// Copied at purchase time: the product price may change afterwards.
+  unitPrice Decimal @map("unit_price")
+
+  @@id([orderId, productId])
+}

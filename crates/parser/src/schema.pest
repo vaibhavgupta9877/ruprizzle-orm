@@ -1,0 +1,83 @@
+// Grammar for `schema.ruprizzle` (P1-01).
+//
+// Deliberately close to Prisma's syntax: thousands of developers already know it,
+// and familiarity is worth more here than novelty. Deviations are documented in
+// `ProjectPlan/ImplementationPlan/ImplPlan02SchemaDslParser.md`.
+//
+// Two traps this grammar is written to avoid:
+//
+//   1. `COMMENT` must not swallow `///`. The `!"///"` lookahead is what keeps doc
+//      comments alive; without it rustdoc output silently vanishes with no error.
+//   2. Keywords must not swallow identifier prefixes. Every keyword is followed by
+//      `!ident_char`, so a model named `models` is not read as `model` + `s`.
+
+schema = { SOI ~ decl* ~ EOI }
+
+decl = _{ datasource | generator | enum_def | model_def }
+
+// --- configuration blocks --------------------------------------------------
+
+datasource = { kw_datasource ~ ident ~ "{" ~ config_kv* ~ "}" }
+generator  = { kw_generator ~ ident ~ "{" ~ config_kv* ~ "}" }
+
+config_kv    = { ident ~ "=" ~ config_value }
+config_value = _{ env_call | string | boolean | number }
+env_call     = { kw_env ~ "(" ~ string ~ ")" }
+
+// --- enums -----------------------------------------------------------------
+
+enum_def     = { doc_comment* ~ kw_enum ~ ident ~ "{" ~ enum_variant* ~ "}" }
+enum_variant = { doc_comment* ~ ident ~ ("@" ~ "map" ~ "(" ~ string ~ ")")? }
+
+// --- models ----------------------------------------------------------------
+
+model_def    = { doc_comment* ~ kw_model ~ ident ~ "{" ~ model_member* ~ "}" }
+model_member = _{ block_attr | field }
+
+field = { doc_comment* ~ ident ~ field_type ~ field_attr* }
+
+// Order matters: list before optional before plain. Compound-atomic so that
+// `String []` is rejected (the marker binds to the type) and, just as usefully,
+// so a missing type is reported as `field_type` rather than as a bare `ident` —
+// which is what lets P1-04 phrase the error in terms of fields.
+field_type  = @{ ident ~ (list_marker | opt_marker)? }
+list_marker = { "[" ~ "]" }
+opt_marker  = { "?" }
+
+field_attr = { "@" ~ attr_path ~ arg_list? }
+block_attr = { "@@" ~ attr_path ~ arg_list? }
+attr_path  = @{ ident ~ ("." ~ ident)? } // supports `db.VarChar`
+
+arg_list  = { "(" ~ (arg ~ ("," ~ arg)* ~ ","?)? ~ ")" }
+arg       = { named_arg | value }
+named_arg = { ident ~ ":" ~ value }
+value     = _{ func_call | array | string | number | boolean | ident }
+func_call = { ident ~ "(" ~ (value ~ ("," ~ value)*)? ~ ")" }
+array     = { "[" ~ (value ~ ("," ~ value)* ~ ","?)? ~ "]" }
+
+// --- terminals -------------------------------------------------------------
+
+ident      = @{ (ASCII_ALPHA | "_") ~ ident_char* }
+ident_char = _{ ASCII_ALPHANUMERIC | "_" }
+
+string    = ${ "\"" ~ inner_str ~ "\"" }
+inner_str = @{ (!"\"" ~ ("\\\"" | ANY))* }
+
+number  = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+boolean = @{ ("true" | "false") ~ !ident_char }
+
+// Atomic, so no implicit whitespace is skipped before the boundary check — a
+// silent rule here would have `skip` inserted between the word and `!ident_char`
+// and would happily match the `model` inside `modelish`. Atomic rules still emit
+// a pair, which the AST walk drops.
+kw_datasource = @{ "datasource" ~ !ident_char }
+kw_generator  = @{ "generator" ~ !ident_char }
+kw_enum       = @{ "enum" ~ !ident_char }
+kw_model      = @{ "model" ~ !ident_char }
+kw_env        = @{ "env" ~ !ident_char }
+
+doc_comment = ${ "///" ~ " "? ~ doc_text ~ (NEWLINE | &EOI) }
+doc_text    = @{ (!NEWLINE ~ ANY)* }
+
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT    = _{ !"///" ~ "//" ~ (!NEWLINE ~ ANY)* }

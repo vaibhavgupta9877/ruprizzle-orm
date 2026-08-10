@@ -12,7 +12,11 @@ categories  = ["database"]
 
 [dependencies]
 ruprizzle-core = { workspace = true }
+indexmap       = { workspace = true }
 pest           = { workspace = true }
 pest_derive    = { workspace = true }
 miette         = { workspace = true }
 
+[dev-dependencies]
+insta  = { workspace = true }
+miette = { workspace = true, features = ["fancy"] }

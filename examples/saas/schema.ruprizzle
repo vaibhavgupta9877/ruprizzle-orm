@@ -1,0 +1,57 @@
+// A multi-tenant SaaS skeleton, on SQLite.
+//
+// Targets SQLite on purpose: the example set has to keep the second dialect
+// honest, and a schema nobody generates for is a schema that quietly rots.
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  output      = "src/db"
+  module_name = "db"
+}
+
+/// Billing tier.
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+/// A tenant.
+model Organisation {
+  id        Uuid         @id @default(uuid7())
+  slug      String       @unique
+  plan      Plan         @default(FREE)
+  /// Free-form tenant configuration; genuinely schemaless, so `Json` earns it.
+  settings  Json?
+  members   Membership[]
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@map("organisations")
+}
+
+/// A person, independent of any tenant they belong to.
+model Account {
+  id          Uuid         @id @default(uuid7())
+  email       String       @unique
+  displayName String?      @map("display_name")
+  memberships Membership[]
+  createdAt   DateTime     @default(now()) @map("created_at")
+}
+
+/// One account's place in one organisation.
+model Membership {
+  id           Uuid         @id @default(uuid7())
+  orgId        Uuid         @map("org_id")
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  accountId    Uuid         @map("account_id")
+  account      Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  isOwner      Boolean      @default(false) @map("is_owner")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  @@unique([orgId, accountId])
+  @@index([accountId])
+}

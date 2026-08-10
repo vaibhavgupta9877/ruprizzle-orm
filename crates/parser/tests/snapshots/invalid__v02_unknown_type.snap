@@ -1,0 +1,19 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v02_unknown_type
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: unknown type `Strng`
+    Diagnostic severity: error
+
+Begin snippet for v02_unknown_type starting at line 7, column 1
+
+snippet line 7:   id    Uuid  @id
+snippet line 8:   email Strng
+    label at line 8, columns 9 to 13: not a known scalar, enum, or model
+snippet line 9: }
+diagnostic help: did you mean `String`?
+diagnostic code: ruprizzle::unknown_type

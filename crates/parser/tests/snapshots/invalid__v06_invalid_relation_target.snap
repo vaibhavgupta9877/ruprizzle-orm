@@ -1,0 +1,19 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v06_invalid_relation_target
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: relation on `Post.author` cannot reference `User.name`
+    Diagnostic severity: error
+
+Begin snippet for v06_invalid_relation_target starting at line 14, column 1
+
+snippet line 14:   authorName String
+snippet line 15:   author     User   @relation(fields: [authorName], references: [name])
+    label at line 15, columns 21 to 71: not a valid reference target
+snippet line 16: }
+diagnostic help: `references:` must name fields that are unique or form the primary key of `User`
+diagnostic code: ruprizzle::invalid_relation_target
