@@ -1,0 +1,25 @@
+# Local databases for the integration suite.
+#
+#   docker compose up -d
+#   cargo test --workspace
+#
+# SQLite needs no service: the harness creates a temporary file per test.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: ruprizzle-postgres
+    environment:
+      POSTGRES_USER: ruprizzle
+      POSTGRES_PASSWORD: ruprizzle
+      POSTGRES_DB: ruprizzle_test
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ruprizzle -d ruprizzle_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      # The test database is disposable; keeping it in RAM makes the suite
+      # noticeably faster and leaves nothing behind.
+      - /var/lib/postgresql/data

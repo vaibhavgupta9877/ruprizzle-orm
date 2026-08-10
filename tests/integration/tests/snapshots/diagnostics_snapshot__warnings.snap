@@ -1,0 +1,30 @@
+---
+source: tests/integration/tests/diagnostics_snapshot.rs
+expression: render(&bundle)
+---
+2 problem(s) found in schema.ruprizzle
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Warning: field name `type` is a Rust keyword
+    Diagnostic severity: warning
+
+Begin snippet for schema.ruprizzle starting at line 6, column 1
+
+snippet line 6: model Post {
+snippet line 7:   title String
+    label at line 7, columns 3 to 7: escaped as `r#type` in generated code
+snippet line 8: }
+diagnostic help: generated code will refer to it as `r#type`; rename it or add `@map("type")` with a different field name to avoid the escape
+diagnostic code: ruprizzle::reserved_keyword
+Warning: `Decimal` is not fully supported on sqlite
+    Diagnostic severity: warning
+
+Begin snippet for schema.ruprizzle starting at line 1, column 1
+
+snippet line 1: model User {
+snippet line 2:   id    Uuid   @id
+    label at line 2, columns 9 to 12: stored as TEXT, so ordering is lexicographic
+snippet line 3:   email Strng
+diagnostic help: store minor units in an `Int` instead
+diagnostic code: ruprizzle::dialect::degraded_type

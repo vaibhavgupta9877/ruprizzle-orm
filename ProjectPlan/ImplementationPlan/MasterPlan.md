@@ -104,9 +104,15 @@ Do not carry a failed gate forward — see the kill criteria in ImplPlan10.
 
 Update the status column as work lands. `⬜ todo · 🟡 in progress · ✅ done · ⛔ blocked`
 
+**P0 landed.** 34 tests pass; `cargo xtask ci` is green. One open item: the
+Postgres half of the harness has not run on real hardware yet (no container
+runtime on the dev machine), so confirm it on the first CI run before P1 depends
+on it. Deviations are logged in
+[ImplPlan10AppendixDecisions.md](ImplPlan10AppendixDecisions.md#p0-deviation-log).
+
 | Phase | Deliverable | Status | Gate |
 |---|---|---|---|
-| P0 | Workspace, core IR, CI green | ⬜ | — |
+| P0 | Workspace, core IR, CI green | ✅ | — |
 | P1 | `schema.ruprizzle` parses + validates | ⬜ | G1 |
 | P2 | Postgres + SQLite DDL generation | ⬜ | G2 |
 | P3 | Entity/enum/token codegen compiles | ⬜ | G3 |

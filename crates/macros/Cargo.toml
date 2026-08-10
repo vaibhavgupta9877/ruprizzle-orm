@@ -1,0 +1,19 @@
+[package]
+name        = "ruprizzle-macros"
+description = "Proc-macro support for the ruprizzle ORM"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+authors.workspace      = true
+keywords    = ["orm", "sql", "database"]
+categories  = ["database"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = { workspace = true }
+quote       = { workspace = true }
+syn         = { workspace = true }

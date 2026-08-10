@@ -77,6 +77,25 @@ path. Paid deliberately.
 
 ---
 
+## P0 deviation log
+
+Deviations from [ImplPlan01Foundation.md](ImplPlan01Foundation.md) made while
+implementing P0. Recorded per that file's own instruction; none change the
+architecture.
+
+| # | Deviation | Why |
+|---|---|---|
+| **D-001** | Added `crates/testkit` and `tests/integration` as workspace members, neither in the original layout | The harness needed a home. Putting it in a `publish = false` crate keeps `TestDb` and `both_dbs!` out of the published graph while letting every crate's tests use them. |
+| **D-002** | Replaced the `--features it` gate with a runtime skip plus `RUPRIZZLE_REQUIRE_DB=1` | A feature flag makes `cargo test` fail confusingly for a contributor without Docker, and `--features` on a virtual workspace requires every member to declare it. The skip keeps local runs green; the env var — set in CI — makes an absent database a hard failure. Strictly better than the flag: it cannot silently pass in CI. |
+| **D-003** | `generated-code-lint` CI job is a guard assertion, not a real lint | There is no generator until P3. The job asserts `ruprizzle generate` is still unimplemented and fails with instructions the moment that stops being true, so it cannot silently pass once codegen lands. |
+| **D-004** | `SchemaError` fields exempted from `missing_docs` | Every field is already described by the variant's `#[error]` message and `#[label]` text, which is where a reader meets it. Rustdoc restating those would add noise and drift. `missing_docs` stays enforced everywhere else. |
+| **D-005** | Implemented all 22 `SchemaError` variants (rules V01–V18) in P0 rather than P1 | The variants are mechanical; writing them alongside the diagnostic infrastructure was near-free and means P1 writes validation logic against errors that already exist. |
+| **D-006** | `miette`'s `fancy` feature is enabled only in the CLI and dev-dependencies | `ruprizzle-core` is depended on transitively by the runtime; a library should not force a terminal renderer and its dependencies on every consumer. |
+| **D-007** | Added `rust-toolchain.toml` (pinned 1.95) and `cargo xtask ci` | Pinning makes `rustfmt`/`clippy` output identical for every contributor and in CI. `xtask ci` makes "what CI runs" one local command instead of a YAML file that drifts. |
+| **D-008** | Added `Schema::relations` and `Schema::fingerprint()` to the IR | The former makes the ImplPlan06 relation-canonicalisation guarantee structural (both sides index the same entry, so they cannot disagree). The latter is needed by P3 and P7 to detect stale generated code; adding both up front avoids an IR change later, which risk R2 identifies as expensive. |
+
+---
+
 ## Risk register
 
 | # | Risk | Prob | Impact | Mitigation | Trigger to act |

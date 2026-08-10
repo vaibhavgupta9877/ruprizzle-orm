@@ -1,0 +1,4 @@
+[alias]
+# Makes `cargo xtask ci` work from anywhere in the workspace, so the README's
+# instructions and the repository's automation are the same command.
+xtask = "run --quiet --package xtask --"

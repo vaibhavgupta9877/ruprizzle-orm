@@ -1,0 +1,17 @@
+[package]
+name        = "ruprizzle-integration-tests"
+description = "Cross-crate integration tests for the ruprizzle ORM"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+publish     = false
+
+[dependencies]
+ruprizzle-core = { workspace = true }
+
+[dev-dependencies]
+ruprizzle-testkit = { workspace = true }
+insta             = { workspace = true }
+miette            = { workspace = true, features = ["fancy"] }
+tokio             = { workspace = true }

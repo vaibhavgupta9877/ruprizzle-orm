@@ -1,0 +1,16 @@
+/target
+**/*.rs.bk
+*.pdb
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Snapshot review artefacts
+**/*.snap.new
+
+# SQLite databases created by local experiments
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal

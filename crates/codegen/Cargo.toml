@@ -1,0 +1,20 @@
+[package]
+name        = "ruprizzle-codegen"
+description = "Rust code generation for the ruprizzle ORM"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+authors.workspace      = true
+keywords    = ["orm", "sql", "database"]
+categories  = ["database"]
+
+[dependencies]
+ruprizzle-core    = { workspace = true }
+ruprizzle-dialect = { workspace = true }
+proc-macro2       = { workspace = true }
+quote             = { workspace = true }
+syn               = { workspace = true }
+prettyplease      = { workspace = true }
+

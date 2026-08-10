@@ -1,0 +1,19 @@
+[package]
+name        = "ruprizzle-migrate"
+description = "Schema diffing and migration engine for the ruprizzle ORM"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+authors.workspace      = true
+keywords    = ["orm", "sql", "database"]
+categories  = ["database"]
+
+[dependencies]
+ruprizzle-core    = { workspace = true }
+ruprizzle-dialect = { workspace = true }
+serde             = { workspace = true }
+serde_json        = { workspace = true }
+thiserror         = { workspace = true }
+
