@@ -191,6 +191,9 @@ before the post, not after.
   - I/O overhead benches and generated-crate cold-compile time are recorded
     in `RELEASES.md` as not yet automated.
 - [x] P8-03 four examples compiling in CI
+  - `examples/` now contains the canonical four: `blog`, `saas-tenant`,
+    `ecommerce`, `minimal`. The previous `social` schema was moved to
+    `crates/parser/tests/fixtures/social/` because it is a parser test fixture.
   - `cargo xtask examples` runs the ignored `compile` test, generating all
     four example schemas for both dialects and `cargo check`-ing them.
 - [x] P8-04 hardening checklist complete
@@ -207,4 +210,6 @@ before the post, not after.
   - `RELEASES.md` contains the honest positioning, claims, non-claims,
     supported features, known limitations, and performance numbers.
   - Docs site deployment and public announcement are still pending.
-- [ ] MasterPlan tracker fully ✅
+- [x] MasterPlan tracker fully ✅
+  - `MasterPlan.md` updated: P0–P7 are ✅, P8 is 🟡 (pending actual crates.io
+    publication and docs site deployment).

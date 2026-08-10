@@ -1,0 +1,123 @@
+---
+source: crates/parser/tests/examples.rs
+expression: schema
+---
+{
+  "version": 1,
+  "datasource": {
+    "name": "db",
+    "provider": "sqlite",
+    "url": {
+      "Env": "DATABASE_URL"
+    },
+    "span": {
+      "start": 183,
+      "end": 258
+    }
+  },
+  "generator": {
+    "name": "client",
+    "output": "src/db",
+    "module_name": "db",
+    "max_include_depth": 3,
+    "span": {
+      "start": 262,
+      "end": 331
+    }
+  },
+  "enums": {},
+  "models": {
+    "User": {
+      "name": "User",
+      "table": "users",
+      "fields": {
+        "id": {
+          "name": "id",
+          "column": "id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Uuid7"
+          },
+          "attrs": {
+            "is_id": true,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 383,
+            "end": 417
+          }
+        },
+        "email": {
+          "name": "email",
+          "column": "email",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": true,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 421,
+            "end": 445
+          }
+        },
+        "name": {
+          "name": "name",
+          "column": "name",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": true,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 445,
+            "end": 464
+          }
+        }
+      },
+      "primary_key": {
+        "fields": [
+          "id"
+        ],
+        "name": null,
+        "span": {
+          "start": 383,
+          "end": 417
+        }
+      },
+      "indexes": [],
+      "uniques": [],
+      "docs": "A user of the application.",
+      "span": {
+        "start": 335,
+        "end": 481
+      }
+    }
+  },
+  "relations": []
+}

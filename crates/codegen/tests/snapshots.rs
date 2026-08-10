@@ -15,7 +15,7 @@ use ruprizzle_parser::parse;
 
 /// The four example schemas, which between them cover every shape codegen has
 /// to handle (see ImplPlan02's example table).
-const EXAMPLES: [&str; 4] = ["blog", "ecommerce", "saas", "social"];
+const EXAMPLES: [&str; 4] = ["blog", "ecommerce", "saas-tenant", "minimal"];
 
 fn workspace_root() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

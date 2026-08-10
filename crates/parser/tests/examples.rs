@@ -9,7 +9,7 @@
 use ruprizzle_core::ir::{FieldKind, ReferentialAction, RelationKind, ScalarType};
 use ruprizzle_parser::parse_with_warnings;
 
-const EXAMPLES: &[&str] = &["blog", "ecommerce", "saas", "social"];
+const EXAMPLES: &[&str] = &["blog", "ecommerce", "saas-tenant", "minimal"];
 
 fn read(example: &str) -> (String, String) {
     let path = format!(
@@ -19,6 +19,16 @@ fn read(example: &str) -> (String, String) {
     let source = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("cannot read example `{example}` at {path}: {e}"));
     (format!("{example}/schema.ruprizzle"), source)
+}
+
+fn read_fixture(name: &str) -> (String, String) {
+    let path = format!(
+        "{}/tests/fixtures/{name}/schema.ruprizzle",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let source = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("cannot read fixture `{name}` at {path}: {e}"));
+    (format!("{name}/schema.ruprizzle"), source)
 }
 
 #[test]
@@ -104,7 +114,7 @@ fn composite_keys_and_named_relations_survive_lowering() {
     assert!(item.primary_key.is_composite());
     assert_eq!(item.primary_key.fields.len(), 2);
 
-    let (name, source) = read("social");
+    let (name, source) = read_fixture("social");
     let schema = ruprizzle_parser::parse(&name, &source).expect("social is valid");
     // follower, followee, threadAuthor, threadParent — the self-relation included.
     assert_eq!(schema.relations.len(), 4);

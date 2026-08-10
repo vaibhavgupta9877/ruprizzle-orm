@@ -1,0 +1,23 @@
+// The minimal quickstart example: one model, one query.
+//
+// This is the schema `ruprizzle init` scaffolds and the one the quickstart
+// guide builds the first query against.
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  output      = "src/db"
+  module_name = "db"
+}
+
+/// A user of the application.
+model User {
+  id    Uuid   @id @default(uuid7())
+  email String @unique
+  name  String?
+
+  @@map("users")
+}

@@ -133,9 +133,9 @@ generated nested-create helpers; see the gaps section of
 | P3 | Entity/enum/token codegen compiles | ✅ | G3 ✅ |
 | P4 | Query builder CRUD on both DBs | ✅ | G4 ✅ |
 | P5 | Relations + nested include batched | ✅ | G5 ✅ |
-| P6 | Migration diff + runner | 🟡 | G6 |
-| P7 | CLI complete, error UX polished | ⬜ | — |
-| P8 | Tests, benches, docs, published | ⬜ | Ship |
+| P6 | Migration diff + runner | ✅ | G6 ✅ |
+| P7 | CLI complete, error UX polished | ✅ | — |
+| P8 | Tests, benches, docs, published | 🟡 | Ship |
 
 ---
 
