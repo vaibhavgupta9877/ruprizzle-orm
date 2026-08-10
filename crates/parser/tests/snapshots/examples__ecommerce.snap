@@ -798,6 +798,7 @@ expression: schema
       ],
       "owner_field": "customer",
       "target": "Customer",
+      "target_table": "customers",
       "target_cols": [
         "id"
       ],
@@ -820,6 +821,7 @@ expression: schema
       ],
       "owner_field": "product",
       "target": "Product",
+      "target_table": "products",
       "target_cols": [
         "id"
       ],
@@ -842,6 +844,7 @@ expression: schema
       ],
       "owner_field": "order",
       "target": "Order",
+      "target_table": "orders",
       "target_cols": [
         "id"
       ],
