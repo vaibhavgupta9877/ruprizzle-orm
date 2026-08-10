@@ -158,9 +158,9 @@ Deferred to 0.2+ — full reasoning in ImplPlan10.
 ## Definition of done for v1
 
 - [ ] `cargo install ruprizzle-cli` works
-- [ ] Quickstart: empty dir → running query in under 5 minutes
-- [ ] Postgres **and** SQLite pass the identical integration suite
-- [ ] Migration diff handles the 12 change classes in ImplPlan07
-- [ ] Generated code has zero `clippy::pedantic` warnings
-- [ ] `examples/` has 4 schemas: blog, saas-tenant, ecommerce, minimal
-- [ ] Known-limitations doc is published and honest
+- [x] Quickstart: empty dir → running query in under 5 minutes
+- [x] Postgres **and** SQLite pass the identical integration suite
+- [x] Migration diff handles the 12 change classes in ImplPlan07
+- [x] Generated code has zero `clippy::pedantic` warnings
+- [x] `examples/` has 4 schemas: blog, saas-tenant, ecommerce, minimal
+- [x] Known-limitations doc is published and honest

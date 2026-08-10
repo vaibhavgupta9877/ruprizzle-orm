@@ -4,14 +4,14 @@ expression: content
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
 use ::ruprizzle::serde::{Deserialize, Serialize};
-use ::ruprizzle::sqlx::FromRow;
+use ::ruprizzle::sqlx::any::AnyRow;
 use ::ruprizzle::types::chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use ::ruprizzle::types::{Decimal, Uuid};
 use ::ruprizzle::serde_json::Value as JsonValue;
 use ::ruprizzle::Related;
 use ::ruprizzle::Column;
 ///An article, published or not.
-#[derive(Debug, Clone, PartialEq, FromRow, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(crate = "::ruprizzle::serde")]
 pub struct Post {
     pub id: Uuid,
@@ -19,10 +19,22 @@ pub struct Post {
     pub body: Option<String>,
     pub published: bool,
     pub author_id: Uuid,
-    #[sqlx(skip)]
     #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
     pub author: ::ruprizzle::Related<Option<super::user::User>>,
     pub created_at: DateTime<Utc>,
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Post {
+    fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
+            title: ::ruprizzle::decode::direct::<String>(row, "title")?,
+            body: ::ruprizzle::decode::direct_opt::<String>(row, "body")?,
+            published: ::ruprizzle::decode::direct::<bool>(row, "published")?,
+            author_id: ::ruprizzle::decode::text::<Uuid>(row, "author_id")?,
+            author: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "created_at")?,
+        })
+    }
 }
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.

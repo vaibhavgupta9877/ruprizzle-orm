@@ -4,25 +4,37 @@ expression: content
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
 use ::ruprizzle::serde::{Deserialize, Serialize};
-use ::ruprizzle::sqlx::FromRow;
+use ::ruprizzle::sqlx::any::AnyRow;
 use ::ruprizzle::types::chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use ::ruprizzle::types::{Decimal, Uuid};
 use ::ruprizzle::serde_json::Value as JsonValue;
 use ::ruprizzle::Related;
 use ::ruprizzle::Column;
 ///A registered account.
-#[derive(Debug, Clone, PartialEq, FromRow, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(crate = "::ruprizzle::serde")]
 pub struct User {
     pub id: Uuid,
     pub email: String,
     pub name: Option<String>,
     pub role: super::enums::Role,
-    #[sqlx(skip)]
     #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
     pub posts: ::ruprizzle::Related<Vec<super::post::Post>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for User {
+    fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
+            email: ::ruprizzle::decode::direct::<String>(row, "email")?,
+            name: ::ruprizzle::decode::direct_opt::<String>(row, "name")?,
+            role: ::ruprizzle::decode::text::<super::enums::Role>(row, "role")?,
+            posts: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "created_at")?,
+            updated_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "updated_at")?,
+        })
+    }
 }
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.

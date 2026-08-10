@@ -202,6 +202,11 @@ before the post, not after.
   - `deny.toml` added for `cargo-deny` (run when `cargo-deny` is installed).
   - `#![forbid(unsafe_code)]` is present in every published crate.
   - MSRV is documented as `rust-version = "1.85"` in the workspace.
+  - Fixed `sqlx::Any` decoding for `Uuid`, `DateTime`, `Decimal`, `Json` and
+    other rich types by generating manual `FromRow` implementations that
+    parse from `String`/`Vec<u8>`.
+  - Fixed SQLite `AUTOINCREMENT` column rendering and `Db::connect` so it
+    routes through `ruprizzle::connect` and installs the `Any` drivers.
 - [~] P8-05 publication tooling ready, staged publication pending
   - `cargo xtask release` dry-runs `cargo publish` for every crate in the
     declared order; pass `--live` to publish for real once credentials are

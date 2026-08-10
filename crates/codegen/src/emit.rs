@@ -264,7 +264,7 @@ fn mod_rs(schema: &Schema) -> String {
             ///
             /// Returns an error if the URL cannot be parsed or the connection fails.
             pub async fn connect(url: &str) -> Result<Self, ::ruprizzle::Error> {
-                let pool = ::ruprizzle::Pool::connect(url).await?;
+                let pool = ::ruprizzle::connect(url).await?;
                 Ok(Self { pool })
             }
 
@@ -472,12 +472,18 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         .map(emit_insert_many_field)
         .collect();
 
+    let from_row_fields: Vec<_> = model
+        .fields
+        .values()
+        .map(|f| emit_from_row_field(schema, model.name.as_str(), f))
+        .collect();
+
     let header = header();
     let tokens = quote! {
         #header
 
         use ::ruprizzle::serde::{Deserialize, Serialize};
-        use ::ruprizzle::sqlx::FromRow;
+        use ::ruprizzle::sqlx::any::AnyRow;
         use ::ruprizzle::types::chrono::{DateTime, NaiveDate, NaiveTime, Utc};
         use ::ruprizzle::types::{Decimal, Uuid};
         use ::ruprizzle::serde_json::Value as JsonValue;
@@ -485,10 +491,18 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         use ::ruprizzle::Column;
 
         #docs
-        #[derive(Debug, Clone, PartialEq, FromRow, Serialize, Deserialize)]
+        #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
         #[serde(crate = "::ruprizzle::serde")]
         pub struct #model_name {
             #( #entity_fields )*
+        }
+
+        impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for #model_name {
+            fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+                Ok(Self {
+                    #( #from_row_fields )*
+                })
+            }
         }
 
         /// Insert shape: required fields are required, defaulted/optional fields
@@ -578,24 +592,66 @@ fn emit_entity_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream
     if !field.has_column() {
         return quote! {
             #doc
-            #[sqlx(skip)]
             #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
             pub #name: #ty,
         };
     }
 
-    let column = field.column.as_str();
-    let sqlx_rename = if name == column {
-        None
-    } else {
-        Some(quote! { #[sqlx(rename = #column)] })
-    };
-
     quote! {
         #doc
-        #sqlx_rename
         pub #name: #ty,
     }
+}
+
+fn emit_from_row_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream {
+    let name = safe_field_ident(field.name.as_str());
+    let column = field.column.as_str();
+
+    if !field.has_column() {
+        return quote! { #name: ::ruprizzle::Related::default(), };
+    }
+
+    let optional = field.optional;
+    let inner = rust_type_tokens(schema, owner, field, false, true);
+
+    let expr = match &field.kind {
+        ruprizzle_core::ir::FieldKind::Scalar(st) => match st {
+            ruprizzle_core::ir::ScalarType::String
+            | ruprizzle_core::ir::ScalarType::Int
+            | ruprizzle_core::ir::ScalarType::BigInt
+            | ruprizzle_core::ir::ScalarType::Float
+            | ruprizzle_core::ir::ScalarType::Boolean => {
+                let helper = format_ident!("{}", if optional { "direct_opt" } else { "direct" });
+                quote! { ::ruprizzle::decode::#helper::<#inner>(row, #column)? }
+            }
+            ruprizzle_core::ir::ScalarType::Decimal
+            | ruprizzle_core::ir::ScalarType::DateTime
+            | ruprizzle_core::ir::ScalarType::Date
+            | ruprizzle_core::ir::ScalarType::Time
+            | ruprizzle_core::ir::ScalarType::Uuid => {
+                let helper = format_ident!("{}", if optional { "text_opt" } else { "text" });
+                quote! { ::ruprizzle::decode::#helper::<#inner>(row, #column)? }
+            }
+            ruprizzle_core::ir::ScalarType::Json => {
+                let helper = format_ident!("{}", if optional { "json_opt" } else { "json" });
+                quote! { ::ruprizzle::decode::#helper(row, #column)? }
+            }
+            ruprizzle_core::ir::ScalarType::Bytes => {
+                let helper = format_ident!("{}", if optional { "bytes_opt" } else { "bytes" });
+                quote! { ::ruprizzle::decode::#helper(row, #column)? }
+            }
+        },
+        ruprizzle_core::ir::FieldKind::Enum(_) => {
+            let helper = format_ident!("{}", if optional { "text_opt" } else { "text" });
+            quote! { ::ruprizzle::decode::#helper::<#inner>(row, #column)? }
+        }
+        _ => {
+            let helper = format_ident!("{}", if optional { "direct_opt" } else { "direct" });
+            quote! { ::ruprizzle::decode::#helper::<#inner>(row, #column)? }
+        }
+    };
+
+    quote! { #name: #expr, }
 }
 
 fn emit_insert_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream {

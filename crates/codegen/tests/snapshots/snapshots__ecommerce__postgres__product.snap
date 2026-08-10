@@ -4,13 +4,13 @@ expression: content
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
 use ::ruprizzle::serde::{Deserialize, Serialize};
-use ::ruprizzle::sqlx::FromRow;
+use ::ruprizzle::sqlx::any::AnyRow;
 use ::ruprizzle::types::chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use ::ruprizzle::types::{Decimal, Uuid};
 use ::ruprizzle::serde_json::Value as JsonValue;
 use ::ruprizzle::Related;
 use ::ruprizzle::Column;
-#[derive(Debug, Clone, PartialEq, FromRow, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(crate = "::ruprizzle::serde")]
 pub struct Product {
     pub id: Uuid,
@@ -18,9 +18,19 @@ pub struct Product {
     pub name: String,
     ///Exact, because floating point money is a bug waiting for an audit.
     pub price: Decimal,
-    #[sqlx(skip)]
     #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
     pub items: ::ruprizzle::Related<Vec<super::order_item::OrderItem>>,
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Product {
+    fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
+            sku: ::ruprizzle::decode::direct::<String>(row, "sku")?,
+            name: ::ruprizzle::decode::direct::<String>(row, "name")?,
+            price: ::ruprizzle::decode::text::<Decimal>(row, "price")?,
+            items: ::ruprizzle::Related::default(),
+        })
+    }
 }
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.
