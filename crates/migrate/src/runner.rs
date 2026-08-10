@@ -454,43 +454,62 @@ pub fn split_statements(sql: &str) -> Vec<String> {
     // from the returned statements.
     let mut statements = Vec::new();
     let mut current = String::new();
-    let bytes = sql.as_bytes();
+    // Scanned as `char`s, not bytes: `u8 as char` is a Latin-1 widening, which
+    // silently turns any multi-byte UTF-8 sequence into mojibake.
+    let chars: Vec<char> = sql.chars().collect();
     let mut i = 0;
 
-    while i < bytes.len() {
-        match bytes[i] {
-            b'\'' => {
+    while i < chars.len() {
+        match chars[i] {
+            '\'' => {
                 current.push('\'');
                 i += 1;
-                while i < bytes.len() {
-                    current.push(bytes[i] as char);
-                    if bytes[i] == b'\'' {
+                while i < chars.len() {
+                    current.push(chars[i]);
+                    if chars[i] == '\'' {
                         i += 1;
                         break;
                     }
                     i += 1;
                 }
             }
-            b'-' if i + 1 < bytes.len() && bytes[i + 1] == b'-' => {
+            // Dollar-quoted body (`$$ … $$` or `$tag$ … $tag$`): copied verbatim,
+            // so a `;` or `--` inside a plpgsql function cannot split the statement.
+            '$' if dollar_tag_len(&chars, i).is_some() => {
+                let tag_len = dollar_tag_len(&chars, i).unwrap_or(0);
+                let tag: Vec<char> = chars[i..i + tag_len].to_vec();
+                current.extend(tag.iter());
+                i += tag_len;
+                while i < chars.len() {
+                    if chars[i] == '$' && matches_at(&chars, i, &tag) {
+                        current.extend(tag.iter());
+                        i += tag_len;
+                        break;
+                    }
+                    current.push(chars[i]);
+                    i += 1;
+                }
+            }
+            '-' if i + 1 < chars.len() && chars[i + 1] == '-' => {
                 i += 2;
-                while i < bytes.len() && bytes[i] != b'\n' {
+                while i < chars.len() && chars[i] != '\n' {
                     i += 1;
                 }
                 // The newline is preserved to act as whitespace.
                 current.push(' ');
                 i += 1;
             }
-            b'/' if i + 1 < bytes.len() && bytes[i + 1] == b'*' => {
+            '/' if i + 1 < chars.len() && chars[i + 1] == '*' => {
                 i += 2;
-                while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                while i + 1 < chars.len() && !(chars[i] == '*' && chars[i + 1] == '/') {
                     i += 1;
                 }
-                if i + 1 < bytes.len() {
+                if i + 1 < chars.len() {
                     i += 2;
                 }
                 current.push(' ');
             }
-            b';' => {
+            ';' => {
                 if !current.trim().is_empty() {
                     statements.push(current.trim().to_owned());
                 }
@@ -498,7 +517,7 @@ pub fn split_statements(sql: &str) -> Vec<String> {
                 i += 1;
             }
             c => {
-                current.push(c as char);
+                current.push(c);
                 i += 1;
             }
         }
@@ -509,4 +528,36 @@ pub fn split_statements(sql: &str) -> Vec<String> {
     }
 
     statements
+}
+
+/// If a dollar-quote tag (`$$` or `$name$`) starts at `i`, returns its length.
+///
+/// Returns `None` for a bind placeholder such as `$1`, because a Postgres tag
+/// may not start with a digit.
+fn dollar_tag_len(chars: &[char], i: usize) -> Option<usize> {
+    if chars.get(i) != Some(&'$') {
+        return None;
+    }
+    let mut j = i + 1;
+    if chars.get(j).is_some_and(|c| *c != '$') {
+        if !chars.get(j).is_some_and(|c| c.is_alphabetic() || *c == '_') {
+            return None;
+        }
+        while chars
+            .get(j)
+            .is_some_and(|c| c.is_alphanumeric() || *c == '_')
+        {
+            j += 1;
+        }
+    }
+    if chars.get(j) == Some(&'$') {
+        Some(j - i + 1)
+    } else {
+        None
+    }
+}
+
+/// Whether `tag` occurs at `i` in `chars`.
+fn matches_at(chars: &[char], i: usize, tag: &[char]) -> bool {
+    chars.len() >= i + tag.len() && chars[i..i + tag.len()] == *tag
 }
