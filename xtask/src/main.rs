@@ -301,7 +301,7 @@ fn run_release(args: &[String]) -> ExitCode {
     ];
     let start = packages
         .iter()
-        .position(|p| from.map_or(true, |f| *p == f))
+        .position(|p| from.is_none_or(|f| *p == f))
         .unwrap_or(0);
 
     for package in packages[start..].iter().copied() {

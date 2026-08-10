@@ -20,7 +20,7 @@ the wire protocol and pooling; we do not write a driver.
 
 ## Status
 
-`0.1.0-alpha.1` is published on crates.io. Phases P0–P8 are implemented. Docs
+`0.1.0-alpha.2` is published on crates.io. Phases P0–P8 are implemented. Docs
 site deployment and public announcement are the only remaining items; see the
 [implementation plan](../ProjectPlan/ImplementationPlan/MasterPlan.md) for the
 phase-by-phase state.

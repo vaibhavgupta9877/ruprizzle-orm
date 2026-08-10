@@ -1,7 +1,7 @@
 [book]
 title = "ruprizzle-orm"
 authors = ["Vaibhav Gupta"]
-description = "Documentation for ruprizzle-orm, a schema-first ORM for Rust."
+description = "Documentation for ruprizzle-orm, a schema-first ORM for Rust with typed queries, automatic migrations, and Postgres/SQLite support."
 src = "docs"
 language = "en"
 multilingual = false
@@ -10,5 +10,6 @@ multilingual = false
 build-dir = "book"
 
 [output.html]
-cname = "ruprizzle.dev"
+site-url = "https://ruprizzle.github.io/ruprizzle-orm/"
 git-repository-url = "https://github.com/ruprizzle/ruprizzle-orm"
+edit-url-template = "https://github.com/ruprizzle/ruprizzle-orm/edit/main/docs/{path}"

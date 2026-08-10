@@ -1764,7 +1764,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "chrono",
  "criterion",
@@ -1785,7 +1785,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-cli"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "clap",
  "dotenvy",
@@ -1804,7 +1804,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-codegen"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "criterion",
  "insta",
@@ -1819,7 +1819,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-core"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "indexmap",
  "miette",
@@ -1831,7 +1831,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-dialect"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "insta",
  "ruprizzle-core",
@@ -1843,7 +1843,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-integration-tests"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "futures-core",
  "insta",
@@ -1861,7 +1861,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-macros"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1870,7 +1870,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-migrate"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "chrono",
  "ruprizzle-core",
@@ -1887,7 +1887,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-parser"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "indexmap",
  "insta",
@@ -1899,7 +1899,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-testkit"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "sqlx",
  "tempfile",
@@ -3127,7 +3127,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "walkdir",
 ]
