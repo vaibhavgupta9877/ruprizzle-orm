@@ -7,18 +7,17 @@ use std::marker::PhantomData;
 
 use crate::BoxFuture;
 use crate::col::Column;
-use crate::compile::dialect_for_pool;
 use crate::error::Error;
 use crate::filter::Filter;
 use crate::model::Model;
 use crate::order::OrderBy;
-use crate::pool::Pool;
+use crate::executor::Executor;
 use crate::query::SelectQuery;
 use crate::related::Related;
 use crate::value::Encodable;
 
 async fn fetch_children<C, Key>(
-    pool: &Pool,
+    exec: &dyn Executor,
     child_key: Column<C, Key>,
     filter: &Filter<C>,
     order: &[OrderBy<C>],
@@ -33,13 +32,13 @@ where
         return Ok(Vec::new());
     }
 
-    let cap = dialect_for_pool(pool).capabilities().max_query_params as usize;
+    let cap = exec.dialect().capabilities().max_query_params as usize;
     let chunk_size = cap.saturating_sub(10).max(1);
 
     let should_chunk = limit.is_none() && keys.len() > chunk_size;
 
     if !should_chunk {
-        let mut q = SelectQuery::<C>::new(pool).filter(child_key.in_set(keys));
+        let mut q = SelectQuery::<C>::new(exec).filter(child_key.in_set(keys));
         if filter.node != crate::filter::FilterNode::And(Vec::new()) {
             q = q.filter(filter.clone());
         }
@@ -54,7 +53,7 @@ where
         let mut all = Vec::new();
         for chunk in keys.chunks(chunk_size) {
             let chunk = chunk.to_vec();
-            let mut q = SelectQuery::<C>::new(pool).filter(child_key.in_set(chunk));
+            let mut q = SelectQuery::<C>::new(exec).filter(child_key.in_set(chunk));
             if filter.node != crate::filter::FilterNode::And(Vec::new()) {
                 q = q.filter(filter.clone());
             }
@@ -73,14 +72,14 @@ where
 /// relations are chained through the relation builder's own `.include()` method.
 pub trait IncludeSet<M: Model> {
     /// Loads the related data and attaches it to `parents` in place.
-    fn load<'a>(&'a self, pool: &'a Pool, parents: &'a mut [M])
+    fn load<'a>(&'a self, exec: &'a dyn Executor, parents: &'a mut [M])
     -> BoxFuture<'a, Result<(), Error>>;
 }
 
 impl<M: Model> IncludeSet<M> for () {
     fn load<'a>(
         &'a self,
-        _pool: &'a Pool,
+        _exec: &'a dyn Executor,
         _parents: &'a mut [M],
     ) -> BoxFuture<'a, Result<(), Error>> {
         Box::pin(async { Ok(()) })
@@ -216,7 +215,7 @@ where
 {
     fn load<'a>(
         &'a self,
-        pool: &'a Pool,
+        exec: &'a dyn Executor,
         parents: &'a mut [M],
     ) -> BoxFuture<'a, Result<(), Error>> {
         Box::pin(async move {
@@ -226,7 +225,7 @@ where
 
             let keys: Vec<Key> = parents.iter().map(self.get).collect();
             let mut children = fetch_children(
-                pool,
+                exec,
                 self.child_key,
                 &self.filter,
                 &self.order,
@@ -234,7 +233,7 @@ where
                 keys,
             )
             .await?;
-            self.nested.load(pool, &mut children).await?;
+            self.nested.load(exec, &mut children).await?;
 
             let mut map: HashMap<Key, Vec<C>> = HashMap::new();
             for child in children {
@@ -382,7 +381,7 @@ where
 {
     fn load<'a>(
         &'a self,
-        pool: &'a Pool,
+        exec: &'a dyn Executor,
         parents: &'a mut [M],
     ) -> BoxFuture<'a, Result<(), Error>> {
         Box::pin(async move {
@@ -392,7 +391,7 @@ where
 
             let keys: Vec<Key> = parents.iter().map(self.get).collect();
             let mut children = fetch_children(
-                pool,
+                exec,
                 self.child_key,
                 &self.filter,
                 &self.order,
@@ -400,7 +399,7 @@ where
                 keys,
             )
             .await?;
-            self.nested.load(pool, &mut children).await?;
+            self.nested.load(exec, &mut children).await?;
 
             let mut map: HashMap<Key, Vec<C>> = HashMap::new();
             for child in children {

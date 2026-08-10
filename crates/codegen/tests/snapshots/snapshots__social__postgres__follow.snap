@@ -47,6 +47,7 @@ pub struct FollowUpdate {
 }
 impl ::ruprizzle::Model for Follow {
     const TABLE: &'static str = "follows";
+    const PRIMARY_KEY: &'static str = "follower_id";
 }
 /// Table name for this model.
 pub const TABLE: &str = "follows";
@@ -65,10 +66,10 @@ pub fn follower() -> ::ruprizzle::IncludeOne<
     (),
 > {
     ::ruprizzle::IncludeOne::new(
-        |parent| parent.follower_id,
-        |parent, follower| parent.follower = follower,
+        |__row| __row.follower_id,
+        |__row, __loaded| __row.follower = __loaded,
         super::person::ID,
-        |child| child.id,
+        |__child| __child.id,
     )
 }
 /// Returns an `IncludeOne` for this relation.
@@ -80,10 +81,10 @@ pub fn followee() -> ::ruprizzle::IncludeOne<
     (),
 > {
     ::ruprizzle::IncludeOne::new(
-        |parent| parent.followee_id,
-        |parent, followee| parent.followee = followee,
+        |__row| __row.followee_id,
+        |__row, __loaded| __row.followee = __loaded,
         super::person::ID,
-        |child| child.id,
+        |__child| __child.id,
     )
 }
 /// Returns a filter for parents that have at least one matching child.

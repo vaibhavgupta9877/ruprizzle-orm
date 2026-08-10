@@ -1435,6 +1435,7 @@ name = "ruprizzle"
 version = "0.1.0-alpha.1"
 dependencies = [
  "chrono",
+ "futures-core",
  "ruprizzle-core",
  "ruprizzle-dialect",
  "ruprizzle-macros",
@@ -1506,6 +1507,7 @@ dependencies = [
 name = "ruprizzle-integration-tests"
 version = "0.1.0-alpha.1"
 dependencies = [
+ "futures-core",
  "insta",
  "miette",
  "ruprizzle",

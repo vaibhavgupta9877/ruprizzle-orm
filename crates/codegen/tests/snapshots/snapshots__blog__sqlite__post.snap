@@ -59,6 +59,7 @@ pub struct PostUpdate {
 }
 impl ::ruprizzle::Model for Post {
     const TABLE: &'static str = "posts";
+    const PRIMARY_KEY: &'static str = "id";
 }
 /// Table name for this model.
 pub const TABLE: &str = "posts";
@@ -71,10 +72,10 @@ pub const CREATED_AT: Column<Post, DateTime<Utc>> = Column::new("posts", "create
 /// Returns an `IncludeOne` for this relation.
 pub fn author() -> ::ruprizzle::IncludeOne<'static, Post, super::user::User, Uuid, ()> {
     ::ruprizzle::IncludeOne::new(
-        |parent| parent.author_id,
-        |parent, author| parent.author = author,
+        |__row| __row.author_id,
+        |__row, __loaded| __row.author = __loaded,
         super::user::ID,
-        |child| child.id,
+        |__child| __child.id,
     )
 }
 /// Returns a filter for parents that have at least one matching child.

@@ -56,6 +56,7 @@ pub struct OrganisationUpdate {
 }
 impl ::ruprizzle::Model for Organisation {
     const TABLE: &'static str = "organisations";
+    const PRIMARY_KEY: &'static str = "id";
 }
 /// Table name for this model.
 pub const TABLE: &str = "organisations";
@@ -82,10 +83,10 @@ pub fn members() -> ::ruprizzle::IncludeList<
     (),
 > {
     ::ruprizzle::IncludeList::new(
-        |parent| parent.id,
-        |parent, members| parent.members = members,
+        |__row| __row.id,
+        |__row, __loaded| __row.members = __loaded,
         super::membership::ORG_ID,
-        |child| child.org_id,
+        |__child| __child.org_id,
     )
 }
 /// Returns a filter for parents that have at least one matching child.

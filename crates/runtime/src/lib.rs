@@ -10,10 +10,12 @@
 pub mod col;
 pub mod compile;
 pub mod error;
+pub mod executor;
 pub mod filter;
 pub mod include;
 pub mod model;
 pub mod order;
+pub mod page;
 pub mod pool;
 pub mod query;
 pub mod related;
@@ -29,18 +31,20 @@ pub mod types {
 /// Common imports for application code.
 pub mod prelude {
     pub use crate::{
-        Column, Encodable, Error, Filter, InsertQuery, Model, OrderBy, Pool, Related, SelectQuery,
-        Tx, Value,
+        Column, Encodable, Error, Executor, Filter, InsertQuery, IsolationLevel, Model, OrderBy,
+        Page, Pool, Related, SelectQuery, Tx, Value,
     };
 }
 
 pub use col::{Column, Projection};
 pub use compile::{CompiledSql, delete, dialect_for_pool, insert, insert_many, select, update};
 pub use error::Error;
+pub use executor::Executor;
 pub use filter::{Filter, FilterNode, all, any};
 pub use include::{IncludeList, IncludeOne, IncludeSet};
 pub use model::Model;
 pub use order::OrderBy;
+pub use page::Page;
 pub use pool::{Pool, connect};
 pub use query::{
     DeleteQuery, InsertManyQuery, InsertQuery, NestedSetter, SelectQuery, UpdateQuery,
@@ -49,7 +53,7 @@ pub use related::Related;
 pub use serde;
 pub use serde_json;
 pub use sqlx;
-pub use tx::Tx;
+pub use tx::{IsolationLevel, Tx, is_retryable};
 pub use value::{Encodable, Ordered, Value};
 
 /// A boxed future, used by the transaction escape hatch.

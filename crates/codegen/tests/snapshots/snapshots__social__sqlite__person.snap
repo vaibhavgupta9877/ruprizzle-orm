@@ -50,6 +50,7 @@ pub struct PersonUpdate {
 }
 impl ::ruprizzle::Model for Person {
     const TABLE: &'static str = "people";
+    const PRIMARY_KEY: &'static str = "id";
 }
 /// Table name for this model.
 pub const TABLE: &str = "people";
@@ -68,10 +69,10 @@ pub fn following() -> ::ruprizzle::IncludeList<
     (),
 > {
     ::ruprizzle::IncludeList::new(
-        |parent| parent.id,
-        |parent, following| parent.following = following,
+        |__row| __row.id,
+        |__row, __loaded| __row.following = __loaded,
         super::follow::FOLLOWER_ID,
-        |child| child.follower_id,
+        |__child| __child.follower_id,
     )
 }
 /// Returns an `IncludeList` for this relation.
@@ -83,10 +84,10 @@ pub fn followers() -> ::ruprizzle::IncludeList<
     (),
 > {
     ::ruprizzle::IncludeList::new(
-        |parent| parent.id,
-        |parent, followers| parent.followers = followers,
+        |__row| __row.id,
+        |__row, __loaded| __row.followers = __loaded,
         super::follow::FOLLOWEE_ID,
-        |child| child.followee_id,
+        |__child| __child.followee_id,
     )
 }
 /// Returns an `IncludeList` for this relation.
@@ -98,10 +99,10 @@ pub fn threads() -> ::ruprizzle::IncludeList<
     (),
 > {
     ::ruprizzle::IncludeList::new(
-        |parent| parent.id,
-        |parent, threads| parent.threads = threads,
+        |__row| __row.id,
+        |__row, __loaded| __row.threads = __loaded,
         super::thread::AUTHOR_ID,
-        |child| child.author_id,
+        |__child| __child.author_id,
     )
 }
 /// Returns a filter for parents that have at least one matching child.

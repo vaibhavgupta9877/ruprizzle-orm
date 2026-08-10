@@ -23,7 +23,7 @@ pub struct Thread {
     pub parent_id: Option<Uuid>,
     #[sqlx(skip)]
     #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
-    pub parent: ::ruprizzle::Related<Option<super::thread::Thread>>,
+    pub parent: ::ruprizzle::Related<Option<Box<super::thread::Thread>>>,
     #[sqlx(skip)]
     #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
     pub replies: ::ruprizzle::Related<Vec<super::thread::Thread>>,
@@ -55,6 +55,7 @@ pub struct ThreadUpdate {
 }
 impl ::ruprizzle::Model for Thread {
     const TABLE: &'static str = "threads";
+    const PRIMARY_KEY: &'static str = "id";
 }
 /// Table name for this model.
 pub const TABLE: &str = "threads";
@@ -71,40 +72,10 @@ pub fn author() -> ::ruprizzle::IncludeOne<
     (),
 > {
     ::ruprizzle::IncludeOne::new(
-        |parent| parent.author_id,
-        |parent, author| parent.author = author,
+        |__row| __row.author_id,
+        |__row, __loaded| __row.author = __loaded,
         super::person::ID,
-        |child| child.id,
-    )
-}
-/// Returns an `IncludeOne` for this relation.
-pub fn parent() -> ::ruprizzle::IncludeOne<
-    'static,
-    Thread,
-    super::thread::Thread,
-    Uuid,
-    (),
-> {
-    ::ruprizzle::IncludeOne::new(
-        |parent| parent.parent_id,
-        |parent, parent| parent.parent = parent,
-        super::thread::ID,
-        |child| child.id,
-    )
-}
-/// Returns an `IncludeList` for this relation.
-pub fn replies() -> ::ruprizzle::IncludeList<
-    'static,
-    Thread,
-    super::thread::Thread,
-    Uuid,
-    (),
-> {
-    ::ruprizzle::IncludeList::new(
-        |parent| parent.parent_id,
-        |parent, replies| parent.replies = replies,
-        super::thread::ID,
-        |child| child.id,
+        |__child| __child.id,
     )
 }
 /// Returns a filter for parents that have at least one matching child.

@@ -60,6 +60,7 @@ pub struct UserUpdate {
 }
 impl ::ruprizzle::Model for User {
     const TABLE: &'static str = "users";
+    const PRIMARY_KEY: &'static str = "id";
 }
 /// Table name for this model.
 pub const TABLE: &str = "users";
@@ -72,10 +73,10 @@ pub const UPDATED_AT: Column<User, DateTime<Utc>> = Column::new("users", "update
 /// Returns an `IncludeList` for this relation.
 pub fn posts() -> ::ruprizzle::IncludeList<'static, User, super::post::Post, Uuid, ()> {
     ::ruprizzle::IncludeList::new(
-        |parent| parent.id,
-        |parent, posts| parent.posts = posts,
+        |__row| __row.id,
+        |__row, __loaded| __row.posts = __loaded,
         super::post::AUTHOR_ID,
-        |child| child.author_id,
+        |__child| __child.author_id,
     )
 }
 /// Returns a filter for parents that have at least one matching child.

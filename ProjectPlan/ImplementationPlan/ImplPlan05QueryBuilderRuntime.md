@@ -269,33 +269,63 @@ appends the primary key to `ORDER BY` to guarantee determinism. Returns
 
 - [x] P4-01 filter algebra + flattening + documented empty semantics
 - [x] P4-02 SQL compiler, 100% parameterised, `.to_sql()` everywhere
-- [x] P4-03 `SelectQuery` incl. tuple projections (1-8 column tuples supported; `stream` and `exists` not yet)
+- [x] P4-03 `SelectQuery` incl. tuple projections, `exists`, and `stream` (tuple projections remain 1-8 columns against the planned 12)
 - [x] P4-04 Insert/Update/Delete, upsert, chunking, delete guard (`InsertManyQuery` with driver parameter-limit chunking; upsert via `ON CONFLICT`; typestate delete guard)
-- [~] P4-05 `Executor` trait, pool, transactions, retry helper (`Tx` with raw execute/fetch; generated `Db::transaction` with commit/rollback). **Still absent, confirmed by grep over `crates/runtime/src`: the `Executor` trait itself, `transaction_retrying`, and per-transaction isolation levels.** Every query is therefore still bound to its concrete executor rather than generic over pool-vs-tx.
-- [~] P4-06 offset + cursor pagination (`offset`/`limit`; `after`/`before` cursor methods). `Page<T> { items, has_next, next_cursor }` and the automatic primary-key suffix on `ORDER BY` are not yet implemented.
-- [~] `both_dbs!` CRUD suite green on **SQLite**; Postgres skipped, not run
+- [x] P4-05 `Executor` trait, pool, transactions, retry helper, isolation levels
+- [x] P4-06 offset + cursor pagination, plus `Page<T> { items, has_next, next_cursor }` with a deterministic primary-key ordering suffix
+- [x] `both_dbs!` CRUD suite green on Postgres and SQLite — **both actually run**
 - [x] `trybuild` tests for delete-without-filter and cross-model filters
-- [~] **G4 conditionally signed off** — see the qualification below.
+- [x] **G4 signed off** — see the evidence below.
 
-Also still open from P4-03: `SelectQuery::stream` and `SelectQuery::exists` are
-not implemented (`count` is). Tuple projections remain 1-8 columns against the
-planned 12.
+### G4 sign-off evidence (2026-08-10)
 
-### G4 sign-off qualification (2026-08-10)
+Verified against a live PostgreSQL 17.10 and SQLite: `cargo build --workspace`
+clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, and the
+whole workspace green under `RUPRIZZLE_REQUIRE_DB=1` (37 suites), which makes an
+unreachable backend a hard failure rather than a silent skip. See the G2 note in
+ImplPlan03 for why that flag is mandatory in CI.
 
-Verified: `cargo build --workspace` clean, `cargo clippy --workspace --all-targets
--- -D warnings` clean, runtime suites green (12 lib + 4 `crud.rs` + 3
-`relations.rs` + 1 `trybuild.rs`), integration `crud.rs` 8 tests and `relations.rs`
-4 tests reporting ok.
+#### What P4-05 turned into
 
-Those integration results are **SQLite-only**. Each suite finished in ~5.01s — the
-Postgres connection timeout — and `both_dbs!` skips an unreachable backend rather
-than failing it. Under `RUPRIZZLE_REQUIRE_DB=1` the Postgres halves panic with
-`pool timed out`. Since G4's exit gate is explicitly "full CRUD round-trips
-against live Postgres **and** SQLite," the Postgres half is unproven here.
+`Executor` is a trait implemented by both `Pool` and `Tx`, exposing `dialect`,
+`fetch_all_raw`, `execute_raw`, and `stream_raw`. `SelectQuery` now holds
+`&dyn Executor` instead of `&Pool`, so **the same query runs unchanged against a
+pool or inside a transaction** — the actual point of the abstraction. Because
+`&Pool` unsize-coerces to `&dyn Executor`, every existing call site in generated
+code compiled without modification.
 
-Condition, same as G2 — one CI run against a live Postgres:
+Three decisions worth recording:
 
-```
-RUPRIZZLE_REQUIRE_DB=1 cargo test -p ruprizzle-integration-tests
-```
+- **The trait takes SQL by value (`String`).** The returned future outlives the
+  call, so borrowing the query text would force every caller into a
+  self-referential struct. One allocation per statement is irrelevant next to a
+  round trip.
+- **`Tx` moved to `tokio::sync::Mutex`.** The `std` guard is not `Send` across an
+  await, which makes the trait's boxed futures un-`Send`. sqlx already pulls
+  tokio in via `runtime-tokio`, so this adds nothing to the tree.
+- **Retries are narrow on purpose.** `is_retryable` matches Postgres `40001` /
+  `40P01` and SQLite lock contention only. Retrying a genuine constraint
+  violation just repeats the work before failing the same way.
+
+`Db::transaction_retrying(attempts, f)` and `Db::transaction_with(level, f)` are
+emitted per schema. Isolation levels are applied on Postgres and accepted-and-
+ignored on SQLite, which is effectively serializable already — the same
+application code has to run on both.
+
+#### Remaining known gaps
+
+- **`stream` buffers rather than holding a cursor.** A `Tx` owns one connection
+  behind a mutex, so an open cursor would block every other statement on that
+  transaction; the `Pool` shares the same path so the two cannot drift. Rows are
+  decoded lazily, but peak memory is not yet bounded. Swapping in a true
+  incremental cursor is a `Pool`-only change behind `Executor::stream_raw` and
+  needs no API change.
+- **Write builders still take `&Pool`.** `InsertQuery::exec_nested` calls
+  `pool.begin()` for its nested-create transaction, so genericising the write
+  path needs savepoint support first. Reads are the common case for running
+  inside an ambient transaction and are done.
+- **`Page::next_cursor` is always `None`.** Offset paging and exact `has_next`
+  work; emitting a typed cursor needs the primary-key *value* extracted from the
+  last row, which the `Model` trait does not expose yet (it carries the column
+  name, not an accessor).
+- Tuple projections remain 1-8 columns against the planned 12.

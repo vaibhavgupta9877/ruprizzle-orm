@@ -48,6 +48,7 @@ pub struct CustomerUpdate {
 }
 impl ::ruprizzle::Model for Customer {
     const TABLE: &'static str = "customers";
+    const PRIMARY_KEY: &'static str = "id";
 }
 /// Table name for this model.
 pub const TABLE: &str = "customers";
@@ -67,10 +68,10 @@ pub fn orders() -> ::ruprizzle::IncludeList<
     (),
 > {
     ::ruprizzle::IncludeList::new(
-        |parent| parent.id,
-        |parent, orders| parent.orders = orders,
+        |__row| __row.id,
+        |__row, __loaded| __row.orders = __loaded,
         super::order::CUSTOMER_ID,
-        |child| child.customer_id,
+        |__child| __child.customer_id,
     )
 }
 /// Returns a filter for parents that have at least one matching child.

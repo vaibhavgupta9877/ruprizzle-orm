@@ -52,6 +52,7 @@ pub struct OrderItemUpdate {
 }
 impl ::ruprizzle::Model for OrderItem {
     const TABLE: &'static str = "order_items";
+    const PRIMARY_KEY: &'static str = "order_id";
 }
 /// Table name for this model.
 pub const TABLE: &str = "order_items";
@@ -71,10 +72,10 @@ pub fn order() -> ::ruprizzle::IncludeOne<
     (),
 > {
     ::ruprizzle::IncludeOne::new(
-        |parent| parent.order_id,
-        |parent, order| parent.order = order,
+        |__row| __row.order_id,
+        |__row, __loaded| __row.order = __loaded,
         super::order::ID,
-        |child| child.id,
+        |__child| __child.id,
     )
 }
 /// Returns an `IncludeOne` for this relation.
@@ -86,10 +87,10 @@ pub fn product() -> ::ruprizzle::IncludeOne<
     (),
 > {
     ::ruprizzle::IncludeOne::new(
-        |parent| parent.product_id,
-        |parent, product| parent.product = product,
+        |__row| __row.product_id,
+        |__row, __loaded| __row.product = __loaded,
         super::product::ID,
-        |child| child.id,
+        |__child| __child.id,
     )
 }
 /// Returns a filter for parents that have at least one matching child.

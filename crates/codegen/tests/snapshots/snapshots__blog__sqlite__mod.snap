@@ -72,6 +72,77 @@ impl Db {
             }
         }
     }
+    /// Run a closure inside a transaction with an explicit isolation level.
+    pub async fn transaction_with<F, T>(
+        &self,
+        level: ::ruprizzle::IsolationLevel,
+        f: F,
+    ) -> Result<T, ::ruprizzle::Error>
+    where
+        F: for<'t> FnOnce(
+            &'t mut ::ruprizzle::Tx,
+        ) -> ::ruprizzle::BoxFuture<'t, Result<T, ::ruprizzle::Error>>,
+    {
+        let mut tx = ::ruprizzle::Tx::begin_with_isolation(self.raw_pool(), level)
+            .await?;
+        match f(&mut tx).await {
+            Ok(v) => {
+                tx.commit().await?;
+                Ok(v)
+            }
+            Err(e) => {
+                tx.rollback().await?;
+                Err(e)
+            }
+        }
+    }
+    /// Run a transaction, retrying transient serialization failures.
+    ///
+    /// Retries only errors [`ruprizzle::is_retryable`] recognises —
+    /// Postgres `40001`/`40P01` and SQLite lock contention. A genuine
+    /// constraint violation is returned immediately rather than
+    /// retried, because retrying it only repeats the work before
+    /// failing the same way. `attempts` counts total tries, so
+    /// `attempts = 1` disables retrying.
+    ///
+    /// The closure is `FnMut` because it runs once per attempt.
+    pub async fn transaction_retrying<F, T>(
+        &self,
+        attempts: u32,
+        mut f: F,
+    ) -> Result<T, ::ruprizzle::Error>
+    where
+        F: for<'t> FnMut(
+            &'t mut ::ruprizzle::Tx,
+        ) -> ::ruprizzle::BoxFuture<'t, Result<T, ::ruprizzle::Error>>,
+    {
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            let mut tx = ::ruprizzle::Tx::begin(self.raw_pool()).await?;
+            let result = f(&mut tx).await;
+            match result {
+                Ok(v) => {
+                    match tx.commit().await {
+                        Ok(()) => return Ok(v),
+                        Err(e) => {
+                            if attempt >= attempts.max(1)
+                                || !::ruprizzle::is_retryable(&e)
+                            {
+                                return Err(e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tx.rollback().await?;
+                    if attempt >= attempts.max(1) || !::ruprizzle::is_retryable(&e) {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+    }
 }
 /// Common imports for this generated module.
 pub mod prelude {
