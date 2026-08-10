@@ -14,7 +14,7 @@ use ruprizzle_codegen::generate_all;
 use ruprizzle_core::ir::Provider;
 use ruprizzle_parser::parse;
 
-const EXAMPLES: [&str; 4] = ["blog", "ecommerce", "saas", "social"];
+const EXAMPLES: [&str; 4] = ["blog", "ecommerce", "saas-tenant", "minimal"];
 
 #[test]
 #[ignore = "runs cargo check over 8 generated crates; expensive (CI: --ignored)"]
@@ -60,7 +60,7 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio",
             schema.datasource.provider = provider;
             let files = generate_all(&schema);
 
-            let module = format!("{example}_{label}");
+            let module = format!("{}_{label}", example.replace('-', "_"));
             let dir = out.join("src").join(&module);
             fs::create_dir_all(&dir).unwrap();
             for (path, content) in files {

@@ -42,7 +42,7 @@ fn postgres_dialect_emits_create_table() {
 
 #[test]
 fn sqlite_dialect_emits_create_table_with_inline_fks() {
-    let schema = example_schema("saas");
+    let schema = example_schema("saas-tenant");
     let dialect = SqliteDialect;
     let membership = schema.model("Membership").unwrap();
 
@@ -58,7 +58,7 @@ fn sqlite_dialect_emits_create_table_with_inline_fks() {
 
 #[test]
 fn sqlite_dialect_emulates_enum_as_text_with_check() {
-    let schema = example_schema("saas");
+    let schema = example_schema("saas-tenant");
     let dialect = SqliteDialect;
     let membership = schema.model("Membership").unwrap();
 
@@ -212,7 +212,7 @@ fn dialect_for_selects_provider() {
 
 #[test]
 fn sqlite_rebuild_table_preserves_other_columns() {
-    let schema = example_schema("saas");
+    let schema = example_schema("saas-tenant");
     let dialect = SqliteDialect;
     let membership = schema.model("Membership").unwrap();
     let is_owner = membership.field("isOwner").unwrap();
