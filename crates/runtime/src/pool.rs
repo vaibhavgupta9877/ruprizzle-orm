@@ -1,9 +1,44 @@
-//! Connection pool re-exports.
+//! Connection pool construction and configuration.
+
+use std::time::Duration;
+
+use sqlx::any::AnyPoolOptions;
 
 /// A `sqlx` pool over the `Any` driver.
 pub type Pool = sqlx::Pool<sqlx::Any>;
 
-/// Connect to a database by URL.
+/// Configuration used to build a [`Pool`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PoolConfig {
+    /// Maximum connections held open by the pool.
+    pub max_connections: u32,
+    /// Connections kept warm while idle.
+    pub min_connections: u32,
+    /// Maximum time spent waiting to acquire a connection.
+    pub acquire_timeout: Duration,
+    /// Maximum idle connection duration; `None` keeps idle connections forever.
+    pub idle_timeout: Option<Duration>,
+    /// Maximum connection lifetime; `None` disables recycling by age.
+    pub max_lifetime: Option<Duration>,
+    /// Whether to test a connection before handing it out.
+    pub test_before_acquire: bool,
+}
+
+impl Default for PoolConfig {
+    fn default() -> Self {
+        Self {
+            max_connections: 10,
+            min_connections: 0,
+            acquire_timeout: Duration::from_secs(30),
+            idle_timeout: Some(Duration::from_secs(600)),
+            max_lifetime: Some(Duration::from_secs(1800)),
+            test_before_acquire: true,
+        }
+    }
+}
+
+/// Connects using sqlx-compatible default pool settings.
 ///
 /// The URL scheme selects the driver (`postgres://`, `sqlite://`, etc.).
 ///
@@ -11,6 +46,26 @@ pub type Pool = sqlx::Pool<sqlx::Any>;
 ///
 /// Returns an error if the URL cannot be parsed or the connection fails.
 pub async fn connect(url: &str) -> Result<Pool, crate::Error> {
+    connect_with(url, &PoolConfig::default()).await
+}
+
+/// Connects using explicit pool settings.
+///
+/// The URL scheme selects the driver (`postgres://`, `sqlite://`, etc.).
+///
+/// # Errors
+///
+/// Returns an error if the URL cannot be parsed or the connection fails.
+pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate::Error> {
     sqlx::any::install_default_drivers();
-    Pool::connect(url).await.map_err(Into::into)
+    AnyPoolOptions::new()
+        .max_connections(config.max_connections)
+        .min_connections(config.min_connections)
+        .acquire_timeout(config.acquire_timeout)
+        .idle_timeout(config.idle_timeout)
+        .max_lifetime(config.max_lifetime)
+        .test_before_acquire(config.test_before_acquire)
+        .connect(url)
+        .await
+        .map_err(Into::into)
 }
