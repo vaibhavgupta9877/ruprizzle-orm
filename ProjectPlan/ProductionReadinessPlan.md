@@ -940,6 +940,8 @@ Bind values are not logged: they are user data. Only the count is."
 
 ## PR-05 · Make the connection pool configurable
 
+**Status: COMPLETE.** Verified 2026-08-11 with pool configuration tests and the full workspace gate. `connect(url)` remains backward compatible and `connect_with` applies all `PoolConfig` fields.
+
 **Est:** 1d · **Severity:** HIGH
 
 `crates/runtime/src/pool.rs` is seventeen lines. `connect(url)` accepts a URL and
@@ -961,7 +963,7 @@ identical behaviour.
 - Consumes: `sqlx::any::AnyPoolOptions` (verified present in sqlx 0.8.6 at `sqlx-core/src/any/mod.rs:52`), whose builder exposes `max_connections(u32)`, `min_connections(u32)`, `acquire_timeout(Duration)`, `idle_timeout(impl Into<Option<Duration>>)`, `max_lifetime(impl Into<Option<Duration>>)`, `test_before_acquire(bool)`, and `connect(self, url: &str)`.
 - Produces: `PoolConfig` struct with public fields, `PoolConfig::default()`, and `connect_with(url: &str, config: &PoolConfig) -> Result<Pool, Error>`. `connect(url)` is retained and delegates.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `crates/runtime/tests/pool_config.rs`:
 
@@ -985,10 +987,8 @@ fn defaults_match_sqlx() {
 
 #[tokio::test]
 async fn honours_max_connections() {
-    let config = PoolConfig {
-        max_connections: 3,
-        ..PoolConfig::default()
-    };
+    let mut config = PoolConfig::default();
+    config.max_connections = 3;
     let pool = connect_with("sqlite::memory:", &config)
         .await
         .expect("connect");
@@ -998,13 +998,13 @@ async fn honours_max_connections() {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cargo test -p ruprizzle --test pool_config`
 
 Expected: FAIL to compile — `PoolConfig` and `connect_with` do not exist.
 
-- [ ] **Step 3: Implement the configuration surface**
+- [x] **Step 3: Implement the configuration surface**
 
 Replace `crates/runtime/src/pool.rs` entirely:
 
@@ -1085,7 +1085,7 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
 }
 ```
 
-- [ ] **Step 4: Re-export from the crate root**
+- [x] **Step 4: Re-export from the crate root**
 
 In `crates/runtime/src/lib.rs`, change the pool re-export line:
 
@@ -1093,14 +1093,14 @@ In `crates/runtime/src/lib.rs`, change the pool re-export line:
 pub use pool::{Pool, PoolConfig, connect, connect_with};
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `cargo test -p ruprizzle --test pool_config`
 
 Expected: PASS. If `pool.options()` is not public in sqlx 0.8.6, drop that assertion and
 assert only that the pool connects — the defaults test carries the contract.
 
-- [ ] **Step 6: Document and commit**
+- [x] **Step 6: Document and commit**
 
 Add a `## Connection pooling` section to `docs/query-guide.md` with a worked example
 sizing `max_connections` against Postgres's own limit.

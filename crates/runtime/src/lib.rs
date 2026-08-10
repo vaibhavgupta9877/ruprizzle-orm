@@ -50,7 +50,7 @@ pub use include::{IncludeList, IncludeOne, IncludeSet};
 pub use model::Model;
 pub use order::OrderBy;
 pub use page::Page;
-pub use pool::{Pool, connect};
+pub use pool::{Pool, PoolConfig, connect, connect_with};
 pub use query::{
     DeleteQuery, InsertManyQuery, InsertQuery, NestedSetter, SelectQuery, UpdateQuery,
 };

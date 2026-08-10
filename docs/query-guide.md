@@ -143,3 +143,20 @@ milliseconds, and a non-sensitive error category on failure. Bind values and
 database error detail are not logged. `ruprizzle::migrate` reports migration
 start and completion events with the migration ID and elapsed time. Avoid embedding
 sensitive literals in raw SQL because raw SQL text is intentionally observable.
+
+## Connection pooling
+
+Use `PoolConfig` when the application needs limits different from sqlx defaults:
+
+```rust
+use std::time::Duration;
+use ruprizzle::pool::{connect_with, PoolConfig};
+
+let mut config = PoolConfig::default();
+config.max_connections = 8;
+config.acquire_timeout = Duration::from_secs(5);
+let pool = connect_with("postgres://...", &config).await?;
+```
+
+Set `max_connections` below the database's `max_connections` after accounting for
+the number of application instances and other database clients.
