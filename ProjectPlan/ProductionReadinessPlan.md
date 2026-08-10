@@ -1161,7 +1161,7 @@ async fn stats_and_ping_report_a_live_pool() {
 }
 
 #[tokio::test]
-async fn ping_fails_against_an_unreachable_database() {
+async fn ping_reports_an_unreachable_database() {
     ruprizzle::sqlx::any::install_default_drivers();
     let pool = ruprizzle::sqlx::any::AnyPoolOptions::new()
         .acquire_timeout(Duration::from_millis(200))
