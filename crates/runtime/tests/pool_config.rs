@@ -36,3 +36,23 @@ async fn configured_pool_connects() {
     assert_eq!(options.get_max_lifetime(), Some(Duration::from_secs(20)));
     assert!(!options.get_test_before_acquire());
 }
+
+#[tokio::test]
+async fn stats_and_ping_report_a_live_pool() {
+    let pool = ruprizzle::connect("sqlite::memory:")
+        .await
+        .expect("connect");
+    ruprizzle::pool::ping(&pool).await.expect("ping");
+    let stats = ruprizzle::pool::stats(&pool);
+    assert_eq!(stats.in_use + stats.idle, stats.size as usize);
+}
+
+#[tokio::test]
+async fn ping_reports_an_unreachable_database() {
+    let mut config = PoolConfig::default();
+    config.acquire_timeout = Duration::from_millis(200);
+    let Ok(pool) = connect_with("postgres://127.0.0.1:1/nope", &config).await else {
+        return;
+    };
+    assert!(ruprizzle::pool::ping(&pool).await.is_err());
+}

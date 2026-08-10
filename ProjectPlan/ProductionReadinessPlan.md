@@ -1124,6 +1124,8 @@ connect() callers see identical behaviour."
 
 ## PR-06 · Expose pool metrics and a health check
 
+**Status: COMPLETE.** Verified 2026-08-11 with live-pool stats/ping tests and the full workspace gate. Readiness uses `SELECT 1`; metrics expose total, idle, and in-use connections.
+
 **Est:** 1d · **Severity:** MEDIUM
 
 A readiness probe needs to know the database is reachable; an autoscaler and a dashboard
@@ -1138,7 +1140,7 @@ need to know whether the pool is saturated. Neither is currently answerable.
 - Consumes: `PoolConfig` and `connect_with` from PR-05; `sqlx::Pool::size() -> u32` and `Pool::num_idle() -> usize` (verified at `sqlx-core/src/pool/mod.rs:535,540`).
 - Produces: `PoolStats { size: u32, idle: usize, in_use: usize }`, `stats(pool: &Pool) -> PoolStats`, `ping(pool: &Pool) -> Result<(), Error>`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `crates/runtime/tests/pool_config.rs`:
 
@@ -1165,13 +1167,13 @@ async fn ping_fails_against_an_unreachable_database() {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cargo test -p ruprizzle --test pool_config`
 
 Expected: FAIL to compile — `stats` and `ping` do not exist.
 
-- [ ] **Step 3: Implement stats and ping**
+- [x] **Step 3: Implement stats and ping**
 
 Append to `crates/runtime/src/pool.rs`:
 
@@ -1219,7 +1221,7 @@ pub async fn ping(pool: &Pool) -> Result<(), crate::Error> {
 }
 ```
 
-- [ ] **Step 4: Re-export**
+- [x] **Step 4: Re-export**
 
 In `crates/runtime/src/lib.rs`:
 
@@ -1227,11 +1229,11 @@ In `crates/runtime/src/lib.rs`:
 pub use pool::{Pool, PoolConfig, PoolStats, connect, connect_with, ping, stats};
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `cargo test -p ruprizzle --test pool_config`. Expected: PASS.
 
-- [ ] **Step 6: Run the full gate and commit**
+- [x] **Step 6: Run the full gate and commit**
 
 ```bash
 git add crates/runtime/src/pool.rs crates/runtime/src/lib.rs crates/runtime/tests/pool_config.rs

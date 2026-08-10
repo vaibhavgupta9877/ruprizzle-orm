@@ -69,3 +69,40 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
         .await
         .map_err(Into::into)
 }
+
+/// Point-in-time pool saturation data for metrics endpoints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PoolStats {
+    /// Total connections currently held by the pool.
+    pub size: u32,
+    /// Connections immediately available for checkout.
+    pub idle: usize,
+    /// Connections currently checked out.
+    pub in_use: usize,
+}
+
+/// Samples the current pool saturation.
+#[must_use]
+pub fn stats(pool: &Pool) -> PoolStats {
+    let size = pool.size();
+    let idle = pool.num_idle();
+    PoolStats {
+        size,
+        idle,
+        in_use: (size as usize).saturating_sub(idle),
+    }
+}
+
+/// Checks database reachability for readiness probes.
+///
+/// # Errors
+///
+/// Returns an error if a connection cannot be acquired or `SELECT 1` fails.
+pub async fn ping(pool: &Pool) -> Result<(), crate::Error> {
+    sqlx::query("SELECT 1")
+        .execute(pool)
+        .await
+        .map(|_| ())
+        .map_err(Into::into)
+}
