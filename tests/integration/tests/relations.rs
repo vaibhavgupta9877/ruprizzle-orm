@@ -1,8 +1,8 @@
 //! Batched relation `include` round-trips over Postgres and SQLite.
 
 use ruprizzle::{
-    Column, Encodable, Filter, FilterNode, IncludeList, IncludeOne, InsertManyQuery, InsertQuery,
-    Model, NestedSetter, Related, SelectQuery, Value,
+    Column, CountingExecutor, Encodable, Filter, FilterNode, IncludeList, IncludeOne,
+    InsertManyQuery, InsertQuery, Model, NestedSetter, Related, SelectQuery, Value,
 };
 use ruprizzle_testkit::both_dbs;
 use sqlx::FromRow;
@@ -211,6 +211,110 @@ both_dbs! {
             .await?;
         assert_eq!(posts_by_alice.len(), 2);
         assert!(posts_by_alice.iter().all(|p| p.author_id == 1));
+    }
+}
+
+/// Seeds `users` users, each with `posts_each` posts, each with `comments_each`
+/// comments. Ids are dense and deterministic so assertions can name rows.
+async fn seed(
+    pool: &ruprizzle::Pool,
+    users: i64,
+    posts_each: i64,
+    comments_each: i64,
+) -> ruprizzle_testkit::Result {
+    for u in 1..=users {
+        InsertQuery::<User>::new(pool)
+            .set(USER_ID, u)
+            .set(USER_NAME, format!("user{u}"))
+            .exec()
+            .await?;
+
+        for p in 1..=posts_each {
+            let post_id = u * 1_000 + p;
+            InsertQuery::<Post>::new(pool)
+                .set(POST_ID, post_id)
+                .set(POST_TITLE, format!("post{post_id}"))
+                .set(POST_PUBLISHED, 1)
+                .set(POST_AUTHOR_ID, u)
+                .exec()
+                .await?;
+
+            for c in 1..=comments_each {
+                InsertQuery::<Comment>::new(pool)
+                    .set(COMMENT_ID, post_id * 100 + c)
+                    .set(COMMENT_BODY, format!("comment{c}"))
+                    .set(COMMENT_POST_ID, post_id)
+                    .exec()
+                    .await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+both_dbs! {
+    setup = "CREATE TABLE users (id BIGINT PRIMARY KEY, name TEXT NOT NULL);
+             CREATE TABLE posts (id BIGINT PRIMARY KEY, title TEXT NOT NULL, published INTEGER NOT NULL, author_id BIGINT NOT NULL);
+             CREATE TABLE comments (id BIGINT PRIMARY KEY, body TEXT NOT NULL, post_id BIGINT NOT NULL)";
+    /// G5's exit gate: a two-level include costs one query per *level*, not one
+    /// per row. Any future refactor that reintroduces N+1 fails right here.
+    async fn include_is_bounded(db: TestDb) {
+        let pool = db.any_pool();
+        seed(pool, 10, 5, 3).await?;
+
+        let counter = CountingExecutor::new(pool);
+        let users: Vec<User> = SelectQuery::<User>::new(&counter)
+            .include(posts().include(comments()))
+            .exec()
+            .await?;
+
+        // users, posts, comments — not 1 + 10 + 50.
+        assert_eq!(counter.count(), 3);
+        assert_eq!(users.len(), 10);
+        assert!(users.iter().all(|u| u.posts.get().len() == 5));
+        assert!(users
+            .iter()
+            .all(|u| u.posts.get().iter().all(|p| p.comments.get().len() == 3)));
+
+        // A many-to-one include over 50 posts is still a single query, because
+        // the repeated author keys are de-duplicated before the `IN`.
+        counter.reset();
+        let posts_with_author: Vec<Post> = SelectQuery::<Post>::new(&counter)
+            .include(author())
+            .exec()
+            .await?;
+        assert_eq!(counter.count(), 2);
+        assert_eq!(posts_with_author.len(), 50);
+        assert!(posts_with_author.iter().all(|p| p.author.get().is_some()));
+    }
+}
+
+both_dbs! {
+    setup = "CREATE TABLE users (id BIGINT PRIMARY KEY, name TEXT NOT NULL);
+             CREATE TABLE posts (id BIGINT PRIMARY KEY, title TEXT NOT NULL, published INTEGER NOT NULL, author_id BIGINT NOT NULL);
+             CREATE TABLE comments (id BIGINT PRIMARY KEY, body TEXT NOT NULL, post_id BIGINT NOT NULL)";
+    /// `take` is per parent, not per batch — the distinction a plain `LIMIT`
+    /// gets silently wrong as soon as there is more than one parent.
+    async fn per_relation_take_is_per_parent(db: TestDb) {
+        let pool = db.any_pool();
+        seed(pool, 4, 5, 0).await?;
+
+        let counter = CountingExecutor::new(pool);
+        let users: Vec<User> = SelectQuery::<User>::new(&counter)
+            .include(posts().order_by(POST_ID.desc()).take(2))
+            .exec()
+            .await?;
+
+        // Still one query for the whole level, window function and all.
+        assert_eq!(counter.count(), 2);
+        assert_eq!(users.len(), 4);
+        for user in &users {
+            let taken = user.posts.get();
+            assert_eq!(taken.len(), 2, "user {} got {} posts", user.id, taken.len());
+            // Ordering is honoured inside each partition: the two highest ids.
+            assert_eq!(taken[0].id, user.id * 1_000 + 5);
+            assert_eq!(taken[1].id, user.id * 1_000 + 4);
+        }
     }
 }
 

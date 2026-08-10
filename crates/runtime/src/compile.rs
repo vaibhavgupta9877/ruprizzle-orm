@@ -63,19 +63,7 @@ pub fn select<M: Model>(
 
     if !order.is_empty() {
         c.push_str(" ORDER BY ");
-        for (i, o) in order.iter().enumerate() {
-            if i > 0 {
-                c.push_str(", ");
-            }
-            c.push_quoted(o.table);
-            c.push('.');
-            c.push_quoted(o.column);
-            if o.desc {
-                c.push_str(" DESC");
-            } else {
-                c.push_str(" ASC");
-            }
-        }
+        c.push_order(order);
     }
 
     if let Some(n) = limit {
@@ -87,6 +75,71 @@ pub fn select<M: Model>(
         c.push_str(" OFFSET ");
         c.push_str(&n.to_string());
     }
+
+    c.finish()
+}
+
+/// The alias the partitioned select gives its `ROW_NUMBER()` column.
+///
+/// It is selected through to the outer query, so it appears in the result set.
+/// `FromRow` implementations match by name and ignore the extra column.
+pub const ROW_NUMBER_ALIAS: &str = "__rz_rn";
+
+/// Compile a `SELECT` for `M` that keeps only the first `take` rows *per group*.
+///
+/// This is the per-parent `take` of a relation `include`. A plain `LIMIT` would
+/// cap the whole batch rather than each parent's children, which is silently
+/// wrong once more than one parent is loaded — hence the window function.
+///
+/// Requires `capabilities().window_functions`; callers must check first.
+#[must_use]
+pub fn select_partitioned<M: Model>(
+    dialect: &dyn DbDialect,
+    table: &str,
+    partition_by: &str,
+    filter: &FilterNode,
+    order: &[OrderBy<M>],
+    take: u64,
+) -> CompiledSql {
+    let mut c = Compiler::new(dialect);
+
+    c.push_str("SELECT * FROM (SELECT ");
+    c.push_quoted(table);
+    c.push_str(".*, ROW_NUMBER() OVER (PARTITION BY ");
+    c.push_quoted(table);
+    c.push('.');
+    c.push_quoted(partition_by);
+    c.push_str(" ORDER BY ");
+    if order.is_empty() {
+        // A window needs a deterministic order or the rows kept by `take` vary
+        // between runs. The primary key is the one column always available.
+        c.push_quoted(table);
+        c.push('.');
+        c.push_quoted(M::PRIMARY_KEY);
+        c.push_str(" ASC");
+    } else {
+        c.push_order(order);
+    }
+    c.push_str(") AS ");
+    c.push_quoted(ROW_NUMBER_ALIAS);
+    c.push_str(" FROM ");
+    c.push_quoted(table);
+
+    if !matches!(filter, FilterNode::And(v) if v.is_empty()) {
+        c.push_str(" WHERE ");
+        c.push_filter(filter);
+    }
+
+    c.push_str(") AS ");
+    c.push_quoted("__rz_partitioned");
+    c.push_str(" WHERE ");
+    c.push_quoted(ROW_NUMBER_ALIAS);
+    c.push_str(" <= ");
+    c.push_str(&take.to_string());
+    // Restores the per-partition ordering the outer query would otherwise lose.
+    c.push_str(" ORDER BY ");
+    c.push_quoted(ROW_NUMBER_ALIAS);
+    c.push_str(" ASC");
 
     c.finish()
 }
@@ -365,6 +418,22 @@ impl<'d> Compiler<'d> {
 
     fn push_quoted(&mut self, s: &str) {
         self.sql.push_str(&self.dialect.quote_ident(s));
+    }
+
+    fn push_order<M: Model>(&mut self, order: &[OrderBy<M>]) {
+        for (i, o) in order.iter().enumerate() {
+            if i > 0 {
+                self.push_str(", ");
+            }
+            self.push_quoted(o.table);
+            self.push('.');
+            self.push_quoted(o.column);
+            if o.desc {
+                self.push_str(" DESC");
+            } else {
+                self.push_str(" ASC");
+            }
+        }
     }
 
     fn push_bind(&mut self, value: Value) {

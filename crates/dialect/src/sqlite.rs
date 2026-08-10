@@ -194,6 +194,9 @@ impl DbDialect for SqliteDialect {
             deferrable_fks: true,
             json_type: JsonSupport::TextEncoded,
             max_query_params: 32_766,
+            // SQLite has had window functions since 3.25 (2018); the bundled
+            // library sqlx links is far newer.
+            window_functions: true,
         }
     }
 }

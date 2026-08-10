@@ -271,6 +271,7 @@ impl DbDialect for PostgresDialect {
             deferrable_fks: true,
             json_type: JsonSupport::Native,
             max_query_params: 65_535,
+            window_functions: true,
         }
     }
 }

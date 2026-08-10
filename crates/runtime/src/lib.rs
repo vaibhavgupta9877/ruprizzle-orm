@@ -9,6 +9,7 @@
 
 pub mod col;
 pub mod compile;
+pub mod counting;
 pub mod error;
 pub mod executor;
 pub mod filter;
@@ -38,6 +39,7 @@ pub mod prelude {
 
 pub use col::{Column, Projection};
 pub use compile::{CompiledSql, delete, dialect_for_pool, insert, insert_many, select, update};
+pub use counting::CountingExecutor;
 pub use error::Error;
 pub use executor::Executor;
 pub use filter::{Filter, FilterNode, all, any};

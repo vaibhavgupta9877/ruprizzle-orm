@@ -114,6 +114,12 @@ pub struct Capabilities {
     pub json_type: JsonSupport,
     /// Maximum number of bind parameters in a single statement.
     pub max_query_params: u32,
+    /// `ROW_NUMBER() OVER (PARTITION BY ...)` and friends are supported.
+    ///
+    /// The relation loader needs this to honour a per-parent `take` in a single
+    /// query. Without it the loader falls back to one query per parent, which is
+    /// correct but no longer bounded.
+    pub window_functions: bool,
 }
 
 /// How a dialect stores JSON.
