@@ -947,7 +947,9 @@ Bind values are not logged: they are user data. Only the count is."
 `crates/runtime/src/pool.rs` is seventeen lines. `connect(url)` accepts a URL and
 nothing else, so a deployment cannot size the pool to its database's `max_connections`,
 cannot recycle connections through a failover, and cannot bound how long it waits
-for a connection — one pathological query can exhaust the pool.
+for a connection. `acquire_timeout` does not cancel a running SQL statement; use a
+database/session statement timeout for that — enough concurrent long queries can
+otherwise exhaust the pool.
 
 Defaults below mirror sqlx's own (`max_connections` 10, `min_connections` 0,
 `acquire_timeout` 30s, `idle_timeout` 10min, `max_lifetime` 30min,
