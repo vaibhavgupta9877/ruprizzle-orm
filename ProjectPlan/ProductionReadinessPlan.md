@@ -641,7 +641,7 @@ breaking change. Free before 0.1.0; a major version after."
 
 ## PR-04 · Instrument query execution with `tracing`
 
-**Status: COMPLETE.** Verified 2026-08-11 with focused tracing tests and the full workspace gate. Query events cover pool and transaction execution; bind values are not emitted.
+**Status: COMPLETE.** Verified 2026-08-11 with focused tracing tests and the full workspace gate. Query events cover pool and transaction execution; bind values and database error detail are not emitted.
 
 **Est:** 2d · **Severity:** CRITICAL for operations
 

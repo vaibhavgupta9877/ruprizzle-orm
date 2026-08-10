@@ -12,7 +12,7 @@ Make the runtime observable and operable in production without changing existing
 
 ### PR-04: Query and migration tracing
 
-`Executor` is the runtime choke point used by generated query builders. Instrument the `Pool` and `Tx` implementations at `fetch_all_raw` and `execute_raw` so every builder-issued database operation emits one event after completion. Successful operations use `DEBUG`; failed operations use `WARN`. Events target `ruprizzle::query` and include SQL text, bind count, result count where applicable, elapsed milliseconds, and the formatted error on failure. Bind values are never emitted. Pool streaming remains covered because it delegates to `fetch_all_raw`; transaction commit and rollback also emit query-target debug events.
+`Executor` is the runtime choke point used by generated query builders. Instrument the `Pool` and `Tx` implementations at `fetch_all_raw` and `execute_raw` so every builder-issued database operation emits one event after completion. Successful operations use `DEBUG`; failed operations use `WARN`. Events target `ruprizzle::query` and include SQL text, bind count, result count where applicable, elapsed milliseconds, and a stable non-sensitive error category on failure. Bind values and database error detail are never emitted. Pool and transaction streaming use the instrumented fetch path; transaction commit and rollback also emit query-target debug events.
 
 Migration application emits `INFO` events at target `ruprizzle::migrate` when a migration starts and completes, including migration ID, statement count, and elapsed milliseconds.
 

@@ -125,7 +125,12 @@ let rows = db.fetch_all_raw(
 
 ## Observability
 
-Install a `tracing` subscriber in the application to see database activity:
+Add `tracing-subscriber` with its `fmt` and `env-filter` features, then install a
+subscriber in the application to see database activity:
+
+```toml
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+```
 
 ```rust
 tracing_subscriber::fmt()
@@ -133,7 +138,8 @@ tracing_subscriber::fmt()
     .init();
 ```
 
-`ruprizzle::query` reports SQL text, bind count, result counts, and elapsed
-milliseconds. Bind values are not logged. `ruprizzle::migrate` reports migration
+`ruprizzle::query` reports SQL text, bind count, result counts, elapsed
+milliseconds, and a non-sensitive error category on failure. Bind values and
+database error detail are not logged. `ruprizzle::migrate` reports migration
 start and completion events with the migration ID and elapsed time. Avoid embedding
 sensitive literals in raw SQL because raw SQL text is intentionally observable.

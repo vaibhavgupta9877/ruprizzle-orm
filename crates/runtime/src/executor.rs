@@ -83,7 +83,7 @@ impl Executor for Pool {
                     sql = %sql,
                     binds = bind_count,
                     elapsed_ms,
-                    error = %error,
+                    error = error.kind(),
                     "query failed"
                 ),
             }
@@ -119,7 +119,7 @@ impl Executor for Pool {
                     sql = %sql,
                     binds = bind_count,
                     elapsed_ms,
-                    error = %error,
+                    error = error.kind(),
                     "execute failed"
                 ),
             }

@@ -44,6 +44,25 @@ pub enum Error {
     Message(String),
 }
 
+impl Error {
+    /// Returns a stable, non-sensitive category for telemetry.
+    #[must_use]
+    pub(crate) fn kind(&self) -> &'static str {
+        match self {
+            Self::UniqueViolation { .. } => "unique_violation",
+            Self::ForeignKeyViolation { .. } => "foreign_key_violation",
+            Self::NotNullViolation { .. } => "not_null_violation",
+            Self::CheckViolation { .. } => "check_violation",
+            Self::Deadlock => "deadlock",
+            Self::SerializationFailure => "serialization_failure",
+            Self::ConnectionFailure { .. } => "connection_failure",
+            Self::Sqlx(_) => "sqlx",
+            Self::NotImplemented => "not_implemented",
+            Self::Message(_) => "message",
+        }
+    }
+}
+
 impl From<sqlx::Error> for Error {
     fn from(err: sqlx::Error) -> Self {
         classify(err)
