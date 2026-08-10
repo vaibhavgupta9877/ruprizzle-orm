@@ -1,0 +1,83 @@
+---
+source: crates/codegen/tests/snapshots.rs
+expression: content
+---
+#![allow(clippy::all, clippy::pedantic, unused_imports)]
+pub mod _generated;
+pub mod enums;
+pub mod user;
+pub mod post;
+pub use _generated::{RUPRIZZLE_VERSION, SCHEMA_HASH};
+pub use self::user::{UserInsert, User, UserRepo, UserUpdate};
+pub use self::post::{PostInsert, Post, PostRepo, PostUpdate};
+/// The generated `Db` client root.
+#[derive(Debug, Clone)]
+pub struct Db {
+    pool: ::ruprizzle::Pool,
+}
+impl Db {
+    /// Connect to a database by URL.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the URL cannot be parsed or the connection fails.
+    pub async fn connect(url: &str) -> Result<Self, ::ruprizzle::Error> {
+        let pool = ::ruprizzle::Pool::connect(url).await?;
+        Ok(Self { pool })
+    }
+    /// Wrap an existing pool.
+    pub fn from_pool(pool: ::ruprizzle::Pool) -> Self {
+        Self { pool }
+    }
+    /// Return the raw `sqlx` pool.
+    pub fn raw_pool(&self) -> &::ruprizzle::Pool {
+        &self.pool
+    }
+    /// Entry point for this model's repository.
+    pub fn user(&self) -> UserRepo<'_> {
+        UserRepo::new(self)
+    }
+    /// Entry point for this model's repository.
+    pub fn post(&self) -> PostRepo<'_> {
+        PostRepo::new(self)
+    }
+    /// Drizzle-flavoured `SELECT` entry point.
+    pub fn select<M: ::ruprizzle::Model>(&self) -> ::ruprizzle::SelectQuery<'_, M> {
+        ::ruprizzle::SelectQuery::new(self.raw_pool())
+    }
+    /// Drizzle-flavoured `INSERT` entry point.
+    pub fn insert<M: ::ruprizzle::Model>(&self) -> ::ruprizzle::InsertQuery<'_, M> {
+        ::ruprizzle::InsertQuery::new(self.raw_pool())
+    }
+    /// Run a closure inside a transaction.
+    ///
+    /// The closure receives a `&mut ::ruprizzle::Tx` and can execute raw
+    /// SQL through it. The transaction is committed if the closure returns
+    /// `Ok`, and rolled back if it returns `Err`.
+    pub async fn transaction<F, T>(&self, f: F) -> Result<T, ::ruprizzle::Error>
+    where
+        F: for<'t> FnOnce(
+            &'t mut ::ruprizzle::Tx,
+        ) -> ::ruprizzle::BoxFuture<'t, Result<T, ::ruprizzle::Error>>,
+    {
+        let mut tx = ::ruprizzle::Tx::begin(self.raw_pool()).await?;
+        match f(&mut tx).await {
+            Ok(v) => {
+                tx.commit().await?;
+                Ok(v)
+            }
+            Err(e) => {
+                tx.rollback().await?;
+                Err(e)
+            }
+        }
+    }
+}
+/// Common imports for this generated module.
+pub mod prelude {
+    pub use super::{
+        Db, RUPRIZZLE_VERSION, SCHEMA_HASH, User, UserInsert, UserUpdate, UserRepo, user,
+        Post, PostInsert, PostUpdate, PostRepo, post,
+    };
+    pub use ::ruprizzle::prelude::*;
+}

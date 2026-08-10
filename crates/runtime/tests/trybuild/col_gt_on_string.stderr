@@ -1,0 +1,20 @@
+error[E0599]: the method `gt` exists for struct `ruprizzle::Column<User, std::string::String>`, but its trait bounds were not satisfied
+  --> tests/trybuild/col_gt_on_string.rs:18:19
+   |
+18 |     let _ = EMAIL.gt("a");
+   |                   ^^ method cannot be called on `ruprizzle::Column<User, std::string::String>` due to unsatisfied trait bounds
+   |
+  ::: $RUST/alloc/src/string.rs
+   |
+   | pub struct String {
+   | ----------------- doesn't satisfy `std::string::String: Ordered`
+   |
+  ::: src/col.rs
+   |
+   | pub struct Column<M, T> {
+   | ----------------------- doesn't satisfy `_: Iterator`
+   |
+   = note: the following trait bounds were not satisfied:
+           `std::string::String: Ordered`
+           `ruprizzle::Column<User, std::string::String>: Iterator`
+           which is required by `&mut ruprizzle::Column<User, std::string::String>: Iterator`

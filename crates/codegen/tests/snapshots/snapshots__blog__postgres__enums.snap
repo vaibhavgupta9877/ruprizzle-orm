@@ -1,0 +1,56 @@
+---
+source: crates/codegen/tests/snapshots.rs
+expression: content
+---
+#![allow(clippy::all, clippy::pedantic, unused_imports)]
+use ::ruprizzle::serde::{Deserialize, Serialize};
+use ::ruprizzle::sqlx::Type;
+use ::ruprizzle::Value;
+///What a user is allowed to do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Type, Serialize, Deserialize)]
+#[sqlx(type_name = "role", rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(crate = "::ruprizzle::serde")]
+pub enum Role {
+    ///Can read, and write their own posts.
+    User,
+    ///Can write anything.
+    Admin,
+}
+impl Role {
+    /// All variants in declaration order.
+    pub const ALL: &'static [Role] = &[Role::User, Role::Admin];
+    /// The database string for this variant.
+    #[must_use]
+    pub const fn as_db_str(&self) -> &'static str {
+        match self {
+            Self::User => "USER",
+            Self::Admin => "ADMIN",
+        }
+    }
+    /// Parse a database string into a variant.
+    #[must_use]
+    pub fn from_db_str(s: &str) -> Option<Self> {
+        match s {
+            "USER" => Some(Self::User),
+            "ADMIN" => Some(Self::Admin),
+            _ => None,
+        }
+    }
+}
+impl std::fmt::Display for Role {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_db_str())
+    }
+}
+impl std::str::FromStr for Role {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_db_str(s)
+            .ok_or_else(|| format!("unknown {0}: {1}", stringify!(Role), s))
+    }
+}
+impl ::ruprizzle::Encodable for Role {
+    fn to_value(&self) -> Value {
+        Value::Str(self.as_db_str().into())
+    }
+}

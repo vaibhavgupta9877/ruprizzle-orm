@@ -1,6 +1,6 @@
 ---
 source: crates/codegen/tests/snapshots.rs
-expression: enums_rs
+expression: content
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
 use ::ruprizzle::serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use ::ruprizzle::sqlx::Type;
 use ::ruprizzle::Value;
 ///What a user is allowed to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Type, Serialize, Deserialize)]
-#[sqlx(type_name = "role", rename_all = "SCREAMING_SNAKE_CASE")]
+#[sqlx(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(crate = "::ruprizzle::serde")]
 pub enum Role {
     ///Can read, and write their own posts.
