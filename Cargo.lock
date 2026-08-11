@@ -1967,6 +1967,7 @@ dependencies = [
 name = "ruprizzle-macros"
 version = "0.1.0-alpha.2"
 dependencies = [
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn 2.0.119",

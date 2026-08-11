@@ -575,6 +575,14 @@ impl<'d> Compiler<'d> {
                 }
                 self.push(')');
             }
+            FilterNode::Raw(raw) => {
+                for (i, part) in raw.parts.iter().enumerate() {
+                    self.push_str(part);
+                    if let Some(bind) = raw.binds.get(i) {
+                        self.push_bind(bind.clone());
+                    }
+                }
+            }
         }
     }
 
@@ -597,7 +605,7 @@ impl<'d> Compiler<'d> {
 mod tests {
     use super::*;
     use crate::col::Column;
-    use crate::filter::{Filter, all, any};
+    use crate::filter::{Filter, RawFragment, all, any};
     use crate::order::OrderBy;
     use crate::value::Value;
     use ruprizzle_core::ir::Provider;
@@ -844,5 +852,48 @@ mod tests {
             r#"INSERT INTO "users" ("email", "age") VALUES ($1, $2) ON CONFLICT (email) DO UPDATE SET "age" = EXCLUDED."age""#
         );
         assert_eq!(c.binds, vec![Value::Str("a@b.c".into()), Value::I32(30)]);
+    }
+
+    #[test]
+    fn raw_filter_postgres() {
+        let fragment = RawFragment::new(
+            vec!["email = ".to_string(), "".to_string()],
+            vec![Value::Str("a@b.c".into())],
+        );
+        let f: Filter<User> = Filter::raw(fragment);
+        let c = select::<User>(pg().as_ref(), "users", &[], &f.node, &[], None, None, false);
+        assert_eq!(c.sql, r#"SELECT * FROM "users" WHERE email = $1"#);
+        assert_eq!(c.binds, vec![Value::Str("a@b.c".into())]);
+    }
+
+    #[test]
+    fn raw_filter_sqlite() {
+        let fragment = RawFragment::new(
+            vec!["email = ".to_string(), "".to_string()],
+            vec![Value::Str("a@b.c".into())],
+        );
+        let f: Filter<User> = Filter::raw(fragment);
+        let c = select::<User>(
+            sqlite().as_ref(),
+            "users",
+            &[],
+            &f.node,
+            &[],
+            None,
+            None,
+            false,
+        );
+        assert_eq!(c.sql, r#"SELECT * FROM `users` WHERE email = ?"#);
+        assert_eq!(c.binds, vec![Value::Str("a@b.c".into())]);
+    }
+
+    #[test]
+    fn raw_fragment_sql() {
+        let raw = RawFragment::new(
+            vec!["x = ".to_string(), " AND y = ".to_string(), "".to_string()],
+            vec![Value::I64(1), Value::I64(2)],
+        );
+        assert_eq!(raw.sql(), "x = $1 AND y = $2");
+        assert_eq!(raw.binds(), &[Value::I64(1), Value::I64(2)]);
     }
 }

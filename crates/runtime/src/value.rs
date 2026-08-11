@@ -7,10 +7,9 @@ use crate::types::{Decimal, Uuid};
 
 /// A value that can be encoded into a bound SQL parameter.
 ///
-/// This is intentionally a small, owned enum: filters are frequently built in
-/// one scope and executed in another, so borrowed values would poison every
-/// signature in the API.
-pub trait Encodable: Send + Sync + 'static {
+/// `to_value` returns an owned `Value`, so borrowed implementors can be used
+/// at a call site without leaking lifetimes into the query API.
+pub trait Encodable: Send + Sync {
     /// Encode `self` into a runtime value.
     fn to_value(&self) -> Value;
 }
@@ -87,6 +86,24 @@ impl Ordered for Decimal {}
 impl Encodable for String {
     fn to_value(&self) -> Value {
         Value::Str(Arc::from(self.as_str()))
+    }
+}
+
+impl Encodable for str {
+    fn to_value(&self) -> Value {
+        Value::Str(Arc::from(self))
+    }
+}
+
+impl<T: Encodable + ?Sized> Encodable for &T {
+    fn to_value(&self) -> Value {
+        T::to_value(&**self)
+    }
+}
+
+impl Encodable for Value {
+    fn to_value(&self) -> Value {
+        self.clone()
     }
 }
 

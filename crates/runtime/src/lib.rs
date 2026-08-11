@@ -36,7 +36,7 @@ pub mod decode;
 pub mod prelude {
     pub use crate::{
         Column, Encodable, Error, Executor, Filter, InsertQuery, IsolationLevel, Model, OrderBy,
-        Page, Pool, Related, SelectQuery, Tx, Value,
+        Page, Pool, RawFragment, Related, SelectQuery, Tx, Value, raw,
     };
 }
 
@@ -45,7 +45,7 @@ pub use compile::{CompiledSql, delete, dialect_for_pool, insert, insert_many, se
 pub use counting::CountingExecutor;
 pub use error::Error;
 pub use executor::Executor;
-pub use filter::{Filter, FilterNode, all, any};
+pub use filter::{Filter, FilterNode, RawFragment, all, any};
 pub use include::{IncludeList, IncludeOne, IncludeSet};
 pub use model::Model;
 pub use order::OrderBy;
@@ -55,6 +55,7 @@ pub use query::{
     DeleteQuery, InsertManyQuery, InsertQuery, NestedSetter, SelectQuery, UpdateQuery,
 };
 pub use related::Related;
+pub use ruprizzle_macros::raw;
 pub use serde;
 pub use serde_json;
 pub use sqlx;

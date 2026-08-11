@@ -17,6 +17,7 @@ categories  = ["database"]
 proc-macro = true
 
 [dependencies]
-proc-macro2 = { workspace = true }
-quote       = { workspace = true }
-syn         = { workspace = true }
+proc-macro-crate = "3"
+proc-macro2    = { workspace = true }
+quote          = { workspace = true }
+syn            = { workspace = true }

@@ -4,6 +4,51 @@ use std::marker::PhantomData;
 
 use crate::value::Value;
 
+/// An injection-safe raw SQL fragment with bound parameters.
+///
+/// The literal parts are stored separately, and values are bound as
+/// parameters. Calling [`RawFragment::sql`] returns the fragment with
+/// PostgreSQL-style placeholders (`$1`, `$2`, ...).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RawFragment {
+    /// Literal fragments of the SQL, between placeholders.
+    pub(crate) parts: Vec<String>,
+    /// Bound values for each placeholder.
+    pub(crate) binds: Vec<Value>,
+}
+
+impl RawFragment {
+    /// Creates a new raw fragment.
+    #[must_use]
+    pub fn new(parts: Vec<String>, binds: Vec<Value>) -> Self {
+        debug_assert_eq!(
+            parts.len(),
+            binds.len() + 1,
+            "RawFragment parts must split the format string around each placeholder"
+        );
+        Self { parts, binds }
+    }
+
+    /// Returns the SQL fragment with `$1`, `$2`, ... placeholders.
+    #[must_use]
+    pub fn sql(&self) -> String {
+        let mut out = String::new();
+        for (i, part) in self.parts.iter().enumerate() {
+            out.push_str(part);
+            if i < self.binds.len() {
+                out.push_str(&format!("${}", i + 1));
+            }
+        }
+        out
+    }
+
+    /// Returns the bound values for this fragment.
+    #[must_use]
+    pub fn binds(&self) -> &[Value] {
+        &self.binds
+    }
+}
+
 /// A predicate that is tied to a model `M`.
 pub struct Filter<M> {
     /// The root filter node.
@@ -52,6 +97,12 @@ impl<M> Filter<M> {
     #[must_use]
     pub fn or(self, other: Self) -> Self {
         Self::new(flatten_or(vec![self.node, other.node]))
+    }
+
+    /// Creates a filter from a raw SQL fragment.
+    #[must_use]
+    pub fn raw(fragment: RawFragment) -> Self {
+        Self::new(FilterNode::Raw(fragment))
     }
 }
 
@@ -102,6 +153,8 @@ pub enum FilterNode {
     And(Vec<FilterNode>),
     Or(Vec<FilterNode>),
     Not(Box<FilterNode>),
+    /// A raw SQL fragment with bound parameters.
+    Raw(RawFragment),
 }
 
 /// Comparison operators.
