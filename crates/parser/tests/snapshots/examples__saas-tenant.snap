@@ -1,0 +1,687 @@
+---
+source: crates/parser/tests/examples.rs
+expression: schema
+---
+{
+  "version": 1,
+  "datasource": {
+    "name": "db",
+    "provider": "sqlite",
+    "url": {
+      "Env": "DATABASE_URL"
+    },
+    "span": {
+      "start": 201,
+      "end": 273
+    }
+  },
+  "generator": {
+    "name": "client",
+    "output": "src/db",
+    "module_name": "db",
+    "max_include_depth": 3,
+    "span": {
+      "start": 275,
+      "end": 341
+    }
+  },
+  "enums": {
+    "Plan": {
+      "name": "Plan",
+      "db_name": "plan",
+      "variants": {
+        "FREE": {
+          "name": "FREE",
+          "db_name": "FREE",
+          "docs": null,
+          "span": {
+            "start": 375,
+            "end": 382
+          }
+        },
+        "PRO": {
+          "name": "PRO",
+          "db_name": "PRO",
+          "docs": null,
+          "span": {
+            "start": 382,
+            "end": 388
+          }
+        },
+        "ENTERPRISE": {
+          "name": "ENTERPRISE",
+          "db_name": "ENTERPRISE",
+          "docs": null,
+          "span": {
+            "start": 388,
+            "end": 399
+          }
+        }
+      },
+      "docs": "Billing tier.",
+      "span": {
+        "start": 343,
+        "end": 400
+      }
+    }
+  },
+  "models": {
+    "Organisation": {
+      "name": "Organisation",
+      "table": "organisations",
+      "fields": {
+        "id": {
+          "name": "id",
+          "column": "id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Uuid7"
+          },
+          "attrs": {
+            "is_id": true,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 439,
+            "end": 483
+          }
+        },
+        "slug": {
+          "name": "slug",
+          "column": "slug",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": true,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 486,
+            "end": 519
+          }
+        },
+        "plan": {
+          "name": "plan",
+          "column": "plan",
+          "kind": {
+            "Enum": "Plan"
+          },
+          "optional": false,
+          "default": {
+            "Literal": {
+              "EnumVariant": "FREE"
+            }
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 519,
+            "end": 556
+          }
+        },
+        "settings": {
+          "name": "settings",
+          "column": "settings",
+          "kind": {
+            "Scalar": "Json"
+          },
+          "optional": true,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": "Free-form tenant configuration; genuinely schemaless, so `Json` earns it.",
+          "span": {
+            "start": 559,
+            "end": 657
+          }
+        },
+        "members": {
+          "name": "members",
+          "column": "members",
+          "kind": {
+            "List": {
+              "Relation": {
+                "target": "Membership",
+                "name": null,
+                "fields": [],
+                "references": [],
+                "on_delete": null,
+                "on_update": null,
+                "resolved": 0,
+                "span": {
+                  "start": 657,
+                  "end": 682
+                }
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 657,
+            "end": 682
+          }
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "column": "created_at",
+          "kind": {
+            "Scalar": "DateTime"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Now"
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 682,
+            "end": 739
+          }
+        }
+      },
+      "primary_key": {
+        "fields": [
+          "id"
+        ],
+        "name": null,
+        "span": {
+          "start": 439,
+          "end": 483
+        }
+      },
+      "indexes": [],
+      "uniques": [],
+      "docs": "A tenant.",
+      "span": {
+        "start": 402,
+        "end": 767
+      }
+    },
+    "Account": {
+      "name": "Account",
+      "table": "accounts",
+      "fields": {
+        "id": {
+          "name": "id",
+          "column": "id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Uuid7"
+          },
+          "attrs": {
+            "is_id": true,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 843,
+            "end": 889
+          }
+        },
+        "email": {
+          "name": "email",
+          "column": "email",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": true,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 892,
+            "end": 927
+          }
+        },
+        "displayName": {
+          "name": "displayName",
+          "column": "display_name",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": true,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 927,
+            "end": 972
+          }
+        },
+        "memberships": {
+          "name": "memberships",
+          "column": "memberships",
+          "kind": {
+            "List": {
+              "Relation": {
+                "target": "Membership",
+                "name": null,
+                "fields": [],
+                "references": [],
+                "on_delete": null,
+                "on_update": null,
+                "resolved": 1,
+                "span": {
+                  "start": 975,
+                  "end": 1002
+                }
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 975,
+            "end": 1002
+          }
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "column": "created_at",
+          "kind": {
+            "Scalar": "DateTime"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Now"
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1002,
+            "end": 1061
+          }
+        }
+      },
+      "primary_key": {
+        "fields": [
+          "id"
+        ],
+        "name": null,
+        "span": {
+          "start": 843,
+          "end": 889
+        }
+      },
+      "indexes": [],
+      "uniques": [],
+      "docs": "A person, independent of any tenant they belong to.",
+      "span": {
+        "start": 769,
+        "end": 1063
+      }
+    },
+    "Membership": {
+      "name": "Membership",
+      "table": "memberships",
+      "fields": {
+        "id": {
+          "name": "id",
+          "column": "id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Uuid7"
+          },
+          "attrs": {
+            "is_id": true,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1131,
+            "end": 1178
+          }
+        },
+        "orgId": {
+          "name": "orgId",
+          "column": "org_id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1181,
+            "end": 1221
+          }
+        },
+        "organisation": {
+          "name": "organisation",
+          "column": "organisation",
+          "kind": {
+            "Relation": {
+              "target": "Organisation",
+              "name": null,
+              "fields": [
+                "orgId"
+              ],
+              "references": [
+                "id"
+              ],
+              "on_delete": "Cascade",
+              "on_update": null,
+              "resolved": 0,
+              "span": {
+                "start": 1250,
+                "end": 1313
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1224,
+            "end": 1313
+          }
+        },
+        "accountId": {
+          "name": "accountId",
+          "column": "account_id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1316,
+            "end": 1360
+          }
+        },
+        "account": {
+          "name": "account",
+          "column": "account",
+          "kind": {
+            "Relation": {
+              "target": "Account",
+              "name": null,
+              "fields": [
+                "accountId"
+              ],
+              "references": [
+                "id"
+              ],
+              "on_delete": "Cascade",
+              "on_update": null,
+              "resolved": 1,
+              "span": {
+                "start": 1389,
+                "end": 1456
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1363,
+            "end": 1456
+          }
+        },
+        "isOwner": {
+          "name": "isOwner",
+          "column": "is_owner",
+          "kind": {
+            "Scalar": "Boolean"
+          },
+          "optional": false,
+          "default": {
+            "Literal": {
+              "Bool": false
+            }
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1459,
+            "end": 1517
+          }
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "column": "updated_at",
+          "kind": {
+            "Scalar": "DateTime"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": true,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1520,
+            "end": 1575
+          }
+        }
+      },
+      "primary_key": {
+        "fields": [
+          "id"
+        ],
+        "name": null,
+        "span": {
+          "start": 1131,
+          "end": 1178
+        }
+      },
+      "indexes": [
+        {
+          "db_name": "memberships_account_id_idx",
+          "fields": [
+            {
+              "field": "accountId",
+              "order": "Asc"
+            }
+          ],
+          "span": {
+            "start": 1610,
+            "end": 1630
+          }
+        }
+      ],
+      "uniques": [
+        {
+          "db_name": "memberships_org_id_account_id_key",
+          "fields": [
+            "orgId",
+            "accountId"
+          ],
+          "span": {
+            "start": 1579,
+            "end": 1607
+          }
+        }
+      ],
+      "docs": "One account's place in one organisation.",
+      "span": {
+        "start": 1065,
+        "end": 1632
+      }
+    }
+  },
+  "relations": [
+    {
+      "name": "MembershipToOrganisation",
+      "kind": "ManyToOne",
+      "owner": "Membership",
+      "owner_cols": [
+        "org_id"
+      ],
+      "owner_field": "organisation",
+      "target": "Organisation",
+      "target_table": "organisations",
+      "target_cols": [
+        "id"
+      ],
+      "target_field": "members",
+      "on_delete": "Cascade",
+      "on_update": "Cascade",
+      "optional": false,
+      "constraint_name": "memberships_org_id_fkey",
+      "span": {
+        "start": 1250,
+        "end": 1313
+      }
+    },
+    {
+      "name": "MembershipToAccount",
+      "kind": "ManyToOne",
+      "owner": "Membership",
+      "owner_cols": [
+        "account_id"
+      ],
+      "owner_field": "account",
+      "target": "Account",
+      "target_table": "accounts",
+      "target_cols": [
+        "id"
+      ],
+      "target_field": "memberships",
+      "on_delete": "Cascade",
+      "on_update": "Cascade",
+      "optional": false,
+      "constraint_name": "memberships_account_id_fkey",
+      "span": {
+        "start": 1389,
+        "end": 1456
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v14_empty_enum
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: enum `Role` has no variants
+    Diagnostic severity: error
+
+Begin snippet for v14_empty_enum starting at line 5, column 1
+
+snippet line 5: 
+snippet line 6: enum Role {
+    label starting at line 6, column 1: no variants declared
+snippet line 7: }
+    label ending at line 7, column 1: no variants declared
+snippet line 8: 
+diagnostic help: an enum needs at least one variant to be usable as a column type
+diagnostic code: ruprizzle::empty_enum

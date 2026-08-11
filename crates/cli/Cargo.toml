@@ -7,6 +7,9 @@ rust-version.workspace = true
 license.workspace      = true
 repository.workspace   = true
 authors.workspace      = true
+homepage.workspace     = true
+readme                 = "README.md"
+documentation          = "https://docs.rs/ruprizzle-cli"
 keywords    = ["orm", "sql", "database", "cli", "migrations"]
 categories  = ["database", "command-line-utilities"]
 
@@ -21,4 +24,11 @@ ruprizzle-codegen = { workspace = true }
 ruprizzle-migrate = { workspace = true }
 ruprizzle-dialect = { workspace = true }
 clap              = { workspace = true }
+dotenvy           = { workspace = true }
+
 miette            = { workspace = true, features = ["fancy"] }
+notify            = { workspace = true }
+sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"] }
+tokio             = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+serde_json        = { workspace = true }
+indexmap          = { workspace = true }

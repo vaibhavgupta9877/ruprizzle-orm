@@ -7,10 +7,13 @@ rust-version.workspace = true
 license.workspace      = true
 repository.workspace   = true
 authors.workspace      = true
+homepage.workspace     = true
+readme                 = "README.md"
+documentation          = "https://docs.rs/ruprizzle-testkit"
 publish     = false
 
 [dependencies]
-sqlx      = { workspace = true, features = ["postgres", "sqlite"] }
+sqlx      = { workspace = true, features = ["postgres", "sqlite", "any"] }
 tempfile  = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true }

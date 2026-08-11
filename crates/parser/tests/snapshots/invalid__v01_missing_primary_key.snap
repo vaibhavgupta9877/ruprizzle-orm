@@ -1,0 +1,19 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v01_missing_primary_key
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: model `User` has no primary key
+    Diagnostic severity: error
+
+Begin snippet for v01_missing_primary_key starting at line 5, column 1
+
+snippet line 5: 
+snippet line 6: model User {
+    label at line 6, columns 7 to 10: this model needs a primary key
+snippet line 7:   email String @unique
+diagnostic help: add `@id` to a field, or `@@id([a, b])` for a composite key
+diagnostic code: ruprizzle::missing_primary_key

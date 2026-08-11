@@ -1,0 +1,23 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v16_name_collision
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: `User` and `Account` both map to `users`
+    Diagnostic severity: error
+
+Begin snippet for v16_name_collision starting at line 9, column 1
+
+snippet line 9: 
+snippet line 10: model Account {
+    label starting at line 10, column 1: collides with an earlier declaration
+snippet line 11:   id Uuid @id
+snippet line 12: 
+snippet line 13:   @@map("users")
+snippet line 14: }
+    label ending at line 14, column 1: collides with an earlier declaration
+diagnostic help: use `@@map("...")` or `@map("...")` to give one of them a distinct database name
+diagnostic code: ruprizzle::name_collision

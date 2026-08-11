@@ -7,13 +7,25 @@ rust-version.workspace = true
 license.workspace      = true
 repository.workspace   = true
 authors.workspace      = true
-keywords    = ["orm", "sql", "database"]
+homepage.workspace     = true
+readme                 = "README.md"
+documentation          = "https://docs.rs/ruprizzle-migrate"
+keywords    = ["orm", "sql", "database", "migrations", "schema"]
 categories  = ["database"]
 
 [dependencies]
 ruprizzle-core    = { workspace = true }
 ruprizzle-dialect = { workspace = true }
+ruprizzle-parser  = { workspace = true }
 serde             = { workspace = true }
 serde_json        = { workspace = true }
 thiserror         = { workspace = true }
+sha2              = { workspace = true }
+chrono            = { workspace = true }
+sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"] }
+tracing            = { version = "0.1", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+tokio  = { workspace = true }
+tempfile = { workspace = true }
 

@@ -7,14 +7,25 @@ rust-version.workspace = true
 license.workspace      = true
 repository.workspace   = true
 authors.workspace      = true
-keywords    = ["orm", "sql", "database"]
+homepage.workspace     = true
+readme                 = "README.md"
+documentation          = "https://docs.rs/ruprizzle-codegen"
+keywords    = ["orm", "sql", "database", "codegen", "migrations"]
 categories  = ["database"]
 
 [dependencies]
 ruprizzle-core    = { workspace = true }
 ruprizzle-dialect = { workspace = true }
+ruprizzle-parser  = { workspace = true }
 proc-macro2       = { workspace = true }
 quote             = { workspace = true }
 syn               = { workspace = true }
 prettyplease      = { workspace = true }
 
+[dev-dependencies]
+insta             = { workspace = true }
+criterion         = { workspace = true }
+
+[[bench]]
+name    = "codegen"
+harness = false

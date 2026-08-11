@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id   Uuid   @id
+  type String
+}

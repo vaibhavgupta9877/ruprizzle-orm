@@ -1,0 +1,52 @@
+// The canonical example: one author, many posts.
+//
+// Everything here is deliberately ordinary — it is the schema the README shows
+// and the one every generated-code snapshot is read against.
+
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  output      = "src/db"
+  module_name = "db"
+}
+
+/// What a user is allowed to do.
+enum Role {
+  /// Can read, and write their own posts.
+  USER
+  /// Can write anything.
+  ADMIN
+}
+
+/// A registered account.
+model User {
+  id        Uuid     @id @default(uuid7())
+  email     String   @unique
+  name      String?
+  role      Role     @default(USER)
+  posts     Post[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  @@index([email])
+  @@map("users")
+}
+
+/// An article, published or not.
+model Post {
+  id        Uuid    @id @default(uuid7())
+  title     String  @db.VarChar(200)
+  body      String?
+  published Boolean @default(false)
+
+  authorId  Uuid    @map("author_id")
+  author    User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([authorId, published])
+  @@map("posts")
+}

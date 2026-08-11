@@ -1,0 +1,19 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v05_unknown_relation_field
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: relation on `Post.author` refers to unknown field `authrId`
+    Diagnostic severity: error
+
+Begin snippet for v05_unknown_relation_field starting at line 13, column 1
+
+snippet line 13:   authorId Uuid
+snippet line 14:   author   User @relation(fields: [authrId], references: [id])
+    label at line 14, columns 17 to 62: no such field on this model
+snippet line 15: }
+diagnostic help: `fields:` must list scalar fields of `Post` that hold the foreign key
+diagnostic code: ruprizzle::unknown_relation_field

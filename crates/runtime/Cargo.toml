@@ -7,13 +7,37 @@ rust-version.workspace = true
 license.workspace      = true
 repository.workspace   = true
 authors.workspace      = true
-keywords    = ["orm", "sql", "database"]
+homepage.workspace     = true
+readme                 = "README.md"
+documentation          = "https://docs.rs/ruprizzle"
+keywords    = ["orm", "sql", "database", "postgres", "sqlite"]
 categories  = ["database"]
 
 [dependencies]
 ruprizzle-core    = { workspace = true }
 ruprizzle-dialect = { workspace = true }
 ruprizzle-macros  = { workspace = true }
-sqlx              = { workspace = true }
+chrono            = { workspace = true }
+futures-core      = "0.3"
+rust_decimal      = { workspace = true }
+serde             = { workspace = true }
+serde_json        = { workspace = true }
+sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"] }
 thiserror         = { workspace = true }
+tracing            = { version = "0.1", default-features = false, features = ["std"] }
+# Only for `sync::Mutex`, whose guard is `Send` across an await. The std guard
+# is not, which makes `Executor`'s boxed futures un-`Send`. sqlx already pulls
+# tokio in via `runtime-tokio`, so this adds no new dependency to the tree.
+tokio             = { version = "1", default-features = false, features = ["sync"] }
+uuid              = { workspace = true }
 
+[dev-dependencies]
+tokio             = { workspace = true }
+tempfile          = { workspace = true }
+trybuild          = "1"
+criterion         = { workspace = true }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
+
+[[bench]]
+name    = "query_construction"
+harness = false
