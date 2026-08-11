@@ -11,8 +11,8 @@ expression: schema
       "Env": "DATABASE_URL"
     },
     "span": {
-      "start": 201,
-      "end": 273
+      "start": 206,
+      "end": 281
     }
   },
   "generator": {
@@ -21,8 +21,8 @@ expression: schema
     "module_name": "db",
     "max_include_depth": 3,
     "span": {
-      "start": 275,
-      "end": 341
+      "start": 285,
+      "end": 354
     }
   },
   "enums": {
@@ -35,8 +35,8 @@ expression: schema
           "db_name": "FREE",
           "docs": null,
           "span": {
-            "start": 375,
-            "end": 382
+            "start": 392,
+            "end": 400
           }
         },
         "PRO": {
@@ -44,8 +44,8 @@ expression: schema
           "db_name": "PRO",
           "docs": null,
           "span": {
-            "start": 382,
-            "end": 388
+            "start": 400,
+            "end": 407
           }
         },
         "ENTERPRISE": {
@@ -53,15 +53,15 @@ expression: schema
           "db_name": "ENTERPRISE",
           "docs": null,
           "span": {
-            "start": 388,
-            "end": 399
+            "start": 407,
+            "end": 419
           }
         }
       },
       "docs": "Billing tier.",
       "span": {
-        "start": 343,
-        "end": 400
+        "start": 358,
+        "end": 420
       }
     }
   },
@@ -90,8 +90,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 439,
-            "end": 483
+            "start": 463,
+            "end": 507
           }
         },
         "slug": {
@@ -112,8 +112,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 486,
-            "end": 519
+            "start": 511,
+            "end": 545
           }
         },
         "plan": {
@@ -138,8 +138,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 519,
-            "end": 556
+            "start": 545,
+            "end": 582
           }
         },
         "settings": {
@@ -160,8 +160,8 @@ expression: schema
           },
           "docs": "Free-form tenant configuration; genuinely schemaless, so `Json` earns it.",
           "span": {
-            "start": 559,
-            "end": 657
+            "start": 586,
+            "end": 686
           }
         },
         "members": {
@@ -178,8 +178,8 @@ expression: schema
                 "on_update": null,
                 "resolved": 0,
                 "span": {
-                  "start": 657,
-                  "end": 682
+                  "start": 686,
+                  "end": 712
                 }
               }
             }
@@ -196,8 +196,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 657,
-            "end": 682
+            "start": 686,
+            "end": 712
           }
         },
         "createdAt": {
@@ -220,8 +220,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 682,
-            "end": 739
+            "start": 712,
+            "end": 769
           }
         }
       },
@@ -231,16 +231,16 @@ expression: schema
         ],
         "name": null,
         "span": {
-          "start": 439,
-          "end": 483
+          "start": 463,
+          "end": 507
         }
       },
       "indexes": [],
       "uniques": [],
       "docs": "A tenant.",
       "span": {
-        "start": 402,
-        "end": 767
+        "start": 424,
+        "end": 800
       }
     },
     "Account": {
@@ -267,8 +267,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 843,
-            "end": 889
+            "start": 880,
+            "end": 926
           }
         },
         "email": {
@@ -289,8 +289,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 892,
-            "end": 927
+            "start": 930,
+            "end": 966
           }
         },
         "displayName": {
@@ -311,8 +311,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 927,
-            "end": 972
+            "start": 966,
+            "end": 1011
           }
         },
         "memberships": {
@@ -329,8 +329,8 @@ expression: schema
                 "on_update": null,
                 "resolved": 1,
                 "span": {
-                  "start": 975,
-                  "end": 1002
+                  "start": 1015,
+                  "end": 1043
                 }
               }
             }
@@ -347,8 +347,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 975,
-            "end": 1002
+            "start": 1015,
+            "end": 1043
           }
         },
         "createdAt": {
@@ -371,8 +371,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 1002,
-            "end": 1061
+            "start": 1043,
+            "end": 1102
           }
         }
       },
@@ -382,16 +382,16 @@ expression: schema
         ],
         "name": null,
         "span": {
-          "start": 843,
-          "end": 889
+          "start": 880,
+          "end": 926
         }
       },
       "indexes": [],
       "uniques": [],
       "docs": "A person, independent of any tenant they belong to.",
       "span": {
-        "start": 769,
-        "end": 1063
+        "start": 804,
+        "end": 1105
       }
     },
     "Membership": {
@@ -418,8 +418,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 1131,
-            "end": 1178
+            "start": 1177,
+            "end": 1224
           }
         },
         "orgId": {
@@ -440,8 +440,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 1181,
-            "end": 1221
+            "start": 1228,
+            "end": 1268
           }
         },
         "organisation": {
@@ -461,8 +461,8 @@ expression: schema
               "on_update": null,
               "resolved": 0,
               "span": {
-                "start": 1250,
-                "end": 1313
+                "start": 1298,
+                "end": 1361
               }
             }
           },
@@ -478,8 +478,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 1224,
-            "end": 1313
+            "start": 1272,
+            "end": 1361
           }
         },
         "accountId": {
@@ -500,8 +500,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 1316,
-            "end": 1360
+            "start": 1365,
+            "end": 1409
           }
         },
         "account": {
@@ -521,8 +521,8 @@ expression: schema
               "on_update": null,
               "resolved": 1,
               "span": {
-                "start": 1389,
-                "end": 1456
+                "start": 1439,
+                "end": 1506
               }
             }
           },
@@ -538,8 +538,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 1363,
-            "end": 1456
+            "start": 1413,
+            "end": 1506
           }
         },
         "isOwner": {
@@ -564,8 +564,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 1459,
-            "end": 1517
+            "start": 1510,
+            "end": 1568
           }
         },
         "updatedAt": {
@@ -586,8 +586,8 @@ expression: schema
           },
           "docs": null,
           "span": {
-            "start": 1520,
-            "end": 1575
+            "start": 1572,
+            "end": 1627
           }
         }
       },
@@ -597,8 +597,8 @@ expression: schema
         ],
         "name": null,
         "span": {
-          "start": 1131,
-          "end": 1178
+          "start": 1177,
+          "end": 1224
         }
       },
       "indexes": [
@@ -611,8 +611,8 @@ expression: schema
             }
           ],
           "span": {
-            "start": 1610,
-            "end": 1630
+            "start": 1665,
+            "end": 1685
           }
         }
       ],
@@ -624,15 +624,15 @@ expression: schema
             "accountId"
           ],
           "span": {
-            "start": 1579,
-            "end": 1607
+            "start": 1633,
+            "end": 1661
           }
         }
       ],
       "docs": "One account's place in one organisation.",
       "span": {
-        "start": 1065,
-        "end": 1632
+        "start": 1109,
+        "end": 1688
       }
     }
   },
@@ -656,8 +656,8 @@ expression: schema
       "optional": false,
       "constraint_name": "memberships_org_id_fkey",
       "span": {
-        "start": 1250,
-        "end": 1313
+        "start": 1298,
+        "end": 1361
       }
     },
     {
@@ -679,8 +679,8 @@ expression: schema
       "optional": false,
       "constraint_name": "memberships_account_id_fkey",
       "span": {
-        "start": 1389,
-        "end": 1456
+        "start": 1439,
+        "end": 1506
       }
     }
   ]
