@@ -121,6 +121,6 @@ ruprizzle generate --watch
 
 ## Next steps
 
-- [Schema reference](schema-reference.md)
-- [Query guide](query-guide.md)
-- [Migrations guide](migrations-guide.md)
+- [Schema reference](SchemaReference.md)
+- [Query guide](QueryGuide.md)
+- [Migrations guide](MigrationsGuide.md)

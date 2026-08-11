@@ -14,7 +14,7 @@ every workspace crate, improves the docs site with structured data, sitemap, and
   `Cargo.toml`.
 - Added `theme/head.hbs` with schema.org JSON-LD, Open Graph, and Twitter Card
   metadata.
-- Added `docs/faq.md` with an FAQPage schema.
+- Added `docs/Faq.md` with an FAQPage schema.
 - Added `sitemap.xml` and `robots.txt` and wired them into the Pages workflow.
 
 ## 0.1.0-alpha.1
@@ -60,7 +60,7 @@ These are honest bounds. Overclaiming would be checked within a day and would
 
 ### Known limitations
 
-See `docs/known-limitations.md` for the full list.
+See `docs/KnownLimitations.md` for the full list.
 
 ### Performance notes
 

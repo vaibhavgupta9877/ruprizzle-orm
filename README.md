@@ -281,7 +281,7 @@ async fn main() -> Result<(), ruprizzle::Error> {
 }
 ```
 
-See the full [quickstart](docs/quickstart.md) for a step-by-step walkthrough.
+See the full [quickstart](docs/Quickstart.md) for a step-by-step walkthrough.
 
 ---
 
@@ -373,7 +373,7 @@ let rows = db
     .await?;
 ```
 
-See the [query guide](docs/query-guide.md) and [relations guide](docs/relations-guide.md) for more.
+See the [query guide](docs/QueryGuide.md) and [relations guide](docs/RelationsGuide.md) for more.
 
 ---
 
@@ -461,7 +461,7 @@ Measured locally during development (no I/O for construction benchmarks):
 | Query construction (filter + order, no I/O) | ~1.8 µs |
 | Codegen, 50-model schema | ~16 ms |
 
-The end-to-end I/O benchmark is `cargo bench -p ruprizzle --bench end_to_end`; for the latest numbers and the text-marshalling note, see [docs/performance.md](docs/performance.md). Generated-crate compile-time benchmarks are not yet automated because they require a dedicated compile-time machine.
+The end-to-end I/O benchmark is `cargo bench -p ruprizzle --bench end_to_end`; for the latest numbers and the text-marshalling note, see [docs/Performance.md](docs/Performance.md). Generated-crate compile-time benchmarks are not yet automated because they require a dedicated compile-time machine.
 
 ---
 
@@ -493,7 +493,7 @@ This is an honest alpha. The boundaries are documented so you can decide whether
 - **SQLite `Json`** is stored as text and cannot be queried with JSON operators.
 - **Polymorphic relations, recursive loading beyond depth 2, soft deletes, JSON path querying, full-text search, and PostGIS types** are deferred to 0.2+.
 
-See [docs/known-limitations.md](docs/known-limitations.md) for the full list and [docs/migrating-from.md](docs/migrating-from.md) for cheat-sheets when moving from Diesel, SeaORM, or sqlx.
+See [docs/KnownLimitations.md](docs/KnownLimitations.md) for the full list and [docs/MigratingFrom.md](docs/MigratingFrom.md) for cheat-sheets when moving from Diesel, SeaORM, or sqlx.
 
 ---
 

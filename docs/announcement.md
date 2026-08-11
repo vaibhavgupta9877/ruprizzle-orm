@@ -55,11 +55,11 @@ cargo add ruprizzle tokio
 cargo run
 ```
 
-See the [quickstart](quickstart.md) for the full five-minute walkthrough.
+See the [quickstart](Quickstart.md) for the full five-minute walkthrough.
 
 ## Known limitations
 
-See [known-limitations](known-limitations.md) for the full list. Highlights:
+See [known-limitations](KnownLimitations.md) for the full list. Highlights:
 
 - Migrations do not handle mutual foreign-key cycles automatically.
 - Heuristic renames are not implemented; use `@renamedFrom`.

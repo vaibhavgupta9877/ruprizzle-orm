@@ -27,7 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Added `SECURITY.md` with supported versions, private vulnerability reporting, and an explicit scope.
   - Added `CONTRIBUTING.md` covering the CI gate, database testing requirements, `clippy::pedantic`-clean generated code, `trybuild` cases for compile-time guarantees, and `ProjectPlan/ImplementationPlan/` as the design record.
   - Linked `Contributing`, `Security policy`, and `Changelog` from the `README.md` Development section.
-  - Corrected the stale status sentence in `docs/README.md` that treated docs-site deployment and public announcement as the only remaining work.
+  - Corrected the stale status sentence in `docs/Readme.md` that treated docs-site deployment and public announcement as the only remaining work.
 - **End-to-end benchmark**
   - Added `crates/runtime/benches/end_to_end` comparing ruprizzle against hand-written `sqlx` for select, include, and bulk-insert workloads, with a `cargo xtask bench-client` generator for the benchmark schema.
 - **Diff-engine property tests**
@@ -62,7 +62,7 @@ A quick follow-up to `0.1.0-alpha.1` that adds README files and SEO metadata to 
 - `README.md` files for every published workspace crate (`ruprizzle-core`, `ruprizzle-parser`, `ruprizzle-dialect`, `ruprizzle-macros`, `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, `ruprizzle-cli`, `ruprizzle-testkit`).
 - `homepage`, `documentation`, and `readme` metadata to every `Cargo.toml`.
 - `theme/head.hbs` with schema.org JSON-LD, Open Graph, and Twitter Card metadata.
-- `docs/faq.md` with an FAQPage schema.
+- `docs/Faq.md` with an FAQPage schema.
 - `sitemap.xml` and `robots.txt` wired into the GitHub Pages workflow.
 
 ## [0.1.0-alpha.1] - 2026-08-10
@@ -87,7 +87,7 @@ Initial alpha release of **ruprizzle-orm**: a schema-first ORM for Rust. Write a
 - Performance superiority over raw `sqlx`.
 - Feature parity with Prisma.
 
-See `docs/known-limitations.md` for the full list.
+See `docs/KnownLimitations.md` for the full list.
 
 [Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.0-alpha.2...HEAD
 [0.1.0-alpha.2]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.0-alpha.1...v0.1.0-alpha.2

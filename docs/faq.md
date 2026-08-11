@@ -9,7 +9,7 @@ SQL. It targets Postgres and SQLite from day one.
 ## Is it production-ready?
 
 Not yet. The current release is `0.1.0-alpha.2`. The API will change, and the
-[known limitations](known-limitations.md) are documented explicitly.
+[known limitations](KnownLimitations.md) are documented explicitly.
 
 ## How is it different from Diesel or SeaORM?
 
