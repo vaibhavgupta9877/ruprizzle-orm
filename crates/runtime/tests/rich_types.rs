@@ -9,6 +9,7 @@
 use ruprizzle::{Column, Executor, InsertQuery, Model, Pool, SelectQuery, connect, decode};
 use ruprizzle::types::chrono::{DateTime, Utc};
 use ruprizzle::types::{Decimal, Uuid};
+use ruprizzle::sqlx::Row;
 use serde_json::Value as JsonValue;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -25,18 +26,36 @@ impl Model for Event {
     const COLUMNS: &'static [&'static str] = &["id", "created_at", "price", "meta"];
 }
 
-impl<'r, R> ruprizzle::sqlx::FromRow<'r, R> for Event
-where
-    R: ruprizzle::sqlx::Row,
-    usize: ruprizzle::sqlx::ColumnIndex<R>,
-    for<'a> &'a str: ruprizzle::sqlx::ColumnIndex<R>,
-    String: for<'a> ruprizzle::sqlx::Decode<'a, R::Database> + ruprizzle::sqlx::Type<R::Database>,
-    Vec<u8>: for<'a> ruprizzle::sqlx::Decode<'a, R::Database> + ruprizzle::sqlx::Type<R::Database>,
-{
-    fn from_row(row: &'r R) -> Result<Self, ruprizzle::sqlx::Error> {
+impl<'r> ruprizzle::sqlx::FromRow<'r, ruprizzle::sqlx::any::AnyRow> for Event {
+    fn from_row(row: &'r ruprizzle::sqlx::any::AnyRow) -> Result<Self, ruprizzle::sqlx::Error> {
         Ok(Self {
             id: decode::text(row, "id")?,
             created_at: decode::text(row, "created_at")?,
+            price: decode::text(row, "price")?,
+            meta: {
+                let s: String = row.try_get("meta")?;
+                serde_json::from_str(&s).map_err(|e| ruprizzle::sqlx::Error::Decode(Box::new(e)))?
+            },
+        })
+    }
+}
+
+impl<'r> ruprizzle::sqlx::FromRow<'r, ruprizzle::sqlx::postgres::PgRow> for Event {
+    fn from_row(row: &'r ruprizzle::sqlx::postgres::PgRow) -> Result<Self, ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: decode::rich(row, "id")?,
+            created_at: decode::rich(row, "created_at")?,
+            price: decode::rich(row, "price")?,
+            meta: decode::json(row, "meta")?,
+        })
+    }
+}
+
+impl<'r> ruprizzle::sqlx::FromRow<'r, ruprizzle::sqlx::sqlite::SqliteRow> for Event {
+    fn from_row(row: &'r ruprizzle::sqlx::sqlite::SqliteRow) -> Result<Self, ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: decode::rich(row, "id")?,
+            created_at: decode::rich(row, "created_at")?,
             price: decode::text(row, "price")?,
             meta: decode::json(row, "meta")?,
         })
@@ -66,29 +85,37 @@ async fn fresh_pool() -> (Pool, bool) {
     let dialect = pool.dialect().name();
 
     if dialect == "postgres" {
-        sqlx::query("DROP TABLE IF EXISTS events").execute(&pool).await.unwrap();
-        sqlx::query(
+        Executor::execute_raw(&pool, "DROP TABLE IF EXISTS events".into(), Vec::new())
+            .await
+            .unwrap();
+        Executor::execute_raw(
+            &pool,
             "CREATE TABLE events (
                 id UUID PRIMARY KEY,
                 created_at TIMESTAMPTZ NOT NULL,
                 price NUMERIC NOT NULL,
                 meta JSONB
-            )",
+            )"
+            .into(),
+            Vec::new(),
         )
-        .execute(&pool)
         .await
         .unwrap();
     } else {
-        sqlx::query("DROP TABLE IF EXISTS events").execute(&pool).await.unwrap();
-        sqlx::query(
+        Executor::execute_raw(&pool, "DROP TABLE IF EXISTS events".into(), Vec::new())
+            .await
+            .unwrap();
+        Executor::execute_raw(
+            &pool,
             "CREATE TABLE events (
                 id TEXT PRIMARY KEY,
                 created_at TEXT NOT NULL,
                 price TEXT NOT NULL,
                 meta TEXT
-            )",
+            )"
+            .into(),
+            Vec::new(),
         )
-        .execute(&pool)
         .await
         .unwrap();
     }
@@ -98,35 +125,21 @@ async fn fresh_pool() -> (Pool, bool) {
 
 #[tokio::test]
 async fn rich_types_round_trip() {
-    let (pool, is_pg) = fresh_pool().await;
+    let (pool, _is_pg) = fresh_pool().await;
 
     let id = Uuid::nil();
     let created_at = Utc::now();
     let price = Decimal::new(150, 2); // 1.50
     let meta = serde_json::json!({"k": "v"});
 
-    let insert = InsertQuery::<Event>::new(&pool)
+    let inserted: Event = InsertQuery::<Event>::new(&pool)
         .set(ID, id)
         .set(CREATED_AT, created_at)
         .set(PRICE, price)
         .set(META, meta.clone())
         .exec()
-        .await;
-
-    if is_pg {
-        assert!(
-            insert.is_err(),
-            "Postgres rich-type insert through sqlx::Any is expected to fail until P2-2: {insert:?}"
-        );
-        let err = insert.unwrap_err().to_string();
-        assert!(
-            err.contains("Any driver") || err.contains("uuid") || err.contains("jsonb"),
-            "expected an Any-driver or Postgres type error, got: {err}"
-        );
-        return;
-    }
-
-    let inserted: Event = insert.unwrap();
+        .await
+        .unwrap();
     assert_eq!(inserted.id, id);
     assert_eq!(inserted.price, price);
     assert_eq!(inserted.meta, meta);

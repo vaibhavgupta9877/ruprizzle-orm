@@ -201,7 +201,17 @@ async fn dispatch_raw_query(
             }
             q.fetch_all(p).await.map(RowBatch::Any).map_err(Error::from)
         }
-        _ => unimplemented!("native backend queries need per-backend FromRow (P2-2)"),
+        Pool::Postgres(p) => {
+            let mut q = sqlx::query::<sqlx::Postgres>(&sql);
+            for bind in binds {
+                q = q.bind(bind);
+            }
+            q.fetch_all(p)
+                .await
+                .map(RowBatch::Postgres)
+                .map_err(Error::from)
+        }
+        Pool::Sqlite(_) => unimplemented!("native SQLite dispatch is not yet wired"),
     }
 }
 
@@ -217,7 +227,17 @@ async fn dispatch_raw_execute(pool: &Pool, sql: String, binds: Vec<Value>) -> Re
                 .map(|r| r.rows_affected())
                 .map_err(Error::from)
         }
-        _ => unimplemented!("native backend execute needs the Backend dispatch path (P2-2)"),
+        Pool::Postgres(p) => {
+            let mut q = sqlx::query::<sqlx::Postgres>(&sql);
+            for bind in binds {
+                q = q.bind(bind);
+            }
+            q.execute(p)
+                .await
+                .map(|r| r.rows_affected())
+                .map_err(Error::from)
+        }
+        Pool::Sqlite(_) => unimplemented!("native SQLite dispatch is not yet wired"),
     }
 }
 

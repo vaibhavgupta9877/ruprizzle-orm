@@ -220,16 +220,36 @@ pub async fn connect(url: &str) -> Result<Pool, crate::Error> {
 /// Returns an error if the URL cannot be parsed or the connection fails.
 pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate::Error> {
     sqlx::any::install_default_drivers();
-    let pool = AnyPoolOptions::new()
-        .max_connections(config.max_connections)
-        .min_connections(config.min_connections)
-        .acquire_timeout(config.acquire_timeout)
-        .idle_timeout(config.idle_timeout)
-        .max_lifetime(config.max_lifetime)
-        .test_before_acquire(config.test_before_acquire)
-        .connect(url)
-        .await
-        .map_err(crate::Error::Sqlx)?;
+
+    let scheme = url.split("://").next().unwrap_or("");
+    let pool = match scheme {
+        "postgres" | "postgresql" => {
+            let pool = sqlx::postgres::PgPoolOptions::new()
+                .max_connections(config.max_connections)
+                .min_connections(config.min_connections)
+                .acquire_timeout(config.acquire_timeout)
+                .idle_timeout(config.idle_timeout)
+                .max_lifetime(config.max_lifetime)
+                .test_before_acquire(config.test_before_acquire)
+                .connect(url)
+                .await
+                .map_err(crate::Error::Sqlx)?;
+            return Ok(Pool::Postgres(pool));
+        }
+        // Native SQLite is kept behind the `Any` driver for now because the
+        // transaction path still relies on `sqlx::Transaction<'static, Any>`.
+        // Once `Tx` is made generic this branch can return `Pool::Sqlite`.
+        _ => AnyPoolOptions::new()
+            .max_connections(config.max_connections)
+            .min_connections(config.min_connections)
+            .acquire_timeout(config.acquire_timeout)
+            .idle_timeout(config.idle_timeout)
+            .max_lifetime(config.max_lifetime)
+            .test_before_acquire(config.test_before_acquire)
+            .connect(url)
+            .await
+            .map_err(crate::Error::Sqlx)?,
+    };
     Ok(Pool::Any(pool))
 }
 

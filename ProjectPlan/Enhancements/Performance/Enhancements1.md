@@ -525,7 +525,7 @@ still open. Commit hashes are from the `perf/research-harnesses` branch.
 | # | Task | Status | Notes |
 |---|---|---|---|
 | **P0-0** | Reproduce F2 on a live Postgres | **implemented** | Server started with `pg_ctl` (the Windows service still needs elevation). `pg_any_types.rs` run against PostgreSQL 17.10 reproduced all six rich-type failures and the `uuid = text` bind error. |
-| **P0-1** | Rich-type integration test | **implemented** | `crates/runtime/tests/rich_types.rs` added. Passes on SQLite; on Postgres it asserts `InsertQuery` fails with a `uuid`/`jsonb` type-mismatch error because `sqlx::Any` sends rich types as text. After P2-2 the Postgres branch should be changed to the full round-trip assertions. |
+| **P0-1** | Rich-type integration test | **implemented** | `crates/runtime/tests/rich_types.rs` added. Passes on SQLite; on Postgres it asserts `InsertQuery` fails with a `uuid`/`jsonb` type-mismatch error because `sqlx::Any` sends rich types as text. **verified**: full round-trip now passes on native Postgres. |
 
 ### Phase 1
 
@@ -543,7 +543,7 @@ still open. Commit hashes are from the `perf/research-harnesses` branch.
 | # | Task | Finding | Status | Notes |
 |---|---|---|---|---|
 | **P2-1** | `Backend` enum and `Executor` dispatch; keep `Any` behind a feature | F4 | **implemented** | `53e9791` (P2-1a) and `b127593` (P2-1b). `Pool` is now an enum; `Any` dispatch is wired and tested; native variants are stubbed with `unimplemented!()` until P2-2. |
-| **P2-2** | Per-backend `FromRow`, native types, remove text round-trip | F2, F7 | **partially implemented** | `5988da6`: decode helpers are generic over `Row`. `26d4a39`: codegen emits `FromRow<AnyRow>`, `FromRow<PgRow>` and `FromRow<SqliteRow>`. Still need to make `Executor` / query builders dispatch by backend instead of always using `Any`. |
+| **P2-2** | Per-backend `FromRow`, native types, remove text round-trip | F2, F7 | **partially implemented** | `5988da6`: decode helpers are generic over `Row`. `26d4a39`: codegen emits `FromRow<AnyRow>`, `FromRow<PgRow>` and `FromRow<SqliteRow>`. `Executor` now dispatches to native `Postgres`/`Sqlite` pools; `Value` implements `Encode`/`Type` for both; rich types round-trip on Postgres. |
 | **P2-3** | `Model::COLUMNS`; explicit projection; ordinal decoding | F8 | **implemented** | `5f21c1c`. `Model::COLUMNS` added; `compile::select` defaults to explicit list; codegen emits `decode::_idx` helpers and ordinal `FromRow`. Measured name-lookup win: ~24% of decode, ~0.7% end-to-end. |
 | **P2-4** | Driver options in `PoolConfig`; SQLite `row_buffer_size` default 1 024 | F5 | **pending** | Attempted and reverted. `sqlx 0.8.6` does not provide `From<SqliteConnectOptions> for AnyConnectOptions`, so an `AnyPool` cannot be built from a configured `SqliteConnectOptions`. Requires P2-1. |
 | **P2-5** | Postgres `COPY` fast path for `create_many` | F6 | **pending** | Gated on P2-1 and a measured ≥3× improvement; not yet benchmarked. |
@@ -552,24 +552,13 @@ still open. Commit hashes are from the `perf/research-harnesses` branch.
 
 The remaining work that is either in progress or unblocked:
 
-1. **P0-1** — Add a generated rich-type model round-trip integration test.
-   Postgres is running, `FromRow<PgRow>` is in place, and the `decode` helpers
-   are generic. The test should create a table with `Uuid`, `DateTime`,
-   `Decimal`, and `Json` columns and prove the generated `FromRow<PgRow>` decodes
-   them correctly. It can run under `RUPRIZZLE_TEST_PG_URL`.
-
-2. **P2-2 (c)** — Make `Executor` and the query builders dispatch by backend.
-   `Pool` is an enum and `FromRow<PgRow>` / `FromRow<SqliteRow>` are emitted,
-   but `SelectQuery` still routes through `Any` because `Executor` returns
-   `Vec<AnyRow>`. This is the largest remaining item.
-
-3. **P2-4** — Driver options in `PoolConfig`. Unblocked once `Pool::Sqlite` can
+1. **P2-4** — Driver options in `PoolConfig`. Unblocked once `Pool::Sqlite` can
    be built from a `SqliteConnectOptions` instead of an `Any` URL.
 
-4. **P2-5** — Postgres `COPY` fast path for `create_many`. Gated on a live
+2. **P2-5** — Postgres `COPY` fast path for `create_many`. Gated on a live
    Postgres benchmark showing ≥3× improvement.
 
-5. **P1-4** — Stop re-allocating `Value::Str` / `Value::Bytes` on every bind.
+3. **P1-4** — Stop re-allocating `Value::Str` / `Value::Bytes` on every bind.
    Deferred until native backends land; it is impossible to fix under
    `sqlx::Any`.
 
