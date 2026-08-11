@@ -298,7 +298,20 @@ fn injection_audit() -> Result<(), std::io::Error> {
 
 fn run_release(args: &[String]) -> ExitCode {
     let live = args.iter().any(|a| a == "--live");
-    let no_verify = args.iter().any(|a| a == "--no-verify");
+
+    // Live publishes are intentionally interactive only. Refuse to publish
+    // automatically from any CI environment, even if --live is passed.
+    if live && (std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok()) {
+        eprintln!("xtask: refusing live crate publish from a CI environment");
+        eprintln!("xtask: run `cargo xtask release --live ...` from an interactive shell only");
+        return ExitCode::FAILURE;
+    }
+
+    // Workspace packages have `workspace = true` dependencies that are
+    // rewritten to exact versions. `cargo publish` verification resolves
+    // those versions from crates.io, so it will see the *previous* release
+    // until the staged publish has completed. Always skip verification here;
+    // `cargo xtask harden` already compiles, tests, and lints.
     let wait: u64 = args
         .iter()
         .position(|a| a == "--wait")
@@ -310,12 +323,9 @@ fn run_release(args: &[String]) -> ExitCode {
         .position(|a| a == "--from")
         .and_then(|i| args.get(i + 1))
         .map(String::as_str);
-    let mut flags = vec!["publish"];
+    let mut flags = vec!["publish", "--no-verify"];
     if !live {
         flags.push("--dry-run");
-    }
-    if no_verify {
-        flags.push("--no-verify");
     }
 
     // Dependency order for first-time publish. `parser` is a dev-dependency
