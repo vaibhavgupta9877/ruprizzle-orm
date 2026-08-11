@@ -27,3 +27,6 @@
 
 # Transient output of `cargo xtask bench-client`
 /crates/runtime/benches/end_to_end/generated
+
+# Generated coverage reports (kept in working tree, not committed)
+/local/coverage/

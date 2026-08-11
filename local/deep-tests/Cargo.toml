@@ -1,0 +1,25 @@
+[package]
+name        = "ruprizzle-deep-tests"
+description = "Local-only deep tests for the ruprizzle ORM (not published)"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+authors.workspace      = true
+homepage.workspace     = true
+publish     = false
+
+[dependencies]
+ruprizzle         = { workspace = true }
+ruprizzle-core    = { workspace = true }
+ruprizzle-dialect = { workspace = true }
+ruprizzle-migrate = { workspace = true }
+ruprizzle-parser  = { workspace = true }
+sqlx              = { workspace = true, features = ["any", "sqlite"] }
+tempfile          = { workspace = true }
+tokio             = { workspace = true }
+
+[dev-dependencies]
+futures-util      = { version = "0.3", default-features = false, features = ["std"] }
+proptest          = "1"

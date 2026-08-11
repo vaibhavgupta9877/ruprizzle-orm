@@ -1934,6 +1934,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruprizzle-deep-tests"
+version = "0.1.0-alpha.2"
+dependencies = [
+ "futures-util",
+ "proptest",
+ "ruprizzle",
+ "ruprizzle-core",
+ "ruprizzle-dialect",
+ "ruprizzle-migrate",
+ "ruprizzle-parser",
+ "sqlx",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "ruprizzle-dialect"
 version = "0.1.0-alpha.2"
 dependencies = [

@@ -178,7 +178,14 @@ impl<'q> sqlx::Encode<'q, sqlx::Any> for Value {
         buf: &mut <sqlx::Any as sqlx::Database>::ArgumentBuffer<'q>,
     ) -> Result<sqlx::encode::IsNull, Box<dyn std::error::Error + Send + Sync + 'static>> {
         match self {
-            Value::Null => Ok(sqlx::encode::IsNull::Yes),
+            // The `Any` driver drops `IsNull::Yes` for non-`Option` Rust types,
+            // which silently shifts every subsequent placeholder. Encoding `None`
+            // as an `Option<String>` keeps the parameter in place and lets the
+            // database cast the untyped NULL to the target column.
+            Value::Null => {
+                let n: Option<String> = None;
+                sqlx::Encode::<sqlx::Any>::encode_by_ref(&n, buf)
+            }
             Value::Bool(b) => sqlx::Encode::<sqlx::Any>::encode_by_ref(b, buf),
             Value::I32(i) => sqlx::Encode::<sqlx::Any>::encode_by_ref(i, buf),
             Value::I64(i) => sqlx::Encode::<sqlx::Any>::encode_by_ref(i, buf),
