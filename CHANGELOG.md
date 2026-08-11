@@ -32,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Added `crates/runtime/benches/end_to_end` comparing ruprizzle against hand-written `sqlx` for select, include, and bulk-insert workloads, with a `cargo xtask bench-client` generator for the benchmark schema.
 - **Diff-engine property tests**
   - Added `crates/migrate/tests/roundtrip_prop.rs` with `proptest` coverage of self-diff emptiness, SQL generation for schema changes, and DB-backed Postgres migration round-trips.
+- **`raw!` macro / `RawFragment` escape hatch**
+  - Added the `raw!` proc macro and `RawFragment` predicate for injection-safe raw SQL fragments with bound parameters.
+- **ADR-009 sqlx::Any decision record**
+  - Documented the runtime dialect-selection trade-off and the costs of routing all queries through `sqlx::Any`.
 
 ### Changed
 

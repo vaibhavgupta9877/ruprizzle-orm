@@ -23,7 +23,7 @@ whether the tool is right for your project.
   at runtime.
 - **Rich types round-trip as text.** `Uuid`, `Decimal`, `DateTime`, `Date`,
   `Time`, and `Json` are sent and received as text because the underlying
-  `sqlx::Any` driver does not encode them natively. See ADR-009.
+  `sqlx::Any` driver does not encode them natively. See [ADR-009](../ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md).
 
 ## Deferrals to 0.2
 

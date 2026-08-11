@@ -90,8 +90,8 @@ dialect.
 
 - `Any` implements neither `Encode` nor `Decode` for rich types, so `Uuid`,
   `Decimal`, `DateTime`, `Date`, `Time`, and `Json` are serialised to text
-  outbound (`crates/runtime/src/value.rs:158`) and parsed from text inbound
-  (`crates/runtime/src/decode.rs:33`), on every row.
+  outbound (`crates/runtime/src/value.rs`) and parsed from text inbound
+  (`crates/runtime/src/decode.rs`), on every row.
 - Comparisons on rich-typed columns rely on server-side parameter inference. If
   inference resolves to `text` rather than the column type, the comparison stops
   using the index — a silent performance cliff, not an error.

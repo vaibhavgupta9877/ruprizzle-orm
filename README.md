@@ -127,7 +127,7 @@ ruprizzle tries to give you all three at once:
 - **No hidden query engine.** No sidecar binary, no WASM engine, no hidden thread pool. The generated client is plain Rust calling `sqlx`.
 - **Predictable SQL.** Every builder call maps to a visible SQL fragment. `.to_sql()` is available on every query.
 - **Type errors, not runtime errors.** Column tokens are typed `Column<Model, T>`, so `user::email.eq(42)` fails to compile.
-- **Escape hatch always present.** `sqlx::query_as!` interop and `raw()` fragments are first-class, not a defeat.
+- **Escape hatch always present.** `sqlx::query_as!` interop and the `raw!` macro / `RawFragment` predicate are first-class, not a defeat.
 - **Dialect differences are explicit.** If Postgres supports something SQLite does not, the generator tells you at build time, not at runtime.
 
 ---

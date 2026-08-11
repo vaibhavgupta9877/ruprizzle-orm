@@ -192,10 +192,15 @@ proptest! {
         a in prop::collection::vec(field_strategy(), 0..4),
         b in prop::collection::vec(field_strategy(), 0..4),
     ) {
-        let Ok(url) = std::env::var("RUPRIZZLE_TEST_PG_URL") else { return Ok(()); };
+        let required = std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok();
+        let Ok(url) = std::env::var("RUPRIZZLE_TEST_PG_URL") else {
+            prop_assert!(
+                !required,
+                "RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not"
+            );
+            return Ok(());
+        };
 
-        let required = std::env::var("RUPRIZZLE_REQUIRE_DB")
-            .is_ok_and(|v| !v.is_empty() && v != "0");
         let config = short_pool_config();
 
         // Probe once across all cases. If Postgres is unreachable and not

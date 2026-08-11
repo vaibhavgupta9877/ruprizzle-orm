@@ -21,7 +21,7 @@ impl RawFragment {
     /// Creates a new raw fragment.
     #[must_use]
     pub fn new(parts: Vec<String>, binds: Vec<Value>) -> Self {
-        debug_assert_eq!(
+        assert_eq!(
             parts.len(),
             binds.len() + 1,
             "RawFragment parts must split the format string around each placeholder"

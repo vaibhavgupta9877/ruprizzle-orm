@@ -20,16 +20,17 @@ use syn::{Expr, Token, parse_macro_input, punctuated::Punctuated};
 /// Inside the `ruprizzle` crate itself (e.g. its own unit or integration tests)
 /// this returns `crate`. For downstream crates it returns the crate name as
 /// declared in the user's `Cargo.toml` (commonly `::ruprizzle`).
-fn crate_path() -> proc_macro2::TokenStream {
+fn crate_path() -> Result<proc_macro2::TokenStream, syn::Error> {
     match proc_macro_crate::crate_name("ruprizzle") {
-        Ok(FoundCrate::Itself) => quote!(crate),
+        Ok(FoundCrate::Itself) => Ok(quote!(crate)),
         Ok(FoundCrate::Name(name)) => {
             let ident = proc_macro2::Ident::new(&name, proc_macro2::Span::call_site());
-            quote!(::#ident)
+            Ok(quote!(::#ident))
         }
-        Err(err) => {
-            panic!("raw! requires the `ruprizzle` crate to be present in Cargo.toml: {err}")
-        }
+        Err(err) => Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            format!("raw! requires the `ruprizzle` crate to be present in Cargo.toml: {err}"),
+        )),
     }
 }
 
@@ -39,15 +40,6 @@ fn crate_path() -> proc_macro2::TokenStream {
 /// remaining argument is an expression whose value is bound as a SQL parameter.
 /// The placeholders are replaced with bind markers; the actual values are never
 /// interpolated into the SQL string.
-///
-/// # Example
-///
-/// ```ignore
-/// use ruprizzle::raw;
-///
-/// let fragment = raw!("email = {}", "user@example.com");
-/// assert_eq!(fragment.sql(), "email = $1");
-/// ```
 #[proc_macro]
 pub fn raw(input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(input with Punctuated::<Expr, Token![,]>::parse_terminated);
@@ -98,7 +90,10 @@ pub fn raw(input: TokenStream) -> TokenStream {
         .map(|part| proc_macro2::Literal::string(part))
         .collect();
 
-    let crate_path = crate_path();
+    let crate_path = match crate_path() {
+        Ok(path) => path,
+        Err(e) => return e.to_compile_error().into(),
+    };
     let binds_ident = proc_macro2::Ident::new("__rz_raw_binds", proc_macro2::Span::mixed_site());
 
     let push_binds: Vec<proc_macro2::TokenStream> = values

@@ -40,7 +40,7 @@ contributors are the extra in-Rust decoding and the attachment/grouping step.
 P8-02 measures this overhead against the thresholds; actually optimising the
 2-level include grouping belongs to a separate work item (for example, P5-03).
 The exceeded thresholds and the unmeasured bulk insert are tracked as follow-up
-issues.
+issues (`Issue #TBD`) and will be opened before the next release.
 
 ## Text-marshalling cost
 
