@@ -538,7 +538,7 @@ still open. Commit hashes are from the `perf/research-harnesses` branch.
 | # | Task | Finding | Status | Notes |
 |---|---|---|---|---|
 | **P2-1** | `Backend` enum and `Executor` dispatch; keep `Any` behind a feature | F4 | **implemented** | `53e9791` (P2-1a) and `b127593` (P2-1b). `Pool` is now an enum; `Any` dispatch is wired and tested; native variants are stubbed with `unimplemented!()` until P2-2. |
-| **P2-2** | Per-backend `FromRow`, native types, remove text round-trip | F2, F7 | **pending** | Unblocks rich types on Postgres and removes the `Any` decode/error fallback tax. Blocked by P2-1. |
+| **P2-2** | Per-backend `FromRow`, native types, remove text round-trip | F2, F7 | **partially implemented** | `5988da6`: decode helpers are generic over `Row`. `26d4a39`: codegen emits `FromRow<AnyRow>`, `FromRow<PgRow>` and `FromRow<SqliteRow>`. Still need to make `Executor` / query builders dispatch by backend instead of always using `Any`. |
 | **P2-3** | `Model::COLUMNS`; explicit projection; ordinal decoding | F8 | **implemented** | `5f21c1c`. `Model::COLUMNS` added; `compile::select` defaults to explicit list; codegen emits `decode::_idx` helpers and ordinal `FromRow`. Measured name-lookup win: ~24% of decode, ~0.7% end-to-end. |
 | **P2-4** | Driver options in `PoolConfig`; SQLite `row_buffer_size` default 1 024 | F5 | **pending** | Attempted and reverted. `sqlx 0.8.6` does not provide `From<SqliteConnectOptions> for AnyConnectOptions`, so an `AnyPool` cannot be built from a configured `SqliteConnectOptions`. Requires P2-1. |
 | **P2-5** | Postgres `COPY` fast path for `create_many` | F6 | **pending** | Gated on P2-1 and a measured ≥3× improvement; not yet benchmarked. |
