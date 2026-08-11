@@ -63,7 +63,8 @@ work *not* worth doing (§8).
 > but the server can be started as a user process with `pg_ctl` once a data
 > directory exists. Task **P0-0** was run live on 2026-08-11; its results are in
 > §4.2 and the status table. Task **P0-1** (a round-trip integration test with
-> rich types) is unblocked but not yet implemented.
+> rich types) was implemented in `crates/runtime/tests/rich_types.rs` on
+2026-08-11.
 
 ---
 
@@ -524,7 +525,7 @@ still open. Commit hashes are from the `perf/research-harnesses` branch.
 | # | Task | Status | Notes |
 |---|---|---|---|
 | **P0-0** | Reproduce F2 on a live Postgres | **implemented** | Server started with `pg_ctl` (the Windows service still needs elevation). `pg_any_types.rs` run against PostgreSQL 17.10 reproduced all six rich-type failures and the `uuid = text` bind error. |
-| **P0-1** | Rich-type integration test | **pending** | Unblocked by P0-0. Needs a generated rich-type model round-trip test under `RUPRIZZLE_TEST_PG_URL`. |
+| **P0-1** | Rich-type integration test | **implemented** | `crates/runtime/tests/rich_types.rs` added. Passes on SQLite; on Postgres it asserts `InsertQuery` fails with a `uuid`/`jsonb` type-mismatch error because `sqlx::Any` sends rich types as text. After P2-2 the Postgres branch should be changed to the full round-trip assertions. |
 
 ### Phase 1
 
