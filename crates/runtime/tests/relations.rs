@@ -1,6 +1,6 @@
 use ruprizzle::{
-    Column, Encodable, IncludeList, IncludeOne, InsertManyQuery, InsertQuery, Model, NestedSetter,
-    Pool, Related, SelectQuery, Value,
+    Column, Encodable, Executor, IncludeList, IncludeOne, InsertManyQuery, InsertQuery, Model,
+    NestedSetter, Pool, Related, SelectQuery, Value,
 };
 use sqlx::FromRow;
 
@@ -67,14 +67,16 @@ async fn fresh_pool() -> Pool {
 async fn include_one_to_many_round_trip() {
     let pool = fresh_pool().await;
 
-    sqlx::query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::query(
-        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)",
+    pool.execute_raw(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string(),
+        Vec::new(),
     )
-    .execute(&pool)
+    .await
+    .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)".to_string(),
+        Vec::new(),
+    )
     .await
     .unwrap();
 
@@ -125,14 +127,16 @@ async fn include_one_to_many_round_trip() {
 async fn include_with_filter_and_take_round_trip() {
     let pool = fresh_pool().await;
 
-    sqlx::query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::query(
-        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)",
+    pool.execute_raw(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string(),
+        Vec::new(),
     )
-    .execute(&pool)
+    .await
+    .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)".to_string(),
+        Vec::new(),
+    )
     .await
     .unwrap();
 
@@ -169,25 +173,23 @@ async fn include_with_filter_and_take_round_trip() {
 async fn nested_create_round_trip() {
     let pool = fresh_pool().await;
 
-    sqlx::query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::query(
-        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)",
+    pool.execute_raw(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string(),
+        Vec::new(),
     )
-    .execute(&pool)
+    .await
+    .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)".to_string(),
+        Vec::new(),
+    )
     .await
     .unwrap();
 
     struct SetPosts;
     impl NestedSetter<User> for SetPosts {
-        fn set(&self, parent: &mut User, rows: Vec<sqlx::any::AnyRow>) {
-            parent.posts = Related::Loaded(
-                rows.into_iter()
-                    .map(|r| Post::from_row(&r).unwrap())
-                    .collect(),
-            );
+        fn set(&self, parent: &mut User, batch: ruprizzle::executor::RowBatch) {
+            parent.posts = Related::Loaded(ruprizzle::executor::decode_rows::<Post>(batch).unwrap());
         }
     }
 

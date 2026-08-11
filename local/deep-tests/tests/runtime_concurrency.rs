@@ -3,7 +3,7 @@
 //! SQLite is single-writer, but the pool and transaction paths must still behave
 //! correctly when many async tasks arrive at once.
 
-use ruprizzle::{Column, InsertManyQuery, InsertQuery, Model, SelectQuery, Value};
+use ruprizzle::{Column, Executor, InsertManyQuery, InsertQuery, Model, SelectQuery, Value};
 use ruprizzle_deep_tests::fresh_pool;
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -24,10 +24,12 @@ const LABEL: Column<Task, String> = Column::new("tasks", "label");
 async fn many_concurrent_inserts_succeed() {
     let (pool, _tmp) = fresh_pool().await;
 
-    sqlx::query("CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)".to_string(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
 
     let mut handles = Vec::new();
     for t in 0..8 {
@@ -55,10 +57,12 @@ async fn many_concurrent_inserts_succeed() {
 async fn transactions_see_their_own_writes_before_commit() {
     let (pool, _tmp) = fresh_pool().await;
 
-    sqlx::query("CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)".to_string(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
 
     InsertQuery::<Task>::new(&pool)
         .set(ID, 1)

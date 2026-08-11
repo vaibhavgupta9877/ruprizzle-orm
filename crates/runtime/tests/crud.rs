@@ -1,6 +1,6 @@
 //! End-to-end CRUD round-trip using a live SQLite `Any` pool.
 
-use ruprizzle::{Column, DeleteQuery, InsertQuery, Model, Pool, SelectQuery, UpdateQuery, connect};
+use ruprizzle::{Column, DeleteQuery, Executor, InsertQuery, Model, Pool, SelectQuery, UpdateQuery, connect};
 
 #[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
 struct Task {
@@ -22,10 +22,12 @@ async fn fresh_pool() -> Pool {
     let url = format!("sqlite:///{}?mode=rwc", file);
     let pool = connect(&url).await.unwrap();
 
-    sqlx::query("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)".to_string(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
 
     pool
 }

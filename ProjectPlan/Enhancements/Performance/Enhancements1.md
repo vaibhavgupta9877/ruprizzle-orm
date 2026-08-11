@@ -545,17 +545,14 @@ still open. Commit hashes are from the `perf/research-harnesses` branch.
 | **P2-1** | `Backend` enum and `Executor` dispatch; keep `Any` behind a feature | F4 | **implemented** | `53e9791` (P2-1a) and `b127593` (P2-1b). `Pool` is now an enum; `Any` dispatch is wired and tested; native variants are stubbed with `unimplemented!()` until P2-2. |
 | **P2-2** | Per-backend `FromRow`, native types, remove text round-trip | F2, F7 | **partially implemented** | `5988da6`: decode helpers are generic over `Row`. `26d4a39`: codegen emits `FromRow<AnyRow>`, `FromRow<PgRow>` and `FromRow<SqliteRow>`. `Executor` now dispatches to native `Postgres`/`Sqlite` pools; `Value` implements `Encode`/`Type` for both; rich types round-trip on Postgres. |
 | **P2-3** | `Model::COLUMNS`; explicit projection; ordinal decoding | F8 | **implemented** | `5f21c1c`. `Model::COLUMNS` added; `compile::select` defaults to explicit list; codegen emits `decode::_idx` helpers and ordinal `FromRow`. Measured name-lookup win: ~24% of decode, ~0.7% end-to-end. |
-| **P2-4** | Driver options in `PoolConfig`; SQLite `row_buffer_size` default 1 024 | F5 | **pending** | Attempted and reverted. `sqlx 0.8.6` does not provide `From<SqliteConnectOptions> for AnyConnectOptions`, so an `AnyPool` cannot be built from a configured `SqliteConnectOptions`. Requires P2-1. |
+| **P2-4** | Driver options in `PoolConfig`; SQLite `row_buffer_size` default 1 024 | F5 | **implemented** | `PoolConfig` gains `row_buffer_size`; `connect_with` builds a native `Pool::Sqlite` for `sqlite:` URLs and sets `SqliteConnectOptions::row_buffer_size`. Tests and benchmarks updated to compile and pass with native backends. |
 | **P2-5** | Postgres `COPY` fast path for `create_many` | F6 | **pending** | Gated on P2-1 and a measured ≥3× improvement; not yet benchmarked. |
 
 ### Next steps after this session
 
 The remaining work that is either in progress or unblocked:
 
-1. **P2-4** — Driver options in `PoolConfig`. Unblocked once `Pool::Sqlite` can
-   be built from a `SqliteConnectOptions` instead of an `Any` URL.
-
-2. **P2-5** — Postgres `COPY` fast path for `create_many`. Gated on a live
+1. **P2-5** — Postgres `COPY` fast path for `create_many`. Gated on a live
    Postgres benchmark showing ≥3× improvement.
 
 3. **P1-4** — Stop re-allocating `Value::Str` / `Value::Bytes` on every bind.

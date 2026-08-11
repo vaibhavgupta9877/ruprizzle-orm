@@ -34,7 +34,7 @@ async fn fetch_children<C, Key>(
     keys: Vec<Key>,
 ) -> Result<Vec<C>, Error>
 where
-    C: Model + Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    C: Model + Send + Unpin,
     Key: Encodable + Eq + Hash + Clone + Send + Sync + 'static,
 {
     // The parent set repeats keys whenever several parents point at the same
@@ -99,7 +99,7 @@ async fn fetch_children_per_parent<C, Key>(
     keys: &[Key],
 ) -> Result<Vec<C>, Error>
 where
-    C: Model + Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    C: Model + Send + Unpin,
     Key: Encodable + Clone + Send + Sync + 'static,
 {
     let mut all = Vec::new();
@@ -269,8 +269,8 @@ where
 
 impl<'db, M, C, Key, NI> IncludeSet<M> for IncludeList<'db, M, C, Key, NI>
 where
-    M: Model + Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
-    C: Model + Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    M: Model + Send + Unpin,
+    C: Model + Send + Unpin,
     Key: Encodable + Eq + Hash + Clone + Send + Sync + 'static,
     NI: IncludeSet<C> + Sync,
 {
@@ -435,10 +435,10 @@ where
 
 impl<'db, M, C, Key, NI> IncludeSet<M> for IncludeOne<'db, M, C, Key, NI>
 where
-    M: Model + Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    M: Model + Send + Unpin,
     // `Clone` because a many-to-one relation is many-to-one: several parents
     // routinely share one child row, and each parent owns its own copy.
-    C: Model + Clone + Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    C: Model + Clone + Send + Unpin,
     Key: Encodable + Eq + Hash + Clone + Send + Sync + 'static,
     NI: IncludeSet<C> + Sync,
 {

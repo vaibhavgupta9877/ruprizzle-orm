@@ -139,13 +139,17 @@ async fn probe_db(url: &str, config: &ruprizzle::PoolConfig) -> Result<(), Strin
 /// and applies that. The database must then report no drift against `to`.
 async fn round_trip(
     url: &str,
-    config: &ruprizzle::PoolConfig,
+    _config: &ruprizzle::PoolConfig,
     from: &Schema,
     to: &Schema,
 ) -> Result<Vec<String>, String> {
-    let pool = ruprizzle::connect_with(url, config)
+    // Migration tests need an `Any` pool because `detect` takes `&AnyPool`.
+    let any = sqlx::any::AnyPoolOptions::new()
+        .max_connections(1)
+        .connect(url)
         .await
         .map_err(|e| e.to_string())?;
+    let pool = ruprizzle::Pool::Any(any);
     let dialect = dialect_for(from.datasource.provider);
 
     // Isolate each case: drop anything a previous case left behind. The model
@@ -180,7 +184,7 @@ async fn round_trip(
         }
     }
 
-    detect(&pool, to).await.map_err(|e| e.to_string())
+    detect(pool.as_any(), to).await.map_err(|e| e.to_string())
 }
 
 proptest! {

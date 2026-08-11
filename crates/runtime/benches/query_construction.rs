@@ -11,7 +11,6 @@ use futures_core::Stream;
 use ruprizzle::executor::BoxRowStream;
 use ruprizzle::{Column, Executor, Model, SelectQuery, Value};
 use ruprizzle_dialect::{DbDialect, SqliteDialect};
-use sqlx::any::AnyRow;
 
 #[derive(sqlx::FromRow)]
 #[allow(dead_code)]
@@ -60,7 +59,7 @@ impl Executor for NoopExecutor {
 struct NoopStream;
 
 impl Stream for NoopStream {
-    type Item = Result<AnyRow, ruprizzle::Error>;
+    type Item = Result<ruprizzle::executor::RawRow, ruprizzle::Error>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         Poll::Ready(None)

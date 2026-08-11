@@ -16,9 +16,33 @@ pub struct BenchRow {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for BenchRow {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::direct::<i64>(row, "id")?,
-            name: ::ruprizzle::decode::direct::<String>(row, "name")?,
-            n: ::ruprizzle::decode::direct::<i64>(row, "n")?,
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            name: ::ruprizzle::decode::direct_idx(row, 1)?,
+            n: ::ruprizzle::decode::direct_idx(row, 2)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow>
+for BenchRow {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::postgres::PgRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            name: ::ruprizzle::decode::direct_idx(row, 1)?,
+            n: ::ruprizzle::decode::direct_idx(row, 2)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>
+for BenchRow {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            name: ::ruprizzle::decode::direct_idx(row, 1)?,
+            n: ::ruprizzle::decode::direct_idx(row, 2)?,
         })
     }
 }
@@ -45,6 +69,7 @@ pub struct BenchRowUpdate {
 impl ::ruprizzle::Model for BenchRow {
     const TABLE: &'static str = "bench_rows";
     const PRIMARY_KEY: &'static str = "id";
+    const COLUMNS: &'static [&'static str] = &["id", "name", "n"];
 }
 /// Table name for this model.
 pub const TABLE: &str = "bench_rows";

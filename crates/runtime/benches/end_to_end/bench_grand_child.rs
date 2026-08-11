@@ -18,9 +18,35 @@ pub struct BenchGrandChild {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for BenchGrandChild {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::direct::<i64>(row, "id")?,
-            child_id: ::ruprizzle::decode::direct::<i64>(row, "child_id")?,
-            name: ::ruprizzle::decode::direct::<String>(row, "name")?,
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            child_id: ::ruprizzle::decode::direct_idx(row, 1)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2)?,
+            child: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow>
+for BenchGrandChild {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::postgres::PgRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            child_id: ::ruprizzle::decode::direct_idx(row, 1)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2)?,
+            child: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>
+for BenchGrandChild {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            child_id: ::ruprizzle::decode::direct_idx(row, 1)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2)?,
             child: ::ruprizzle::Related::default(),
         })
     }
@@ -48,6 +74,7 @@ pub struct BenchGrandChildUpdate {
 impl ::ruprizzle::Model for BenchGrandChild {
     const TABLE: &'static str = "bench_grandchildren";
     const PRIMARY_KEY: &'static str = "id";
+    const COLUMNS: &'static [&'static str] = &["id", "child_id", "name"];
 }
 /// Table name for this model.
 pub const TABLE: &str = "bench_grandchildren";

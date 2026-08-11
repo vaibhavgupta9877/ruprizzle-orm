@@ -19,7 +19,7 @@ const NAME: Column<Task, String> = Column::new("tasks", "name");
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn runtime_crud_round_trip(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         // INSERT
         let one: Task = InsertQuery::<Task>::new(pool)
@@ -82,7 +82,7 @@ both_dbs! {
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn runtime_upsert_round_trip(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         let one: Task = InsertQuery::<Task>::new(pool)
             .set(ID, 1)
@@ -115,7 +115,7 @@ both_dbs! {
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn runtime_insert_many_round_trip(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         let rows: Vec<Task> = ruprizzle::InsertManyQuery::<Task>::new(pool)
             .row([("id", ruprizzle::Value::I64(1)), ("name", ruprizzle::Value::Str("one".into()))])
@@ -144,7 +144,7 @@ both_dbs! {
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn runtime_pagination_round_trip(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         for i in 1..=5 {
             InsertQuery::<Task>::new(pool)

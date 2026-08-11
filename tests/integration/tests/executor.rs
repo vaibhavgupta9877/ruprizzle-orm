@@ -46,7 +46,7 @@ where
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn exists_is_cheap_and_correct(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         // No rows yet.
         assert!(!SelectQuery::<Task>::new(pool).exists().await?);
@@ -74,7 +74,7 @@ both_dbs! {
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn page_reports_has_next_exactly(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
         for i in 1..=5i64 {
             InsertQuery::<Task>::new(pool)
                 .set(ID, i)
@@ -107,7 +107,7 @@ both_dbs! {
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn stream_yields_every_row(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
         for i in 1..=4i64 {
             InsertQuery::<Task>::new(pool)
                 .set(ID, i)
@@ -133,7 +133,7 @@ both_dbs! {
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn the_same_query_runs_on_a_pool_and_in_a_transaction(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
         InsertQuery::<Task>::new(pool).set(ID, 1).set(NAME, "a").exec().await.map(|_: Task| ())?;
 
         // This is the point of the `Executor` trait: one query, two contexts.
@@ -166,7 +166,7 @@ both_dbs! {
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn rollback_discards_writes(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         let tx = Tx::begin(pool).await?;
         SelectQuery::<Task>::new(&tx).fetch_all().await.map(|_: Vec<Task>| ())?;
@@ -184,7 +184,7 @@ both_dbs! {
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn isolation_level_is_accepted_on_both_backends(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         // Postgres applies the level; SQLite accepts and ignores it. Either way
         // the same application code must work, which is what this pins.

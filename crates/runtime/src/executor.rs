@@ -58,17 +58,22 @@ impl RowBatch {
         }
     }
 
-    /// Consumes the batch and returns the underlying `AnyRow` rows.
+    /// Merges another batch of the same backend into this one.
     ///
-    /// This is a temporary helper for `NestedSetter`, which still works with
-    /// `Vec<AnyRow>`. It will be removed once child rows are decoded per-backend.
-    pub(crate) fn into_any_rows(self) -> Result<Vec<AnyRow>, Error> {
-        match self {
-            Self::Any(rows) => Ok(rows),
-            _ => Err(Error::Message(
-                "native backend child rows are not yet implemented".into(),
-            )),
+    /// Used by nested `INSERT ... RETURNING` to accumulate child rows across
+    /// parameter-limit chunks.
+    pub fn merge(&mut self, other: Self) -> Result<(), Error> {
+        match (self, other) {
+            (Self::Any(a), Self::Any(b)) => a.extend(b),
+            (Self::Postgres(a), Self::Postgres(b)) => a.extend(b),
+            (Self::Sqlite(a), Self::Sqlite(b)) => a.extend(b),
+            _ => {
+                return Err(Error::Message(
+                    "cannot merge row batches from different backends".into(),
+                ));
+            }
         }
+        Ok(())
     }
 }
 
@@ -112,9 +117,88 @@ pub trait Executor: Send + Sync {
     fn stream_raw(&self, sql: String, binds: Vec<Value>) -> BoxRowStream<'_>;
 }
 
+/// A single raw row from any backend.
+///
+/// Streaming keeps the executor object-safe by returning an untyped row that the
+/// caller decodes with the matching `FromRow` implementation.
+#[non_exhaustive]
+pub enum RawRow {
+    /// A row from the generic `sqlx::Any` driver.
+    Any(AnyRow),
+    /// A row from the native Postgres driver.
+    Postgres(PgRow),
+    /// A row from the native SQLite driver.
+    Sqlite(SqliteRow),
+}
+
 /// A boxed stream of raw rows.
 pub type BoxRowStream<'a> =
-    std::pin::Pin<Box<dyn futures_core::Stream<Item = Result<AnyRow, Error>> + Send + 'a>>;
+    std::pin::Pin<Box<dyn futures_core::Stream<Item = Result<RawRow, Error>> + Send + 'a>>;
+
+/// Resolves a pending fetch, then yields its rows one at a time.
+///
+/// Both executors currently buffer: a `Tx` must, because it owns one connection
+/// behind a mutex and an open cursor would block every other statement on the
+/// transaction. The `Pool` shares this path so the two cannot drift; swapping
+/// it for a true incremental cursor is a `Pool`-only change behind this type.
+pub(crate) struct DeferredRowStream<'a> {
+    fut: crate::BoxFuture<'a, Result<RowBatch, Error>>,
+    done: bool,
+    buffered: std::vec::IntoIter<RawRow>,
+}
+
+impl<'a> DeferredRowStream<'a> {
+    pub(crate) fn new(fut: crate::BoxFuture<'a, Result<RowBatch, Error>>) -> Self {
+        Self {
+            fut,
+            done: false,
+            buffered: Vec::new().into_iter(),
+        }
+    }
+}
+
+impl futures_core::Stream for DeferredRowStream<'_> {
+    type Item = Result<RawRow, Error>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        use std::task::Poll;
+
+        let this = self.get_mut();
+
+        if !this.done {
+            match this.fut.as_mut().poll(cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Err(e)) => {
+                    this.done = true;
+                    return Poll::Ready(Some(Err(e)));
+                }
+                Poll::Ready(Ok(batch)) => {
+                    this.done = true;
+                    this.buffered = match batch {
+                        RowBatch::Any(rows) => rows
+                            .into_iter()
+                            .map(RawRow::Any)
+                            .collect::<Vec<_>>(),
+                        RowBatch::Postgres(rows) => rows
+                            .into_iter()
+                            .map(RawRow::Postgres)
+                            .collect::<Vec<_>>(),
+                        RowBatch::Sqlite(rows) => rows
+                            .into_iter()
+                            .map(RawRow::Sqlite)
+                            .collect::<Vec<_>>(),
+                    }
+                    .into_iter();
+                }
+            }
+        }
+
+        Poll::Ready(this.buffered.next().map(Ok))
+    }
+}
 
 impl Executor for Pool {
     fn dialect(&self) -> Box<dyn DbDialect> {
@@ -182,7 +266,7 @@ impl Executor for Pool {
     }
 
     fn stream_raw(&self, sql: String, binds: Vec<Value>) -> BoxRowStream<'_> {
-        Box::pin(crate::tx::DeferredRowStream::new(Box::pin(async move {
+        Box::pin(DeferredRowStream::new(Box::pin(async move {
             self.fetch_all_raw(sql, binds).await
         })))
     }
@@ -211,7 +295,16 @@ async fn dispatch_raw_query(
                 .map(RowBatch::Postgres)
                 .map_err(Error::from)
         }
-        Pool::Sqlite(_) => unimplemented!("native SQLite dispatch is not yet wired"),
+        Pool::Sqlite(p) => {
+            let mut q = sqlx::query::<sqlx::Sqlite>(&sql);
+            for bind in binds {
+                q = q.bind(bind);
+            }
+            q.fetch_all(p)
+                .await
+                .map(RowBatch::Sqlite)
+                .map_err(Error::from)
+        }
     }
 }
 
@@ -237,7 +330,16 @@ async fn dispatch_raw_execute(pool: &Pool, sql: String, binds: Vec<Value>) -> Re
                 .map(|r| r.rows_affected())
                 .map_err(Error::from)
         }
-        Pool::Sqlite(_) => unimplemented!("native SQLite dispatch is not yet wired"),
+        Pool::Sqlite(p) => {
+            let mut q = sqlx::query::<sqlx::Sqlite>(&sql);
+            for bind in binds {
+                q = q.bind(bind);
+            }
+            q.execute(p)
+                .await
+                .map(|r| r.rows_affected())
+                .map_err(Error::from)
+        }
     }
 }
 
@@ -245,7 +347,7 @@ async fn dispatch_raw_execute(pool: &Pool, sql: String, binds: Vec<Value>) -> Re
 ///
 /// Shared by every builder so that the pool and transaction paths cannot drift
 /// apart in how they decode.
-pub(crate) fn decode_rows<T>(batch: RowBatch) -> Result<Vec<T>, Error>
+pub fn decode_rows<T>(batch: RowBatch) -> Result<Vec<T>, Error>
 where
     T: crate::model::RowDecode,
 {

@@ -27,11 +27,21 @@ pub fn db_dir() -> PathBuf {
 ///
 /// Keep the returned [`TempDir`] alive for the lifetime of the pool; the
 /// directory is removed when it is dropped.
+///
+/// The returned pool uses the `Any` driver so that tests can also exercise raw
+/// `sqlx` queries against the same connection.
 pub async fn fresh_pool() -> (ruprizzle::Pool, TempDir) {
+    sqlx::any::install_default_drivers();
     let dir = tempfile::tempdir_in(db_dir()).expect("create temp dir under local db dir");
     let path = dir.path().join("test.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
     let url = format!("sqlite:///{}?mode=rwc", file);
-    let pool = ruprizzle::connect(&url).await.expect("connect to local sqlite");
+    let any = sqlx::any::AnyPoolOptions::new()
+        .max_connections(4)
+        .acquire_timeout(std::time::Duration::from_secs(5))
+        .connect(&url)
+        .await
+        .expect("connect to local sqlite");
+    let pool = ruprizzle::Pool::Any(any);
     (pool, dir)
 }

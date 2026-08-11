@@ -16,9 +16,33 @@ pub struct BenchBulk {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for BenchBulk {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::direct::<i64>(row, "id")?,
-            name: ::ruprizzle::decode::direct::<String>(row, "name")?,
-            n: ::ruprizzle::decode::direct::<i64>(row, "n")?,
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            name: ::ruprizzle::decode::direct_idx(row, 1)?,
+            n: ::ruprizzle::decode::direct_idx(row, 2)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow>
+for BenchBulk {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::postgres::PgRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            name: ::ruprizzle::decode::direct_idx(row, 1)?,
+            n: ::ruprizzle::decode::direct_idx(row, 2)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>
+for BenchBulk {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            name: ::ruprizzle::decode::direct_idx(row, 1)?,
+            n: ::ruprizzle::decode::direct_idx(row, 2)?,
         })
     }
 }
@@ -45,6 +69,7 @@ pub struct BenchBulkUpdate {
 impl ::ruprizzle::Model for BenchBulk {
     const TABLE: &'static str = "bench_bulk";
     const PRIMARY_KEY: &'static str = "id";
+    const COLUMNS: &'static [&'static str] = &["id", "name", "n"];
 }
 /// Table name for this model.
 pub const TABLE: &str = "bench_bulk";

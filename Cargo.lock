@@ -2081,6 +2081,7 @@ dependencies = [
 name = "ruprizzle-testkit"
 version = "0.1.0-alpha.3"
 dependencies = [
+ "ruprizzle",
  "sqlx",
  "tempfile",
  "thiserror",

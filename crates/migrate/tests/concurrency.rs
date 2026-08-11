@@ -3,7 +3,7 @@
 use std::fs;
 use std::time::Duration;
 
-use ruprizzle::{PoolConfig, connect_with};
+use ruprizzle::Pool;
 use ruprizzle_migrate::Migrator;
 
 /// Writes a two-migration directory into a temp dir and returns its path.
@@ -42,13 +42,16 @@ async fn ten_concurrent_deployers_all_succeed() {
     };
 
     let dir = fixture();
-    let mut config = PoolConfig::default();
-    config.max_connections = 20;
-    config.acquire_timeout = Duration::from_secs(5);
-    let pool = connect_with(&url, &config).await.expect("connect");
+    let any = sqlx::any::AnyPoolOptions::new()
+        .max_connections(20)
+        .acquire_timeout(Duration::from_secs(5))
+        .connect(&url)
+        .await
+        .expect("connect");
+    let pool = Pool::Any(any);
 
     sqlx::query("DROP TABLE IF EXISTS conc_a, conc_b, _ruprizzle_migrations")
-        .execute(&pool)
+        .execute(pool.as_any())
         .await
         .expect("clean slate");
 
@@ -57,7 +60,7 @@ async fn ten_concurrent_deployers_all_succeed() {
         let path = dir.path().to_path_buf();
         let pool = pool.clone();
         handles.push(tokio::spawn(async move {
-            Migrator::new(path).apply_all(&pool, false).await
+            Migrator::new(path).apply_all(pool.as_any(), false).await
         }));
     }
 
@@ -76,11 +79,11 @@ async fn ten_concurrent_deployers_all_succeed() {
     );
 
     sqlx::query("SELECT 1 FROM conc_a")
-        .execute(&pool)
+        .execute(pool.as_any())
         .await
         .expect("conc_a exists");
     sqlx::query("SELECT 1 FROM conc_b")
-        .execute(&pool)
+        .execute(pool.as_any())
         .await
         .expect("conc_b exists");
 }

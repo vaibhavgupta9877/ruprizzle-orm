@@ -5,7 +5,7 @@
 
 use futures_util::StreamExt;
 use ruprizzle::{
-    Column, DeleteQuery, InsertQuery, Model, SelectQuery, UpdateQuery,
+    Column, DeleteQuery, Executor, InsertQuery, Model, SelectQuery, UpdateQuery,
 };
 use ruprizzle_deep_tests::fresh_pool;
 
@@ -30,16 +30,17 @@ const ACTIVE: Column<Item, i64> = Column::new("items", "active");
 const NOTE: Column<Item, Option<String>> = Column::new("items", "note");
 
 async fn seed(pool: &ruprizzle::Pool) {
-    sqlx::query(
+    pool.execute_raw(
         "CREATE TABLE items (
             id INTEGER PRIMARY KEY,
             handle TEXT NOT NULL,
             age INTEGER NOT NULL,
             active INTEGER NOT NULL,
             note TEXT
-        )",
+        )"
+        .to_string(),
+        Vec::new(),
     )
-    .execute(pool)
     .await
     .unwrap();
 

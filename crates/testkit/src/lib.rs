@@ -114,6 +114,8 @@ pub enum TestDbError {
 pub struct TestDb {
     backend: Backend,
     inner: Inner,
+    /// A `ruprizzle` [`Pool`] wrapping the same connections.
+    pool: ruprizzle::Pool,
 }
 
 #[derive(Debug)]
@@ -233,6 +235,7 @@ impl TestDb {
                 reason: e.to_string(),
             })?;
 
+        let pool = ruprizzle::Pool::Any(any_pool.clone());
         Ok(TestDb {
             backend: Backend::Postgres,
             inner: Inner::Postgres {
@@ -241,6 +244,7 @@ impl TestDb {
                 schema,
                 admin_url: url,
             },
+            pool,
         })
     }
 
@@ -285,6 +289,7 @@ impl TestDb {
                 reason: e.to_string(),
             })?;
 
+        let pool = ruprizzle::Pool::Any(any_pool.clone());
         Ok(TestDb {
             backend: Backend::Sqlite,
             inner: Inner::Sqlite {
@@ -292,6 +297,7 @@ impl TestDb {
                 any_pool,
                 _dir: dir,
             },
+            pool,
         })
     }
 
@@ -308,7 +314,15 @@ impl TestDb {
         self.backend
     }
 
-    /// The database-agnostic `Any` pool, for tests that go through the runtime.
+    /// A `ruprizzle` [`Pool`] backed by this database.
+    ///
+    /// Use this when exercising the runtime's query builders and executor.
+    #[must_use]
+    pub fn pool(&self) -> &ruprizzle::Pool {
+        &self.pool
+    }
+
+    /// The database-agnostic `Any` pool, for tests that go through raw `sqlx`.
     #[must_use]
     pub fn any_pool(&self) -> &AnyPool {
         match &self.inner {

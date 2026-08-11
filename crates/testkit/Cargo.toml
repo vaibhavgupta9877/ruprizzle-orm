@@ -12,6 +12,7 @@ readme                 = "README.md"
 documentation          = "https://docs.rs/ruprizzle-testkit"
 
 [dependencies]
+ruprizzle = { workspace = true }
 sqlx      = { workspace = true, features = ["postgres", "sqlite", "any"] }
 tempfile  = { workspace = true }
 thiserror = { workspace = true }

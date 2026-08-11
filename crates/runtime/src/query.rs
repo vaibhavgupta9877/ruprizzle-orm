@@ -271,7 +271,16 @@ where
         let this = self.get_mut();
         std::pin::Pin::new(&mut this.inner)
             .poll_next(cx)
-            .map(|o| o.map(|r| r.and_then(|row| Out::from_row(&row).map_err(Error::Sqlx))))
+            .map(|o| {
+                o.map(|r| {
+                    r.and_then(|raw| match raw {
+                        crate::executor::RawRow::Any(r) => Out::from_row(&r),
+                        crate::executor::RawRow::Postgres(r) => Out::from_row(&r),
+                        crate::executor::RawRow::Sqlite(r) => Out::from_row(&r),
+                    }
+                    .map_err(Error::Sqlx))
+                })
+            })
     }
 }
 
@@ -557,7 +566,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
             let cols_per_row = rows[0].len() as u32;
             let chunk_size = (max / cols_per_row).max(1) as usize;
 
-            let mut child_rows = Vec::new();
+            let mut child_rows: Option<crate::executor::RowBatch> = None;
             for chunk in rows.chunks(chunk_size) {
                 let returning: &[&str] = if M::COLUMNS.is_empty() {
                     &["*"]
@@ -567,13 +576,15 @@ impl<'db, M: Model> InsertQuery<'db, M> {
                 let compiled =
                     insert_many::<M>(dialect.as_ref(), nested.child_table, chunk, returning);
                 let chunk = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
-                let mut chunk_rows = crate::executor::RowBatch::into_any_rows(chunk)?;
-                child_rows.append(&mut chunk_rows);
+                match child_rows.as_mut() {
+                    Some(acc) => acc.merge(chunk)?,
+                    None => child_rows = Some(chunk),
+                }
             }
 
-            nested.setter.set(&mut parent, child_rows);
+            nested.setter.set(&mut parent, child_rows.unwrap_or(crate::executor::RowBatch::Any(Vec::new())));
         } else {
-            nested.setter.set(&mut parent, Vec::new());
+            nested.setter.set(&mut parent, crate::executor::RowBatch::Any(Vec::new()));
         }
 
         tx.commit().await?;
@@ -586,7 +597,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
 /// Generated code provides one implementation per relation.
 pub trait NestedSetter<M: Model> {
     /// Attaches the loaded child rows to the parent model.
-    fn set(&self, parent: &mut M, rows: Vec<sqlx::any::AnyRow>);
+    fn set(&self, parent: &mut M, batch: crate::executor::RowBatch);
 }
 
 /// Specification for a one-level nested create.

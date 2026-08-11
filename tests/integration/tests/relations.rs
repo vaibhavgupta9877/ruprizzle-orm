@@ -5,7 +5,6 @@ use ruprizzle::{
     InsertManyQuery, InsertQuery, Model, NestedSetter, Related, SelectQuery, Value,
 };
 use ruprizzle_testkit::both_dbs;
-use sqlx::FromRow;
 
 #[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
 struct User {
@@ -91,7 +90,7 @@ both_dbs! {
              CREATE TABLE posts (id BIGINT PRIMARY KEY, title TEXT NOT NULL, published INTEGER NOT NULL, author_id BIGINT NOT NULL);
              CREATE TABLE comments (id BIGINT PRIMARY KEY, body TEXT NOT NULL, post_id BIGINT NOT NULL)";
     async fn runtime_include_round_trip(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         for (id, name) in [(1, "alice"), (2, "bob")] {
             InsertQuery::<User>::new(pool)
@@ -259,7 +258,7 @@ both_dbs! {
     /// G5's exit gate: a two-level include costs one query per *level*, not one
     /// per row. Any future refactor that reintroduces N+1 fails right here.
     async fn include_is_bounded(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
         seed(pool, 10, 5, 3).await?;
 
         let counter = CountingExecutor::new(pool);
@@ -296,7 +295,7 @@ both_dbs! {
     /// `take` is per parent, not per batch — the distinction a plain `LIMIT`
     /// gets silently wrong as soon as there is more than one parent.
     async fn per_relation_take_is_per_parent(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
         seed(pool, 4, 5, 0).await?;
 
         let counter = CountingExecutor::new(pool);
@@ -323,16 +322,12 @@ both_dbs! {
              CREATE TABLE posts (id BIGINT PRIMARY KEY, title TEXT NOT NULL, published INTEGER NOT NULL, author_id BIGINT NOT NULL);
              CREATE TABLE comments (id BIGINT PRIMARY KEY, body TEXT NOT NULL, post_id BIGINT NOT NULL)";
     async fn nested_create_round_trip(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         struct SetPosts;
         impl NestedSetter<User> for SetPosts {
-            fn set(&self, parent: &mut User, rows: Vec<sqlx::any::AnyRow>) {
-                parent.posts = Related::Loaded(
-                    rows.into_iter()
-                        .map(|r| Post::from_row(&r).unwrap())
-                        .collect(),
-                );
+            fn set(&self, parent: &mut User, batch: ruprizzle::executor::RowBatch) {
+                parent.posts = Related::Loaded(ruprizzle::executor::decode_rows::<Post>(batch).unwrap());
             }
         }
 

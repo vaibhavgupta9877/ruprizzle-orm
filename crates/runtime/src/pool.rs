@@ -1,17 +1,19 @@
 //! Connection pool construction and configuration.
 
+use std::str::FromStr;
 use std::time::Duration;
 
 use futures_core::future::BoxFuture;
 use futures_core::stream::BoxStream;
 use ruprizzle_core::ir::Provider;
 use sqlx::any::AnyPoolOptions;
+use sqlx::sqlite::SqlitePoolOptions;
 
 /// An ORM pool that may wrap a native `sqlx` pool or the generic `Any` driver.
 ///
-/// For now the public `connect`/`connect_with` builders always return
-/// `Pool::Any`. Native variants will become reachable once per-backend
-/// `FromRow` codegen lands (P2-2).
+/// `connect`/`connect_with` return native `Pool::Postgres` or `Pool::Sqlite`
+/// pools for their respective URL schemes, and fall back to `Pool::Any` for
+/// other schemes.
 #[derive(Clone, Debug)]
 pub enum Pool {
     /// Generic `sqlx::Any` pool, chosen by URL scheme.
@@ -68,14 +70,38 @@ impl Pool {
 
     /// Returns the pool's connection options.
     ///
-    /// This is exposed for tests that verify `PoolConfig` propagation. It only
-    /// makes sense for the `Any` backend until native pool construction is
-    /// wired up.
+    /// This is exposed for tests that verify `PoolConfig` propagation.
     #[must_use]
     pub fn options(&self) -> &sqlx::pool::PoolOptions<sqlx::Any> {
         match self {
             Pool::Any(any) => any.options(),
             _ => unimplemented!("options() only implemented for the Any backend"),
+        }
+    }
+
+    /// Returns the connection options for a native Postgres pool.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not a [`Pool::Postgres`].
+    #[must_use]
+    pub fn postgres_options(&self) -> &sqlx::pool::PoolOptions<sqlx::Postgres> {
+        match self {
+            Pool::Postgres(p) => p.options(),
+            _ => unimplemented!("postgres_options() only implemented for Postgres"),
+        }
+    }
+
+    /// Returns the connection options for a native SQLite pool.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not a [`Pool::Sqlite`].
+    #[must_use]
+    pub fn sqlite_options(&self) -> &sqlx::pool::PoolOptions<sqlx::Sqlite> {
+        match self {
+            Pool::Sqlite(p) => p.options(),
+            _ => unimplemented!("sqlite_options() only implemented for SQLite"),
         }
     }
 
@@ -90,13 +116,21 @@ impl Pool {
     /// Borrows the wrapped `Any` pool.
     ///
     /// This is a compatibility helper for tests and benchmarks that still want
-    /// to use raw `sqlx` against the `Any` backend. It will be removed once the
-    /// native-backend path is complete.
+    /// to use raw `sqlx` against the `Any` backend.
     #[must_use]
     pub fn as_any(&self) -> &sqlx::Pool<sqlx::Any> {
         match self {
             Pool::Any(any) => any,
             _ => unimplemented!("as_any() is only valid for the Any backend"),
+        }
+    }
+
+    /// Closes the pool and waits for all connections to finish.
+    pub async fn close(&self) {
+        match self {
+            Pool::Any(p) => p.close().await,
+            Pool::Postgres(p) => p.close().await,
+            Pool::Sqlite(p) => p.close().await,
         }
     }
 }
@@ -185,6 +219,11 @@ pub struct PoolConfig {
     pub max_lifetime: Option<Duration>,
     /// Whether to test a connection before handing it out.
     pub test_before_acquire: bool,
+    /// Number of rows the SQLite driver buffers per prepared statement.
+    ///
+    /// This is only meaningful when `connect`/`connect_with` build a native
+    /// SQLite pool. The default matches `sqlx-sqlite`'s own default.
+    pub row_buffer_size: u32,
 }
 
 impl Default for PoolConfig {
@@ -196,6 +235,7 @@ impl Default for PoolConfig {
             idle_timeout: Some(Duration::from_secs(600)),
             max_lifetime: Some(Duration::from_secs(1800)),
             test_before_acquire: true,
+            row_buffer_size: 1024,
         }
     }
 }
@@ -221,8 +261,8 @@ pub async fn connect(url: &str) -> Result<Pool, crate::Error> {
 pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate::Error> {
     sqlx::any::install_default_drivers();
 
-    let scheme = url.split("://").next().unwrap_or("");
-    let pool = match scheme {
+    let scheme = url.split(':').next().unwrap_or("");
+    match scheme {
         "postgres" | "postgresql" => {
             let pool = sqlx::postgres::PgPoolOptions::new()
                 .max_connections(config.max_connections)
@@ -234,23 +274,38 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
                 .connect(url)
                 .await
                 .map_err(crate::Error::Sqlx)?;
-            return Ok(Pool::Postgres(pool));
+            Ok(Pool::Postgres(pool))
         }
-        // Native SQLite is kept behind the `Any` driver for now because the
-        // transaction path still relies on `sqlx::Transaction<'static, Any>`.
-        // Once `Tx` is made generic this branch can return `Pool::Sqlite`.
-        _ => AnyPoolOptions::new()
-            .max_connections(config.max_connections)
-            .min_connections(config.min_connections)
-            .acquire_timeout(config.acquire_timeout)
-            .idle_timeout(config.idle_timeout)
-            .max_lifetime(config.max_lifetime)
-            .test_before_acquire(config.test_before_acquire)
-            .connect(url)
-            .await
-            .map_err(crate::Error::Sqlx)?,
-    };
-    Ok(Pool::Any(pool))
+        "sqlite" => {
+            let mut connect_opts = sqlx::sqlite::SqliteConnectOptions::from_str(url)
+                .map_err(crate::Error::Sqlx)?;
+            connect_opts = connect_opts.row_buffer_size(config.row_buffer_size as usize);
+            let pool = SqlitePoolOptions::new()
+                .max_connections(config.max_connections)
+                .min_connections(config.min_connections)
+                .acquire_timeout(config.acquire_timeout)
+                .idle_timeout(config.idle_timeout)
+                .max_lifetime(config.max_lifetime)
+                .test_before_acquire(config.test_before_acquire)
+                .connect_with(connect_opts)
+                .await
+                .map_err(crate::Error::Sqlx)?;
+            Ok(Pool::Sqlite(pool))
+        }
+        _ => {
+            let pool = AnyPoolOptions::new()
+                .max_connections(config.max_connections)
+                .min_connections(config.min_connections)
+                .acquire_timeout(config.acquire_timeout)
+                .idle_timeout(config.idle_timeout)
+                .max_lifetime(config.max_lifetime)
+                .test_before_acquire(config.test_before_acquire)
+                .connect(url)
+                .await
+                .map_err(crate::Error::Sqlx)?;
+            Ok(Pool::Any(pool))
+        }
+    }
 }
 
 /// Point-in-time pool saturation data for metrics endpoints.

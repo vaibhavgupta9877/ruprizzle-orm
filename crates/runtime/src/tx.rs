@@ -4,9 +4,12 @@ use tokio::sync::Mutex;
 
 use ruprizzle_core::ir::Provider;
 use ruprizzle_dialect::{DbDialect, dialect_for};
-use sqlx::Any;
+use sqlx::{Any, Postgres, Sqlite};
 
+use crate::BoxFuture;
 use crate::Error;
+use crate::executor::RowBatch;
+use crate::model::RowDecode;
 use crate::pool::Pool;
 use crate::value::Value;
 
@@ -37,10 +40,17 @@ impl IsolationLevel {
     }
 }
 
+#[derive(Debug)]
+enum TxInner {
+    Any(sqlx::Transaction<'static, Any>),
+    Postgres(sqlx::Transaction<'static, Postgres>),
+    Sqlite(sqlx::Transaction<'static, Sqlite>),
+}
+
 /// A transaction in progress.
 #[derive(Debug)]
 pub struct Tx {
-    inner: Mutex<Option<sqlx::Transaction<'static, Any>>>,
+    inner: Mutex<Option<TxInner>>,
     provider: Provider,
 }
 
@@ -52,8 +62,9 @@ impl Tx {
     /// Returns [`Error::Sqlx`] if the database cannot begin a transaction.
     pub async fn begin(pool: &Pool) -> Result<Self, Error> {
         let tx = match pool {
-            Pool::Any(any) => any.begin().await.map_err(Error::Sqlx)?,
-            _ => unimplemented!("native backend transactions need per-backend dispatch (P2-2)"),
+            Pool::Any(p) => TxInner::Any(p.begin().await.map_err(Error::Sqlx)?),
+            Pool::Postgres(p) => TxInner::Postgres(p.begin().await.map_err(Error::Sqlx)?),
+            Pool::Sqlite(p) => TxInner::Sqlite(p.begin().await.map_err(Error::Sqlx)?),
         };
         Ok(Self {
             inner: Mutex::new(Some(tx)),
@@ -93,7 +104,11 @@ impl Tx {
     pub async fn commit(self) -> Result<(), Error> {
         let tx = self.inner.lock().await.take();
         if let Some(tx) = tx {
-            tx.commit().await.map_err(Error::Sqlx)?;
+            match tx {
+                TxInner::Any(tx) => tx.commit().await.map_err(Error::Sqlx)?,
+                TxInner::Postgres(tx) => tx.commit().await.map_err(Error::Sqlx)?,
+                TxInner::Sqlite(tx) => tx.commit().await.map_err(Error::Sqlx)?,
+            };
             tracing::debug!(target: "ruprizzle::query", "transaction committed");
         }
         Ok(())
@@ -107,7 +122,11 @@ impl Tx {
     pub async fn rollback(self) -> Result<(), Error> {
         let tx = self.inner.lock().await.take();
         if let Some(tx) = tx {
-            tx.rollback().await.map_err(Error::Sqlx)?;
+            match tx {
+                TxInner::Any(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
+                TxInner::Postgres(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
+                TxInner::Sqlite(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
+            };
             tracing::debug!(target: "ruprizzle::query", "transaction rolled back");
         }
         Ok(())
@@ -125,14 +144,38 @@ impl Tx {
             .as_mut()
             .ok_or_else(|| Error::Message("transaction already finished".into()))?;
 
-        let mut q = sqlx::query::<Any>(sql);
-        for b in binds {
-            q = q.bind(b);
+        match tx {
+            TxInner::Any(tx) => {
+                let mut q = sqlx::query::<Any>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.execute(&mut **tx)
+                    .await
+                    .map(|r| r.rows_affected())
+                    .map_err(Error::Sqlx)
+            }
+            TxInner::Postgres(tx) => {
+                let mut q = sqlx::query::<Postgres>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.execute(&mut **tx)
+                    .await
+                    .map(|r| r.rows_affected())
+                    .map_err(Error::Sqlx)
+            }
+            TxInner::Sqlite(tx) => {
+                let mut q = sqlx::query::<Sqlite>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.execute(&mut **tx)
+                    .await
+                    .map(|r| r.rows_affected())
+                    .map_err(Error::Sqlx)
+            }
         }
-        q.execute(&mut **tx)
-            .await
-            .map(|r| r.rows_affected())
-            .map_err(Error::Sqlx)
     }
 
     /// Fetches all rows from a raw statement inside the transaction.
@@ -143,18 +186,36 @@ impl Tx {
     /// transaction has already been finished.
     pub async fn fetch_all<T>(&self, sql: &str, binds: Vec<Value>) -> Result<Vec<T>, Error>
     where
-        T: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+        T: Send + Unpin + RowDecode,
     {
         let mut guard = self.inner.lock().await;
         let tx = guard
             .as_mut()
             .ok_or_else(|| Error::Message("transaction already finished".into()))?;
 
-        let mut q = sqlx::query_as::<Any, T>(sql);
-        for b in binds {
-            q = q.bind(b);
+        match tx {
+            TxInner::Any(tx) => {
+                let mut q = sqlx::query_as::<Any, T>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
+            }
+            TxInner::Postgres(tx) => {
+                let mut q = sqlx::query_as::<Postgres, T>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
+            }
+            TxInner::Sqlite(tx) => {
+                let mut q = sqlx::query_as::<Sqlite, T>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
+            }
         }
-        q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
     }
 
     /// Fetches one row from a raw statement inside the transaction.
@@ -165,18 +226,36 @@ impl Tx {
     /// transaction has already been finished.
     pub async fn fetch_one<T>(&self, sql: &str, binds: Vec<Value>) -> Result<T, Error>
     where
-        T: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+        T: Send + Unpin + RowDecode,
     {
         let mut guard = self.inner.lock().await;
         let tx = guard
             .as_mut()
             .ok_or_else(|| Error::Message("transaction already finished".into()))?;
 
-        let mut q = sqlx::query_as::<Any, T>(sql);
-        for b in binds {
-            q = q.bind(b);
+        match tx {
+            TxInner::Any(tx) => {
+                let mut q = sqlx::query_as::<Any, T>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_one(&mut **tx).await.map_err(Error::Sqlx)
+            }
+            TxInner::Postgres(tx) => {
+                let mut q = sqlx::query_as::<Postgres, T>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_one(&mut **tx).await.map_err(Error::Sqlx)
+            }
+            TxInner::Sqlite(tx) => {
+                let mut q = sqlx::query_as::<Sqlite, T>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_one(&mut **tx).await.map_err(Error::Sqlx)
+            }
         }
-        q.fetch_one(&mut **tx).await.map_err(Error::Sqlx)
     }
 
     /// Fetches one row from a raw statement inside the transaction.
@@ -187,18 +266,36 @@ impl Tx {
     /// transaction has already been finished.
     pub async fn fetch_optional<T>(&self, sql: &str, binds: Vec<Value>) -> Result<Option<T>, Error>
     where
-        T: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+        T: Send + Unpin + RowDecode,
     {
         let mut guard = self.inner.lock().await;
         let tx = guard
             .as_mut()
             .ok_or_else(|| Error::Message("transaction already finished".into()))?;
 
-        let mut q = sqlx::query_as::<Any, T>(sql);
-        for b in binds {
-            q = q.bind(b);
+        match tx {
+            TxInner::Any(tx) => {
+                let mut q = sqlx::query_as::<Any, T>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_optional(&mut **tx).await.map_err(Error::Sqlx)
+            }
+            TxInner::Postgres(tx) => {
+                let mut q = sqlx::query_as::<Postgres, T>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_optional(&mut **tx).await.map_err(Error::Sqlx)
+            }
+            TxInner::Sqlite(tx) => {
+                let mut q = sqlx::query_as::<Sqlite, T>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_optional(&mut **tx).await.map_err(Error::Sqlx)
+            }
         }
-        q.fetch_optional(&mut **tx).await.map_err(Error::Sqlx)
     }
 
     /// Fetches raw rows inside the transaction.
@@ -207,21 +304,45 @@ impl Tx {
     ///
     /// Returns [`Error::Sqlx`] for database errors or [`Error::Message`] if the
     /// transaction has already been finished.
-    pub async fn fetch_all_rows(
+    pub(crate) async fn fetch_all_rows(
         &self,
         sql: &str,
         binds: Vec<Value>,
-    ) -> Result<Vec<sqlx::any::AnyRow>, Error> {
+    ) -> Result<RowBatch, Error> {
         let mut guard = self.inner.lock().await;
         let tx = guard
             .as_mut()
             .ok_or_else(|| Error::Message("transaction already finished".into()))?;
 
-        let mut q = sqlx::query::<Any>(sql);
-        for b in binds {
-            q = q.bind(b);
+        match tx {
+            TxInner::Any(tx) => {
+                let mut q = sqlx::query::<Any>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_all(&mut **tx).await.map(RowBatch::Any).map_err(Error::Sqlx)
+            }
+            TxInner::Postgres(tx) => {
+                let mut q = sqlx::query::<Postgres>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_all(&mut **tx)
+                    .await
+                    .map(RowBatch::Postgres)
+                    .map_err(Error::Sqlx)
+            }
+            TxInner::Sqlite(tx) => {
+                let mut q = sqlx::query::<Sqlite>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_all(&mut **tx)
+                    .await
+                    .map(RowBatch::Sqlite)
+                    .map_err(Error::Sqlx)
+            }
         }
-        q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
     }
 }
 
@@ -234,14 +355,11 @@ impl crate::executor::Executor for Tx {
         &self,
         sql: String,
         binds: Vec<Value>,
-    ) -> crate::BoxFuture<'_, Result<crate::executor::RowBatch, Error>> {
+    ) -> BoxFuture<'_, Result<RowBatch, Error>> {
         Box::pin(async move {
             let bind_count = binds.len();
             let started = std::time::Instant::now();
-            let result = self
-                .fetch_all_rows(&sql, binds)
-                .await
-                .map(crate::executor::RowBatch::Any);
+            let result = self.fetch_all_rows(&sql, binds).await;
             let elapsed_ms = started.elapsed().as_millis() as u64;
             match &result {
                 Ok(batch) => tracing::debug!(
@@ -269,7 +387,7 @@ impl crate::executor::Executor for Tx {
         &self,
         sql: String,
         binds: Vec<Value>,
-    ) -> crate::BoxFuture<'_, Result<u64, Error>> {
+    ) -> BoxFuture<'_, Result<u64, Error>> {
         Box::pin(async move {
             let bind_count = binds.len();
             let started = std::time::Instant::now();
@@ -305,67 +423,9 @@ impl crate::executor::Executor for Tx {
     /// front. Streaming a very large result set is therefore something to do on
     /// the pool, not inside a transaction.
     fn stream_raw(&self, sql: String, binds: Vec<Value>) -> crate::executor::BoxRowStream<'_> {
-        Box::pin(DeferredRowStream::new(Box::pin(async move {
+        Box::pin(crate::executor::DeferredRowStream::new(Box::pin(async move {
             crate::executor::Executor::fetch_all_raw(self, sql, binds).await
         })))
-    }
-}
-
-/// Resolves a pending fetch, then yields its rows one at a time.
-///
-/// Both executors currently buffer: a `Tx` must, because it owns one connection
-/// behind a mutex and an open cursor would block every other statement on the
-/// transaction. The `Pool` shares this path so the two cannot drift; swapping
-/// it for a true incremental cursor is a `Pool`-only change behind this type.
-pub(crate) struct DeferredRowStream<'a> {
-    fut: crate::BoxFuture<'a, Result<crate::executor::RowBatch, Error>>,
-    done: bool,
-    buffered: std::vec::IntoIter<sqlx::any::AnyRow>,
-}
-
-impl<'a> DeferredRowStream<'a> {
-    pub(crate) fn new(fut: crate::BoxFuture<'a, Result<crate::executor::RowBatch, Error>>) -> Self {
-        Self {
-            fut,
-            done: false,
-            buffered: Vec::new().into_iter(),
-        }
-    }
-}
-
-impl futures_core::Stream for DeferredRowStream<'_> {
-    type Item = Result<sqlx::any::AnyRow, Error>;
-
-    fn poll_next(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        use std::task::Poll;
-        // Every field is `Unpin` (a boxed future and a vec iterator), so the
-        // struct is `Unpin` and this projection needs no `unsafe`.
-        let this = self.get_mut();
-
-        if !this.done {
-            match this.fut.as_mut().poll(cx) {
-                Poll::Pending => return Poll::Pending,
-                Poll::Ready(Err(e)) => {
-                    this.done = true;
-                    return Poll::Ready(Some(Err(e)));
-                }
-                Poll::Ready(Ok(batch)) => {
-                    this.done = true;
-                    match batch {
-                        crate::executor::RowBatch::Any(rows) => this.buffered = rows.into_iter(),
-                        _ => {
-                            return Poll::Ready(Some(Err(Error::Message(
-                                "native backend streaming is not yet implemented".into(),
-                            ))));
-                        }
-                    }
-                }
-            }
-        }
-        Poll::Ready(this.buffered.next().map(Ok))
     }
 }
 

@@ -13,6 +13,7 @@ fn defaults_match_sqlx() {
     assert_eq!(config.idle_timeout, Some(Duration::from_secs(600)));
     assert_eq!(config.max_lifetime, Some(Duration::from_secs(1800)));
     assert!(config.test_before_acquire);
+    assert_eq!(config.row_buffer_size, 1024);
 }
 
 #[tokio::test]
@@ -28,7 +29,7 @@ async fn configured_pool_connects() {
     let pool = connect_with("sqlite::memory:", &config)
         .await
         .expect("connect");
-    let options = pool.options();
+    let options = pool.sqlite_options();
     assert_eq!(options.get_max_connections(), 3);
     assert_eq!(options.get_min_connections(), 1);
     assert_eq!(options.get_acquire_timeout(), Duration::from_secs(1));
@@ -44,10 +45,10 @@ async fn stats_and_ping_report_a_live_pool() {
         .expect("connect");
     ruprizzle::ping(&pool).await.expect("ping");
 
-    let connection = pool.acquire().await.expect("acquire");
+    let tx = pool.begin().await.expect("begin");
     let busy = ruprizzle::stats(&pool);
     assert!(busy.in_use >= 1);
-    drop(connection);
+    tx.rollback().await.expect("rollback");
 
     let idle = ruprizzle::stats(&pool);
     assert!(idle.idle >= 1);
