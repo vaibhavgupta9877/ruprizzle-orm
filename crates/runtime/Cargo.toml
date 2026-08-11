@@ -38,6 +38,7 @@ trybuild          = "1"
 futures-util      = "0.3"
 criterion         = { workspace = true }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [[bench]]
 name    = "query_construction"
