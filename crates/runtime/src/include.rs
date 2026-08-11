@@ -66,8 +66,8 @@ where
                 order,
                 n,
             );
-            let rows = exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
-            all.extend(crate::executor::decode_rows::<C>(rows)?);
+            let batch = exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            all.extend(crate::executor::decode_rows::<C>(batch)?);
         }
         return Ok(all);
     }

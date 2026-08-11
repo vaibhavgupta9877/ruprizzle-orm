@@ -329,6 +329,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .fetch_all_raw(sql.to_owned(), Vec::new())
             .await
             .unwrap();
+        let ruprizzle::executor::RowBatch::Any(rows) = rows else {
+            panic!("expected AnyRow batch")
+        };
         rows.iter()
             .map(|r| User {
                 id: r.get::<i64, _>(0),

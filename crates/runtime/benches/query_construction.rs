@@ -40,8 +40,8 @@ impl Executor for NoopExecutor {
         &self,
         _sql: String,
         _binds: Vec<Value>,
-    ) -> ruprizzle::BoxFuture<'_, Result<Vec<AnyRow>, ruprizzle::Error>> {
-        Box::pin(async { Ok(Vec::new()) })
+    ) -> ruprizzle::BoxFuture<'_, Result<ruprizzle::executor::RowBatch, ruprizzle::Error>> {
+        Box::pin(async { Ok(ruprizzle::executor::RowBatch::Any(Vec::new())) })
     }
 
     fn execute_raw(

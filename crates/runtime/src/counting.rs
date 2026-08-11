@@ -20,7 +20,6 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use ruprizzle_dialect::DbDialect;
-use sqlx::any::AnyRow;
 
 use crate::BoxFuture;
 use crate::error::Error;
@@ -77,7 +76,7 @@ impl Executor for CountingExecutor<'_> {
         &self,
         sql: String,
         binds: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<AnyRow>, Error>> {
+    ) -> BoxFuture<'_, Result<crate::executor::RowBatch, Error>> {
         self.tick();
         self.inner.fetch_all_raw(sql, binds)
     }

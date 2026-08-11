@@ -234,18 +234,21 @@ impl crate::executor::Executor for Tx {
         &self,
         sql: String,
         binds: Vec<Value>,
-    ) -> crate::BoxFuture<'_, Result<Vec<sqlx::any::AnyRow>, Error>> {
+    ) -> crate::BoxFuture<'_, Result<crate::executor::RowBatch, Error>> {
         Box::pin(async move {
             let bind_count = binds.len();
             let started = std::time::Instant::now();
-            let result = self.fetch_all_rows(&sql, binds).await;
+            let result = self
+                .fetch_all_rows(&sql, binds)
+                .await
+                .map(crate::executor::RowBatch::Any);
             let elapsed_ms = started.elapsed().as_millis() as u64;
             match &result {
-                Ok(rows) => tracing::debug!(
+                Ok(batch) => tracing::debug!(
                     target: "ruprizzle::query",
                     sql = %sql,
                     binds = bind_count,
-                    rows = rows.len(),
+                    rows = batch.len(),
                     elapsed_ms,
                     "query"
                 ),
@@ -315,13 +318,13 @@ impl crate::executor::Executor for Tx {
 /// transaction. The `Pool` shares this path so the two cannot drift; swapping
 /// it for a true incremental cursor is a `Pool`-only change behind this type.
 pub(crate) struct DeferredRowStream<'a> {
-    fut: crate::BoxFuture<'a, Result<Vec<sqlx::any::AnyRow>, Error>>,
+    fut: crate::BoxFuture<'a, Result<crate::executor::RowBatch, Error>>,
     done: bool,
     buffered: std::vec::IntoIter<sqlx::any::AnyRow>,
 }
 
 impl<'a> DeferredRowStream<'a> {
-    pub(crate) fn new(fut: crate::BoxFuture<'a, Result<Vec<sqlx::any::AnyRow>, Error>>) -> Self {
+    pub(crate) fn new(fut: crate::BoxFuture<'a, Result<crate::executor::RowBatch, Error>>) -> Self {
         Self {
             fut,
             done: false,
@@ -349,9 +352,16 @@ impl futures_core::Stream for DeferredRowStream<'_> {
                     this.done = true;
                     return Poll::Ready(Some(Err(e)));
                 }
-                Poll::Ready(Ok(rows)) => {
+                Poll::Ready(Ok(batch)) => {
                     this.done = true;
-                    this.buffered = rows.into_iter();
+                    match batch {
+                        crate::executor::RowBatch::Any(rows) => this.buffered = rows.into_iter(),
+                        _ => {
+                            return Poll::Ready(Some(Err(Error::Message(
+                                "native backend streaming is not yet implemented".into(),
+                            ))));
+                        }
+                    }
                 }
             }
         }

@@ -180,8 +180,8 @@ where
             q.limit = Some(1);
         }
         let compiled = q.to_sql();
-        let rows = q.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
-        crate::executor::decode_rows(rows).map(|mut v: Vec<Out>| {
+        let batch = q.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+        crate::executor::decode_rows(batch).map(|mut v: Vec<Out>| {
             if v.is_empty() {
                 None
             } else {
@@ -218,14 +218,15 @@ where
         let compiled =
             crate::compile::count::<M>(dialect.as_ref(), M::TABLE, &self.filter.node);
 
-        let rows = self
+        let batch = self
             .exec
             .fetch_all_raw(compiled.sql, compiled.binds)
             .await?;
-        let row = rows
-            .first()
+        let mut counts = crate::executor::decode_rows::<(i64,)>(batch)?;
+        let (count,) = counts
+            .pop()
             .ok_or_else(|| Error::Message("COUNT(*) returned no row".into()))?;
-        sqlx::Row::try_get::<i64, _>(row, 0).map_err(Error::Sqlx)
+        Ok(count)
     }
 
     /// Whether any row matches.
@@ -242,11 +243,11 @@ where
         let compiled =
             crate::compile::exists::<M>(dialect.as_ref(), M::TABLE, &self.filter.node);
 
-        let rows = self
+        let batch = self
             .exec
             .fetch_all_raw(compiled.sql, compiled.binds)
             .await?;
-        Ok(!rows.is_empty())
+        Ok(!batch.is_empty())
     }
 }
 
@@ -292,11 +293,11 @@ where
         Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
     {
         let compiled = self.to_sql();
-        let rows = self
+        let batch = self
             .exec
             .fetch_all_raw(compiled.sql, compiled.binds)
             .await?;
-        crate::executor::decode_rows(rows)
+        crate::executor::decode_rows(batch)
     }
 
     /// Streams matching rows instead of collecting them.
@@ -361,11 +362,11 @@ where
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exec(self) -> Result<Vec<M>, Error> {
         let compiled = self.to_sql();
-        let raw = self
+        let batch = self
             .exec
             .fetch_all_raw(compiled.sql, compiled.binds)
             .await?;
-        let mut rows: Vec<M> = crate::executor::decode_rows(raw)?;
+        let mut rows: Vec<M> = crate::executor::decode_rows(batch)?;
         self.includes.load(self.exec, &mut rows).await?;
         Ok(rows)
     }
@@ -523,15 +524,15 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         } else {
             insert::<M>(dialect.as_ref(), M::TABLE, &self.values, returning)
         };
-        let rows = self
+        let batch = self
             .pool
             .fetch_all_raw(compiled.sql, compiled.binds)
             .await?;
+        let mut rows = crate::executor::decode_rows::<M>(batch)?;
         let row = rows
-            .into_iter()
-            .next()
+            .pop()
             .ok_or_else(|| Error::Message("INSERT RETURNING returned no row".into()))?;
-        M::from_row(&row).map_err(Error::Sqlx)
+        Ok(row)
     }
 
     async fn exec_nested(self, nested: NestedInsert<'db, M>) -> Result<M, Error>
@@ -547,12 +548,11 @@ impl<'db, M: Model> InsertQuery<'db, M> {
             M::COLUMNS
         };
         let compiled = insert::<M>(dialect.as_ref(), M::TABLE, &self.values, returning);
-        let parent_rows = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
-        let parent_row = parent_rows
-            .into_iter()
-            .next()
+        let batch = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
+        let mut parent_rows = crate::executor::decode_rows::<M>(batch)?;
+        let mut parent = parent_rows
+            .pop()
             .ok_or_else(|| Error::Message("INSERT RETURNING returned no row".into()))?;
-        let mut parent = M::from_row(&parent_row).map_err(Error::Sqlx)?;
 
         let pk_value = (nested.get_parent_pk)(&parent);
 
@@ -575,7 +575,8 @@ impl<'db, M: Model> InsertQuery<'db, M> {
                 };
                 let compiled =
                     insert_many::<M>(dialect.as_ref(), nested.child_table, chunk, returning);
-                let mut chunk_rows = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
+                let chunk = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
+                let mut chunk_rows = crate::executor::RowBatch::into_any_rows(chunk)?;
                 child_rows.append(&mut chunk_rows);
             }
 
@@ -682,8 +683,8 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
                 M::COLUMNS
             };
             let compiled = insert_many::<M>(dialect.as_ref(), M::TABLE, chunk, returning);
-            let rows = self.pool.fetch_all_raw(compiled.sql, compiled.binds).await?;
-            let mut rows = crate::executor::decode_rows::<M>(rows)?;
+            let batch = self.pool.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            let mut rows = crate::executor::decode_rows::<M>(batch)?;
             out.append(&mut rows);
         }
         Ok(out)
