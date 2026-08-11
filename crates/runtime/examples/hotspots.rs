@@ -129,9 +129,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for _ in 0..iters {
         for r in &rows {
             std::hint::black_box(User {
-                id: ruprizzle::decode::direct::<i64>(r, "id").unwrap(),
-                email: ruprizzle::decode::direct::<String>(r, "email").unwrap(),
-                age: ruprizzle::decode::direct::<i64>(r, "age").unwrap(),
+                id: ruprizzle::decode::direct(r, "id").unwrap(),
+                email: ruprizzle::decode::direct(r, "email").unwrap(),
+                age: ruprizzle::decode::direct(r, "age").unwrap(),
             });
         }
     }

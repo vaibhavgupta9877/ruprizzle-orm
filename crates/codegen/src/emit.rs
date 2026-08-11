@@ -644,7 +644,7 @@ fn emit_from_row_field(
             | ruprizzle_core::ir::ScalarType::BigInt
             | ruprizzle_core::ir::ScalarType::Float => {
                 let helper = format_ident!("{}", if optional { "direct_opt_idx" } else { "direct_idx" });
-                quote! { ::ruprizzle::decode::#helper::<#inner>(row, #idx)? }
+                quote! { ::ruprizzle::decode::#helper(row, #idx)? }
             }
             ruprizzle_core::ir::ScalarType::Boolean => {
                 let helper = format_ident!("{}", if optional { "boolean_opt_idx" } else { "boolean_idx" });
@@ -656,7 +656,7 @@ fn emit_from_row_field(
             | ruprizzle_core::ir::ScalarType::Time
             | ruprizzle_core::ir::ScalarType::Uuid => {
                 let helper = format_ident!("{}", if optional { "text_opt_idx" } else { "text_idx" });
-                quote! { ::ruprizzle::decode::#helper::<#inner>(row, #idx)? }
+                quote! { ::ruprizzle::decode::#helper(row, #idx)? }
             }
             ruprizzle_core::ir::ScalarType::Json => {
                 let helper = format_ident!("{}", if optional { "json_opt_idx" } else { "json_idx" });
@@ -669,11 +669,11 @@ fn emit_from_row_field(
         },
         ruprizzle_core::ir::FieldKind::Enum(_) => {
             let helper = format_ident!("{}", if optional { "text_opt_idx" } else { "text_idx" });
-            quote! { ::ruprizzle::decode::#helper::<#inner>(row, #idx)? }
+            quote! { ::ruprizzle::decode::#helper(row, #idx)? }
         }
         _ => {
             let helper = format_ident!("{}", if optional { "direct_opt_idx" } else { "direct_idx" });
-            quote! { ::ruprizzle::decode::#helper::<#inner>(row, #idx)? }
+            quote! { ::ruprizzle::decode::#helper(row, #idx)? }
         }
     };
 

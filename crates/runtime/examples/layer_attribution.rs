@@ -51,9 +51,9 @@ const USER_AGE: Column<User, i64> = Column::new("users", "age");
 /// The manual-decode shape, mirroring what codegen emits for `User`.
 fn decode_user(row: &sqlx::any::AnyRow) -> Result<User, sqlx::Error> {
     Ok(User {
-        id: ruprizzle::decode::direct::<i64>(row, "id")?,
-        email: ruprizzle::decode::direct::<String>(row, "email")?,
-        age: ruprizzle::decode::direct::<i64>(row, "age")?,
+        id: ruprizzle::decode::direct(row, "id")?,
+        email: ruprizzle::decode::direct(row, "email")?,
+        age: ruprizzle::decode::direct(row, "age")?,
     })
 }
 
