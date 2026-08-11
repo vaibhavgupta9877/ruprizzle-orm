@@ -85,12 +85,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max_connections(10)
         .test_before_acquire(true)
         .connect(&url)
-        .await?;
+        .await
+        .map(ruprizzle::Pool::Any)?;
     let untested = AnyPoolOptions::new()
         .max_connections(10)
         .test_before_acquire(false)
         .connect(&url)
-        .await?;
+        .await
+        .map(ruprizzle::Pool::Any)?;
 
     let with_ping = bench("select_by_pk  test_before_acquire=true", 3000, || async {
         let u: User = sqlx::query_as::<sqlx::Any, User>("SELECT id, email, age FROM users WHERE id = ?")
