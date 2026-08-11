@@ -15,7 +15,7 @@ This document records an apples-to-apples benchmark of **ruprizzle**, **Prisma**
   - Drizzle ORM `0.43.0`
   - better-sqlite3 `13.0.3`
 
-> Important: this run used SQLite because no Postgres / Docker was available. The numbers are therefore dominated as much by driver choice as by the ORM layer. ruprizzle uses `sqlx::Any` (async, text-encodes every bind/row), Drizzle uses the synchronous `better-sqlite3` binding, and Prisma uses its in-process Rust query engine.
+> Important: this run used SQLite because no Postgres / Docker was available. The numbers are therefore dominated as much by driver choice as by the ORM layer. ruprizzle uses `sqlx::Any`, Drizzle uses the synchronous `better-sqlite3` binding, and Prisma uses its in-process Rust query engine.
 
 ## Harness and raw data
 
@@ -36,6 +36,36 @@ All times are microseconds per operation (lower is better).
 | `include_posts` (1,000 users + 10,000 posts) | **16,174.7** | 32,586.3 | 181,496.5 |
 | `bulk_insert_1000` | 9,964.3 | 15,003.4 | **8,379.3** |
 
+## Attribution against hand-written `sqlx`
+
+Cross-ORM numbers compare different languages and runtimes; they do not show
+where ruprizzle itself spends time. Layered controls on the same SQLite file
+show a different picture:
+
+| Layer | `find_many_1000` (µs) | `include_posts` (ms) |
+|---|---:|---:|
+| hand-written `sqlx`, native `SqlitePool`, `query_as` | 1,628.3 | 13.8–14.9 |
+| hand-written `sqlx`, `AnyPool`, `query_as` | 1,630.7 | — |
+| `AnyPool` + ruprizzle's `decode::*` helpers | 1,561.1 | — |
+| **ruprizzle `SelectQuery`** | **1,679.4** | **15.2–17.5** |
+| Drizzle + better-sqlite3 (recorded above) | 289.7 | 181.5 |
+
+- **ruprizzle is ~3% slower than hand-written `sqlx` doing the identical work**
+  on `find_many_1000` (1,679 µs vs 1,628 µs). The `sqlx::Any` wrapper accounts
+  for only ~0.1% of the gap.
+- **The remaining ~1,340 µs of the gap to Drizzle is `sqlx` itself**, not the
+  ORM layer. better-sqlite3 is a synchronous, in-process binding with no
+  per-row thread hop; `sqlx-sqlite` is async over a dedicated worker thread and
+  a row channel, costing roughly 0.9 µs/row versus better-sqlite3's 0.29 µs/row.
+- On `include_posts`, ruprizzle's full include path is sometimes faster and
+  sometimes slower than a hand-rolled, two-query, hash-map-grouping equivalent.
+  The ORM's own overhead on this path is inside run-to-run noise.
+
+This means the reflexive targets — query builder, SQL string building, relation
+loader grouping — are not where the time goes. The real opportunities are
+elsewhere (see [`KnownLimitations`](KnownLimitations.md) and the implementation
+plan for the proposed work).
+
 ## Query construction (no I/O)
 
 Drizzle exposes `.toSQL()`; ruprizzle exposes `.to_sql()`; Prisma does not expose an equivalent API.
@@ -54,7 +84,7 @@ Drizzle exposes `.toSQL()`; ruprizzle exposes `.to_sql()`; Prisma does not expos
 ## Analysis
 
 ### Simple reads
-Drizzle is fastest on plain SQLite reads because `better-sqlite3` is synchronous and the Drizzle runtime is very thin. ruprizzle is 1.6–5.8× slower on these micro-benchmarks, mostly because `sqlx::Any` is async and text-encodes/decodes every bind and row. Prisma is consistently the slowest here — its query-engine serialization adds measurable per-call overhead.
+Drizzle is fastest on plain SQLite reads because `better-sqlite3` is synchronous and in-process, with no per-row thread hop. The measured gap is **not** ORM overhead: ruprizzle is only ~3% slower than hand-written `sqlx` doing the identical work. The remaining ~1,340 µs of the gap to Drizzle is `sqlx-sqlite`'s per-row cost — roughly 0.9 µs/row versus better-sqlite3's 0.29 µs/row. `sqlx::Any` itself accounts for only ~0.1% of the end-to-end time. Prisma is consistently the slowest here — its query-engine serialization adds measurable per-call overhead.
 
 ### Relation includes
 This is where ruprizzle’s batched loader shows its biggest advantage:
@@ -63,13 +93,13 @@ This is where ruprizzle’s batched loader shows its biggest advantage:
 - **Prisma: 32.6 ms**
 - **Drizzle: 181.5 ms**
 
-Drizzle’s SQLite relational query (`db.query.users.findMany({ with: { posts: true } })`) emits a correlated subquery with `json_group_array` per parent row — effectively an N+1 shape in SQL. Prisma and ruprizzle both issue a bounded number of batched queries. On Postgres, Drizzle can use joins/CTEs and would likely be much faster.
+Drizzle’s SQLite relational query (`db.query.users.findMany({ with: { posts: true } })`) emits a correlated subquery with `json_group_array` per parent row — effectively an N+1 shape in SQL. Prisma and ruprizzle both issue a bounded number of batched queries, so this comparison is partly **query-strategy**, not purely ORM efficiency. Measured against a hand-rolled two-query, hash-map-grouping equivalent, ruprizzle's full include path is inside run-to-run noise. On Postgres, Drizzle can use joins/CTEs and would likely be much faster.
 
 ### Bulk insert
 Drizzle and ruprizzle are close; Prisma is ~1.8× slower. Note that ruprizzle’s `InsertManyQuery` also decodes the 1,000 returned rows via `RETURNING *`, while Drizzle and Prisma only return count/change metadata, so the real gap is smaller than it looks.
 
 ### Query construction
-ruprizzle is roughly an order of magnitude faster at turning a builder into SQL+binds than Drizzle. This matters most for high-throughput request paths where the same builder patterns are repeated many times.
+ruprizzle is roughly an order of magnitude faster at turning a builder into SQL+binds than Drizzle (`0.57` µs vs `8.41` µs for select-by-PK). That is real, but it is not a throughput advantage in the recorded end-to-end numbers: the full `to_sql()` path is ~0.42 µs against a ~22 µs round-trip floor. It is best read as evidence that the builder layer is not where end-to-end time goes, not as a reason to choose ruprizzle for raw speed.
 
 ## Usage criteria
 
@@ -85,8 +115,8 @@ ruprizzle is roughly an order of magnitude faster at turning a builder into SQL+
 
 ## Caveats
 
-1. **SQLite is not Postgres.** These numbers are from a single SQLite file. The relative ordering can change with network latency, a different driver, or a different database. ruprizzle’s existing Postgres report shows much closer parity with hand-written `sqlx` for 1,000-row selects.
-2. **Driver differences dominate simple reads.** Drizzle’s `better-sqlite3` sync path is inherently faster than ruprizzle’s `sqlx::Any` async path on this workload.
+1. **SQLite is not Postgres.** These numbers are from a single SQLite file. The relative ordering can change with network latency, a different driver, or a different database. **Do not cite these numbers for a Postgres comparison until they are re-run on Postgres.**
+2. **Driver differences dominate simple reads.** Drizzle’s `better-sqlite3` is a synchronous, in-process binding with no per-row thread hop. `sqlx-sqlite` is async over a dedicated worker thread and a bounded row channel, costing roughly 0.9 µs/row versus better-sqlite3's 0.29 µs/row. The ruprizzle ORM layer itself is ~3% slower than hand-written `sqlx` doing the identical work.
 3. **Drizzle relational query is SQLite/driver-specific.** On Postgres Drizzle can use joins/CTEs and would likely be far faster for `include_posts`; do not take the 181 ms as a universal Drizzle number.
 4. **No network.** All ORMs talked to a local file, so result-set decoding and ORM overhead are the main differentiators.
 

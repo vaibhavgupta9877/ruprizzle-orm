@@ -21,9 +21,15 @@ whether the tool is right for your project.
   operators.
 - **Postgres arrays** cannot be used as bind values. `Value::Array` is rejected
   at runtime.
-- **Rich types round-trip as text.** `Uuid`, `Decimal`, `DateTime`, `Date`,
-  `Time`, and `Json` are sent and received as text because the underlying
-  `sqlx::Any` driver does not encode them natively. See [ADR-009](../ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md).
+- **Rich types through `sqlx::Any` are limited.** On SQLite, `Uuid`,
+  `Decimal`, `DateTime`, `Date`, `Time`, and `Json` round-trip as text. On
+  Postgres, the `sqlx::Any` driver cannot decode several of these types
+  natively, so full rich-type support requires the planned native Postgres
+  backend. See [ADR-009](../ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md).
+- **`SelectQuery::stream` is buffered, not a true cursor.** The current
+  implementation buffers the full result set and yields decoded rows. Using
+  `sqlx`'s `.fetch()` stream is **~64% slower per row** on SQLite, so the
+  buffered design is deliberate. See [BenchmarkResults](BenchmarkResults.md).
 
 ## Deferrals to 0.2
 

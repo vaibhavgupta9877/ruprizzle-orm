@@ -79,6 +79,51 @@ pub fn select<M: Model>(
     c.finish()
 }
 
+/// Compile a `SELECT COUNT(*)` for `M`.
+///
+/// Skips `ORDER BY`, `LIMIT` and `OFFSET` because an aggregate count over an
+/// unordered, unlimited relation is what callers of `SelectQuery::count` want.
+#[must_use]
+pub fn count<M: Model>(
+    dialect: &dyn DbDialect,
+    table: &str,
+    filter: &FilterNode,
+) -> CompiledSql {
+    let mut c = Compiler::new(dialect);
+
+    c.push_str("SELECT COUNT(*) FROM ");
+    c.push_quoted(table);
+
+    if !matches!(filter, FilterNode::And(v) if v.is_empty()) {
+        c.push_str(" WHERE ");
+        c.push_filter(filter);
+    }
+
+    c.finish()
+}
+
+/// Compile an `EXISTS`-style `SELECT 1 ... LIMIT 1` for `M`.
+#[must_use]
+pub fn exists<M: Model>(
+    dialect: &dyn DbDialect,
+    table: &str,
+    filter: &FilterNode,
+) -> CompiledSql {
+    let mut c = Compiler::new(dialect);
+
+    c.push_str("SELECT 1 FROM ");
+    c.push_quoted(table);
+
+    if !matches!(filter, FilterNode::And(v) if v.is_empty()) {
+        c.push_str(" WHERE ");
+        c.push_filter(filter);
+    }
+
+    c.push_str(" LIMIT 1");
+
+    c.finish()
+}
+
 /// The alias the partitioned select gives its `ROW_NUMBER()` column.
 ///
 /// It is selected through to the outer query, so it appears in the result set.
@@ -895,5 +940,27 @@ mod tests {
         );
         assert_eq!(raw.sql(), "x = $1 AND y = $2");
         assert_eq!(raw.binds(), &[Value::I64(1), Value::I64(2)]);
+    }
+
+    #[test]
+    fn count_ignores_order_limit() {
+        let f = AGE.gt(0);
+        let c = count::<User>(pg().as_ref(), "users", &f.node);
+        assert_eq!(
+            c.sql,
+            r#"SELECT COUNT(*) FROM "users" WHERE "users"."age" > $1"#
+        );
+        assert_eq!(c.binds, vec![Value::I32(0)]);
+    }
+
+    #[test]
+    fn exists_adds_limit_1() {
+        let f = AGE.gt(0);
+        let c = exists::<User>(pg().as_ref(), "users", &f.node);
+        assert_eq!(
+            c.sql,
+            r#"SELECT 1 FROM "users" WHERE "users"."age" > $1 LIMIT 1"#
+        );
+        assert_eq!(c.binds, vec![Value::I32(0)]);
     }
 }

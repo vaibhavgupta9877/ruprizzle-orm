@@ -166,23 +166,6 @@ where
         )
     }
 
-    /// Executes the query and returns all matching rows.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::Sqlx`] for database errors.
-    pub async fn fetch_all(self) -> Result<Vec<Out>, Error>
-    where
-        Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
-    {
-        let compiled = self.to_sql();
-        let rows = self
-            .exec
-            .fetch_all_raw(compiled.sql, compiled.binds)
-            .await?;
-        crate::executor::decode_rows(rows)
-    }
-
     /// Executes the query and returns the first row, if any.
     ///
     /// # Errors
@@ -192,11 +175,12 @@ where
     where
         Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
     {
-        let compiled = self.to_sql();
-        let rows = self
-            .exec
-            .fetch_all_raw(compiled.sql, compiled.binds)
-            .await?;
+        let mut q = self;
+        if q.limit.is_none() {
+            q.limit = Some(1);
+        }
+        let compiled = q.to_sql();
+        let rows = q.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
         crate::executor::decode_rows(rows).map(|mut v: Vec<Out>| {
             if v.is_empty() {
                 None
@@ -223,16 +207,16 @@ where
 
     /// Returns the number of rows the query would return.
     ///
+    /// `ORDER BY`, `LIMIT` and `OFFSET` are ignored for the count: counting the
+    /// matching rows is independent of ordering or pagination.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn count(self) -> Result<i64, Error> {
-        let mut compiled = self.to_sql();
-        // Replace the leading `SELECT ... FROM` with `SELECT COUNT(*) FROM`.
-        if let Some(from_pos) = compiled.sql.find(" FROM ") {
-            let rest = compiled.sql.split_off(from_pos);
-            compiled.sql = format!("SELECT COUNT(*) {rest}");
-        }
+        let dialect = self.exec.dialect();
+        let compiled =
+            crate::compile::count::<M>(dialect.as_ref(), M::TABLE, &self.filter.node);
 
         let rows = self
             .exec
@@ -254,40 +238,15 @@ where
     ///
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exists(self) -> Result<bool, Error> {
-        let mut compiled = Self {
-            limit: Some(1),
-            ..self
-        }
-        .to_sql();
-        if let Some(from_pos) = compiled.sql.find(" FROM ") {
-            let rest = compiled.sql.split_off(from_pos);
-            compiled.sql = format!("SELECT 1 {rest}");
-        }
+        let dialect = self.exec.dialect();
+        let compiled =
+            crate::compile::exists::<M>(dialect.as_ref(), M::TABLE, &self.filter.node);
 
         let rows = self
             .exec
             .fetch_all_raw(compiled.sql, compiled.binds)
             .await?;
         Ok(!rows.is_empty())
-    }
-
-    /// Streams matching rows instead of collecting them.
-    ///
-    /// Rows are decoded one at a time as the stream is polled. The underlying
-    /// fetch is currently buffered by both executors (see
-    /// [`Executor::stream_raw`]), so this bounds decode cost rather than peak
-    /// memory; the buffering lives behind the executor so it can be replaced
-    /// with a true cursor without touching this API.
-    #[must_use]
-    pub fn stream(self) -> RowStream<'db, Out>
-    where
-        Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
-    {
-        let compiled = self.to_sql();
-        RowStream {
-            inner: self.exec.stream_raw(compiled.sql, compiled.binds),
-            _out: PhantomData,
-        }
     }
 }
 
@@ -319,6 +278,50 @@ impl<'db, M, Out> SelectQuery<'db, M, Out, ()>
 where
     M: Model,
 {
+    /// Executes the query and returns all matching rows.
+    ///
+    /// Only available when the query has no `.include(...)`: fetching all rows
+    /// without loading declared includes would silently return the wrong data.
+    /// Use [`exec`](SelectQuery::exec) for include-aware execution.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors.
+    pub async fn fetch_all(self) -> Result<Vec<Out>, Error>
+    where
+        Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    {
+        let compiled = self.to_sql();
+        let rows = self
+            .exec
+            .fetch_all_raw(compiled.sql, compiled.binds)
+            .await?;
+        crate::executor::decode_rows(rows)
+    }
+
+    /// Streams matching rows instead of collecting them.
+    ///
+    /// Only available when the query has no `.include(...)`: a stream without
+    /// loaded includes would silently return the wrong data. Use
+    /// [`exec`](SelectQuery::exec) for include-aware execution.
+    ///
+    /// Rows are decoded one at a time as the stream is polled. The underlying
+    /// fetch is currently buffered by both executors (see
+    /// [`Executor::stream_raw`]), so this bounds decode cost rather than peak
+    /// memory; the buffering lives behind the executor so it can be replaced
+    /// with a true cursor without touching this API.
+    #[must_use]
+    pub fn stream(self) -> RowStream<'db, Out>
+    where
+        Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    {
+        let compiled = self.to_sql();
+        RowStream {
+            inner: self.exec.stream_raw(compiled.sql, compiled.binds),
+            _out: PhantomData,
+        }
+    }
+
     /// Fetches one page, reporting whether another page follows.
     ///
     /// Fetches `size + 1` rows and discards the extra, so `has_next` is exact
