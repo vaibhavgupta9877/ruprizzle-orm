@@ -523,18 +523,22 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         } else {
             insert::<M>(dialect.as_ref(), M::TABLE, &self.values, returning)
         };
-        let mut q = sqlx::query_as::<sqlx::Any, M>(compiled.sql.as_str());
-        for v in compiled.binds {
-            q = q.bind(v);
-        }
-        q.fetch_one(self.pool).await.map_err(Error::Sqlx)
+        let rows = self
+            .pool
+            .fetch_all_raw(compiled.sql, compiled.binds)
+            .await?;
+        let row = rows
+            .into_iter()
+            .next()
+            .ok_or_else(|| Error::Message("INSERT RETURNING returned no row".into()))?;
+        M::from_row(&row).map_err(Error::Sqlx)
     }
 
     async fn exec_nested(self, nested: NestedInsert<'db, M>) -> Result<M, Error>
     where
         M: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
     {
-        let mut tx = self.pool.begin().await.map_err(Error::Sqlx)?;
+        let tx = crate::tx::Tx::begin(self.pool).await?;
 
         let dialect = dialect_for_pool(self.pool);
         let returning: &[&str] = if M::COLUMNS.is_empty() {
@@ -543,11 +547,12 @@ impl<'db, M: Model> InsertQuery<'db, M> {
             M::COLUMNS
         };
         let compiled = insert::<M>(dialect.as_ref(), M::TABLE, &self.values, returning);
-        let mut q = sqlx::query_as::<sqlx::Any, M>(compiled.sql.as_str());
-        for v in compiled.binds {
-            q = q.bind(v);
-        }
-        let mut parent = q.fetch_one(&mut *tx).await.map_err(Error::Sqlx)?;
+        let parent_rows = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
+        let parent_row = parent_rows
+            .into_iter()
+            .next()
+            .ok_or_else(|| Error::Message("INSERT RETURNING returned no row".into()))?;
+        let mut parent = M::from_row(&parent_row).map_err(Error::Sqlx)?;
 
         let pk_value = (nested.get_parent_pk)(&parent);
 
@@ -570,11 +575,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
                 };
                 let compiled =
                     insert_many::<M>(dialect.as_ref(), nested.child_table, chunk, returning);
-                let mut q = sqlx::query(compiled.sql.as_str());
-                for v in compiled.binds {
-                    q = q.bind(v);
-                }
-                let mut chunk_rows = q.fetch_all(&mut *tx).await.map_err(Error::Sqlx)?;
+                let mut chunk_rows = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
                 child_rows.append(&mut chunk_rows);
             }
 
@@ -583,7 +584,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
             nested.setter.set(&mut parent, Vec::new());
         }
 
-        tx.commit().await.map_err(Error::Sqlx)?;
+        tx.commit().await?;
         Ok(parent)
     }
 }
@@ -681,11 +682,8 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
                 M::COLUMNS
             };
             let compiled = insert_many::<M>(dialect.as_ref(), M::TABLE, chunk, returning);
-            let mut q = sqlx::query_as::<sqlx::Any, M>(compiled.sql.as_str());
-            for v in compiled.binds {
-                q = q.bind(v);
-            }
-            let mut rows = q.fetch_all(self.pool).await.map_err(Error::Sqlx)?;
+            let rows = self.pool.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            let mut rows = crate::executor::decode_rows::<M>(rows)?;
             out.append(&mut rows);
         }
         Ok(out)
@@ -770,14 +768,7 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exec(self) -> Result<u64, Error> {
         let compiled = self.to_sql()?;
-        let mut q = sqlx::query::<sqlx::Any>(compiled.sql.as_str());
-        for v in compiled.binds {
-            q = q.bind(v);
-        }
-        q.execute(self.pool)
-            .await
-            .map(|r| r.rows_affected())
-            .map_err(Error::Sqlx)
+        self.pool.execute_raw(compiled.sql, compiled.binds).await
     }
 }
 
@@ -870,13 +861,6 @@ impl<'db, M: Model> DeleteQuery<'db, M, FilteredDelete> {
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exec(self) -> Result<u64, Error> {
         let compiled = self.to_sql()?;
-        let mut q = sqlx::query::<sqlx::Any>(compiled.sql.as_str());
-        for v in compiled.binds {
-            q = q.bind(v);
-        }
-        q.execute(self.pool)
-            .await
-            .map(|r| r.rows_affected())
-            .map_err(Error::Sqlx)
+        self.pool.execute_raw(compiled.sql, compiled.binds).await
     }
 }
