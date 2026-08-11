@@ -26,6 +26,8 @@ sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"]
 tracing            = { version = "0.1", default-features = false, features = ["std"] }
 
 [dev-dependencies]
-tokio  = { workspace = true }
+proptest = "1"
+tokio    = { workspace = true }
+ruprizzle = { workspace = true }
 tempfile = { workspace = true }
 
