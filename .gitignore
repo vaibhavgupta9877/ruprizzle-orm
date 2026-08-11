@@ -22,7 +22,6 @@
 /.cargo
 
 # Private project planning notes (not published to GitHub)
-/ProjectPlan/
 /docs/superpowers/
 
 # Transient output of `cargo xtask bench-client`

@@ -42,7 +42,10 @@ pub trait Executor: Send + Sync {
     /// Runs a statement and returns the number of affected rows.
     fn execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>>;
 
-    /// Runs a query and yields rows as they arrive.
+    /// Runs a query and yields decoded rows from a buffered result set.
+    ///
+    /// This deliberately fetches all rows first and then streams them. A true
+    /// cursor is slower on `sqlx-sqlite` (see `docs/BenchmarkResults.md`).
     fn stream_raw(&self, sql: String, binds: Vec<Value>) -> BoxRowStream<'_>;
 }
 
