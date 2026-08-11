@@ -672,10 +672,35 @@ mod tests {
     use ruprizzle_core::ir::Provider;
     use ruprizzle_dialect::dialect_for;
 
+    macro_rules! unit_row_decode {
+        ($t:ty) => {
+            impl<'r> sqlx::FromRow<'r, sqlx::any::AnyRow> for $t {
+                fn from_row(_: &'r sqlx::any::AnyRow) -> Result<Self, sqlx::Error> {
+                    let v: $t = Default::default();
+                    Ok(v)
+                }
+            }
+            impl<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow> for $t {
+                fn from_row(_: &'r sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+                    let v: $t = Default::default();
+                    Ok(v)
+                }
+            }
+            impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for $t {
+                fn from_row(_: &'r sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
+                    let v: $t = Default::default();
+                    Ok(v)
+                }
+            }
+        };
+    }
+
+    #[derive(Default)]
     struct User;
     impl Model for User {
         const TABLE: &'static str = "users";
     }
+    unit_row_decode!(User);
 
     const ID: Column<User, i64> = Column::new("users", "id");
     const EMAIL: Column<User, Option<String>> = Column::new("users", "email");
@@ -809,12 +834,15 @@ mod tests {
         );
     }
 
+    #[derive(Default)]
+    struct Post;
+    impl Model for Post {
+        const TABLE: &'static str = "posts";
+    }
+    unit_row_decode!(Post);
+
     #[test]
     fn relation_exists_filter() {
-        struct Post;
-        impl Model for Post {
-            const TABLE: &'static str = "posts";
-        }
 
         let child = Filter::<Post>::new(FilterNode::Cmp {
             table: "posts",

@@ -10,7 +10,7 @@ use crate::compile::{
 use crate::executor::Executor;
 use crate::filter::{Filter, FilterNode};
 use crate::include::IncludeSet;
-use crate::model::Model;
+use crate::model::{Model, RowDecode};
 use crate::order::OrderBy;
 use crate::page::Page;
 use crate::pool::Pool;
@@ -173,7 +173,7 @@ where
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn fetch_optional(self) -> Result<Option<Out>, Error>
     where
-        Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+        Out: Send + Unpin + RowDecode,
     {
         let mut q = self;
         if q.limit.is_none() {
@@ -198,7 +198,7 @@ where
     /// row matches.
     pub async fn fetch_one(self) -> Result<Out, Error>
     where
-        Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+        Out: Send + Unpin + RowDecode,
     {
         self.fetch_optional()
             .await?
@@ -259,7 +259,7 @@ pub struct RowStream<'db, Out> {
 
 impl<Out> futures_core::Stream for RowStream<'_, Out>
 where
-    Out: Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    Out: Unpin + RowDecode,
 {
     type Item = Result<Out, Error>;
 
@@ -290,7 +290,7 @@ where
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn fetch_all(self) -> Result<Vec<Out>, Error>
     where
-        Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+        Out: Send + Unpin + RowDecode,
     {
         let compiled = self.to_sql();
         let batch = self
@@ -314,7 +314,7 @@ where
     #[must_use]
     pub fn stream(self) -> RowStream<'db, Out>
     where
-        Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+        Out: Send + Unpin + RowDecode,
     {
         let compiled = self.to_sql();
         RowStream {
@@ -336,7 +336,7 @@ where
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn page(self, size: u64) -> Result<Page<Out>, Error>
     where
-        Out: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+        Out: Send + Unpin + RowDecode,
     {
         let pk: Column<M, i64> = Column::new(M::TABLE, M::PRIMARY_KEY);
         let q = self.order_by(pk.asc()).limit(size.saturating_add(1));
@@ -352,7 +352,7 @@ where
 
 impl<'db, M, I> SelectQuery<'db, M, M, I>
 where
-    M: Model + Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
+    M: Model,
     I: IncludeSet<M>,
 {
     /// Executes the query, then loads any requested includes.
@@ -490,10 +490,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
     /// # Errors
     ///
     /// Returns [`Error::Sqlx`] for database errors.
-    pub async fn exec(mut self) -> Result<M, Error>
-    where
-        M: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
-    {
+    pub async fn exec(mut self) -> Result<M, Error> {
         let nested = self.nested.take();
         match nested {
             None => self.exec_single().await,
@@ -501,10 +498,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         }
     }
 
-    async fn exec_single(self) -> Result<M, Error>
-    where
-        M: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
-    {
+    async fn exec_single(self) -> Result<M, Error> {
         let dialect = dialect_for_pool(self.pool);
         let returning: &[&str] = if M::COLUMNS.is_empty() {
             &["*"]
@@ -535,10 +529,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         Ok(row)
     }
 
-    async fn exec_nested(self, nested: NestedInsert<'db, M>) -> Result<M, Error>
-    where
-        M: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
-    {
+    async fn exec_nested(self, nested: NestedInsert<'db, M>) -> Result<M, Error> {
         let tx = crate::tx::Tx::begin(self.pool).await?;
 
         let dialect = dialect_for_pool(self.pool);
@@ -662,10 +653,7 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
     /// # Errors
     ///
     /// Returns [`Error::Sqlx`] for database errors.
-    pub async fn exec(self) -> Result<Vec<M>, Error>
-    where
-        M: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
-    {
+    pub async fn exec(self) -> Result<Vec<M>, Error> {
         if self.rows.is_empty() {
             return Ok(Vec::new());
         }

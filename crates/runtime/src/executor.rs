@@ -227,15 +227,20 @@ async fn dispatch_raw_execute(pool: &Pool, sql: String, binds: Vec<Value>) -> Re
 /// apart in how they decode.
 pub(crate) fn decode_rows<T>(batch: RowBatch) -> Result<Vec<T>, Error>
 where
-    T: for<'r> sqlx::FromRow<'r, AnyRow>,
+    T: crate::model::RowDecode,
 {
     match batch {
         RowBatch::Any(rows) => rows
             .iter()
             .map(|r| T::from_row(r).map_err(Error::Sqlx))
             .collect(),
-        RowBatch::Postgres(_) | RowBatch::Sqlite(_) => Err(Error::Message(
-            "native backend decoding is not yet implemented".into(),
-        )),
+        RowBatch::Postgres(rows) => rows
+            .iter()
+            .map(|r| T::from_row(r).map_err(Error::Sqlx))
+            .collect(),
+        RowBatch::Sqlite(rows) => rows
+            .iter()
+            .map(|r| T::from_row(r).map_err(Error::Sqlx))
+            .collect(),
     }
 }

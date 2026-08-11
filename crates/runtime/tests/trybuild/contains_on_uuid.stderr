@@ -1,3 +1,65 @@
+error[E0277]: the trait bound `uuid::Uuid: sqlx::Decode<'_, sqlx::Any>` is not satisfied
+  --> tests/trybuild/contains_on_uuid.rs:11:16
+   |
+11 | impl Model for User {
+   |                ^^^^ the trait `sqlx::Decode<'_, sqlx::Any>` is not implemented for `uuid::Uuid`
+   |
+help: the following other types implement trait `sqlx::Decode<'r, DB>`
+  --> $CARGO/sqlx-postgres-$VERSION/src/types/uuid.rs
+   |
+   | impl Decode<'_, Postgres> for Uuid {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `uuid::Uuid` implements `sqlx::Decode<'_, sqlx::Postgres>`
+   |
+  ::: $CARGO/sqlx-sqlite-$VERSION/src/types/uuid.rs
+   |
+   | impl Decode<'_, Sqlite> for Uuid {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `uuid::Uuid` implements `sqlx::Decode<'_, sqlx::Sqlite>`
+note: required for `User` to implement `for<'r> FromRow<'r, AnyRow>`
+  --> tests/trybuild/contains_on_uuid.rs:7:8
+   |
+ 6 | #[derive(sqlx::FromRow)]
+   |          ------------- type parameter would need to implement `for<'r> FromRow<'r, AnyRow>`
+ 7 | struct User {
+   |        ^^^^
+   = help: consider manually implementing `for<'r> FromRow<'r, AnyRow>` to avoid undesired bounds
+   = note: required for `User` to implement `RowDecode`
+note: required by a bound in `Model`
+  --> src/model.rs
+   |
+   | pub trait Model: RowDecode {
+   |                  ^^^^^^^^^ required by this bound in `Model`
+
+error[E0277]: the trait bound `uuid::Uuid: sqlx::Type<sqlx::Any>` is not satisfied
+  --> tests/trybuild/contains_on_uuid.rs:11:16
+   |
+11 | impl Model for User {
+   |                ^^^^ the trait `sqlx::Type<sqlx::Any>` is not implemented for `uuid::Uuid`
+   |
+help: the following other types implement trait `sqlx::Type<DB>`
+  --> $CARGO/sqlx-postgres-$VERSION/src/types/uuid.rs
+   |
+   | impl Type<Postgres> for Uuid {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `uuid::Uuid` implements `sqlx::Type<sqlx::Postgres>`
+   |
+  ::: $CARGO/sqlx-sqlite-$VERSION/src/types/uuid.rs
+   |
+   | impl Type<Sqlite> for Uuid {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^ `uuid::Uuid` implements `sqlx::Type<sqlx::Sqlite>`
+note: required for `User` to implement `for<'r> FromRow<'r, AnyRow>`
+  --> tests/trybuild/contains_on_uuid.rs:7:8
+   |
+ 6 | #[derive(sqlx::FromRow)]
+   |          ------------- type parameter would need to implement `for<'r> FromRow<'r, AnyRow>`
+ 7 | struct User {
+   |        ^^^^
+   = help: consider manually implementing `for<'r> FromRow<'r, AnyRow>` to avoid undesired bounds
+   = note: required for `User` to implement `RowDecode`
+note: required by a bound in `Model`
+  --> src/model.rs
+   |
+   | pub trait Model: RowDecode {
+   |                  ^^^^^^^^^ required by this bound in `Model`
+
 error[E0599]: no method named `contains` found for struct `ruprizzle::Column<User, uuid::Uuid>` in the current scope
   --> tests/trybuild/contains_on_uuid.rs:18:21
    |

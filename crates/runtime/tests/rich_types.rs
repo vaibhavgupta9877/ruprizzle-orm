@@ -9,7 +9,6 @@
 use ruprizzle::{Column, Executor, InsertQuery, Model, Pool, SelectQuery, connect, decode};
 use ruprizzle::types::chrono::{DateTime, Utc};
 use ruprizzle::types::{Decimal, Uuid};
-use ruprizzle::sqlx::any::AnyRow;
 use serde_json::Value as JsonValue;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -26,8 +25,15 @@ impl Model for Event {
     const COLUMNS: &'static [&'static str] = &["id", "created_at", "price", "meta"];
 }
 
-impl<'r> ruprizzle::sqlx::FromRow<'r, AnyRow> for Event {
-    fn from_row(row: &'r AnyRow) -> Result<Self, ruprizzle::sqlx::Error> {
+impl<'r, R> ruprizzle::sqlx::FromRow<'r, R> for Event
+where
+    R: ruprizzle::sqlx::Row,
+    usize: ruprizzle::sqlx::ColumnIndex<R>,
+    for<'a> &'a str: ruprizzle::sqlx::ColumnIndex<R>,
+    String: for<'a> ruprizzle::sqlx::Decode<'a, R::Database> + ruprizzle::sqlx::Type<R::Database>,
+    Vec<u8>: for<'a> ruprizzle::sqlx::Decode<'a, R::Database> + ruprizzle::sqlx::Type<R::Database>,
+{
+    fn from_row(row: &'r R) -> Result<Self, ruprizzle::sqlx::Error> {
         Ok(Self {
             id: decode::text(row, "id")?,
             created_at: decode::text(row, "created_at")?,
