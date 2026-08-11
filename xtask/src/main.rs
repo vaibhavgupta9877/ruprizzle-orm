@@ -176,7 +176,14 @@ fn run_harden() -> ExitCode {
         eprintln!("--- xtask: dry-run publish {package} ---");
         if !run_command(
             "cargo",
-            &["publish", "-p", package, "--dry-run", "--allow-dirty", "--no-verify"],
+            &[
+                "publish",
+                "-p",
+                package,
+                "--dry-run",
+                "--allow-dirty",
+                "--no-verify",
+            ],
         ) {
             return ExitCode::FAILURE;
         }
