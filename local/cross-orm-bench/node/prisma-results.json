@@ -1,0 +1,37 @@
+[
+  {
+    "orm": "prisma",
+    "operation": "select_by_pk",
+    "iters": 1000,
+    "total_ms": 166.2963,
+    "avg_ms": 0.1662963
+  },
+  {
+    "orm": "prisma",
+    "operation": "find_many_1000",
+    "iters": 50,
+    "total_ms": 102.47349999999997,
+    "avg_ms": 2.0494699999999995
+  },
+  {
+    "orm": "prisma",
+    "operation": "find_filtered_ordered",
+    "iters": 50,
+    "total_ms": 107.68880000000001,
+    "avg_ms": 2.153776
+  },
+  {
+    "orm": "prisma",
+    "operation": "include_posts",
+    "iters": 10,
+    "total_ms": 325.86339999999996,
+    "avg_ms": 32.58633999999999
+  },
+  {
+    "orm": "prisma",
+    "operation": "bulk_insert_1000",
+    "iters": 10,
+    "total_ms": 150.03440000000012,
+    "avg_ms": 15.003440000000012
+  }
+]

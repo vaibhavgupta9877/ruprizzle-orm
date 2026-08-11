@@ -1,0 +1,18 @@
+{
+  "name": "cross-orm-bench",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "prisma generate",
+    "seed": "node seed.js",
+    "bench:prisma": "node bench-prisma.js",
+    "bench:drizzle": "node bench-drizzle.js"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "better-sqlite3": "^13.0.3",
+    "drizzle-orm": "^0.43.0",
+    "prisma": "6.19.3"
+  }
+}

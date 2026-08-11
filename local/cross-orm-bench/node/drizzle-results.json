@@ -1,0 +1,51 @@
+[
+  {
+    "orm": "drizzle",
+    "operation": "to_sql_select_by_pk",
+    "iters": 100000,
+    "total_ms": 840.9070999999999,
+    "avg_ms": 0.008409070999999999
+  },
+  {
+    "orm": "drizzle",
+    "operation": "to_sql_select_filter_order",
+    "iters": 100000,
+    "total_ms": 1008.0076000000001,
+    "avg_ms": 0.010080076000000002
+  },
+  {
+    "orm": "drizzle",
+    "operation": "select_by_pk",
+    "iters": 1000,
+    "total_ms": 28.266299999999774,
+    "avg_ms": 0.028266299999999772
+  },
+  {
+    "orm": "drizzle",
+    "operation": "find_many_1000",
+    "iters": 50,
+    "total_ms": 14.486699999999928,
+    "avg_ms": 0.28973399999999855
+  },
+  {
+    "orm": "drizzle",
+    "operation": "find_filtered_ordered",
+    "iters": 50,
+    "total_ms": 17.176300000000083,
+    "avg_ms": 0.34352600000000166
+  },
+  {
+    "orm": "drizzle",
+    "operation": "include_posts",
+    "iters": 10,
+    "total_ms": 1814.9652,
+    "avg_ms": 181.49652
+  },
+  {
+    "orm": "drizzle",
+    "operation": "bulk_insert_1000",
+    "iters": 10,
+    "total_ms": 83.79330000000027,
+    "avg_ms": 8.379330000000028
+  }
+]
