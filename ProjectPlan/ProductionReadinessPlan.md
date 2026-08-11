@@ -1780,21 +1780,14 @@ Add to the README's Development section:
 - [Changelog](CHANGELOG.md)
 ```
 
-- [ ] **Step 5: Fix the stale status line**
+- [x] **Step 5: Fix the stale status line**
 
-`README.md:23` reads *"Phases P1–P7 are implemented and P8 … is the current focus"*, but
-P8 shipped in `418475f`. Replace with an accurate status sentence.
+`README.md` now reads `0.1.0-alpha.3` with P0–P7 complete and P8 mostly complete
+(docs site / announcement pending).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
-```bash
-git add SECURITY.md CONTRIBUTING.md CHANGELOG.md README.md
-git commit -m "docs: add security policy, contributing guide, and changelog
-
-A database library with no documented disclosure path receives its first
-vulnerability report as a public issue. Also corrects the README status
-line, which still described P8 as upcoming after it shipped."
-```
+Tracked in the same commit as the plan-status refresh.
 
 ---
 

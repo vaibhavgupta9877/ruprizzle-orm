@@ -1,6 +1,6 @@
 # Performance enhancements, round 2
 
-**Status:** research complete, nothing implemented
+**Status:** in progress — Phase B (native Postgres/Sqlite backends) implemented with P2-4; Phase A, C and D still open.
 **Date:** 2026-08-11
 **Baseline:** `e513f7e` (post Phase 1 + P2-3), `docs/BenchmarkResults.md`
 **Supersedes the attribution in:** [`Enhancements1.md`](Enhancements1.md) §3

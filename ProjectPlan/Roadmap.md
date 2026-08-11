@@ -3,7 +3,7 @@
 **Start:** Monday, Week 1  
 **Ship:** Friday, Week 12  
 **Team:** Vaibhav Gupta (architecture, design docs) + Vaibhav Gupta (implementation)  
-**Status:** READY TO EXECUTE
+**Status:** in progress — P0–P7 complete, P8 (docs site / public announcement) in progress, P2-4 landed.
 
 ---
 

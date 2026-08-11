@@ -198,15 +198,14 @@ covered by `crates/runtime/tests/pool_config.rs`.
 
 ## 7. Architectural risks worth naming
 
-### 7.1 The `sqlx::Any` foundation is load-bearing and expensive to reverse — **still open**
+### 7.1 The `sqlx::Any` foundation is load-bearing and expensive to reverse — **mitigated**
 
-Unchanged in substance from the previous assessment, and still the most consequential
-open question in the codebase. Every query goes through the type-erased driver, which buys
-one identical Rust API across Postgres and SQLite with the dialect chosen by URL scheme at
-runtime — the product's core promise — at the cost of text round-tripping for `Uuid`,
-`Decimal`, `DateTime`, `Date`, `Time`, and `Json` in both directions
-(`crates/runtime/src/value.rs`, `decode.rs`), reliance on server-side type inference for
-index usage, timezone/format fragility, and unreachable Postgres-native features.
+P2-1 through P2-4 introduced native `Pool::Postgres` and `Pool::Sqlite` variants, so the
+type-erased `Any` driver is no longer the only path. Read-heavy and rich-type workloads
+now bypass the text round-trip for `Uuid`, `Decimal`, `DateTime`, `Date`, `Time`, and `Json`
+when a native URL is used. `sqlx::Any` is still the default when an `Any`-scheme URL or
+`Pool::Any` is requested, preserving the identical Rust API, but the exit strategy is now
+implemented and exercised in the test suite.
 
 **What improved:** the cost is no longer unmeasured. `docs/Performance.md` discusses the
 trade-off and the end-to-end benchmarks give it numbers against a hand-written `sqlx`

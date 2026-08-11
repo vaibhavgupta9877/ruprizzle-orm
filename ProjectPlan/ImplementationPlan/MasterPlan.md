@@ -116,14 +116,19 @@ snapshot-verified IR; 16 of 18 validation rules are enforced with a fixture each
 a span and a fix. Deviations:
 [P1 deviation log](ImplPlan10AppendixDecisions.md#p1-deviation-log).
 
-**P2-P5 landed.** G2, G3, G4 and G5 are signed off in their own plans, each with
-evidence recorded there. The whole workspace is green against a live PostgreSQL
-17.10 and SQLite under `RUPRIZZLE_REQUIRE_DB=1`. G5's bound is now asserted, not
-asserted-by-inspection: `include_is_bounded` counts the statements a two-level
-include issues and fails if it is ever more than one per level. Two P5 checklist
-items are explicitly **not** signed off — composite-key relations and the
-generated nested-create helpers; see the gaps section of
-[ImplPlan06](ImplPlan06RelationsInclude.md#remaining-known-gaps).
+**P0–P7 landed.** G1–G6 are signed off in their own plans, each with evidence
+recorded there. The whole workspace is green against a live PostgreSQL 17.10 and
+SQLite under `RUPRIZZLE_REQUIRE_DB=1`. P2-4 landed on `perf/research-harnesses`
+with native `Pool::Postgres` and `Pool::Sqlite` construction and `row_buffer_size`.
+G5's bound is now asserted, not asserted-by-inspection: `include_is_bounded` counts
+the statements a two-level include issues and fails if it is ever more than one
+per level. Two P5 checklist items are explicitly **not** signed off —
+composite-key relations and the generated nested-create helpers; see the gaps
+section of [ImplPlan06](ImplPlan06RelationsInclude.md#remaining-known-gaps).
+
+**P8 is mostly complete.** Crates are published, the test matrix is green, the
+examples compile, and `cargo xtask harden` runs. The docs site GitHub Pages
+enablement and public announcement are still pending.
 
 | Phase | Deliverable | Status | Gate |
 |---|---|---|---|
@@ -135,7 +140,7 @@ generated nested-create helpers; see the gaps section of
 | P5 | Relations + nested include batched | ✅ | G5 ✅ |
 | P6 | Migration diff + runner | ✅ | G6 ✅ |
 | P7 | CLI complete, error UX polished | ✅ | — |
-| P8 | Tests, benches, docs, published | ✅ | Ship |
+| P8 | Tests, benches, docs, published | 🟡 | Ship (docs site / announcement pending) |
 
 ---
 

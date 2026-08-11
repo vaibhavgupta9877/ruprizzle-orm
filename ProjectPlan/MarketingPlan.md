@@ -2,7 +2,7 @@
 
 *Prepared for the ruprizzle open-source project.*  
 *Date: 2026-08-11*  
-*Status: 0.1.0-alpha.3 just published on crates.io; pre-seed / bootstrapped budget assumptions.*
+*Status: 0.1.0-alpha.3 published on crates.io; 90-day priorities in execution.*
 
 ---
 

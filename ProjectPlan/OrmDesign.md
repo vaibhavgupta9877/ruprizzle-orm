@@ -2,7 +2,7 @@
 
 **Parser:** Pest (robust DSL, scales to Prisma/Drizzle complexity)  
 **Databases:** Postgres MVP, SQLite/Turso designed-in, extensible  
-**Status:** Ready for Vaibhav Gupta, Monday start
+**Status:** superseded — early design doc; implementation tracked in the `ImplPlan*.md` series.
 
 ---
 
