@@ -3,6 +3,7 @@
 **Status:** partially implemented
 **Date:** 2026-08-11
 **Baseline:** `0.1.0-alpha.3`
+**Branch:** `perf/research-harnesses`
 **Trigger:** [`docs/BenchmarkResults.md`](../../../docs/BenchmarkResults.md) shows ruprizzle 1.6–5.8× behind Drizzle on simple SQLite reads.
 
 ---
@@ -545,6 +546,31 @@ still open. Commit hashes are from the `perf/research-harnesses` branch.
 | **P2-3** | `Model::COLUMNS`; explicit projection; ordinal decoding | F8 | **implemented** | `5f21c1c`. `Model::COLUMNS` added; `compile::select` defaults to explicit list; codegen emits `decode::_idx` helpers and ordinal `FromRow`. Measured name-lookup win: ~24% of decode, ~0.7% end-to-end. |
 | **P2-4** | Driver options in `PoolConfig`; SQLite `row_buffer_size` default 1 024 | F5 | **pending** | Attempted and reverted. `sqlx 0.8.6` does not provide `From<SqliteConnectOptions> for AnyConnectOptions`, so an `AnyPool` cannot be built from a configured `SqliteConnectOptions`. Requires P2-1. |
 | **P2-5** | Postgres `COPY` fast path for `create_many` | F6 | **pending** | Gated on P2-1 and a measured ≥3× improvement; not yet benchmarked. |
+
+### Next steps after this session
+
+The remaining work that is either in progress or unblocked:
+
+1. **P0-1** — Add a generated rich-type model round-trip integration test.
+   Postgres is running, `FromRow<PgRow>` is in place, and the `decode` helpers
+   are generic. The test should create a table with `Uuid`, `DateTime`,
+   `Decimal`, and `Json` columns and prove the generated `FromRow<PgRow>` decodes
+   them correctly. It can run under `RUPRIZZLE_TEST_PG_URL`.
+
+2. **P2-2 (c)** — Make `Executor` and the query builders dispatch by backend.
+   `Pool` is an enum and `FromRow<PgRow>` / `FromRow<SqliteRow>` are emitted,
+   but `SelectQuery` still routes through `Any` because `Executor` returns
+   `Vec<AnyRow>`. This is the largest remaining item.
+
+3. **P2-4** — Driver options in `PoolConfig`. Unblocked once `Pool::Sqlite` can
+   be built from a `SqliteConnectOptions` instead of an `Any` URL.
+
+4. **P2-5** — Postgres `COPY` fast path for `create_many`. Gated on a live
+   Postgres benchmark showing ≥3× improvement.
+
+5. **P1-4** — Stop re-allocating `Value::Str` / `Value::Bytes` on every bind.
+   Deferred until native backends land; it is impossible to fix under
+   `sqlx::Any`.
 
 ### Findings not yet addressed
 
