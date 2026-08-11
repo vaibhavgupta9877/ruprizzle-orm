@@ -66,11 +66,7 @@ impl Executor for Pool {
         Box::pin(async move {
             let bind_count = binds.len();
             let started = std::time::Instant::now();
-            let mut q = sqlx::query::<sqlx::Any>(&sql);
-            for bind in binds {
-                q = q.bind(bind);
-            }
-            let result = q.fetch_all(self).await.map_err(Error::from);
+            let result = dispatch_raw_query(self, sql.clone(), binds).await;
             let elapsed_ms = started.elapsed().as_millis() as u64;
             match &result {
                 Ok(rows) => tracing::debug!(
@@ -98,15 +94,7 @@ impl Executor for Pool {
         Box::pin(async move {
             let bind_count = binds.len();
             let started = std::time::Instant::now();
-            let mut q = sqlx::query::<sqlx::Any>(&sql);
-            for bind in binds {
-                q = q.bind(bind);
-            }
-            let result = q
-                .execute(self)
-                .await
-                .map(|result| result.rows_affected())
-                .map_err(Error::from);
+            let result = dispatch_raw_execute(self, sql.clone(), binds).await;
             let elapsed_ms = started.elapsed().as_millis() as u64;
             match &result {
                 Ok(rows_affected) => tracing::debug!(
@@ -134,6 +122,39 @@ impl Executor for Pool {
         Box::pin(crate::tx::DeferredRowStream::new(Box::pin(async move {
             self.fetch_all_raw(sql, binds).await
         })))
+    }
+}
+
+async fn dispatch_raw_query(
+    pool: &Pool,
+    sql: String,
+    binds: Vec<Value>,
+) -> Result<Vec<AnyRow>, Error> {
+    match pool {
+        Pool::Any(p) => {
+            let mut q = sqlx::query::<sqlx::Any>(&sql);
+            for bind in binds {
+                q = q.bind(bind);
+            }
+            q.fetch_all(p).await.map_err(Error::from)
+        }
+        _ => unimplemented!("native backend queries need per-backend FromRow (P2-2)"),
+    }
+}
+
+async fn dispatch_raw_execute(pool: &Pool, sql: String, binds: Vec<Value>) -> Result<u64, Error> {
+    match pool {
+        Pool::Any(p) => {
+            let mut q = sqlx::query::<sqlx::Any>(&sql);
+            for bind in binds {
+                q = q.bind(bind);
+            }
+            q.execute(p)
+                .await
+                .map(|r| r.rows_affected())
+                .map_err(Error::from)
+        }
+        _ => unimplemented!("native backend execute needs the Backend dispatch path (P2-2)"),
     }
 }
 

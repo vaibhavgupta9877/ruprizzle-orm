@@ -57,9 +57,10 @@ async fn stats_and_ping_report_a_live_pool() {
 #[tokio::test]
 async fn ping_reports_an_unreachable_database() {
     ruprizzle::sqlx::any::install_default_drivers();
-    let pool = ruprizzle::sqlx::any::AnyPoolOptions::new()
+    let any = ruprizzle::sqlx::any::AnyPoolOptions::new()
         .acquire_timeout(Duration::from_millis(200))
         .connect_lazy("postgres://127.0.0.1:1/nope")
         .expect("lazy pool");
+    let pool = ruprizzle::Pool::Any(any);
     assert!(ruprizzle::ping(&pool).await.is_err());
 }

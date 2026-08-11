@@ -51,10 +51,13 @@ impl Tx {
     ///
     /// Returns [`Error::Sqlx`] if the database cannot begin a transaction.
     pub async fn begin(pool: &Pool) -> Result<Self, Error> {
-        let tx = pool.begin().await.map_err(Error::Sqlx)?;
+        let tx = match pool {
+            Pool::Any(any) => any.begin().await.map_err(Error::Sqlx)?,
+            _ => unimplemented!("native backend transactions need per-backend dispatch (P2-2)"),
+        };
         Ok(Self {
             inner: Mutex::new(Some(tx)),
-            provider: provider_of(pool),
+            provider: pool.provider(),
         })
     }
 
@@ -220,12 +223,6 @@ impl Tx {
         }
         q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
     }
-}
-
-/// Reads the provider from a pool's URL scheme.
-fn provider_of(pool: &Pool) -> Provider {
-    let opts = pool.connect_options();
-    Provider::parse(opts.database_url.scheme()).unwrap_or(Provider::Postgres)
 }
 
 impl crate::executor::Executor for Tx {

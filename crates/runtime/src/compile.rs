@@ -4,7 +4,6 @@
 //! interpolation of user data. The compiler is dialect-aware so it can quote
 //! identifiers and produce the correct parameter markers.
 
-use ruprizzle_core::ir::Provider;
 use ruprizzle_dialect::{DbDialect, dialect_for};
 
 use crate::filter::{CmpOp, FilterNode};
@@ -443,13 +442,9 @@ pub fn delete<M: Model>(
     c.finish()
 }
 
-/// Build a `Box<dyn DbDialect>` from an `Any` pool URL scheme.
+/// Build a `Box<dyn DbDialect>` from a `Pool`.
 pub fn dialect_for_pool(pool: &crate::Pool) -> Box<dyn DbDialect> {
-    let opts = pool.connect_options();
-    let scheme = opts.database_url.scheme();
-    Provider::parse(scheme)
-        .map(dialect_for)
-        .unwrap_or_else(|| dialect_for(Provider::Postgres))
+    dialect_for(pool.provider())
 }
 
 struct Compiler<'d> {
