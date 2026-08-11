@@ -56,12 +56,13 @@ So the honest framing is:
 This document proposes a programme built around those, and explicitly names the
 work *not* worth doing (§8).
 
-> **One caveat up front, stated plainly:** every number here is SQLite on one
-> Windows workstation. SQLite is not the deployment target, and the local
-> Postgres service could not be started in this session (needs elevation), so
-> the Postgres findings in §4 F2 are derived from reading the `sqlx-postgres`
-> source, not from a live run. Task **P0-0** exists to close that gap before any
-> other work starts.
+> **One caveat up front, stated plainly:** end-to-end benchmark numbers are
+> SQLite on one Windows workstation. SQLite is not the deployment target. The
+> `postgresql-x64-17` Windows service still cannot be started without elevation,
+> but the server can be started as a user process with `pg_ctl` once a data
+> directory exists. Task **P0-0** was run live on 2026-08-11; its results are in
+> §4.2 and the status table. Task **P0-1** (a round-trip integration test with
+> rich types) is unblocked but not yet implemented.
 
 ---
 
@@ -245,7 +246,9 @@ a coverage gap.
 
 **Fix:** F4 (native backends). There is no fix that keeps `Any`.
 
-**Confidence:** high, from source. **Not yet reproduced live** — see P0-0.
+**Verification:** P0-0 ran `cargo run --example pg_any_types` against a live
+PostgreSQL 17.10 instance on 2026-08-11. The pass/fail table above matches the
+live run exactly. The `uuid = text` bind probe also failed as predicted.
 
 ---
 
@@ -519,8 +522,8 @@ still open. Commit hashes are from the `perf/research-harnesses` branch.
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| **P0-0** | Reproduce F2 on a live Postgres | **pending** | Postgres service (`postgresql-x64-17`) is stopped; attempts to start fail without elevation. Run `pg_any_types.rs` once a service is available. |
-| **P0-1** | Rich-type integration test | **pending** | Blocked on P0-0. |
+| **P0-0** | Reproduce F2 on a live Postgres | **implemented** | Server started with `pg_ctl` (the Windows service still needs elevation). `pg_any_types.rs` run against PostgreSQL 17.10 reproduced all six rich-type failures and the `uuid = text` bind error. |
+| **P0-1** | Rich-type integration test | **pending** | Unblocked by P0-0. Needs a generated rich-type model round-trip test under `RUPRIZZLE_TEST_PG_URL`. |
 
 ### Phase 1
 
