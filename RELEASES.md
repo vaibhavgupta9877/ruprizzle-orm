@@ -81,18 +81,19 @@ a dedicated compile-time machine.
 The workspace is ordered for staged publication:
 
 1. `ruprizzle-core`
-2. `ruprizzle-dialect`
-3. `ruprizzle-macros`
-4. `ruprizzle`
-5. `ruprizzle-parser`
-6. `ruprizzle-codegen`
-7. `ruprizzle-migrate`
+2. `ruprizzle-parser`
+3. `ruprizzle-dialect`
+4. `ruprizzle-macros`
+5. `ruprizzle`
+6. `ruprizzle-migrate`
+7. `ruprizzle-codegen`
 8. `ruprizzle-cli`
 
-Use `cargo xtask release` to dry-run the first crate, then
-`cargo xtask release --live --no-verify --wait 60` to publish for real.
-`--no-verify` is required for the first upload because each crate's
-`workspace = true` dependencies are rewritten to exact versions, and the
-resolver cannot find them on crates.io until the previous crate has actually
-been indexed. `--wait 60` pauses between uploads to give that indexing time to
-propagate.
+Use `cargo xtask release` to dry-run every crate, then
+`cargo xtask release --live --wait 60` to publish for real from an
+interactive shell. `cargo xtask release` already passes `--no-verify`
+internally because `cargo publish` verification resolves `workspace = true`
+dependencies against the version on crates.io, which is stale until the
+previous crate has actually been indexed. `--wait 60` pauses between uploads
+to give that indexing time to propagate. Live publishes are also refused if
+`CI` or `GITHUB_ACTIONS` is set.
