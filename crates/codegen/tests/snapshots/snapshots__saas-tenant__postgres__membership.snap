@@ -27,13 +27,45 @@ pub struct Membership {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Membership {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::text_idx::<Uuid>(row, 0)?,
-            org_id: ::ruprizzle::decode::text_idx::<Uuid>(row, 1)?,
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            org_id: ::ruprizzle::decode::text_idx(row, 1)?,
             organisation: ::ruprizzle::Related::default(),
-            account_id: ::ruprizzle::decode::text_idx::<Uuid>(row, 2)?,
+            account_id: ::ruprizzle::decode::text_idx(row, 2)?,
             account: ::ruprizzle::Related::default(),
             is_owner: ::ruprizzle::decode::boolean_idx(row, 3)?,
-            updated_at: ::ruprizzle::decode::text_idx::<DateTime<Utc>>(row, 4)?,
+            updated_at: ::ruprizzle::decode::text_idx(row, 4)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow>
+for Membership {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::postgres::PgRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            org_id: ::ruprizzle::decode::text_idx(row, 1)?,
+            organisation: ::ruprizzle::Related::default(),
+            account_id: ::ruprizzle::decode::text_idx(row, 2)?,
+            account: ::ruprizzle::Related::default(),
+            is_owner: ::ruprizzle::decode::boolean_idx(row, 3)?,
+            updated_at: ::ruprizzle::decode::text_idx(row, 4)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>
+for Membership {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            org_id: ::ruprizzle::decode::text_idx(row, 1)?,
+            organisation: ::ruprizzle::Related::default(),
+            account_id: ::ruprizzle::decode::text_idx(row, 2)?,
+            account: ::ruprizzle::Related::default(),
+            is_owner: ::ruprizzle::decode::boolean_idx(row, 3)?,
+            updated_at: ::ruprizzle::decode::text_idx(row, 4)?,
         })
     }
 }

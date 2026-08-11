@@ -522,6 +522,22 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
             }
         }
 
+        impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow> for #model_name {
+            fn from_row(row: &'r ::ruprizzle::sqlx::postgres::PgRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+                Ok(Self {
+                    #( #from_row_fields )*
+                })
+            }
+        }
+
+        impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow> for #model_name {
+            fn from_row(row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+                Ok(Self {
+                    #( #from_row_fields )*
+                })
+            }
+        }
+
         /// Insert shape: required fields are required, defaulted/optional fields
         /// are `Option` so the database can fill them in.
         #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -634,7 +650,7 @@ fn emit_from_row_field(
     }
 
     let optional = field.optional;
-    let inner = rust_type_tokens(schema, owner, field, false, true);
+    let _inner = rust_type_tokens(schema, owner, field, false, true);
     let idx = syn::Index::from(idx.unwrap_or(0));
 
     let expr = match &field.kind {

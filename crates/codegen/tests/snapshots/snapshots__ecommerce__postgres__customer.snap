@@ -23,11 +23,39 @@ pub struct Customer {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Customer {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::text_idx::<Uuid>(row, 0)?,
-            email: ::ruprizzle::decode::direct_idx::<String>(row, 1)?,
-            name: ::ruprizzle::decode::direct_idx::<String>(row, 2)?,
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            email: ::ruprizzle::decode::direct_idx(row, 1)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2)?,
             orders: ::ruprizzle::Related::default(),
-            created_at: ::ruprizzle::decode::text_idx::<DateTime<Utc>>(row, 3)?,
+            created_at: ::ruprizzle::decode::text_idx(row, 3)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow>
+for Customer {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::postgres::PgRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            email: ::ruprizzle::decode::direct_idx(row, 1)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2)?,
+            orders: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 3)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>
+for Customer {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            email: ::ruprizzle::decode::direct_idx(row, 1)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2)?,
+            orders: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 3)?,
         })
     }
 }
