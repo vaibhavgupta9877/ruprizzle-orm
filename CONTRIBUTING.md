@@ -50,6 +50,9 @@ breakage. Set it whenever a database is reachable.
   Generated code must stay `clippy::pedantic`-clean; if your change makes the
   generator emit code that trips pedantic lints, fix the generator or the lint
   configuration, not the generated output.
+- `cargo xtask bench-client` regenerates the end-to-end benchmark client from
+  `crates/runtime/benches/end_to_end/schema.ruprizzle`. Run it after changing
+  the benchmark schema or the generator.
 
 ## What we enforce
 

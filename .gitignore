@@ -15,6 +15,9 @@
 *.sqlite-journal
 *.sqlite-wal
 
+# Proptest regression artefacts
+*.proptest-regressions
+
 # Local cargo-deny database and config
 /.cargo
 

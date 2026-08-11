@@ -3,6 +3,15 @@
 //! Hand-written diff tests only cover transitions someone thought of. These
 //! generate the transitions instead. Schemas are built by rendering DSL text
 //! and parsing it, which exercises the parser on the same path users take.
+//!
+//! The DB-backed round-trip property in this file is **Postgres-only**. The
+//! brief for PR-13 explicitly pinned the property to a live Postgres database,
+//! and the schema/render code below is written for `provider = "postgres"`.
+//! SQLite coverage for the same property is deferred; see the note in
+//! `ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md`.
+
+use std::sync::OnceLock;
+use std::time::Duration;
 
 use proptest::prelude::*;
 use ruprizzle_core::ir::Schema;
@@ -101,10 +110,42 @@ fn empty_schema() -> String {
         .to_owned()
 }
 
+/// Pool settings that fail fast when Postgres is not reachable.
+fn short_pool_config() -> ruprizzle::PoolConfig {
+    let mut config = ruprizzle::PoolConfig::default();
+    config.max_connections = 2;
+    config.acquire_timeout = Duration::from_secs(5);
+    config
+}
+
+/// Cached reachability probe for the Postgres test URL.
+///
+/// A short-timeout probe keeps the suite from hanging for 30 seconds per case
+/// when `RUPRIZZLE_TEST_PG_URL` is set but the database is unreachable.
+static PG_REACHABLE: OnceLock<Result<(), String>> = OnceLock::new();
+
+/// Probes the configured Postgres URL using a short-timeout pool, then closes
+/// it. Returns `Ok(())` only if a real connection and `SELECT 1` succeed.
+async fn probe_db(url: &str, config: &ruprizzle::PoolConfig) -> Result<(), String> {
+    let pool = ruprizzle::connect_with(url, config)
+        .await
+        .map_err(|e| e.to_string())?;
+    ruprizzle::ping(&pool).await.map_err(|e| e.to_string())?;
+    pool.close().await;
+    Ok(())
+}
+
 /// Builds an empty-to-`from` migration and applies it, then diffs to `to`
 /// and applies that. The database must then report no drift against `to`.
-async fn round_trip(url: &str, from: &Schema, to: &Schema) -> Result<Vec<String>, String> {
-    let pool = ruprizzle::connect(url).await.map_err(|e| e.to_string())?;
+async fn round_trip(
+    url: &str,
+    config: &ruprizzle::PoolConfig,
+    from: &Schema,
+    to: &Schema,
+) -> Result<Vec<String>, String> {
+    let pool = ruprizzle::connect_with(url, config)
+        .await
+        .map_err(|e| e.to_string())?;
     let dialect = dialect_for(from.datasource.provider);
 
     // Isolate each case: drop anything a previous case left behind. The model
@@ -152,6 +193,28 @@ proptest! {
         b in prop::collection::vec(field_strategy(), 0..4),
     ) {
         let Ok(url) = std::env::var("RUPRIZZLE_TEST_PG_URL") else { return Ok(()); };
+
+        let required = std::env::var("RUPRIZZLE_REQUIRE_DB")
+            .is_ok_and(|v| !v.is_empty() && v != "0");
+        let config = short_pool_config();
+
+        // Probe once across all cases. If Postgres is unreachable and not
+        // required, skip quickly instead of timing out for every case.
+        let probe = PG_REACHABLE.get_or_init(|| {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("runtime");
+            rt.block_on(probe_db(&url, &config))
+        });
+        if let Err(e) = probe.as_ref() {
+            prop_assert!(
+                !required,
+                "Postgres is required (RUPRIZZLE_REQUIRE_DB is set) but unreachable: {e}"
+            );
+            return Ok(());
+        }
+
         let (Some(sa), Some(sb)) = (schema_of(&a), schema_of(&b)) else { return Ok(()); };
 
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -159,7 +222,7 @@ proptest! {
             .build()
             .expect("runtime");
 
-        match rt.block_on(round_trip(&url, &sa, &sb)) {
+        match rt.block_on(round_trip(&url, &config, &sa, &sb)) {
             Ok(drift) => prop_assert!(
                 drift.is_empty(),
                 "after applying the diff, drift remains: {drift:?}"

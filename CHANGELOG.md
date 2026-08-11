@@ -28,6 +28,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Added `CONTRIBUTING.md` covering the CI gate, database testing requirements, `clippy::pedantic`-clean generated code, `trybuild` cases for compile-time guarantees, and `ProjectPlan/ImplementationPlan/` as the design record.
   - Linked `Contributing`, `Security policy`, and `Changelog` from the `README.md` Development section.
   - Corrected the stale status sentence in `docs/README.md` that treated docs-site deployment and public announcement as the only remaining work.
+- **End-to-end benchmark**
+  - Added `crates/runtime/benches/end_to_end` comparing ruprizzle against hand-written `sqlx` for select, include, and bulk-insert workloads, with a `cargo xtask bench-client` generator for the benchmark schema.
+- **Diff-engine property tests**
+  - Added `crates/migrate/tests/roundtrip_prop.rs` with `proptest` coverage of self-diff emptiness, SQL generation for schema changes, and DB-backed Postgres migration round-trips.
 
 ### Changed
 
