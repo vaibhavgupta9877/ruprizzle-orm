@@ -10,7 +10,6 @@ authors.workspace      = true
 homepage.workspace     = true
 readme                 = "README.md"
 documentation          = "https://docs.rs/ruprizzle-testkit"
-publish     = false
 
 [dependencies]
 sqlx      = { workspace = true, features = ["postgres", "sqlite", "any"] }
