@@ -17,3 +17,7 @@
 
 # Local cargo-deny database and config
 /.cargo
+
+# Private project planning notes (not published to GitHub)
+/ProjectPlan/
+/docs/superpowers/
