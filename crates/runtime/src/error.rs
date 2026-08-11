@@ -66,7 +66,7 @@ impl Error {
 impl Error {
     /// Returns the captured value that violated a unique constraint, if any.
     ///
-    /// This is user data and is intentionally not part of [`Display`].
+    /// This is user data and is intentionally not part of [`std::fmt::Display`].
     #[must_use]
     pub fn conflicting_value(&self) -> Option<&str> {
         match self {
