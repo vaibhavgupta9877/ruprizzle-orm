@@ -280,14 +280,14 @@ async fn dispatch_raw_query(
     match pool {
         Pool::Any(p) => {
             let mut q = sqlx::query::<sqlx::Any>(&sql);
-            for bind in binds {
+            for bind in &binds {
                 q = q.bind(bind);
             }
             q.fetch_all(p).await.map(RowBatch::Any).map_err(Error::from)
         }
         Pool::Postgres(p) => {
             let mut q = sqlx::query::<sqlx::Postgres>(&sql);
-            for bind in binds {
+            for bind in &binds {
                 q = q.bind(bind);
             }
             q.fetch_all(p)
@@ -297,7 +297,7 @@ async fn dispatch_raw_query(
         }
         Pool::Sqlite(p) => {
             let mut q = sqlx::query::<sqlx::Sqlite>(&sql);
-            for bind in binds {
+            for bind in &binds {
                 q = q.bind(bind);
             }
             q.fetch_all(p)
@@ -312,7 +312,7 @@ async fn dispatch_raw_execute(pool: &Pool, sql: String, binds: Vec<Value>) -> Re
     match pool {
         Pool::Any(p) => {
             let mut q = sqlx::query::<sqlx::Any>(&sql);
-            for bind in binds {
+            for bind in &binds {
                 q = q.bind(bind);
             }
             q.execute(p)
@@ -322,7 +322,7 @@ async fn dispatch_raw_execute(pool: &Pool, sql: String, binds: Vec<Value>) -> Re
         }
         Pool::Postgres(p) => {
             let mut q = sqlx::query::<sqlx::Postgres>(&sql);
-            for bind in binds {
+            for bind in &binds {
                 q = q.bind(bind);
             }
             q.execute(p)
@@ -332,7 +332,7 @@ async fn dispatch_raw_execute(pool: &Pool, sql: String, binds: Vec<Value>) -> Re
         }
         Pool::Sqlite(p) => {
             let mut q = sqlx::query::<sqlx::Sqlite>(&sql);
-            for bind in binds {
+            for bind in &binds {
                 q = q.bind(bind);
             }
             q.execute(p)

@@ -10,9 +10,9 @@ async fn value_null_in_middle_does_not_shift() {
     let row: (String, Option<String>, i64) = sqlx::query_as(
         "SELECT ? AS a, ? AS b, ? AS c",
     )
-    .bind(Value::Str("hello".into()))
-    .bind(Value::Null)
-    .bind(Value::I64(42))
+    .bind(&Value::Str("hello".into()))
+    .bind(&Value::Null)
+    .bind(&Value::I64(42))
     .fetch_one(&pool)
     .await
     .unwrap();

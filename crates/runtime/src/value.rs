@@ -166,18 +166,38 @@ impl<T: Encodable> Encodable for Arc<T> {
 
 impl sqlx::Type<sqlx::Any> for Value {
     fn type_info() -> <sqlx::Any as sqlx::Database>::TypeInfo {
-        // The concrete type is reported through `Encode::produces`; this
-        // default is a harmless placeholder for `Value::Null`.
+        // Concrete type is reported through `Encode::produces`; this is a
+        // harmless placeholder for `Value::Null`.
         <String as sqlx::Type<sqlx::Any>>::type_info()
     }
 }
 
-impl<'q> sqlx::Encode<'q, sqlx::Any> for Value {
+impl sqlx::Type<sqlx::Postgres> for Value {
+    fn type_info() -> <sqlx::Postgres as sqlx::Database>::TypeInfo {
+        // Concrete type is reported through `Encode::produces`; this is a
+        // harmless placeholder for `Value::Null`.
+        <String as sqlx::Type<sqlx::Postgres>>::type_info()
+    }
+}
+
+impl sqlx::Type<sqlx::Sqlite> for Value {
+    fn type_info() -> <sqlx::Sqlite as sqlx::Database>::TypeInfo {
+        // Concrete type is reported through `Encode::produces`; this is a
+        // harmless placeholder for `Value::Null`.
+        <String as sqlx::Type<sqlx::Sqlite>>::type_info()
+    }
+}
+
+// P1-4: encode `&'q Value` by reference so `Str`/`Bytes` never re-allocate.
+// Binding `&Value` instead of `Value` lets sqlx see the `'q` lifetime it needs
+// to borrow `Arc<str>` / `Arc<[u8]>` data directly.
+
+impl<'q> sqlx::Encode<'q, sqlx::Any> for &'q Value {
     fn encode_by_ref(
         &self,
         buf: &mut <sqlx::Any as sqlx::Database>::ArgumentBuffer<'q>,
     ) -> Result<sqlx::encode::IsNull, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        match self {
+        match *self {
             // The `Any` driver drops `IsNull::Yes` for non-`Option` Rust types,
             // which silently shifts every subsequent placeholder. Encoding `None`
             // as an `Option<String>` keeps the parameter in place and lets the
@@ -186,10 +206,10 @@ impl<'q> sqlx::Encode<'q, sqlx::Any> for Value {
                 let n: Option<String> = None;
                 sqlx::Encode::<sqlx::Any>::encode_by_ref(&n, buf)
             }
-            Value::Bool(b) => sqlx::Encode::<sqlx::Any>::encode_by_ref(b, buf),
-            Value::I32(i) => sqlx::Encode::<sqlx::Any>::encode_by_ref(i, buf),
-            Value::I64(i) => sqlx::Encode::<sqlx::Any>::encode_by_ref(i, buf),
-            Value::F64(f) => sqlx::Encode::<sqlx::Any>::encode_by_ref(f, buf),
+            Value::Bool(b) => sqlx::Encode::<sqlx::Any>::encode_by_ref(&b, buf),
+            Value::I32(i) => sqlx::Encode::<sqlx::Any>::encode_by_ref(&i, buf),
+            Value::I64(i) => sqlx::Encode::<sqlx::Any>::encode_by_ref(&i, buf),
+            Value::F64(f) => sqlx::Encode::<sqlx::Any>::encode_by_ref(&f, buf),
             // The `Any` driver does not have `Encode<Any>` for chrono/uuid/decimal/json,
             // so we serialize these to a type the `Any` driver understands and let the
             // database cast from text/bytes.
@@ -197,10 +217,7 @@ impl<'q> sqlx::Encode<'q, sqlx::Any> for Value {
                 let s = d.to_string();
                 sqlx::Encode::<sqlx::Any>::encode_by_ref(&s, buf)
             }
-            Value::Str(s) => {
-                let s = s.to_string();
-                sqlx::Encode::<sqlx::Any>::encode_by_ref(&s, buf)
-            }
+            Value::Str(s) => sqlx::Encode::<sqlx::Any>::encode(s.as_ref(), buf),
             Value::Uuid(u) => {
                 let s = u.to_string();
                 sqlx::Encode::<sqlx::Any>::encode_by_ref(&s, buf)
@@ -221,16 +238,13 @@ impl<'q> sqlx::Encode<'q, sqlx::Any> for Value {
                 let s = v.to_string();
                 sqlx::Encode::<sqlx::Any>::encode_by_ref(&s, buf)
             }
-            Value::Bytes(b) => {
-                let v: Vec<u8> = b.iter().copied().collect();
-                sqlx::Encode::<sqlx::Any>::encode_by_ref(&v, buf)
-            }
+            Value::Bytes(b) => sqlx::Encode::<sqlx::Any>::encode(b.as_ref(), buf),
             Value::Array(_) => Err("array bind values are not supported yet".into()),
         }
     }
 
     fn produces(&self) -> Option<<sqlx::Any as sqlx::Database>::TypeInfo> {
-        Some(match self {
+        Some(match *self {
             Value::Null => <String as sqlx::Type<sqlx::Any>>::type_info(),
             Value::Bool(_) => <bool as sqlx::Type<sqlx::Any>>::type_info(),
             Value::I32(_) => <i32 as sqlx::Type<sqlx::Any>>::type_info(),
@@ -250,51 +264,34 @@ impl<'q> sqlx::Encode<'q, sqlx::Any> for Value {
     }
 }
 
-impl sqlx::Type<sqlx::Postgres> for Value {
-    fn type_info() -> <sqlx::Postgres as sqlx::Database>::TypeInfo {
-        // Concrete type is reported through `Encode::produces`; this is a
-        // harmless placeholder for `Value::Null`.
-        <String as sqlx::Type<sqlx::Postgres>>::type_info()
-    }
-}
-
-impl<'q> sqlx::Encode<'q, sqlx::Postgres> for Value {
+impl<'q> sqlx::Encode<'q, sqlx::Postgres> for &'q Value {
     fn encode_by_ref(
         &self,
         buf: &mut <sqlx::Postgres as sqlx::Database>::ArgumentBuffer<'q>,
     ) -> Result<sqlx::encode::IsNull, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        match self {
+        match *self {
             Value::Null => {
                 let n: Option<String> = None;
                 sqlx::Encode::<sqlx::Postgres>::encode_by_ref(&n, buf)
             }
-            Value::Bool(b) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(b, buf),
-            Value::I32(i) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(i, buf),
-            Value::I64(i) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(i, buf),
-            Value::F64(f) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(f, buf),
+            Value::Bool(b) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(&b, buf),
+            Value::I32(i) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(&i, buf),
+            Value::I64(i) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(&i, buf),
+            Value::F64(f) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(&f, buf),
             Value::Decimal(d) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(d, buf),
-            Value::Str(s) => {
-                let s = s.to_string();
-                sqlx::Encode::<sqlx::Postgres>::encode_by_ref(&s, buf)
-            }
+            Value::Str(s) => sqlx::Encode::<sqlx::Postgres>::encode(s.as_ref(), buf),
             Value::Uuid(u) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(u, buf),
             Value::DateTime(dt) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(dt, buf),
             Value::Date(d) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(d, buf),
             Value::Time(t) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(t, buf),
-            Value::Json(v) => {
-                let j = sqlx::types::Json(v.clone());
-                sqlx::Encode::<sqlx::Postgres>::encode_by_ref(&j, buf)
-            }
-            Value::Bytes(b) => {
-                let v: Vec<u8> = b.iter().copied().collect();
-                sqlx::Encode::<sqlx::Postgres>::encode_by_ref(&v, buf)
-            }
+            Value::Json(v) => sqlx::Encode::<sqlx::Postgres>::encode_by_ref(v, buf),
+            Value::Bytes(b) => sqlx::Encode::<sqlx::Postgres>::encode(b.as_ref(), buf),
             Value::Array(_) => Err("array bind values are not supported yet".into()),
         }
     }
 
     fn produces(&self) -> Option<<sqlx::Postgres as sqlx::Database>::TypeInfo> {
-        Some(match self {
+        Some(match *self {
             Value::Null => <String as sqlx::Type<sqlx::Postgres>>::type_info(),
             Value::Bool(_) => <bool as sqlx::Type<sqlx::Postgres>>::type_info(),
             Value::I32(_) => <i32 as sqlx::Type<sqlx::Postgres>>::type_info(),
@@ -313,37 +310,25 @@ impl<'q> sqlx::Encode<'q, sqlx::Postgres> for Value {
     }
 }
 
-impl sqlx::Type<sqlx::Sqlite> for Value {
-    fn type_info() -> <sqlx::Sqlite as sqlx::Database>::TypeInfo {
-        // Concrete type is reported through `Encode::produces`; this is a
-        // harmless placeholder for `Value::Null` and for text-encoded rich
-        // types.
-        <String as sqlx::Type<sqlx::Sqlite>>::type_info()
-    }
-}
-
-impl<'q> sqlx::Encode<'q, sqlx::Sqlite> for Value {
+impl<'q> sqlx::Encode<'q, sqlx::Sqlite> for &'q Value {
     fn encode_by_ref(
         &self,
         buf: &mut <sqlx::Sqlite as sqlx::Database>::ArgumentBuffer<'q>,
     ) -> Result<sqlx::encode::IsNull, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        match self {
+        match *self {
             Value::Null => {
                 let n: Option<String> = None;
                 sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(&n, buf)
             }
-            Value::Bool(b) => sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(b, buf),
-            Value::I32(i) => sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(i, buf),
-            Value::I64(i) => sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(i, buf),
-            Value::F64(f) => sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(f, buf),
+            Value::Bool(b) => sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(&b, buf),
+            Value::I32(i) => sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(&i, buf),
+            Value::I64(i) => sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(&i, buf),
+            Value::F64(f) => sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(&f, buf),
             Value::Decimal(d) => {
                 let s = d.to_string();
                 sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(&s, buf)
             }
-            Value::Str(s) => {
-                let s = s.to_string();
-                sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(&s, buf)
-            }
+            Value::Str(s) => sqlx::Encode::<sqlx::Sqlite>::encode(s.as_ref(), buf),
             Value::Uuid(u) => {
                 let s = u.to_string();
                 sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(&s, buf)
@@ -364,16 +349,13 @@ impl<'q> sqlx::Encode<'q, sqlx::Sqlite> for Value {
                 let s = v.to_string();
                 sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(&s, buf)
             }
-            Value::Bytes(b) => {
-                let v: Vec<u8> = b.iter().copied().collect();
-                sqlx::Encode::<sqlx::Sqlite>::encode_by_ref(&v, buf)
-            }
+            Value::Bytes(b) => sqlx::Encode::<sqlx::Sqlite>::encode(b.as_ref(), buf),
             Value::Array(_) => Err("array bind values are not supported yet".into()),
         }
     }
 
     fn produces(&self) -> Option<<sqlx::Sqlite as sqlx::Database>::TypeInfo> {
-        Some(match self {
+        Some(match *self {
             Value::Null
             | Value::Decimal(_)
             | Value::Str(_)

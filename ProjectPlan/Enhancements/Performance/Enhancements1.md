@@ -1,6 +1,6 @@
 # Performance Enhancements 1 — where the time actually goes
 
-**Status:** in progress — P0–P2 (through P2-4) implemented; P2-5 and P1-4 still open.
+**Status:** in progress — P0–P2 (through P2-4) and P1-4 implemented; P2-5 still open.
 **Date:** 2026-08-11
 **Baseline:** `0.1.0-alpha.3`
 **Branch:** `perf/research-harnesses`
@@ -534,7 +534,7 @@ still open. Commit hashes are from the `perf/research-harnesses` branch.
 | **P1-1** | `LIMIT 1` in `fetch_optional` / `fetch_one` | F1 | **implemented** | `83a2a9e`. Query compile now injects `limit = Some(1)` for unbounded `fetch_one`/`fetch_optional` calls. |
 | **P1-2** | Compile `count()` / `exists()` from the AST | F9 | **implemented** | `83a2a9e`. New `compile::count` and `compile::exists` strip `ORDER BY` / `LIMIT` / `OFFSET`. |
 | **P1-3** | Make `.fetch_all()` on a query with includes a compile error | F3 | **implemented** | `83a2a9e`. `fetch_all` is now only defined on `SelectQuery<'db, M, Out, ()>`; `exec()` remains the include-aware path. |
-| **P1-4** | Stop re-allocating `Value::Str` / `Value::Bytes` on every bind | F4 | **in progress** | Native backends landed, so `Arc<str>`/`Arc<[u8]>` can be encoded by reference for `Postgres`/`Sqlite`. `crates/runtime/src/value.rs` currently still materialises an owned `String`/`Vec<u8>` per bind; a binding-side encode refactor is the remaining work. |
+| **P1-4** | Stop re-allocating `Value::Str` / `Value::Bytes` on every bind | F4 | **implemented** | `sqlx::Encode`/`Type` are now implemented for `&'q Value`; `executor.rs` and `tx.rs` bind `&Value`. `Str`/`Bytes` encode `&str`/`&[u8]` directly from `Arc<str>`/`Arc<[u8]>` for `Any`, `Postgres`, and `Sqlite` (no `to_string()` / `collect()` allocation). |
 | **P1-5** | Correct `BenchmarkResults.md` | — | **implemented** | `83a2a9e` (analysis) and `e513f7e` (re-run and update). Re-ran cross-ORM and attribution harnesses; attribution now separates ORM, `Any`, and driver floor. |
 | **P1-6** | Document `stream()` as deliberately buffered | F10 | **implemented** | `KnownLimitations.md` updated in `83a2a9e`; `Executor::stream_raw` doc comment updated to state buffering is deliberate. |
 
@@ -556,9 +556,8 @@ The remaining work that is either in progress or unblocked:
    Postgres benchmark showing ≥3× improvement.
 
 2. **P1-4** — Stop re-allocating `Value::Str` / `Value::Bytes` on every bind.
-   Native backends now remove the `sqlx::Any` lifetime blocker; the remaining
-   work is to make the per-backend `Value::encode` paths bind `&str` and
-   `&[u8]` directly from the `Arc` data.
+   Implemented by binding `&'q Value`: `Str`/`Bytes` now encode `&str`/`&[u8]`
+   directly from the `Arc` data for `Any`, `Postgres`, and `Sqlite`.
 
 ### Findings not yet addressed
 

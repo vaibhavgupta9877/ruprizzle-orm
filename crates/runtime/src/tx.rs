@@ -147,7 +147,7 @@ impl Tx {
         match tx {
             TxInner::Any(tx) => {
                 let mut q = sqlx::query::<Any>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.execute(&mut **tx)
@@ -157,7 +157,7 @@ impl Tx {
             }
             TxInner::Postgres(tx) => {
                 let mut q = sqlx::query::<Postgres>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.execute(&mut **tx)
@@ -167,7 +167,7 @@ impl Tx {
             }
             TxInner::Sqlite(tx) => {
                 let mut q = sqlx::query::<Sqlite>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.execute(&mut **tx)
@@ -196,21 +196,21 @@ impl Tx {
         match tx {
             TxInner::Any(tx) => {
                 let mut q = sqlx::query_as::<Any, T>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
             }
             TxInner::Postgres(tx) => {
                 let mut q = sqlx::query_as::<Postgres, T>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
             }
             TxInner::Sqlite(tx) => {
                 let mut q = sqlx::query_as::<Sqlite, T>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
@@ -236,21 +236,21 @@ impl Tx {
         match tx {
             TxInner::Any(tx) => {
                 let mut q = sqlx::query_as::<Any, T>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.fetch_one(&mut **tx).await.map_err(Error::Sqlx)
             }
             TxInner::Postgres(tx) => {
                 let mut q = sqlx::query_as::<Postgres, T>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.fetch_one(&mut **tx).await.map_err(Error::Sqlx)
             }
             TxInner::Sqlite(tx) => {
                 let mut q = sqlx::query_as::<Sqlite, T>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.fetch_one(&mut **tx).await.map_err(Error::Sqlx)
@@ -276,21 +276,21 @@ impl Tx {
         match tx {
             TxInner::Any(tx) => {
                 let mut q = sqlx::query_as::<Any, T>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.fetch_optional(&mut **tx).await.map_err(Error::Sqlx)
             }
             TxInner::Postgres(tx) => {
                 let mut q = sqlx::query_as::<Postgres, T>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.fetch_optional(&mut **tx).await.map_err(Error::Sqlx)
             }
             TxInner::Sqlite(tx) => {
                 let mut q = sqlx::query_as::<Sqlite, T>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.fetch_optional(&mut **tx).await.map_err(Error::Sqlx)
@@ -317,14 +317,14 @@ impl Tx {
         match tx {
             TxInner::Any(tx) => {
                 let mut q = sqlx::query::<Any>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.fetch_all(&mut **tx).await.map(RowBatch::Any).map_err(Error::Sqlx)
             }
             TxInner::Postgres(tx) => {
                 let mut q = sqlx::query::<Postgres>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.fetch_all(&mut **tx)
@@ -334,7 +334,7 @@ impl Tx {
             }
             TxInner::Sqlite(tx) => {
                 let mut q = sqlx::query::<Sqlite>(sql);
-                for b in binds {
+                for b in &binds {
                     q = q.bind(b);
                 }
                 q.fetch_all(&mut **tx)
