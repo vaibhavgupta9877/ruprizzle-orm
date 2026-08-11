@@ -1,0 +1,172 @@
+---
+source: crates/codegen/tests/snapshots.rs
+expression: content
+---
+#![allow(clippy::all, clippy::pedantic, unused_imports)]
+use ::ruprizzle::serde::{Deserialize, Serialize};
+use ::ruprizzle::sqlx::any::AnyRow;
+use ::ruprizzle::types::chrono::{DateTime, NaiveDate, NaiveTime, Utc};
+use ::ruprizzle::types::{Decimal, Uuid};
+use ::ruprizzle::serde_json::Value as JsonValue;
+use ::ruprizzle::Related;
+use ::ruprizzle::Column;
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(crate = "::ruprizzle::serde")]
+pub struct Product {
+    pub id: Uuid,
+    pub sku: String,
+    pub name: String,
+    ///Exact, because floating point money is a bug waiting for an audit.
+    pub price: Decimal,
+    #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
+    pub items: ::ruprizzle::Related<Vec<super::order_item::OrderItem>>,
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Product {
+    fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
+            sku: ::ruprizzle::decode::direct::<String>(row, "sku")?,
+            name: ::ruprizzle::decode::direct::<String>(row, "name")?,
+            price: ::ruprizzle::decode::text::<Decimal>(row, "price")?,
+            items: ::ruprizzle::Related::default(),
+        })
+    }
+}
+/// Insert shape: required fields are required, defaulted/optional fields
+/// are `Option` so the database can fill them in.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "::ruprizzle::serde")]
+pub struct ProductInsert {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<Uuid>,
+    pub sku: String,
+    pub name: String,
+    pub price: Decimal,
+}
+/// Update shape: every field is `Option` to support explicit nulls.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(crate = "::ruprizzle::serde")]
+pub struct ProductUpdate {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sku: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub price: Option<Decimal>,
+}
+impl ::ruprizzle::Model for Product {
+    const TABLE: &'static str = "products";
+    const PRIMARY_KEY: &'static str = "id";
+}
+/// Table name for this model.
+pub const TABLE: &str = "products";
+pub const ID: Column<Product, Uuid> = Column::new("products", "id");
+pub const SKU: Column<Product, String> = Column::new("products", "sku");
+pub const NAME: Column<Product, String> = Column::new("products", "name");
+pub const PRICE: Column<Product, Decimal> = Column::new("products", "price");
+/// Returns an `IncludeList` for this relation.
+pub fn items() -> ::ruprizzle::IncludeList<
+    'static,
+    Product,
+    super::order_item::OrderItem,
+    Uuid,
+    (),
+> {
+    ::ruprizzle::IncludeList::new(
+        |__row| __row.id,
+        |__row, __loaded| __row.items = __loaded,
+        super::order_item::PRODUCT_ID,
+        |__child| __child.product_id,
+    )
+}
+/// Returns a filter for parents that have at least one matching child.
+pub fn items_some(
+    f: ::ruprizzle::Filter<super::order_item::OrderItem>,
+) -> ::ruprizzle::Filter<Product> {
+    ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+        child_table: "order_items",
+        child_col: "product_id",
+        parent_table: "products",
+        parent_col: "id",
+        filter: Box::new(f.node),
+        negated: false,
+    })
+}
+/// Returns a filter for parents that have no matching child.
+pub fn items_none(
+    f: ::ruprizzle::Filter<super::order_item::OrderItem>,
+) -> ::ruprizzle::Filter<Product> {
+    ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+        child_table: "order_items",
+        child_col: "product_id",
+        parent_table: "products",
+        parent_col: "id",
+        filter: Box::new(f.node),
+        negated: true,
+    })
+}
+/// Returns a filter for parents where every matching child satisfies `f`.
+/// Vacuously true for parents with no children.
+pub fn items_every(
+    f: ::ruprizzle::Filter<super::order_item::OrderItem>,
+) -> ::ruprizzle::Filter<Product> {
+    ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+        child_table: "order_items",
+        child_col: "product_id",
+        parent_table: "products",
+        parent_col: "id",
+        filter: Box::new((!f).node),
+        negated: true,
+    })
+}
+/// Prisma-flavoured repository for `#model_name`.
+#[derive(Debug, Clone, Copy)]
+pub struct ProductRepo<'a> {
+    db: &'a super::Db,
+}
+impl<'a> ProductRepo<'a> {
+    /// Creates a new repository handle.
+    pub(crate) fn new(db: &'a super::Db) -> Self {
+        Self { db }
+    }
+    /// Start a `find_many` query.
+    pub fn find_many(&self) -> ::ruprizzle::SelectQuery<'a, Product> {
+        ::ruprizzle::SelectQuery::new(self.db.raw_pool())
+    }
+    /// Start an `insert` query.
+    pub fn create(&self, _data: ProductInsert) -> ::ruprizzle::InsertQuery<'a, Product> {
+        let mut insert = ::ruprizzle::InsertQuery::new(self.db.raw_pool());
+        insert = insert.set_optional(ID, _data.id);
+        insert = insert.set(SKU, _data.sku);
+        insert = insert.set(NAME, _data.name);
+        insert = insert.set(PRICE, _data.price);
+        insert
+    }
+    /// Start a multi-row `insert` query.
+    pub fn create_many(
+        &self,
+        _data: Vec<ProductInsert>,
+    ) -> ::ruprizzle::InsertManyQuery<'a, Product> {
+        let mut q = ::ruprizzle::InsertManyQuery::new(self.db.raw_pool());
+        for _row in _data {
+            q = q
+                .row([
+                    ("id", ::ruprizzle::Encodable::to_value(&_row.id)),
+                    ("sku", ::ruprizzle::Encodable::to_value(&_row.sku)),
+                    ("name", ::ruprizzle::Encodable::to_value(&_row.name)),
+                    ("price", ::ruprizzle::Encodable::to_value(&_row.price)),
+                ]);
+        }
+        q
+    }
+    /// Start an `update` query.
+    pub fn update(&self) -> ::ruprizzle::UpdateQuery<'a, Product> {
+        ::ruprizzle::UpdateQuery::new(self.db.raw_pool())
+    }
+    /// Start a `delete` query.
+    pub fn delete(&self) -> ::ruprizzle::DeleteQuery<'a, Product> {
+        ::ruprizzle::DeleteQuery::new(self.db.raw_pool())
+    }
+}

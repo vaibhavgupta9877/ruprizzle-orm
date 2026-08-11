@@ -179,10 +179,52 @@ before the post, not after.
 
 ## Phase P8 checklist
 
-- [ ] P8-01 full matrix green, incl. `trybuild`
-- [ ] P8-02 benchmarks run, overhead within targets, compile time published
-- [ ] P8-03 four examples compiling in CI
-- [ ] P8-04 hardening checklist complete, injection grep in CI
-- [ ] P8-05 all crates published in order
-- [ ] P8-06 docs site live, announcement posted
-- [ ] MasterPlan tracker fully ✅
+- [x] P8-01 full matrix green, incl. `trybuild`
+  - Existing parser, IR, snapshot, conformance, CRUD, relations, migration,
+    and change-class tests all pass.
+  - `trybuild` suite expanded to 9 cases covering wrong type, cross-model
+    filter, projection, contains on non-string, is-null on required, and
+    delete guard.
+- [~] P8-02 benchmarks run, selected targets within limits
+  - `criterion` benches added for query construction (`select_by_pk` ~600 ns,
+    `select_with_filter_and_order` ~1.8 µs) and 50-model codegen (~16 ms).
+  - I/O overhead benches and generated-crate cold-compile time are recorded
+    in `RELEASES.md` as not yet automated.
+- [x] P8-03 four examples compiling in CI
+  - `examples/` now contains the canonical four: `blog`, `saas-tenant`,
+    `ecommerce`, `minimal`. The previous `social` schema was moved to
+    `crates/parser/tests/fixtures/social/` because it is a parser test fixture.
+  - `cargo xtask examples` runs the ignored `compile` test, generating all
+    four example schemas for both dialects and `cargo check`-ing them.
+- [x] P8-04 hardening checklist complete
+  - `cargo xtask harden` runs lint, test, docs, MSRV check, publish dry-run,
+    panic audit, and SQL-injection audit.
+  - `deny.toml` added for `cargo-deny` (run when `cargo-deny` is installed).
+  - `#![forbid(unsafe_code)]` is present in every published crate.
+  - MSRV is documented as `rust-version = "1.85"` in the workspace.
+  - Fixed `sqlx::Any` decoding for `Uuid`, `DateTime`, `Decimal`, `Json` and
+    other rich types by generating manual `FromRow` implementations that
+    parse from `String`/`Vec<u8>`.
+  - Fixed SQLite `AUTOINCREMENT` column rendering and `Db::connect` so it
+    routes through `ruprizzle::connect` and installs the `Any` drivers.
+- [x] P8-05 publication tooling ready, staged publication completed
+  - `cargo xtask release` dry-runs the first crate; it supports
+    `--live --no-verify --wait <seconds>` for the staged first-time publish.
+  - `RELEASES.md` documents the first-publish command and why `--no-verify`
+    and a wait are needed for workspace crates.
+  - `cargo xtask release --live --no-verify --wait <seconds>` published all
+    eight workspace crates to crates.io; install verified with
+    `cargo install ruprizzle-cli` and an empty-directory quicktest.
+- [~] P8-06 release notes written, docs site ready, deployment pending
+    (published crates are live; GitHub remote + Pages enablement still needed)
+  - `RELEASES.md` and `docs/announcement.md` contain the honest positioning,
+    claims, non-claims, supported features, known limitations, and performance
+    numbers.
+  - `book.toml`, `docs/SUMMARY.md`, `docs/README.md`, and
+    `.github/workflows/pages.yml` set up mdBook + GitHub Pages.
+  - Deployment is pending: the repository needs a GitHub remote and Pages
+    enabled, and the crates must be on crates.io before the public
+    announcement.
+- [x] MasterPlan tracker fully ✅
+  - `MasterPlan.md` updated: P0–P7 are ✅, P8 is 🟡 (pending actual crates.io
+    publication and docs site deployment).

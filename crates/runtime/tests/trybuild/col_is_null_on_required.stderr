@@ -1,0 +1,8 @@
+error[E0599]: no method named `is_null` found for struct `ruprizzle::Column<User, std::string::String>` in the current scope
+  --> tests/trybuild/col_is_null_on_required.rs:18:19
+   |
+18 |     let _ = EMAIL.is_null();
+   |                   ^^^^^^^ method not found in `ruprizzle::Column<User, std::string::String>`
+   |
+   = note: the method was found for
+           - `ruprizzle::Column<M, std::option::Option<T>>`

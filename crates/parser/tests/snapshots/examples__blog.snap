@@ -1,0 +1,527 @@
+---
+source: crates/parser/tests/examples.rs
+expression: schema
+---
+{
+  "version": 1,
+  "datasource": {
+    "name": "db",
+    "provider": "postgres",
+    "url": {
+      "Env": "DATABASE_URL"
+    },
+    "span": {
+      "start": 198,
+      "end": 272
+    }
+  },
+  "generator": {
+    "name": "client",
+    "output": "src/db",
+    "module_name": "db",
+    "max_include_depth": 3,
+    "span": {
+      "start": 274,
+      "end": 340
+    }
+  },
+  "enums": {
+    "Role": {
+      "name": "Role",
+      "db_name": "role",
+      "variants": {
+        "USER": {
+          "name": "USER",
+          "db_name": "USER",
+          "docs": "Can read, and write their own posts.",
+          "span": {
+            "start": 390,
+            "end": 440
+          }
+        },
+        "ADMIN": {
+          "name": "ADMIN",
+          "db_name": "ADMIN",
+          "docs": "Can write anything.",
+          "span": {
+            "start": 440,
+            "end": 472
+          }
+        }
+      },
+      "docs": "What a user is allowed to do.",
+      "span": {
+        "start": 342,
+        "end": 473
+      }
+    }
+  },
+  "models": {
+    "User": {
+      "name": "User",
+      "table": "users",
+      "fields": {
+        "id": {
+          "name": "id",
+          "column": "id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Uuid7"
+          },
+          "attrs": {
+            "is_id": true,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 516,
+            "end": 556
+          }
+        },
+        "email": {
+          "name": "email",
+          "column": "email",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": true,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 559,
+            "end": 588
+          }
+        },
+        "name": {
+          "name": "name",
+          "column": "name",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": true,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 588,
+            "end": 608
+          }
+        },
+        "role": {
+          "name": "role",
+          "column": "role",
+          "kind": {
+            "Enum": "Role"
+          },
+          "optional": false,
+          "default": {
+            "Literal": {
+              "EnumVariant": "USER"
+            }
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 608,
+            "end": 641
+          }
+        },
+        "posts": {
+          "name": "posts",
+          "column": "posts",
+          "kind": {
+            "List": {
+              "Relation": {
+                "target": "Post",
+                "name": null,
+                "fields": [],
+                "references": [],
+                "on_delete": null,
+                "on_update": null,
+                "resolved": 0,
+                "span": {
+                  "start": 644,
+                  "end": 663
+                }
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 644,
+            "end": 663
+          }
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "column": "created_at",
+          "kind": {
+            "Scalar": "DateTime"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Now"
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 663,
+            "end": 716
+          }
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "column": "updated_at",
+          "kind": {
+            "Scalar": "DateTime"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": true,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 719,
+            "end": 772
+          }
+        }
+      },
+      "primary_key": {
+        "fields": [
+          "id"
+        ],
+        "name": null,
+        "span": {
+          "start": 516,
+          "end": 556
+        }
+      },
+      "indexes": [
+        {
+          "db_name": "users_email_idx",
+          "fields": [
+            {
+              "field": "email",
+              "order": "Asc"
+            }
+          ],
+          "span": {
+            "start": 776,
+            "end": 792
+          }
+        }
+      ],
+      "uniques": [],
+      "docs": "A registered account.",
+      "span": {
+        "start": 475,
+        "end": 811
+      }
+    },
+    "Post": {
+      "name": "Post",
+      "table": "posts",
+      "fields": {
+        "id": {
+          "name": "id",
+          "column": "id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Uuid7"
+          },
+          "attrs": {
+            "is_id": true,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 862,
+            "end": 901
+          }
+        },
+        "title": {
+          "name": "title",
+          "column": "title",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": {
+              "name": "VarChar",
+              "args": [
+                "200"
+              ],
+              "span": {
+                "start": 922,
+                "end": 938
+              }
+            },
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 904,
+            "end": 938
+          }
+        },
+        "body": {
+          "name": "body",
+          "column": "body",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": true,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 941,
+            "end": 961
+          }
+        },
+        "published": {
+          "name": "published",
+          "column": "published",
+          "kind": {
+            "Scalar": "Boolean"
+          },
+          "optional": false,
+          "default": {
+            "Literal": {
+              "Bool": false
+            }
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 961,
+            "end": 994
+          }
+        },
+        "authorId": {
+          "name": "authorId",
+          "column": "author_id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 998,
+            "end": 1033
+          }
+        },
+        "author": {
+          "name": "author",
+          "column": "author",
+          "kind": {
+            "Relation": {
+              "target": "User",
+              "name": null,
+              "fields": [
+                "authorId"
+              ],
+              "references": [
+                "id"
+              ],
+              "on_delete": "Cascade",
+              "on_update": null,
+              "resolved": 0,
+              "span": {
+                "start": 1054,
+                "end": 1120
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1036,
+            "end": 1120
+          }
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "column": "created_at",
+          "kind": {
+            "Scalar": "DateTime"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Now"
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1124,
+            "end": 1177
+          }
+        }
+      },
+      "primary_key": {
+        "fields": [
+          "id"
+        ],
+        "name": null,
+        "span": {
+          "start": 862,
+          "end": 901
+        }
+      },
+      "indexes": [
+        {
+          "db_name": "posts_author_id_published_idx",
+          "fields": [
+            {
+              "field": "authorId",
+              "order": "Asc"
+            },
+            {
+              "field": "published",
+              "order": "Asc"
+            }
+          ],
+          "span": {
+            "start": 1181,
+            "end": 1211
+          }
+        }
+      ],
+      "uniques": [],
+      "docs": "An article, published or not.",
+      "span": {
+        "start": 813,
+        "end": 1230
+      }
+    }
+  },
+  "relations": [
+    {
+      "name": "PostToUser",
+      "kind": "ManyToOne",
+      "owner": "Post",
+      "owner_cols": [
+        "author_id"
+      ],
+      "owner_field": "author",
+      "target": "User",
+      "target_table": "users",
+      "target_cols": [
+        "id"
+      ],
+      "target_field": "posts",
+      "on_delete": "Cascade",
+      "on_update": "Cascade",
+      "optional": false,
+      "constraint_name": "posts_author_id_fkey",
+      "span": {
+        "start": 1054,
+        "end": 1120
+      }
+    }
+  ]
+}

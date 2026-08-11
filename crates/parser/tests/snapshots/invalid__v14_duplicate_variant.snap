@@ -1,0 +1,24 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v14_duplicate_variant
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: enum `Role` declares variant `USER` twice
+    Diagnostic severity: error
+
+Begin snippet for v14_duplicate_variant starting at line 6, column 1
+
+snippet line 6: enum Role {
+snippet line 7:   USER
+    label starting at line 7, column 3: first declared here
+snippet line 8:   USER
+    label ending at line 8, column 2: first declared here
+    label starting at line 8, column 3: redeclared here
+snippet line 9: }
+    label ending at line 9, column 0: redeclared here
+snippet line 10: 
+diagnostic help: remove the repeat, or give one variant a distinct name and `@map("USER")`
+diagnostic code: ruprizzle::duplicate_variant

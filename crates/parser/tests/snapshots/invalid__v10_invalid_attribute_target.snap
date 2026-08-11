@@ -1,0 +1,20 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v10_invalid_attribute_target
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: `@updatedAt` cannot be used on a `String` field
+    Diagnostic severity: error
+
+Begin snippet for v10_invalid_attribute_target starting at line 7, column 1
+
+snippet line 7:   id   Uuid   @id
+snippet line 8:   name String @updatedAt
+    label starting at line 8, column 15: not valid here
+snippet line 9: }
+    label ending at line 9, column 0: not valid here
+diagnostic help: `@updatedAt` stamps a timestamp, so it needs a `DateTime` field
+diagnostic code: ruprizzle::invalid_attribute_target

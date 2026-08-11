@@ -58,6 +58,10 @@ fn default_ir_version() -> u32 {
     IR_VERSION
 }
 
+fn empty_string() -> String {
+    String::new()
+}
+
 impl Schema {
     /// Looks up a model by name.
     #[must_use]
@@ -302,15 +306,12 @@ pub struct Field {
 impl Field {
     /// Whether this field corresponds to a physical column.
     ///
-    /// `false` for `Post[]` and for the non-owning side of a 1:1, both of which
-    /// are navigation properties backed by a column on the *other* table.
+    /// `false` for navigation properties (`Post[]`, the owner side of a relation,
+    /// or the non-owning side of a 1:1). The foreign key columns of a relation
+    /// are the scalar fields named in the relation's `fields:`.
     #[must_use]
     pub fn has_column(&self) -> bool {
-        match &self.kind {
-            FieldKind::Scalar(_) | FieldKind::Enum(_) => true,
-            FieldKind::List(_) => false,
-            FieldKind::Relation(r) => !r.fields.is_empty(),
-        }
+        matches!(&self.kind, FieldKind::Scalar(_) | FieldKind::Enum(_))
     }
 
     /// The relation this field navigates, if any — including through a list.
@@ -692,6 +693,9 @@ pub struct ResolvedRelation {
     pub owner_field: FieldName,
     /// The referenced model.
     pub target: ModelName,
+    /// Physical table name of the referenced model.
+    #[serde(default = "empty_string")]
+    pub target_table: String,
     /// Referenced columns on the target, in order, positionally matching
     /// `owner_cols`.
     pub target_cols: Vec<String>,

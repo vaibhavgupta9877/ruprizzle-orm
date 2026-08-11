@@ -1,0 +1,14 @@
+error[E0599]: no method named `contains` found for struct `ruprizzle::Column<User, uuid::Uuid>` in the current scope
+  --> tests/trybuild/contains_on_uuid.rs:18:21
+   |
+18 |     let _ = USER_ID.contains("x");
+   |                     ^^^^^^^^ method not found in `ruprizzle::Column<User, uuid::Uuid>`
+   |
+   = note: the method was found for
+           - `ruprizzle::Column<M, std::string::String>`
+help: some of the expressions' fields have a method of the same name
+   |
+18 |     let _ = USER_ID.column.contains("x");
+   |                     +++++++
+18 |     let _ = USER_ID.table.contains("x");
+   |                     ++++++

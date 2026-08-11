@@ -1,0 +1,23 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v01_multiple_primary_keys
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: model `User` declares more than one primary key
+    Diagnostic severity: error
+
+Begin snippet for v01_multiple_primary_keys starting at line 6, column 1
+
+snippet line 6: model User {
+snippet line 7:   id    Uuid   @id
+    label starting at line 7, column 3: first one is here
+snippet line 8:   email String @id
+    label ending at line 8, column 2: first one is here
+    label starting at line 8, column 3: second primary key declared here
+snippet line 9: }
+    label ending at line 9, column 0: second primary key declared here
+diagnostic help: use a single `@@id([a, b])` for a composite key instead of several `@id` fields
+diagnostic code: ruprizzle::multiple_primary_keys

@@ -1,0 +1,52 @@
+// The awkward shapes: two relations between the same pair of models, and a model
+// that references itself.
+//
+// Both are where schema bugs live, so the example set carries them rather than
+// leaving them to the failing fixtures. Each relation is named, which is exactly
+// what V08 requires once a pair of models is joined more than once.
+
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  output      = "src/db"
+  module_name = "db"
+}
+
+model Person {
+  id        Uuid     @id @default(uuid7())
+  handle    String   @unique
+  following Follow[] @relation("follower")
+  followers Follow[] @relation("followee")
+  threads   Thread[] @relation("threadAuthor")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("people")
+}
+
+/// A directed follow edge.
+model Follow {
+  followerId Uuid     @map("follower_id")
+  follower   Person   @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followeeId Uuid     @map("followee_id")
+  followee   Person   @relation("followee", fields: [followeeId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([followerId, followeeId])
+}
+
+/// A post, optionally a reply to another post.
+model Thread {
+  id       Uuid     @id @default(uuid7())
+  body     String
+  authorId Uuid     @map("author_id")
+  author   Person   @relation("threadAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  parentId Uuid?    @map("parent_id")
+  parent   Thread?  @relation("threadParent", fields: [parentId], references: [id])
+  replies  Thread[] @relation("threadParent")
+
+  @@index([authorId])
+  @@index([parentId])
+}

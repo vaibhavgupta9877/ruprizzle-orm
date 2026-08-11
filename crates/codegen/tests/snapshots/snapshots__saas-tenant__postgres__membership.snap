@@ -1,0 +1,249 @@
+---
+source: crates/codegen/tests/snapshots.rs
+expression: content
+---
+#![allow(clippy::all, clippy::pedantic, unused_imports)]
+use ::ruprizzle::serde::{Deserialize, Serialize};
+use ::ruprizzle::sqlx::any::AnyRow;
+use ::ruprizzle::types::chrono::{DateTime, NaiveDate, NaiveTime, Utc};
+use ::ruprizzle::types::{Decimal, Uuid};
+use ::ruprizzle::serde_json::Value as JsonValue;
+use ::ruprizzle::Related;
+use ::ruprizzle::Column;
+///One account's place in one organisation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(crate = "::ruprizzle::serde")]
+pub struct Membership {
+    pub id: Uuid,
+    pub org_id: Uuid,
+    #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
+    pub organisation: ::ruprizzle::Related<Option<super::organisation::Organisation>>,
+    pub account_id: Uuid,
+    #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
+    pub account: ::ruprizzle::Related<Option<super::account::Account>>,
+    pub is_owner: bool,
+    pub updated_at: DateTime<Utc>,
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Membership {
+    fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
+            org_id: ::ruprizzle::decode::text::<Uuid>(row, "org_id")?,
+            organisation: ::ruprizzle::Related::default(),
+            account_id: ::ruprizzle::decode::text::<Uuid>(row, "account_id")?,
+            account: ::ruprizzle::Related::default(),
+            is_owner: ::ruprizzle::decode::boolean(row, "is_owner")?,
+            updated_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "updated_at")?,
+        })
+    }
+}
+/// Insert shape: required fields are required, defaulted/optional fields
+/// are `Option` so the database can fill them in.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "::ruprizzle::serde")]
+pub struct MembershipInsert {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<Uuid>,
+    pub org_id: Uuid,
+    pub account_id: Uuid,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_owner: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<DateTime<Utc>>,
+}
+/// Update shape: every field is `Option` to support explicit nulls.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(crate = "::ruprizzle::serde")]
+pub struct MembershipUpdate {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_owner: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<DateTime<Utc>>,
+}
+impl ::ruprizzle::Model for Membership {
+    const TABLE: &'static str = "memberships";
+    const PRIMARY_KEY: &'static str = "id";
+}
+/// Table name for this model.
+pub const TABLE: &str = "memberships";
+pub const ID: Column<Membership, Uuid> = Column::new("memberships", "id");
+pub const ORG_ID: Column<Membership, Uuid> = Column::new("memberships", "org_id");
+pub const ACCOUNT_ID: Column<Membership, Uuid> = Column::new(
+    "memberships",
+    "account_id",
+);
+pub const IS_OWNER: Column<Membership, bool> = Column::new("memberships", "is_owner");
+pub const UPDATED_AT: Column<Membership, DateTime<Utc>> = Column::new(
+    "memberships",
+    "updated_at",
+);
+/// Returns an `IncludeOne` for this relation.
+pub fn organisation() -> ::ruprizzle::IncludeOne<
+    'static,
+    Membership,
+    super::organisation::Organisation,
+    Uuid,
+    (),
+> {
+    ::ruprizzle::IncludeOne::new(
+        |__row| __row.org_id,
+        |__row, __loaded| __row.organisation = __loaded,
+        super::organisation::ID,
+        |__child| __child.id,
+    )
+}
+/// Returns an `IncludeOne` for this relation.
+pub fn account() -> ::ruprizzle::IncludeOne<
+    'static,
+    Membership,
+    super::account::Account,
+    Uuid,
+    (),
+> {
+    ::ruprizzle::IncludeOne::new(
+        |__row| __row.account_id,
+        |__row, __loaded| __row.account = __loaded,
+        super::account::ID,
+        |__child| __child.id,
+    )
+}
+/// Returns a filter for parents that have at least one matching child.
+pub fn organisation_some(
+    f: ::ruprizzle::Filter<super::organisation::Organisation>,
+) -> ::ruprizzle::Filter<Membership> {
+    ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+        child_table: "organisations",
+        child_col: "id",
+        parent_table: "memberships",
+        parent_col: "org_id",
+        filter: Box::new(f.node),
+        negated: false,
+    })
+}
+/// Returns a filter for parents that have no matching child.
+pub fn organisation_none(
+    f: ::ruprizzle::Filter<super::organisation::Organisation>,
+) -> ::ruprizzle::Filter<Membership> {
+    ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+        child_table: "organisations",
+        child_col: "id",
+        parent_table: "memberships",
+        parent_col: "org_id",
+        filter: Box::new(f.node),
+        negated: true,
+    })
+}
+/// Returns a filter for parents where every matching child satisfies `f`.
+/// Vacuously true for parents with no children.
+pub fn organisation_every(
+    f: ::ruprizzle::Filter<super::organisation::Organisation>,
+) -> ::ruprizzle::Filter<Membership> {
+    ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+        child_table: "organisations",
+        child_col: "id",
+        parent_table: "memberships",
+        parent_col: "org_id",
+        filter: Box::new((!f).node),
+        negated: true,
+    })
+}
+/// Returns a filter for parents that have at least one matching child.
+pub fn account_some(
+    f: ::ruprizzle::Filter<super::account::Account>,
+) -> ::ruprizzle::Filter<Membership> {
+    ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+        child_table: "accounts",
+        child_col: "id",
+        parent_table: "memberships",
+        parent_col: "account_id",
+        filter: Box::new(f.node),
+        negated: false,
+    })
+}
+/// Returns a filter for parents that have no matching child.
+pub fn account_none(
+    f: ::ruprizzle::Filter<super::account::Account>,
+) -> ::ruprizzle::Filter<Membership> {
+    ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+        child_table: "accounts",
+        child_col: "id",
+        parent_table: "memberships",
+        parent_col: "account_id",
+        filter: Box::new(f.node),
+        negated: true,
+    })
+}
+/// Returns a filter for parents where every matching child satisfies `f`.
+/// Vacuously true for parents with no children.
+pub fn account_every(
+    f: ::ruprizzle::Filter<super::account::Account>,
+) -> ::ruprizzle::Filter<Membership> {
+    ::ruprizzle::Filter::new(::ruprizzle::FilterNode::Exists {
+        child_table: "accounts",
+        child_col: "id",
+        parent_table: "memberships",
+        parent_col: "account_id",
+        filter: Box::new((!f).node),
+        negated: true,
+    })
+}
+/// Prisma-flavoured repository for `#model_name`.
+#[derive(Debug, Clone, Copy)]
+pub struct MembershipRepo<'a> {
+    db: &'a super::Db,
+}
+impl<'a> MembershipRepo<'a> {
+    /// Creates a new repository handle.
+    pub(crate) fn new(db: &'a super::Db) -> Self {
+        Self { db }
+    }
+    /// Start a `find_many` query.
+    pub fn find_many(&self) -> ::ruprizzle::SelectQuery<'a, Membership> {
+        ::ruprizzle::SelectQuery::new(self.db.raw_pool())
+    }
+    /// Start an `insert` query.
+    pub fn create(
+        &self,
+        _data: MembershipInsert,
+    ) -> ::ruprizzle::InsertQuery<'a, Membership> {
+        let mut insert = ::ruprizzle::InsertQuery::new(self.db.raw_pool());
+        insert = insert.set_optional(ID, _data.id);
+        insert = insert.set(ORG_ID, _data.org_id);
+        insert = insert.set(ACCOUNT_ID, _data.account_id);
+        insert = insert.set_optional(IS_OWNER, _data.is_owner);
+        insert = insert.set_optional(UPDATED_AT, _data.updated_at);
+        insert
+    }
+    /// Start a multi-row `insert` query.
+    pub fn create_many(
+        &self,
+        _data: Vec<MembershipInsert>,
+    ) -> ::ruprizzle::InsertManyQuery<'a, Membership> {
+        let mut q = ::ruprizzle::InsertManyQuery::new(self.db.raw_pool());
+        for _row in _data {
+            q = q
+                .row([
+                    ("id", ::ruprizzle::Encodable::to_value(&_row.id)),
+                    ("org_id", ::ruprizzle::Encodable::to_value(&_row.org_id)),
+                    ("account_id", ::ruprizzle::Encodable::to_value(&_row.account_id)),
+                    ("is_owner", ::ruprizzle::Encodable::to_value(&_row.is_owner)),
+                    ("updated_at", ::ruprizzle::Encodable::to_value(&_row.updated_at)),
+                ]);
+        }
+        q
+    }
+    /// Start an `update` query.
+    pub fn update(&self) -> ::ruprizzle::UpdateQuery<'a, Membership> {
+        ::ruprizzle::UpdateQuery::new(self.db.raw_pool())
+    }
+    /// Start a `delete` query.
+    pub fn delete(&self) -> ::ruprizzle::DeleteQuery<'a, Membership> {
+        ::ruprizzle::DeleteQuery::new(self.db.raw_pool())
+    }
+}

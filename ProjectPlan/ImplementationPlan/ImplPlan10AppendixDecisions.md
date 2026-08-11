@@ -96,6 +96,25 @@ architecture.
 
 ---
 
+## P1 deviation log
+
+Deviations from [ImplPlan02SchemaDslParser.md](ImplPlan02SchemaDslParser.md) made
+while implementing P1. None change the architecture, and the `parse(&str) ->
+Result<ir::Schema>` boundary is unchanged.
+
+| # | Deviation | Why |
+|---|---|---|
+| **D-101** | Keyword rules are atomic (`@{ "model" ~ !ident_char }`), not silent | A silent rule has implicit whitespace inserted between the word and its boundary check, so `model` happily matched the start of `modelish`. Atomic emits one pair per keyword, which the AST walk drops. |
+| **D-102** | `field_type` is atomic, and the arity marker is read from its text | Pest reports the innermost rule it wanted. With a non-atomic `field_type`, a missing type surfaced as "expected `ident`", which no P1-04 phrasing can rescue. Atomic makes the failure report `field_type`, which is what lets the error say "expected a field type". |
+| **D-103** | Validation is split: rules needing attribute spans run in `lower.rs` (V02–V10, V12–V15), the rest in `validate.rs` (V01, V11, V14-empty, V16, V17) | A rule can only point at `@updatedAt` if it can see that attribute, and the IR deliberately does not keep per-attribute spans. Splitting on "what does this rule need to point at" keeps every diagnostic's label accurate. |
+| **D-104** | `references:` defaults to the target's primary key when omitted | It is the primary key in every schema that bothers to write it out, and the alternative is an error for something we can resolve unambiguously. |
+| **D-105** | Referential defaults are `onDelete: Restrict` (required) / `SetNull` (optional), `onUpdate: Cascade` | Prisma's defaults, and the right ones: deleting out from under a required foreign key must fail, while an optional one can simply be cleared. The IR's `ReferentialAction::default()` (`NoAction`) is a SQL-level default, not a schema-level one. |
+| **D-106** | Added `help(...)` to `DuplicateField` and `DuplicateVariant` in `ruprizzle-core` | They were the only two variants without one. The P1-03 fixtures assert the P0-03 standard mechanically against real parser output, and these two failed it. |
+| **D-107** | V03's `PascalCase` naming check is not implemented | There is no `NamingConvention` variant in `SchemaError`, and a warning that fires on every deliberately-lowercase model name is worse than none. Duplicate-declaration detection, the part of V03 that matters, is enforced. |
+| **D-108** | V18 (dialect capability) is not implemented | It is defined by P2's capability matrix, which does not exist yet. `SchemaError::DialectDegraded` is in place waiting for it. |
+
+---
+
 ## Risk register
 
 | # | Risk | Prob | Impact | Mitigation | Trigger to act |
@@ -107,7 +126,7 @@ architecture.
 | R5 | `trybuild` error messages become unreadable as generics grow | 30% | 🟠 med | Keep `Column` bounds shallow; resist adding type parameters; ADR-005 exists to hold this line | any `trybuild` expected-output over 20 lines |
 | R6 | sqlx 0.9 breaks the runtime mid-build | 20% | 🟠 med | Exact pin; `Executor` trait already isolates sqlx behind our own interface | sqlx 0.9 release during P4–P8 |
 | R7 | Scope creep from the consuming application project | 50% | 🟠 med | This repo is ORM-only. Application needs go to the deferral list, not into v1 | any request referencing UI, auth, or RPC |
-| R8 | Relation loader goes accidentally quadratic | 25% | 🟡 low | Query-count *and* timing assertions in P5-06; `HashMap` attachment specified explicitly | include bench > 15% overhead |
+| R8 | ~~Relation loader goes accidentally quadratic~~ **retired at G5** | — | 🟡 low | Query-count assertion landed (`include_is_bounded`, both dialects); `HashMap` attachment in place. Timing assertions still owed to P8-02 | include bench > 15% overhead |
 
 **R1 is the one to watch.** It is the highest-value feature and the highest-risk
 task, which is a bad combination. It is scheduled in week 6 with a buffer week
@@ -140,6 +159,17 @@ Two consecutive failed gates means re-scoping the release, not adding weeks.
 
 Nothing here is a bug or an oversight. Each is a scoping decision, and the
 Known Limitations doc (P7-05) publishes this list verbatim.
+
+**Carried out of P5 at G5 sign-off** — these two were on the P5 checklist and
+did not land. They are recorded here rather than quietly ticked:
+- **Composite-key relations.** `Encodable` has no tuple impl and the codegen
+  reads `owner_cols.first()`, so a multi-column relation would use only its
+  first column. No example schema declares one, so nothing generated today is
+  wrong — but the row-value `IN` (Postgres) / `OR` chain (SQLite) described in
+  P5-01 is unwritten, and a schema that needs it must wait.
+- **Generated `.with_posts()` nested-create helpers.** The runtime mechanism
+  (`with_related` + `NestedSetter`) is done and tested; only the codegen sugar
+  over it is missing, so nested create is a hand-written call for now.
 
 **0.2 — the obvious next increment**
 - MySQL / MariaDB dialects (additive behind `DbDialect`)

@@ -1,0 +1,8 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+field name `type` is a Rust keyword
+    Diagnostic severity: warning
+diagnostic help: generated code will refer to it as `r#type`; rename it or add `@map("type")` with a different field name to avoid the escape
+diagnostic code: ruprizzle::reserved_keyword

@@ -7,10 +7,18 @@ rust-version.workspace = true
 license.workspace      = true
 repository.workspace   = true
 authors.workspace      = true
-keywords    = ["orm", "sql", "database"]
+homepage.workspace     = true
+readme                 = "README.md"
+documentation          = "https://docs.rs/ruprizzle-dialect"
+keywords    = ["orm", "sql", "database", "postgres", "sqlite"]
 categories  = ["database"]
 
 [dependencies]
 ruprizzle-core = { workspace = true }
 thiserror      = { workspace = true }
 
+[dev-dependencies]
+ruprizzle-parser = { workspace = true }
+ruprizzle-testkit = { workspace = true }
+insta            = { workspace = true }
+tokio            = { workspace = true }

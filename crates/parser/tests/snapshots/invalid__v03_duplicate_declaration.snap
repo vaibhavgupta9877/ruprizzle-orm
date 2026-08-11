@@ -1,0 +1,24 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v03_duplicate_declaration
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: `User` is declared more than once
+    Diagnostic severity: error
+
+Begin snippet for v03_duplicate_declaration starting at line 5, column 1
+
+snippet line 5: 
+snippet line 6: model User {
+    label at line 6, columns 7 to 10: first declared here
+snippet line 7:   id Uuid @id
+snippet line 8: }
+snippet line 9: 
+snippet line 10: model User {
+    label at line 10, columns 7 to 10: redeclared here
+snippet line 11:   id Uuid @id
+diagnostic help: model and enum names share one namespace; rename one of them
+diagnostic code: ruprizzle::duplicate_declaration

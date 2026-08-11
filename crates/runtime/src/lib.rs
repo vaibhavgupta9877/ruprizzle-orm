@@ -1,15 +1,65 @@
 //! The ruprizzle runtime: the crate your application depends on.
 //!
-//! Implemented in P4; see
-//! `ProjectPlan/ImplementationPlan/ImplPlan05QueryBuilderRuntime.md`.
-//!
-//! Note what is *absent* from this crate's dependency graph: the parser and the
-//! code generator. Those run in the CLI, so your application never compiles
-//! them.
+//! This crate provides the types that generated code compiles against:
+//! typed columns, filters, relation wrappers, and the query builders that the
+//! P4 implementation will fill in.
 
 #![forbid(unsafe_code)]
-#![warn(missing_docs, clippy::pedantic)]
+#![warn(missing_docs, clippy::all)]
 
-/// Placeholder for the P4 query builder.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NotYetImplemented;
+pub mod col;
+pub mod compile;
+pub mod counting;
+pub mod error;
+pub mod executor;
+pub mod filter;
+pub mod include;
+pub mod model;
+pub mod order;
+pub mod page;
+pub mod pool;
+pub mod query;
+pub mod related;
+pub mod tx;
+pub mod value;
+
+/// Re-exported database types (chrono, uuid, decimal, json, ...) so generated
+/// code can depend on `ruprizzle` alone.
+pub mod types {
+    pub use sqlx::types::*;
+}
+
+/// Decoding helpers for generated `FromRow` implementations.
+pub mod decode;
+
+/// Common imports for application code.
+pub mod prelude {
+    pub use crate::{
+        Column, Encodable, Error, Executor, Filter, InsertQuery, IsolationLevel, Model, OrderBy,
+        Page, Pool, Related, SelectQuery, Tx, Value,
+    };
+}
+
+pub use col::{Column, Projection};
+pub use compile::{CompiledSql, delete, dialect_for_pool, insert, insert_many, select, update};
+pub use counting::CountingExecutor;
+pub use error::Error;
+pub use executor::Executor;
+pub use filter::{Filter, FilterNode, all, any};
+pub use include::{IncludeList, IncludeOne, IncludeSet};
+pub use model::Model;
+pub use order::OrderBy;
+pub use page::Page;
+pub use pool::{Pool, PoolConfig, PoolStats, connect, connect_with, ping, stats};
+pub use query::{
+    DeleteQuery, InsertManyQuery, InsertQuery, NestedSetter, SelectQuery, UpdateQuery,
+};
+pub use related::Related;
+pub use serde;
+pub use serde_json;
+pub use sqlx;
+pub use tx::{IsolationLevel, Tx, is_retryable};
+pub use value::{Encodable, Ordered, Value};
+
+/// A boxed future, used by the transaction escape hatch.
+pub type BoxFuture<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;

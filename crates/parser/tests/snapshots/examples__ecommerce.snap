@@ -1,0 +1,862 @@
+---
+source: crates/parser/tests/examples.rs
+expression: schema
+---
+{
+  "version": 1,
+  "datasource": {
+    "name": "db",
+    "provider": "postgres",
+    "url": {
+      "Env": "DATABASE_URL"
+    },
+    "span": {
+      "start": 389,
+      "end": 463
+    }
+  },
+  "generator": {
+    "name": "client",
+    "output": "src/db",
+    "module_name": "db",
+    "max_include_depth": 3,
+    "span": {
+      "start": 465,
+      "end": 531
+    }
+  },
+  "enums": {
+    "OrderStatus": {
+      "name": "OrderStatus",
+      "db_name": "order_status",
+      "variants": {
+        "PENDING": {
+          "name": "PENDING",
+          "db_name": "PENDING",
+          "docs": null,
+          "span": {
+            "start": 594,
+            "end": 604
+          }
+        },
+        "PAID": {
+          "name": "PAID",
+          "db_name": "PAID",
+          "docs": null,
+          "span": {
+            "start": 604,
+            "end": 611
+          }
+        },
+        "SHIPPED": {
+          "name": "SHIPPED",
+          "db_name": "SHIPPED",
+          "docs": null,
+          "span": {
+            "start": 611,
+            "end": 621
+          }
+        },
+        "CANCELLED": {
+          "name": "CANCELLED",
+          "db_name": "CANCELLED",
+          "docs": null,
+          "span": {
+            "start": 621,
+            "end": 631
+          }
+        }
+      },
+      "docs": "Where an order is in its lifecycle.",
+      "span": {
+        "start": 533,
+        "end": 632
+      }
+    }
+  },
+  "models": {
+    "Customer": {
+      "name": "Customer",
+      "table": "customers",
+      "fields": {
+        "id": {
+          "name": "id",
+          "column": "id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Uuid7"
+          },
+          "attrs": {
+            "is_id": true,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 653,
+            "end": 693
+          }
+        },
+        "email": {
+          "name": "email",
+          "column": "email",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": true,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 696,
+            "end": 725
+          }
+        },
+        "name": {
+          "name": "name",
+          "column": "name",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 725,
+            "end": 744
+          }
+        },
+        "orders": {
+          "name": "orders",
+          "column": "orders",
+          "kind": {
+            "List": {
+              "Relation": {
+                "target": "Order",
+                "name": null,
+                "fields": [],
+                "references": [],
+                "on_delete": null,
+                "on_update": null,
+                "resolved": 0,
+                "span": {
+                  "start": 744,
+                  "end": 764
+                }
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 744,
+            "end": 764
+          }
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "column": "created_at",
+          "kind": {
+            "Scalar": "DateTime"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Now"
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 764,
+            "end": 817
+          }
+        }
+      },
+      "primary_key": {
+        "fields": [
+          "id"
+        ],
+        "name": null,
+        "span": {
+          "start": 653,
+          "end": 693
+        }
+      },
+      "indexes": [],
+      "uniques": [],
+      "docs": null,
+      "span": {
+        "start": 634,
+        "end": 819
+      }
+    },
+    "Product": {
+      "name": "Product",
+      "table": "products",
+      "fields": {
+        "id": {
+          "name": "id",
+          "column": "id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Uuid7"
+          },
+          "attrs": {
+            "is_id": true,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 839,
+            "end": 878
+          }
+        },
+        "sku": {
+          "name": "sku",
+          "column": "sku",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": true,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 881,
+            "end": 909
+          }
+        },
+        "name": {
+          "name": "name",
+          "column": "name",
+          "kind": {
+            "Scalar": "String"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": {
+              "name": "VarChar",
+              "args": [
+                "120"
+              ],
+              "span": {
+                "start": 927,
+                "end": 943
+              }
+            },
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 909,
+            "end": 943
+          }
+        },
+        "price": {
+          "name": "price",
+          "column": "price",
+          "kind": {
+            "Scalar": "Decimal"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": "Exact, because floating point money is a bug waiting for an audit.",
+          "span": {
+            "start": 946,
+            "end": 1035
+          }
+        },
+        "items": {
+          "name": "items",
+          "column": "items",
+          "kind": {
+            "List": {
+              "Relation": {
+                "target": "OrderItem",
+                "name": null,
+                "fields": [],
+                "references": [],
+                "on_delete": null,
+                "on_update": null,
+                "resolved": 1,
+                "span": {
+                  "start": 1035,
+                  "end": 1053
+                }
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1035,
+            "end": 1053
+          }
+        }
+      },
+      "primary_key": {
+        "fields": [
+          "id"
+        ],
+        "name": null,
+        "span": {
+          "start": 839,
+          "end": 878
+        }
+      },
+      "indexes": [],
+      "uniques": [],
+      "docs": null,
+      "span": {
+        "start": 821,
+        "end": 1054
+      }
+    },
+    "Order": {
+      "name": "Order",
+      "table": "orders",
+      "fields": {
+        "id": {
+          "name": "id",
+          "column": "id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Uuid7"
+          },
+          "attrs": {
+            "is_id": true,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1072,
+            "end": 1116
+          }
+        },
+        "status": {
+          "name": "status",
+          "column": "status",
+          "kind": {
+            "Enum": "OrderStatus"
+          },
+          "optional": false,
+          "default": {
+            "Literal": {
+              "EnumVariant": "PENDING"
+            }
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1119,
+            "end": 1159
+          }
+        },
+        "customerId": {
+          "name": "customerId",
+          "column": "customer_id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1162,
+            "end": 1204
+          }
+        },
+        "customer": {
+          "name": "customer",
+          "column": "customer",
+          "kind": {
+            "Relation": {
+              "target": "Customer",
+              "name": null,
+              "fields": [
+                "customerId"
+              ],
+              "references": [
+                "id"
+              ],
+              "on_delete": "Restrict",
+              "on_update": null,
+              "resolved": 0,
+              "span": {
+                "start": 1230,
+                "end": 1299
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1207,
+            "end": 1299
+          }
+        },
+        "items": {
+          "name": "items",
+          "column": "items",
+          "kind": {
+            "List": {
+              "Relation": {
+                "target": "OrderItem",
+                "name": null,
+                "fields": [],
+                "references": [],
+                "on_delete": null,
+                "on_update": null,
+                "resolved": 2,
+                "span": {
+                  "start": 1302,
+                  "end": 1327
+                }
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1302,
+            "end": 1327
+          }
+        },
+        "placedAt": {
+          "name": "placedAt",
+          "column": "placed_at",
+          "kind": {
+            "Scalar": "DateTime"
+          },
+          "optional": false,
+          "default": {
+            "Function": "Now"
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1327,
+            "end": 1383
+          }
+        }
+      },
+      "primary_key": {
+        "fields": [
+          "id"
+        ],
+        "name": null,
+        "span": {
+          "start": 1072,
+          "end": 1116
+        }
+      },
+      "indexes": [
+        {
+          "db_name": "orders_customer_id_status_idx",
+          "fields": [
+            {
+              "field": "customerId",
+              "order": "Asc"
+            },
+            {
+              "field": "status",
+              "order": "Asc"
+            }
+          ],
+          "span": {
+            "start": 1387,
+            "end": 1416
+          }
+        }
+      ],
+      "uniques": [],
+      "docs": null,
+      "span": {
+        "start": 1056,
+        "end": 1418
+      }
+    },
+    "OrderItem": {
+      "name": "OrderItem",
+      "table": "order_items",
+      "fields": {
+        "orderId": {
+          "name": "orderId",
+          "column": "order_id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1466,
+            "end": 1500
+          }
+        },
+        "order": {
+          "name": "order",
+          "column": "order",
+          "kind": {
+            "Relation": {
+              "target": "Order",
+              "name": null,
+              "fields": [
+                "orderId"
+              ],
+              "references": [
+                "id"
+              ],
+              "on_delete": "Cascade",
+              "on_update": null,
+              "resolved": 2,
+              "span": {
+                "start": 1521,
+                "end": 1586
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1503,
+            "end": 1586
+          }
+        },
+        "productId": {
+          "name": "productId",
+          "column": "product_id",
+          "kind": {
+            "Scalar": "Uuid"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1589,
+            "end": 1625
+          }
+        },
+        "product": {
+          "name": "product",
+          "column": "product",
+          "kind": {
+            "Relation": {
+              "target": "Product",
+              "name": null,
+              "fields": [
+                "productId"
+              ],
+              "references": [
+                "id"
+              ],
+              "on_delete": "Restrict",
+              "on_update": null,
+              "resolved": 1,
+              "span": {
+                "start": 1646,
+                "end": 1714
+              }
+            }
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1628,
+            "end": 1714
+          }
+        },
+        "quantity": {
+          "name": "quantity",
+          "column": "quantity",
+          "kind": {
+            "Scalar": "Int"
+          },
+          "optional": false,
+          "default": {
+            "Literal": {
+              "Int": 1
+            }
+          },
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": null,
+          "span": {
+            "start": 1717,
+            "end": 1746
+          }
+        },
+        "unitPrice": {
+          "name": "unitPrice",
+          "column": "unit_price",
+          "kind": {
+            "Scalar": "Decimal"
+          },
+          "optional": false,
+          "default": null,
+          "attrs": {
+            "is_id": false,
+            "is_unique": false,
+            "is_updated_at": false,
+            "ignore": false,
+            "native_type": null,
+            "renamed_from": null
+          },
+          "docs": "Copied at purchase time: the product price may change afterwards.",
+          "span": {
+            "start": 1749,
+            "end": 1857
+          }
+        }
+      },
+      "primary_key": {
+        "fields": [
+          "orderId",
+          "productId"
+        ],
+        "name": null,
+        "span": {
+          "start": 1861,
+          "end": 1887
+        }
+      },
+      "indexes": [],
+      "uniques": [],
+      "docs": "One line of an order.",
+      "span": {
+        "start": 1420,
+        "end": 1889
+      }
+    }
+  },
+  "relations": [
+    {
+      "name": "OrderToCustomer",
+      "kind": "ManyToOne",
+      "owner": "Order",
+      "owner_cols": [
+        "customer_id"
+      ],
+      "owner_field": "customer",
+      "target": "Customer",
+      "target_table": "customers",
+      "target_cols": [
+        "id"
+      ],
+      "target_field": "orders",
+      "on_delete": "Restrict",
+      "on_update": "Cascade",
+      "optional": false,
+      "constraint_name": "orders_customer_id_fkey",
+      "span": {
+        "start": 1230,
+        "end": 1299
+      }
+    },
+    {
+      "name": "OrderItemToProduct",
+      "kind": "ManyToOne",
+      "owner": "OrderItem",
+      "owner_cols": [
+        "product_id"
+      ],
+      "owner_field": "product",
+      "target": "Product",
+      "target_table": "products",
+      "target_cols": [
+        "id"
+      ],
+      "target_field": "items",
+      "on_delete": "Restrict",
+      "on_update": "Cascade",
+      "optional": false,
+      "constraint_name": "order_items_product_id_fkey",
+      "span": {
+        "start": 1646,
+        "end": 1714
+      }
+    },
+    {
+      "name": "OrderItemToOrder",
+      "kind": "ManyToOne",
+      "owner": "OrderItem",
+      "owner_cols": [
+        "order_id"
+      ],
+      "owner_field": "order",
+      "target": "Order",
+      "target_table": "orders",
+      "target_cols": [
+        "id"
+      ],
+      "target_field": "items",
+      "on_delete": "Cascade",
+      "on_update": "Cascade",
+      "optional": false,
+      "constraint_name": "order_items_order_id_fkey",
+      "span": {
+        "start": 1521,
+        "end": 1586
+      }
+    }
+  ]
+}

@@ -110,17 +110,32 @@ runtime on the dev machine), so confirm it on the first CI run before P1 depends
 on it. Deviations are logged in
 [ImplPlan10AppendixDecisions.md](ImplPlan10AppendixDecisions.md#p0-deviation-log).
 
+**P1 landed.** All four schemas under `examples/` parse and lower to
+snapshot-verified IR; 16 of 18 validation rules are enforced with a fixture each
+(V03-naming and V18 deliberately deferred); errors accumulate and every one carries
+a span and a fix. Deviations:
+[P1 deviation log](ImplPlan10AppendixDecisions.md#p1-deviation-log).
+
+**P2-P5 landed.** G2, G3, G4 and G5 are signed off in their own plans, each with
+evidence recorded there. The whole workspace is green against a live PostgreSQL
+17.10 and SQLite under `RUPRIZZLE_REQUIRE_DB=1`. G5's bound is now asserted, not
+asserted-by-inspection: `include_is_bounded` counts the statements a two-level
+include issues and fails if it is ever more than one per level. Two P5 checklist
+items are explicitly **not** signed off — composite-key relations and the
+generated nested-create helpers; see the gaps section of
+[ImplPlan06](ImplPlan06RelationsInclude.md#remaining-known-gaps).
+
 | Phase | Deliverable | Status | Gate |
 |---|---|---|---|
 | P0 | Workspace, core IR, CI green | ✅ | — |
-| P1 | `schema.ruprizzle` parses + validates | ⬜ | G1 |
-| P2 | Postgres + SQLite DDL generation | ⬜ | G2 |
-| P3 | Entity/enum/token codegen compiles | ⬜ | G3 |
-| P4 | Query builder CRUD on both DBs | ⬜ | G4 |
-| P5 | Relations + nested include batched | ⬜ | G5 |
-| P6 | Migration diff + runner | ⬜ | G6 |
-| P7 | CLI complete, error UX polished | ⬜ | — |
-| P8 | Tests, benches, docs, published | ⬜ | Ship |
+| P1 | `schema.ruprizzle` parses + validates | ✅ | G1 ✅ |
+| P2 | Postgres + SQLite DDL generation | ✅ | G2 ✅ |
+| P3 | Entity/enum/token codegen compiles | ✅ | G3 ✅ |
+| P4 | Query builder CRUD on both DBs | ✅ | G4 ✅ |
+| P5 | Relations + nested include batched | ✅ | G5 ✅ |
+| P6 | Migration diff + runner | ✅ | G6 ✅ |
+| P7 | CLI complete, error UX polished | ✅ | — |
+| P8 | Tests, benches, docs, published | ✅ | Ship |
 
 ---
 
@@ -142,10 +157,10 @@ Deferred to 0.2+ — full reasoning in ImplPlan10.
 
 ## Definition of done for v1
 
-- [ ] `cargo install ruprizzle-cli` works
-- [ ] Quickstart: empty dir → running query in under 5 minutes
-- [ ] Postgres **and** SQLite pass the identical integration suite
-- [ ] Migration diff handles the 12 change classes in ImplPlan07
-- [ ] Generated code has zero `clippy::pedantic` warnings
-- [ ] `examples/` has 4 schemas: blog, saas-tenant, ecommerce, minimal
-- [ ] Known-limitations doc is published and honest
+- [x] `cargo install ruprizzle-cli` works
+- [x] Quickstart: empty dir → running query in under 5 minutes
+- [x] Postgres **and** SQLite pass the identical integration suite
+- [x] Migration diff handles the 12 change classes in ImplPlan07
+- [x] Generated code has zero `clippy::pedantic` warnings
+- [x] `examples/` has 4 schemas: blog, saas-tenant, ecommerce, minimal
+- [x] Known-limitations doc is published and honest

@@ -270,13 +270,69 @@ Cases to cover: `Decimal` on SQLite, enums on SQLite, `Json` querying on SQLite,
 
 ---
 
+## P2-07 · Adding a new dialect
+
+The seam is intentionally small. To add a backend, e.g. MySQL:
+
+1. Add a `Provider::MySql` variant in `crates/core/src/ir.rs`.
+2. Implement `DbDialect` for a new `MysqlDialect` in `crates/dialect/src/mysql.rs`.
+3. Implement the required methods: quoting, placeholders, `column_type`,
+   `rust_type`, every DDL operation, and `capabilities()`.
+4. Add the new implementation to `dialect_for` in
+   `crates/dialect/src/common.rs`.
+5. Add a row to `crates/dialect/tests/conformance.rs` so the backend is exercised
+   against a live database.
+
+The trait methods return `Vec<Stmt>` because one logical change (e.g. altering a
+SQLite column) requires many physical statements. `Stmt` carries `destructive`
+and `transactional` metadata so the migration planner can reason about cost and
+safety without rediscovering dialect quirks.
+
+### Implementation deviations from the initial sketch
+
+- `DbDialect::create_table`, `add_column`, and `alter_column` take `&Schema` in
+  addition to `&Model` so the dialect can resolve enum variants and foreign-key
+  targets without re-deriving naming.
+- `ResolvedRelation` gained a `target_table` field so `add_foreign_key` can emit
+  the correct referenced table even when the target uses `@@map`.
+- `Field::has_column` now returns `false` for `FieldKind::Relation`; the foreign
+  key columns are the scalar fields named in the relation's `fields:` argument.
+  This prevents the dialect from emitting duplicate `author` and `author_id`
+  columns.
+
+---
+
 ## Phase P2 checklist
 
-- [ ] P2-01 `DbDialect` trait, object-safe, documented
-- [ ] P2-02 type matrix implemented in both dialects
-- [ ] P2-03 Postgres dialect complete
-- [ ] P2-04 SQLite dialect complete, incl. correct 12-step rebuild
-- [ ] P2-05 conformance suite green on both engines
-- [ ] P2-06 capability warnings emitted at generate time
-- [ ] "Adding a new dialect" guide written (proves the seam is real)
-- [ ] **G2 signed off by Claude**
+- [x] P2-01 `DbDialect` trait, object-safe, documented
+- [x] P2-02 type matrix implemented in both dialects
+- [x] P2-03 Postgres dialect complete
+- [x] P2-04 SQLite dialect complete, incl. correct 12-step rebuild
+- [x] P2-05 conformance suite green on both engines — **verified against live Postgres**
+- [x] P2-06 capability warnings emitted at generate time
+- [x] "Adding a new dialect" guide written (proves the seam is real)
+- [x] **G2 signed off by Claude** — see the evidence below.
+
+### G2 sign-off evidence (2026-08-10)
+
+Verified: `cargo build --workspace` clean, `cargo clippy --workspace --all-targets
+-- -D warnings` clean, `crates/dialect` 17 unit tests green, and `conformance.rs`
+6/6 green with **both** backends actually contacted — PostgreSQL 17.10 running
+locally at the default test URL plus SQLite.
+
+This was previously signed off on skipped tests, and the mechanism is worth
+recording because it will recur. `both_dbs!` prints `skipping {backend}` and
+returns when a backend is unreachable, and cargo swallows stderr for passing
+tests, so an unqualified `cargo test` reports "ok" whether or not Postgres was
+ever reached. The tell was timing: every DB suite finished in almost exactly
+5.01s, which is the connection timeout, not test work. With a live server the
+same suites finish in ~0.24s.
+
+**Guard against regression — CI must run:**
+
+```
+RUPRIZZLE_REQUIRE_DB=1 cargo test --workspace
+```
+
+`RUPRIZZLE_REQUIRE_DB=1` converts an unreachable backend from a silent skip into
+a hard failure. Without it, a green build proves nothing about Postgres.
