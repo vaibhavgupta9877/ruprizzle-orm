@@ -20,7 +20,7 @@ ruprizzle-codegen = { path = "crates/codegen", version = "0.1.0-alpha.2" }
 ruprizzle-migrate = { path = "crates/migrate", version = "0.1.0-alpha.2" }
 ruprizzle-macros  = { path = "crates/macros",  version = "0.1.0-alpha.2" }
 ruprizzle         = { path = "crates/runtime", version = "0.1.0-alpha.2" }
-ruprizzle-testkit = { path = "crates/testkit", version = "0.1.0-alpha.2" }
+ruprizzle-testkit = { path = "crates/testkit" }
 
 # --- external ---
 pest         = "2.8"

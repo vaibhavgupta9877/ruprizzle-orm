@@ -42,6 +42,10 @@ allow = ["OpenSSL"]
 # We do not want two versions of heavy crates if it can be avoided.
 multiple-versions = "warn"
 wildcards = "deny"
+# Path and git dev-dependencies (like the internal ruprizzle-testkit) use a
+# wildcard version by design; this option keeps `wildcards = deny` without
+# flagging those.
+allow-wildcard-paths = true
 highlight = "all"
 
 [sources]
