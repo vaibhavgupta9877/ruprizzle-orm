@@ -40,6 +40,15 @@ pub fn select<M: Model>(
     if distinct {
         c.push_str("DISTINCT ");
     }
+    // Fall back to `SELECT *` only when the user did not request an explicit
+    // projection and the model does not declare its columns. Generated models
+    // always declare `COLUMNS`, so this compiles to an explicit, narrow list
+    // and lets `FromRow` decode by ordinal instead of by name.
+    let projection = if projection.is_empty() && !M::COLUMNS.is_empty() {
+        M::COLUMNS
+    } else {
+        projection
+    };
     if projection.is_empty() {
         c.push('*');
     } else {
@@ -149,8 +158,20 @@ pub fn select_partitioned<M: Model>(
     let mut c = Compiler::new(dialect);
 
     c.push_str("SELECT * FROM (SELECT ");
-    c.push_quoted(table);
-    c.push_str(".*, ROW_NUMBER() OVER (PARTITION BY ");
+    if M::COLUMNS.is_empty() {
+        c.push_quoted(table);
+        c.push_str(".*");
+    } else {
+        for (i, col) in M::COLUMNS.iter().enumerate() {
+            if i > 0 {
+                c.push_str(", ");
+            }
+            c.push_quoted(table);
+            c.push('.');
+            c.push_quoted(col);
+        }
+    }
+    c.push_str(", ROW_NUMBER() OVER (PARTITION BY ");
     c.push_quoted(table);
     c.push('.');
     c.push_quoted(partition_by);

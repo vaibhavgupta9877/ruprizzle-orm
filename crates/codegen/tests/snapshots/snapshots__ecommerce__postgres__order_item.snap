@@ -27,12 +27,12 @@ pub struct OrderItem {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for OrderItem {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            order_id: ::ruprizzle::decode::text::<Uuid>(row, "order_id")?,
+            order_id: ::ruprizzle::decode::text_idx::<Uuid>(row, 0)?,
             order: ::ruprizzle::Related::default(),
-            product_id: ::ruprizzle::decode::text::<Uuid>(row, "product_id")?,
+            product_id: ::ruprizzle::decode::text_idx::<Uuid>(row, 1)?,
             product: ::ruprizzle::Related::default(),
-            quantity: ::ruprizzle::decode::direct::<i32>(row, "quantity")?,
-            unit_price: ::ruprizzle::decode::text::<Decimal>(row, "unit_price")?,
+            quantity: ::ruprizzle::decode::direct_idx::<i32>(row, 2)?,
+            unit_price: ::ruprizzle::decode::text_idx::<Decimal>(row, 3)?,
         })
     }
 }
@@ -63,6 +63,12 @@ pub struct OrderItemUpdate {
 impl ::ruprizzle::Model for OrderItem {
     const TABLE: &'static str = "order_items";
     const PRIMARY_KEY: &'static str = "order_id";
+    const COLUMNS: &'static [&'static str] = &[
+        "order_id",
+        "product_id",
+        "quantity",
+        "unit_price",
+    ];
 }
 /// Table name for this model.
 pub const TABLE: &str = "order_items";

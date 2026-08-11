@@ -24,13 +24,11 @@ pub struct Account {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Account {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
-            email: ::ruprizzle::decode::direct::<String>(row, "email")?,
-            display_name: ::ruprizzle::decode::direct_opt::<
-                String,
-            >(row, "display_name")?,
+            id: ::ruprizzle::decode::text_idx::<Uuid>(row, 0)?,
+            email: ::ruprizzle::decode::direct_idx::<String>(row, 1)?,
+            display_name: ::ruprizzle::decode::direct_opt_idx::<String>(row, 2)?,
             memberships: ::ruprizzle::Related::default(),
-            created_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "created_at")?,
+            created_at: ::ruprizzle::decode::text_idx::<DateTime<Utc>>(row, 3)?,
         })
     }
 }
@@ -63,6 +61,12 @@ pub struct AccountUpdate {
 impl ::ruprizzle::Model for Account {
     const TABLE: &'static str = "accounts";
     const PRIMARY_KEY: &'static str = "id";
+    const COLUMNS: &'static [&'static str] = &[
+        "id",
+        "email",
+        "display_name",
+        "created_at",
+    ];
 }
 /// Table name for this model.
 pub const TABLE: &str = "accounts";

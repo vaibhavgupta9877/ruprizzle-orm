@@ -26,13 +26,13 @@ pub struct Post {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Post {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
-            title: ::ruprizzle::decode::direct::<String>(row, "title")?,
-            body: ::ruprizzle::decode::direct_opt::<String>(row, "body")?,
-            published: ::ruprizzle::decode::boolean(row, "published")?,
-            author_id: ::ruprizzle::decode::text::<Uuid>(row, "author_id")?,
+            id: ::ruprizzle::decode::text_idx::<Uuid>(row, 0)?,
+            title: ::ruprizzle::decode::direct_idx::<String>(row, 1)?,
+            body: ::ruprizzle::decode::direct_opt_idx::<String>(row, 2)?,
+            published: ::ruprizzle::decode::boolean_idx(row, 3)?,
+            author_id: ::ruprizzle::decode::text_idx::<Uuid>(row, 4)?,
             author: ::ruprizzle::Related::default(),
-            created_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "created_at")?,
+            created_at: ::ruprizzle::decode::text_idx::<DateTime<Utc>>(row, 5)?,
         })
     }
 }
@@ -72,6 +72,14 @@ pub struct PostUpdate {
 impl ::ruprizzle::Model for Post {
     const TABLE: &'static str = "posts";
     const PRIMARY_KEY: &'static str = "id";
+    const COLUMNS: &'static [&'static str] = &[
+        "id",
+        "title",
+        "body",
+        "published",
+        "author_id",
+        "created_at",
+    ];
 }
 /// Table name for this model.
 pub const TABLE: &str = "posts";

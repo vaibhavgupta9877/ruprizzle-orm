@@ -26,13 +26,13 @@ pub struct User {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for User {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
-            email: ::ruprizzle::decode::direct::<String>(row, "email")?,
-            name: ::ruprizzle::decode::direct_opt::<String>(row, "name")?,
-            role: ::ruprizzle::decode::text::<super::enums::Role>(row, "role")?,
+            id: ::ruprizzle::decode::text_idx::<Uuid>(row, 0)?,
+            email: ::ruprizzle::decode::direct_idx::<String>(row, 1)?,
+            name: ::ruprizzle::decode::direct_opt_idx::<String>(row, 2)?,
+            role: ::ruprizzle::decode::text_idx::<super::enums::Role>(row, 3)?,
             posts: ::ruprizzle::Related::default(),
-            created_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "created_at")?,
-            updated_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "updated_at")?,
+            created_at: ::ruprizzle::decode::text_idx::<DateTime<Utc>>(row, 4)?,
+            updated_at: ::ruprizzle::decode::text_idx::<DateTime<Utc>>(row, 5)?,
         })
     }
 }
@@ -73,6 +73,14 @@ pub struct UserUpdate {
 impl ::ruprizzle::Model for User {
     const TABLE: &'static str = "users";
     const PRIMARY_KEY: &'static str = "id";
+    const COLUMNS: &'static [&'static str] = &[
+        "id",
+        "email",
+        "name",
+        "role",
+        "created_at",
+        "updated_at",
+    ];
 }
 /// Table name for this model.
 pub const TABLE: &str = "users";

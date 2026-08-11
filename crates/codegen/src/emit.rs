@@ -472,10 +472,27 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         .map(emit_insert_many_field)
         .collect();
 
+    let columns: Vec<_> = model
+        .fields
+        .values()
+        .filter(|f| f.has_column())
+        .map(|f| f.column.as_str())
+        .collect();
+
+    let mut next_index = 0;
     let from_row_fields: Vec<_> = model
         .fields
         .values()
-        .map(|f| emit_from_row_field(schema, model.name.as_str(), f))
+        .map(|f| {
+            let idx = if f.has_column() {
+                let i = next_index;
+                next_index += 1;
+                Some(i)
+            } else {
+                None
+            };
+            emit_from_row_field(schema, model.name.as_str(), f, idx)
+        })
         .collect();
 
     let header = header();
@@ -523,6 +540,7 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         impl ::ruprizzle::Model for #model_name {
             const TABLE: &'static str = #table;
             const PRIMARY_KEY: &'static str = #primary_key;
+            const COLUMNS: &'static [&'static str] = &[ #( #columns ),* ];
         }
 
         /// Table name for this model.
@@ -603,9 +621,13 @@ fn emit_entity_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream
     }
 }
 
-fn emit_from_row_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream {
+fn emit_from_row_field(
+    schema: &Schema,
+    owner: &str,
+    field: &Field,
+    idx: Option<usize>,
+) -> TokenStream {
     let name = safe_field_ident(field.name.as_str());
-    let column = field.column.as_str();
 
     if !field.has_column() {
         return quote! { #name: ::ruprizzle::Related::default(), };
@@ -613,6 +635,7 @@ fn emit_from_row_field(schema: &Schema, owner: &str, field: &Field) -> TokenStre
 
     let optional = field.optional;
     let inner = rust_type_tokens(schema, owner, field, false, true);
+    let idx = syn::Index::from(idx.unwrap_or(0));
 
     let expr = match &field.kind {
         ruprizzle_core::ir::FieldKind::Scalar(st) => match st {
@@ -620,37 +643,37 @@ fn emit_from_row_field(schema: &Schema, owner: &str, field: &Field) -> TokenStre
             | ruprizzle_core::ir::ScalarType::Int
             | ruprizzle_core::ir::ScalarType::BigInt
             | ruprizzle_core::ir::ScalarType::Float => {
-                let helper = format_ident!("{}", if optional { "direct_opt" } else { "direct" });
-                quote! { ::ruprizzle::decode::#helper::<#inner>(row, #column)? }
+                let helper = format_ident!("{}", if optional { "direct_opt_idx" } else { "direct_idx" });
+                quote! { ::ruprizzle::decode::#helper::<#inner>(row, #idx)? }
             }
             ruprizzle_core::ir::ScalarType::Boolean => {
-                let helper = format_ident!("{}", if optional { "boolean_opt" } else { "boolean" });
-                quote! { ::ruprizzle::decode::#helper(row, #column)? }
+                let helper = format_ident!("{}", if optional { "boolean_opt_idx" } else { "boolean_idx" });
+                quote! { ::ruprizzle::decode::#helper(row, #idx)? }
             }
             ruprizzle_core::ir::ScalarType::Decimal
             | ruprizzle_core::ir::ScalarType::DateTime
             | ruprizzle_core::ir::ScalarType::Date
             | ruprizzle_core::ir::ScalarType::Time
             | ruprizzle_core::ir::ScalarType::Uuid => {
-                let helper = format_ident!("{}", if optional { "text_opt" } else { "text" });
-                quote! { ::ruprizzle::decode::#helper::<#inner>(row, #column)? }
+                let helper = format_ident!("{}", if optional { "text_opt_idx" } else { "text_idx" });
+                quote! { ::ruprizzle::decode::#helper::<#inner>(row, #idx)? }
             }
             ruprizzle_core::ir::ScalarType::Json => {
-                let helper = format_ident!("{}", if optional { "json_opt" } else { "json" });
-                quote! { ::ruprizzle::decode::#helper(row, #column)? }
+                let helper = format_ident!("{}", if optional { "json_opt_idx" } else { "json_idx" });
+                quote! { ::ruprizzle::decode::#helper(row, #idx)? }
             }
             ruprizzle_core::ir::ScalarType::Bytes => {
-                let helper = format_ident!("{}", if optional { "bytes_opt" } else { "bytes" });
-                quote! { ::ruprizzle::decode::#helper(row, #column)? }
+                let helper = format_ident!("{}", if optional { "bytes_opt_idx" } else { "bytes_idx" });
+                quote! { ::ruprizzle::decode::#helper(row, #idx)? }
             }
         },
         ruprizzle_core::ir::FieldKind::Enum(_) => {
-            let helper = format_ident!("{}", if optional { "text_opt" } else { "text" });
-            quote! { ::ruprizzle::decode::#helper::<#inner>(row, #column)? }
+            let helper = format_ident!("{}", if optional { "text_opt_idx" } else { "text_idx" });
+            quote! { ::ruprizzle::decode::#helper::<#inner>(row, #idx)? }
         }
         _ => {
-            let helper = format_ident!("{}", if optional { "direct_opt" } else { "direct" });
-            quote! { ::ruprizzle::decode::#helper::<#inner>(row, #column)? }
+            let helper = format_ident!("{}", if optional { "direct_opt_idx" } else { "direct_idx" });
+            quote! { ::ruprizzle::decode::#helper::<#inner>(row, #idx)? }
         }
     };
 

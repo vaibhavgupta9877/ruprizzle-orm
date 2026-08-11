@@ -26,12 +26,12 @@ pub struct Organisation {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Organisation {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
-            slug: ::ruprizzle::decode::direct::<String>(row, "slug")?,
-            plan: ::ruprizzle::decode::text::<super::enums::Plan>(row, "plan")?,
-            settings: ::ruprizzle::decode::json_opt(row, "settings")?,
+            id: ::ruprizzle::decode::text_idx::<Uuid>(row, 0)?,
+            slug: ::ruprizzle::decode::direct_idx::<String>(row, 1)?,
+            plan: ::ruprizzle::decode::text_idx::<super::enums::Plan>(row, 2)?,
+            settings: ::ruprizzle::decode::json_opt_idx(row, 3)?,
             members: ::ruprizzle::Related::default(),
-            created_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "created_at")?,
+            created_at: ::ruprizzle::decode::text_idx::<DateTime<Utc>>(row, 4)?,
         })
     }
 }
@@ -68,6 +68,13 @@ pub struct OrganisationUpdate {
 impl ::ruprizzle::Model for Organisation {
     const TABLE: &'static str = "organisations";
     const PRIMARY_KEY: &'static str = "id";
+    const COLUMNS: &'static [&'static str] = &[
+        "id",
+        "slug",
+        "plan",
+        "settings",
+        "created_at",
+    ];
 }
 /// Table name for this model.
 pub const TABLE: &str = "organisations";

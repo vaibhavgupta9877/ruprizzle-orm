@@ -505,6 +505,11 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         M: Send + Unpin + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>,
     {
         let dialect = dialect_for_pool(self.pool);
+        let returning: &[&str] = if M::COLUMNS.is_empty() {
+            &["*"]
+        } else {
+            M::COLUMNS
+        };
         let compiled = if let Some(ref conflict) = self.on_conflict {
             let do_update = self.do_update.as_deref().unwrap_or(&[]);
             upsert::<M>(
@@ -513,10 +518,10 @@ impl<'db, M: Model> InsertQuery<'db, M> {
                 &self.values,
                 conflict,
                 do_update,
-                &["*"],
+                returning,
             )
         } else {
-            insert::<M>(dialect.as_ref(), M::TABLE, &self.values, &["*"])
+            insert::<M>(dialect.as_ref(), M::TABLE, &self.values, returning)
         };
         let mut q = sqlx::query_as::<sqlx::Any, M>(compiled.sql.as_str());
         for v in compiled.binds {
@@ -532,7 +537,12 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         let mut tx = self.pool.begin().await.map_err(Error::Sqlx)?;
 
         let dialect = dialect_for_pool(self.pool);
-        let compiled = insert::<M>(dialect.as_ref(), M::TABLE, &self.values, &["*"]);
+        let returning: &[&str] = if M::COLUMNS.is_empty() {
+            &["*"]
+        } else {
+            M::COLUMNS
+        };
+        let compiled = insert::<M>(dialect.as_ref(), M::TABLE, &self.values, returning);
         let mut q = sqlx::query_as::<sqlx::Any, M>(compiled.sql.as_str());
         for v in compiled.binds {
             q = q.bind(v);
@@ -553,8 +563,13 @@ impl<'db, M: Model> InsertQuery<'db, M> {
 
             let mut child_rows = Vec::new();
             for chunk in rows.chunks(chunk_size) {
+                let returning: &[&str] = if M::COLUMNS.is_empty() {
+                    &["*"]
+                } else {
+                    M::COLUMNS
+                };
                 let compiled =
-                    insert_many::<M>(dialect.as_ref(), nested.child_table, chunk, &["*"]);
+                    insert_many::<M>(dialect.as_ref(), nested.child_table, chunk, returning);
                 let mut q = sqlx::query(compiled.sql.as_str());
                 for v in compiled.binds {
                     q = q.bind(v);
@@ -660,7 +675,12 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
 
         let mut out = Vec::new();
         for chunk in self.rows.chunks(chunk_size) {
-            let compiled = insert_many::<M>(dialect.as_ref(), M::TABLE, chunk, &["*"]);
+            let returning: &[&str] = if M::COLUMNS.is_empty() {
+                &["*"]
+            } else {
+                M::COLUMNS
+            };
+            let compiled = insert_many::<M>(dialect.as_ref(), M::TABLE, chunk, returning);
             let mut q = sqlx::query_as::<sqlx::Any, M>(compiled.sql.as_str());
             for v in compiled.binds {
                 q = q.bind(v);
