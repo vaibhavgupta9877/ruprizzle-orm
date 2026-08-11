@@ -41,3 +41,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["r
 [[bench]]
 name    = "query_construction"
 harness = false
+
+[[bench]]
+name    = "end_to_end"
+harness = false

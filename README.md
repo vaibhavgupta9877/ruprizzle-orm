@@ -461,7 +461,7 @@ Measured locally during development (no I/O for construction benchmarks):
 | Query construction (filter + order, no I/O) | ~1.8 µs |
 | Codegen, 50-model schema | ~16 ms |
 
-I/O benchmarks against Postgres and generated-crate compile-time benchmarks are not yet part of the automated suite because they require a running database and a dedicated compile-time machine. The design goal is to be competitive with hand-written `sqlx` for common CRUD while adding zero runtime overhead beyond the `sqlx` call itself.
+The end-to-end I/O benchmark is `cargo bench -p ruprizzle --bench end_to_end`; for the latest numbers and the text-marshalling note, see [docs/performance.md](docs/performance.md). Generated-crate compile-time benchmarks are not yet automated because they require a dedicated compile-time machine.
 
 ---
 

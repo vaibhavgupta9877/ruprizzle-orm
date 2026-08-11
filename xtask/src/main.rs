@@ -13,6 +13,10 @@ const TASKS: &[(&str, &str)] = &[
     ("test", "unit and snapshot tests"),
     ("docs", "build documentation with warnings denied"),
     ("examples", "compile generated code for all example schemas"),
+    (
+        "bench-client",
+        "regenerate the end_to_end benchmark client from schema.ruprizzle",
+    ),
     ("harden", "pre-release hardening checks"),
     (
         "release",
@@ -48,6 +52,7 @@ fn main() -> ExitCode {
         Some("test") => run_all(&["test"]),
         Some("docs") => run_all(&["docs"]),
         Some("examples") => run_examples(),
+        Some("bench-client") => run_bench_client(),
         Some("harden") => run_harden(),
         Some("release") => run_release(&rest),
         other => {
@@ -134,6 +139,85 @@ fn run_examples() -> ExitCode {
             return ExitCode::FAILURE;
         }
     }
+    ExitCode::SUCCESS
+}
+
+fn run_bench_client() -> ExitCode {
+    eprintln!("--- xtask: bench-client ---");
+
+    let schema = "crates/runtime/benches/end_to_end/schema.ruprizzle";
+    let out = Path::new("crates/runtime/benches/end_to_end");
+    let generated = out.join("generated");
+
+    if !run_command(
+        "cargo",
+        &[
+            "run",
+            "-p",
+            "ruprizzle-cli",
+            "--",
+            "generate",
+            "--schema",
+            schema,
+        ],
+    ) {
+        eprintln!("xtask: bench client generation failed");
+        return ExitCode::FAILURE;
+    }
+
+    // The generated `mod.rs` starts with an inner `#![allow(...)]` attribute,
+    // which is not legal when the file is `include!`-ed into `main.rs`. Strip
+    // it before copying the generated files into place.
+    let mod_rs = generated.join("mod.rs");
+    let content = match std::fs::read_to_string(&mod_rs) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("xtask: could not read generated mod.rs: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let patched = content
+        .lines()
+        .filter(|line| !line.starts_with("#![allow("))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if let Err(e) = std::fs::write(&mod_rs, patched) {
+        eprintln!("xtask: could not write patched mod.rs: {e}");
+        return ExitCode::FAILURE;
+    }
+
+    let entries = match std::fs::read_dir(&generated) {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("xtask: could not read generated directory: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+            let file_name = match path.file_name().and_then(|s| s.to_str()) {
+                Some(name) => name,
+                None => continue,
+            };
+            let dest = out.join(file_name);
+            if let Err(e) = std::fs::copy(&path, &dest) {
+                eprintln!(
+                    "xtask: could not copy {} to {}: {e}",
+                    path.display(),
+                    dest.display()
+                );
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+
+    if let Err(e) = std::fs::remove_dir_all(&generated) {
+        eprintln!("xtask: could not remove generated directory: {e}");
+        return ExitCode::FAILURE;
+    }
+
+    eprintln!("xtask: bench client regenerated in {}", out.display());
     ExitCode::SUCCESS
 }
 

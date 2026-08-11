@@ -1,0 +1,57 @@
+// Schema for the `end_to_end` benchmark client.
+//
+// Regenerate the client with `cargo xtask bench-client` (or the equivalent
+// `regenerate.sh` / `regenerate.ps1` script in this directory).
+
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  output      = "generated"
+  module_name = "db"
+}
+
+model BenchRow {
+  id   BigInt @id
+  name String
+  n    BigInt
+
+  @@map("bench_rows")
+}
+
+model BenchBulk {
+  id   BigInt @id
+  name String
+  n    BigInt
+
+  @@map("bench_bulk")
+}
+
+model BenchParent {
+  id       BigInt      @id
+  name     String
+  children BenchChild[]
+
+  @@map("bench_parents")
+}
+
+model BenchChild {
+  id            BigInt           @id
+  parent_id     BigInt           @map("parent_id")
+  name          String
+  parent        BenchParent      @relation(fields: [parent_id], references: [id])
+  grandchildren BenchGrandChild[]
+
+  @@map("bench_children")
+}
+
+model BenchGrandChild {
+  id       BigInt    @id
+  child_id BigInt    @map("child_id")
+  name     String
+  child    BenchChild @relation(fields: [child_id], references: [id])
+
+  @@map("bench_grandchildren")
+}

@@ -21,3 +21,6 @@
 # Private project planning notes (not published to GitHub)
 /ProjectPlan/
 /docs/superpowers/
+
+# Transient output of `cargo xtask bench-client`
+/crates/runtime/benches/end_to_end/generated
