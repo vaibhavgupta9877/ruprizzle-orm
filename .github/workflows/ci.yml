@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -71,8 +72,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
 
-  generated-code-lint:
-    name: generated code lints clean
+  generated-code:
+    name: generated code compiles clean
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -83,20 +84,12 @@ jobs:
       # Our output is other people's source code. A warning in it is our bug and
       # must fail our build, not theirs.
       #
-      # There is no generator yet (it lands in P3), so this job asserts that fact
-      # rather than silently passing: if `ruprizzle generate` starts working and
-      # nobody wires up the real check, this step fails and says so.
-      - name: Assert the generator is still unimplemented
-        run: |
-          set -euo pipefail
-          if cargo run -q -p ruprizzle-cli -- generate 2>&1 | grep -q "not implemented yet"; then
-            echo "generator not implemented yet (expected before P3); nothing to lint"
-          else
-            echo '::error::ruprizzle generate now produces output.'
-            echo '::error::Replace this step with: generate examples/*, then clippy the result.'
-            echo '::error::See ProjectPlan/ImplementationPlan/ImplPlan04CodegenEntities.md'
-            exit 1
-          fi
+      # xtask runs the two #[ignore]d compile tests sequentially: the first
+      # materialises all example schemas for both dialects into a throw-away
+      # crate and the second clippys it under clippy::pedantic. Running both
+      # tests in one `cargo test --include-ignored` invocation races on the
+      # generated crate, so this job uses xtask to keep them serial.
+      - run: cargo xtask examples
 
   msrv:
     name: minimum supported rust version
@@ -125,3 +118,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --workspace --no-deps
+
+  harden:
+    name: pre-release hardening
+    runs-on: ubuntu-latest
+    # Expensive (publish dry-runs, deny check, audits). Run on main and on
+    # demand rather than on every PR.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: EmbarkStudios/cargo-deny-action@v2
+      - run: cargo xtask harden

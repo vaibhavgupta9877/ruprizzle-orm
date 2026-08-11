@@ -20,6 +20,22 @@ const TASKS: &[(&str, &str)] = &[
     ),
 ];
 
+/// Per-crate ceiling for `unwrap()` / `expect()` / `panic!` in `src/`.
+///
+/// These are the counts at the time the audit became a gate. The numbers may
+/// only go down: a new panic in library source is a design question, not a
+/// detail, and it should be argued for in review rather than merged silently.
+const PANIC_BUDGET: &[(&str, usize)] = &[
+    ("crates/core", 2),
+    ("crates/dialect", 0),
+    ("crates/macros", 0),
+    ("crates/runtime", 1),
+    ("crates/parser", 29),
+    ("crates/codegen", 1),
+    ("crates/migrate", 2),
+    ("crates/cli", 2),
+];
+
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
     let task = args.next();
@@ -91,34 +107,34 @@ fn run_all(tasks: &[&str]) -> ExitCode {
 
 fn run_examples() -> ExitCode {
     eprintln!("--- xtask: examples ---");
-    // The codegen compile test generates all example schemas for both dialects
-    // and cargo-checks the result. It is ignored by default because it is
-    // expensive, so we explicitly include ignored tests here.
-    let status = Command::new("cargo")
-        .args([
-            "test",
-            "-p",
-            "ruprizzle-codegen",
-            "--test",
-            "compile",
-            "all_examples_both_dialects_compile",
-            "--",
-            "--include-ignored",
-            "--exact",
-        ])
-        .status();
-
-    match status {
-        Ok(s) if s.success() => ExitCode::SUCCESS,
-        Ok(s) => {
-            eprintln!("xtask: examples failed with {s}");
-            ExitCode::FAILURE
-        }
-        Err(e) => {
-            eprintln!("xtask: could not run examples: {e}");
-            ExitCode::FAILURE
+    // The first test generates all example schemas for both dialects into a
+    // throw-away crate in `target/generated-check`; the second clippys it under
+    // `clippy::pedantic`. They must run sequentially because the second reuses
+    // the crate the first materialises.
+    for test in [
+        "all_examples_both_dialects_compile",
+        "generated_code_is_pedantic_clean",
+    ] {
+        eprintln!("--- xtask: examples: {test} ---");
+        if !run_command(
+            "cargo",
+            &[
+                "test",
+                "-p",
+                "ruprizzle-codegen",
+                "--test",
+                "compile",
+                test,
+                "--",
+                "--include-ignored",
+                "--exact",
+            ],
+        ) {
+            eprintln!("xtask: examples test `{test}` failed");
+            return ExitCode::FAILURE;
         }
     }
+    ExitCode::SUCCESS
 }
 
 fn run_harden() -> ExitCode {
@@ -144,40 +160,46 @@ fn run_harden() -> ExitCode {
     }
 
     // Dry-run publish every crate that will be published, in dependency order.
+    // Verification is skipped because `cargo publish --dry-run` resolves path
+    // dependencies against the version on crates.io, which is stale until the
+    // actual release. Compile is already covered by the lint and test steps.
     for package in [
         "ruprizzle-core",
+        "ruprizzle-parser",
         "ruprizzle-dialect",
         "ruprizzle-macros",
         "ruprizzle",
-        "ruprizzle-parser",
-        "ruprizzle-codegen",
         "ruprizzle-migrate",
+        "ruprizzle-codegen",
         "ruprizzle-cli",
     ] {
         eprintln!("--- xtask: dry-run publish {package} ---");
         if !run_command(
             "cargo",
-            &["publish", "-p", package, "--dry-run", "--allow-dirty"],
+            &["publish", "-p", package, "--dry-run", "--allow-dirty", "--no-verify"],
         ) {
             return ExitCode::FAILURE;
         }
     }
 
-    // Panic audit: warn on unwrap/expect in library source (tests allowed).
+    // Panic audit: fail on unwrap/expect/panic in library source above the
+    // checked-in budget.
     eprintln!("--- xtask: panic audit ---");
-    for crate_dir in [
-        "crates/core",
-        "crates/dialect",
-        "crates/macros",
-        "crates/runtime",
-        "crates/parser",
-        "crates/codegen",
-        "crates/migrate",
-        "crates/cli",
-    ] {
-        if let Err(e) = panic_audit(crate_dir) {
-            eprintln!("xtask: panic audit failed for {crate_dir}: {e}");
-            return ExitCode::FAILURE;
+    for (crate_dir, budget) in PANIC_BUDGET {
+        match panic_audit(crate_dir) {
+            Ok(count) if count <= *budget => {
+                eprintln!("  {crate_dir}: {count} panic sites (budget {budget})");
+            }
+            Ok(count) => {
+                eprintln!(
+                    "xtask: panic budget exceeded for {crate_dir}: found {count}, budget {budget}"
+                );
+                return ExitCode::FAILURE;
+            }
+            Err(e) => {
+                eprintln!("xtask: panic audit failed for {crate_dir}: {e}");
+                return ExitCode::FAILURE;
+            }
         }
     }
 
@@ -192,12 +214,13 @@ fn run_harden() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn panic_audit(crate_dir: &str) -> Result<(), std::io::Error> {
+fn panic_audit(crate_dir: &str) -> Result<usize, std::io::Error> {
     let src = Path::new(crate_dir).join("src");
     if !src.exists() {
-        return Ok(());
+        return Ok(0);
     }
 
+    let mut count = 0;
     for entry in walkdir::WalkDir::new(&src)
         .into_iter()
         .filter_map(|e| e.ok())
@@ -214,17 +237,18 @@ fn panic_audit(crate_dir: &str) -> Result<(), std::io::Error> {
 
         let content = std::fs::read_to_string(path)?;
         for (line_no, line) in content.lines().enumerate() {
-            // allow documented panics in Related::get and trybuild tests
-            if line.contains("Related::get")
+            if line.contains(".unwrap()")
+                || line.contains(".expect(")
                 || line.contains("panic!")
-                || line.contains("unwrap()")
-                || line.contains("expect(")
+                || line.contains("todo!")
+                || line.contains("unimplemented!")
             {
+                count += 1;
                 eprintln!("  {path:?}:{}: {line}", line_no + 1);
             }
         }
     }
-    Ok(())
+    Ok(count)
 }
 
 fn injection_audit() -> Result<(), std::io::Error> {
