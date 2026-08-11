@@ -1,5 +1,8 @@
 # Release notes
 
+For a sectioned, versioned changelog, see [CHANGELOG.md](CHANGELOG.md).
+
+
 ## 0.1.0-alpha.2
 
 A quick follow-up to `0.1.0-alpha.1` that adds README files and SEO metadata to

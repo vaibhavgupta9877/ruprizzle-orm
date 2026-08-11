@@ -33,6 +33,7 @@ Postgres and SQLite are supported from day one behind a `DbDialect` trait, so mo
 - [Known limitations](#known-limitations)
 - [Development](#development)
 - [Planning documents](#planning-documents)
+- [Changelog](#changelog)
 - [Licence](#licence)
 
 ---
@@ -512,6 +513,13 @@ Without Docker, `cargo test` still passes: the Postgres half of each dual-databa
 - [MasterPlan](ProjectPlan/ImplementationPlan/MasterPlan.md) — scope, timeline, progress tracker
 - [Decisions and risks](ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md) — ADRs, kill criteria, what is deferred to 0.2
 - [Release notes](RELEASES.md) — what changed in each published version
+- [Changelog](CHANGELOG.md) — the full, sectioned changelog
+
+---
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full, versioned list of additions, changes, fixes, and security notes.
 
 ---
 
