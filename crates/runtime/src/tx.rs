@@ -1,5 +1,7 @@
 //! Transaction handle.
 
+use std::borrow::Cow;
+
 use tokio::sync::Mutex;
 
 use ruprizzle_core::ir::Provider;
@@ -83,7 +85,7 @@ impl Tx {
         if this.provider == Provider::Postgres {
             this.execute(
                 &format!("SET TRANSACTION ISOLATION LEVEL {}", level.as_sql()),
-                Vec::new(),
+                &[],
             )
             .await?;
         }
@@ -138,7 +140,7 @@ impl Tx {
     ///
     /// Returns [`Error::Sqlx`] for database errors or [`Error::Message`] if the
     /// transaction has already been finished.
-    pub async fn execute(&self, sql: &str, binds: Vec<Value>) -> Result<u64, Error> {
+    pub async fn execute(&self, sql: &str, binds: &[Value]) -> Result<u64, Error> {
         let mut guard = self.inner.lock().await;
         let tx = guard
             .as_mut()
@@ -147,7 +149,7 @@ impl Tx {
         match tx {
             TxInner::Any(tx) => {
                 let mut q = sqlx::query::<Any>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.execute(&mut **tx)
@@ -157,7 +159,7 @@ impl Tx {
             }
             TxInner::Postgres(tx) => {
                 let mut q = sqlx::query::<Postgres>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.execute(&mut **tx)
@@ -167,7 +169,7 @@ impl Tx {
             }
             TxInner::Sqlite(tx) => {
                 let mut q = sqlx::query::<Sqlite>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.execute(&mut **tx)
@@ -184,7 +186,7 @@ impl Tx {
     ///
     /// Returns [`Error::Sqlx`] for database errors or [`Error::Message`] if the
     /// transaction has already been finished.
-    pub async fn fetch_all<T>(&self, sql: &str, binds: Vec<Value>) -> Result<Vec<T>, Error>
+    pub async fn fetch_all<T>(&self, sql: &str, binds: &[Value]) -> Result<Vec<T>, Error>
     where
         T: Send + Unpin + RowDecode,
     {
@@ -196,21 +198,21 @@ impl Tx {
         match tx {
             TxInner::Any(tx) => {
                 let mut q = sqlx::query_as::<Any, T>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
             }
             TxInner::Postgres(tx) => {
                 let mut q = sqlx::query_as::<Postgres, T>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
             }
             TxInner::Sqlite(tx) => {
                 let mut q = sqlx::query_as::<Sqlite, T>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
@@ -224,7 +226,7 @@ impl Tx {
     ///
     /// Returns [`Error::Sqlx`] for database errors or [`Error::Message`] if the
     /// transaction has already been finished.
-    pub async fn fetch_one<T>(&self, sql: &str, binds: Vec<Value>) -> Result<T, Error>
+    pub async fn fetch_one<T>(&self, sql: &str, binds: &[Value]) -> Result<T, Error>
     where
         T: Send + Unpin + RowDecode,
     {
@@ -236,21 +238,21 @@ impl Tx {
         match tx {
             TxInner::Any(tx) => {
                 let mut q = sqlx::query_as::<Any, T>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.fetch_one(&mut **tx).await.map_err(Error::Sqlx)
             }
             TxInner::Postgres(tx) => {
                 let mut q = sqlx::query_as::<Postgres, T>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.fetch_one(&mut **tx).await.map_err(Error::Sqlx)
             }
             TxInner::Sqlite(tx) => {
                 let mut q = sqlx::query_as::<Sqlite, T>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.fetch_one(&mut **tx).await.map_err(Error::Sqlx)
@@ -264,7 +266,7 @@ impl Tx {
     ///
     /// Returns [`Error::Sqlx`] for database errors or [`Error::Message`] if the
     /// transaction has already been finished.
-    pub async fn fetch_optional<T>(&self, sql: &str, binds: Vec<Value>) -> Result<Option<T>, Error>
+    pub async fn fetch_optional<T>(&self, sql: &str, binds: &[Value]) -> Result<Option<T>, Error>
     where
         T: Send + Unpin + RowDecode,
     {
@@ -276,21 +278,21 @@ impl Tx {
         match tx {
             TxInner::Any(tx) => {
                 let mut q = sqlx::query_as::<Any, T>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.fetch_optional(&mut **tx).await.map_err(Error::Sqlx)
             }
             TxInner::Postgres(tx) => {
                 let mut q = sqlx::query_as::<Postgres, T>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.fetch_optional(&mut **tx).await.map_err(Error::Sqlx)
             }
             TxInner::Sqlite(tx) => {
                 let mut q = sqlx::query_as::<Sqlite, T>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.fetch_optional(&mut **tx).await.map_err(Error::Sqlx)
@@ -307,7 +309,7 @@ impl Tx {
     pub(crate) async fn fetch_all_rows(
         &self,
         sql: &str,
-        binds: Vec<Value>,
+        binds: &[Value],
     ) -> Result<RowBatch, Error> {
         let mut guard = self.inner.lock().await;
         let tx = guard
@@ -317,14 +319,14 @@ impl Tx {
         match tx {
             TxInner::Any(tx) => {
                 let mut q = sqlx::query::<Any>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.fetch_all(&mut **tx).await.map(RowBatch::Any).map_err(Error::Sqlx)
             }
             TxInner::Postgres(tx) => {
                 let mut q = sqlx::query::<Postgres>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.fetch_all(&mut **tx)
@@ -334,7 +336,7 @@ impl Tx {
             }
             TxInner::Sqlite(tx) => {
                 let mut q = sqlx::query::<Sqlite>(sql);
-                for b in &binds {
+                for b in binds {
                     q = q.bind(b);
                 }
                 q.fetch_all(&mut **tx)
@@ -353,65 +355,73 @@ impl crate::executor::Executor for Tx {
 
     fn fetch_all_raw(
         &self,
-        sql: String,
+        sql: Cow<'static, str>,
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<RowBatch, Error>> {
         Box::pin(async move {
             let bind_count = binds.len();
-            let started = std::time::Instant::now();
-            let result = self.fetch_all_rows(&sql, binds).await;
-            let elapsed_ms = started.elapsed().as_millis() as u64;
-            match &result {
-                Ok(batch) => tracing::debug!(
-                    target: "ruprizzle::query",
-                    sql = %sql,
-                    binds = bind_count,
-                    rows = batch.len(),
-                    elapsed_ms,
-                    "query"
-                ),
-                Err(error) => tracing::warn!(
-                    target: "ruprizzle::query",
-                    sql = %sql,
-                    binds = bind_count,
-                    elapsed_ms,
-                    error = error.kind(),
-                    "query failed"
-                ),
+            if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
+                let started = std::time::Instant::now();
+                let result = self.fetch_all_rows(sql.as_ref(), &binds).await;
+                let elapsed_ms = started.elapsed().as_millis() as u64;
+                match &result {
+                    Ok(batch) => tracing::debug!(
+                        target: "ruprizzle::query",
+                        sql = %sql,
+                        binds = bind_count,
+                        rows = batch.len(),
+                        elapsed_ms,
+                        "query"
+                    ),
+                    Err(error) => tracing::warn!(
+                        target: "ruprizzle::query",
+                        sql = %sql,
+                        binds = bind_count,
+                        elapsed_ms,
+                        error = error.kind(),
+                        "query failed"
+                    ),
+                }
+                result
+            } else {
+                self.fetch_all_rows(sql.as_ref(), &binds).await
             }
-            result
         })
     }
 
     fn execute_raw(
         &self,
-        sql: String,
+        sql: Cow<'static, str>,
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<u64, Error>> {
         Box::pin(async move {
             let bind_count = binds.len();
-            let started = std::time::Instant::now();
-            let result = self.execute(&sql, binds).await;
-            let elapsed_ms = started.elapsed().as_millis() as u64;
-            match &result {
-                Ok(rows_affected) => tracing::debug!(
-                    target: "ruprizzle::query",
-                    sql = %sql,
-                    binds = bind_count,
-                    rows_affected,
-                    elapsed_ms,
-                    "execute"
-                ),
-                Err(error) => tracing::warn!(
-                    target: "ruprizzle::query",
-                    sql = %sql,
-                    binds = bind_count,
-                    elapsed_ms,
-                    error = error.kind(),
-                    "execute failed"
-                ),
+            if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
+                let started = std::time::Instant::now();
+                let result = self.execute(sql.as_ref(), &binds).await;
+                let elapsed_ms = started.elapsed().as_millis() as u64;
+                match &result {
+                    Ok(rows_affected) => tracing::debug!(
+                        target: "ruprizzle::query",
+                        sql = %sql,
+                        binds = bind_count,
+                        rows_affected,
+                        elapsed_ms,
+                        "execute"
+                    ),
+                    Err(error) => tracing::warn!(
+                        target: "ruprizzle::query",
+                        sql = %sql,
+                        binds = bind_count,
+                        elapsed_ms,
+                        error = error.kind(),
+                        "execute failed"
+                    ),
+                }
+                result
+            } else {
+                self.execute(sql.as_ref(), &binds).await
             }
-            result
         })
     }
 
@@ -422,7 +432,7 @@ impl crate::executor::Executor for Tx {
     /// statement issued on the same transaction, so the rows are fetched up
     /// front. Streaming a very large result set is therefore something to do on
     /// the pool, not inside a transaction.
-    fn stream_raw(&self, sql: String, binds: Vec<Value>) -> crate::executor::BoxRowStream<'_> {
+    fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> crate::executor::BoxRowStream<'_> {
         Box::pin(crate::executor::DeferredRowStream::new(Box::pin(async move {
             crate::executor::Executor::fetch_all_raw(self, sql, binds).await
         })))

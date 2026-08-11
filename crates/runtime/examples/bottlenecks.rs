@@ -7,8 +7,8 @@
 //!
 //! Five experiments:
 //!
-//! 1. `test_before_acquire` — ruprizzle's `PoolConfig` defaults it to `true`,
-//!    which makes the pool ping the connection before every checkout.
+//! 1. `test_before_acquire` — ruprizzle's `PoolConfig` now defaults it to
+//!    `false`; this arm measures the cost of setting it back to `true`.
 //! 2. pool checkout — per-query `acquire()` versus a held connection.
 //! 3. `AnyRow` conversion — the same rows fetched natively and through `Any`,
 //!    with no decoding at all, split by whether a text column is present.
@@ -78,9 +78,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let url = format!("sqlite:///{}?mode=ro", db_path());
 
     // ------------------------------------------------------------------
-    // 1. test_before_acquire: ruprizzle's PoolConfig default is `true`.
+    // 1. test_before_acquire: ruprizzle's PoolConfig default is `false`.
     // ------------------------------------------------------------------
-    println!("\n=== 1. test_before_acquire (ruprizzle PoolConfig default = true) ===");
+    println!("\n=== 1. test_before_acquire (ruprizzle PoolConfig default = false) ===");
     let tested = AnyPoolOptions::new()
         .max_connections(10)
         .test_before_acquire(true)
@@ -326,7 +326,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let via_exec = bench("via ruprizzle Executor::fetch_all_raw", 300, || async {
         use ruprizzle::Executor as _;
         let rows = untested
-            .fetch_all_raw(sql.to_owned(), Vec::new())
+            .fetch_all_raw(sql.to_owned().into(), Vec::new())
             .await
             .unwrap();
         let ruprizzle::executor::RowBatch::Any(rows) = rows else {

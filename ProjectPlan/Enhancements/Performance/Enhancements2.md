@@ -1,6 +1,6 @@
 # Performance enhancements, round 2
 
-**Status:** in progress — Phase B (native Postgres/Sqlite backends) implemented with P2-4; Phase A, C and D still open.
+**Status:** in progress — Phase A (default `test_before_acquire=false` and `Executor` trimming) and Phase B (native Postgres/Sqlite backends) implemented; Phase C and D still open.
 **Date:** 2026-08-11
 **Baseline:** `e513f7e` (post Phase 1 + P2-3), `docs/BenchmarkResults.md`
 **Supersedes the attribution in:** [`Enhancements1.md`](Enhancements1.md) §3
@@ -287,11 +287,13 @@ Drizzle's correlated-subquery SQLite path.
 | item | cost | where |
 |---|---:|---|
 | ruprizzle `Executor` wrapper over raw `sqlx` | **+2.2%** (36 µs / 1,650) | `executor.rs:58-92` |
-| `Value::Str(Arc<str>)` → `String` on every bind | 1 alloc per bound string | `value.rs:200-203` |
+| `Value::Str(Arc<str>)` → `String` on every bind | 1 alloc per bound string | `value.rs` (fixed in P1-4) |
 
-The `Executor` wrapper cost is the `sql: String` allocation, `Instant::now()`,
-and the `tracing::debug!` call site — paid on every query whether or not a
-subscriber is installed. The bind re-allocation is round 1's deferred P1-4; it
+The `Executor` wrapper cost was the `sql: String` clone and the
+`Instant::now()` / `tracing::debug!` call site, paid on every query whether or
+not a subscriber was installed. Phase A-2 removes the clone (SQL is now
+`Cow<'static, str>` and borrowed for `sqlx`) and skips `Instant::now()` unless
+the `ruprizzle::query` target is enabled. The bind re-allocation is round 1's deferred P1-4; it
 is forced by `Any`'s `Encode<'q, Any>` lifetime and dissolves on its own under
 a native backend.
 
@@ -319,10 +321,10 @@ Everything in round 1's §7 still holds. Nothing there has been reopened.
 
 ### Phase A — the default that costs a round-trip (hours)
 
-| # | task | evidence | effect |
-|---|---|---|---|
-| **A-1** | `PoolConfig::default().test_before_acquire = false` | §3.3 | **−10.2 µs/query** on SQLite; **−1 network RTT/query** on Postgres |
-| **A-2** | Trim `Executor::fetch_all_raw`: take `sql` as `Cow<'_, str>`, drop `Instant::now()` unless the `ruprizzle::query` target is enabled | §3.6 | ~−2% |
+| # | task | evidence | effect | status |
+|---|---|---|---|---|
+| **A-1** | `PoolConfig::default().test_before_acquire = false` | §3.3 | **−10.2 µs/query** on SQLite; **−1 network RTT/query** on Postgres | implemented |
+| **A-2** | Trim `Executor::fetch_all_raw`: take `sql` as `Cow<'_, str>`, drop `Instant::now()` unless the `ruprizzle::query` target is enabled | §3.6 | ~−2% | implemented |
 
 **A-1 is the highest value-per-line change in the project** and it is a
 one-word diff. It is not free, and the docs must say so:
@@ -344,13 +346,13 @@ one-word diff. It is not free, and the docs must say so:
 enum Backend { Postgres(PgPool), Sqlite(SqlitePool) }
 ```
 
-| # | task | effect |
-|---|---|---|
-| **B-1** | `Backend` enum behind `Pool`; `Executor` dispatches per variant | enables the rest |
-| **B-2** | Drop `sqlx::Any` from the read path | **−16%/row** (§3.4) |
-| **B-3** | Expose `row_buffer_size`, journal mode, cache size on the SQLite variant | **−10%/row** (§3.1 row 3) |
-| **B-4** | Native `Encode` per backend; `Value::Str` binds by reference | removes the per-bind allocation (§3.6), unblocks round 1's P1-4 |
-| **B-5** | Native decode per backend | **fixes round 1's F2** — `UUID`, `TIMESTAMPTZ`, `NUMERIC`, `JSONB`, `DATE`, `TIME` are unreadable through `Any` on Postgres today |
+| # | task | effect | status |
+|---|---|---|---|
+| **B-1** | `Backend` enum behind `Pool`; `Executor` dispatches per variant | enables the rest | implemented |
+| **B-2** | Drop `sqlx::Any` from the read path | **−16%/row** (§3.4) | implemented |
+| **B-3** | Expose `row_buffer_size`, journal mode, cache size on the SQLite variant | **−10%/row** (§3.1 row 3) | implemented |
+| **B-4** | Native `Encode` per backend; `Value::Str` binds by reference | removes the per-bind allocation (§3.6), unblocks round 1's P1-4 | implemented |
+| **B-5** | Native decode per backend | **fixes round 1's F2** — `UUID`, `TIMESTAMPTZ`, `NUMERIC`, `JSONB`, `DATE`, `TIME` are unreadable through `Any` on Postgres today | implemented |
 
 Combined: ~25% on row-heavy reads, plus the correctness hole closed.
 
@@ -392,8 +394,7 @@ configuration change. Costs and risks:
   constraint on both crates' upgrade cadence — or `sqlx-sqlite` is dropped
   entirely and the constraint disappears.
 
-**Recommendation:** do A now, B next (the correctness fix justifies it on its
-own), then C. C-0 was the gate and it has been measured (§3.2b) — the advantage
+**Recommendation:** A and B are done; C is next. C-0 was the gate and it has been measured (§3.2b) — the advantage
 holds at ≥11× under concurrent load, so Phase C is justified. The remaining
 open question is not *whether* it is worth it but blocking-pool sizing under a
 real server's mixed read/write load.

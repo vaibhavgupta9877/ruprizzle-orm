@@ -146,7 +146,7 @@ both_dbs! {
         // Reads inside the transaction see its own uncommitted writes.
         let exec: &dyn Executor = &tx;
         exec.execute_raw(
-            "INSERT INTO tasks (id, name) VALUES (2, 'in-tx')".to_owned(),
+            "INSERT INTO tasks (id, name) VALUES (2, 'in-tx')".to_owned().into(),
             Vec::new(),
         )
         .await?;
@@ -172,7 +172,7 @@ both_dbs! {
         SelectQuery::<Task>::new(&tx).fetch_all().await.map(|_: Vec<Task>| ())?;
         tx.execute(
             "INSERT INTO tasks (id, name) VALUES (9, 'gone')",
-            Vec::new(),
+            &[],
         )
         .await?;
         tx.rollback().await?;

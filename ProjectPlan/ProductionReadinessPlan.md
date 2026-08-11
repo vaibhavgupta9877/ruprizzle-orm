@@ -668,7 +668,7 @@ The `Executor` trait is the correct choke point: every builder runs through
 - Create: `crates/runtime/tests/tracing.rs`
 
 **Interfaces:**
-- Consumes: `Executor` trait as defined at `crates/runtime/src/executor.rs:23-47` — `fetch_all_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<Vec<AnyRow>, Error>>`, `execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>>`, `stream_raw(&self, sql: String, binds: Vec<Value>) -> BoxRowStream<'_>`.
+- Consumes: `Executor` trait as defined at `crates/runtime/src/executor.rs:90-118` — `fetch_all_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxFuture<'_, Result<RowBatch, Error>>`, `execute_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>>`, `stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_>`.
 - Produces: events on target `ruprizzle::query` at `DEBUG` (success) and `WARN` (failure), with fields `sql`, `binds`, `rows`, `elapsed_ms`, `error`. Events on target `ruprizzle::migrate` at `INFO` per migration.
 
 - [x] **Step 1: Add the dependency**
@@ -785,9 +785,9 @@ In `crates/runtime/src/executor.rs`, replace the three method bodies in
 ```rust
     fn fetch_all_raw(
         &self,
-        sql: String,
+        sql: Cow<'static, str>,
         binds: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<AnyRow>, Error>> {
+    ) -> BoxFuture<'_, Result<RowBatch, Error>> {
         Box::pin(async move {
             let bind_count = binds.len();
             let started = std::time::Instant::now();
@@ -819,7 +819,7 @@ In `crates/runtime/src/executor.rs`, replace the three method bodies in
         })
     }
 
-    fn execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>> {
+    fn execute_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>> {
         Box::pin(async move {
             let bind_count = binds.len();
             let started = std::time::Instant::now();

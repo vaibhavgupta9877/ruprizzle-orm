@@ -5,14 +5,14 @@ use std::time::Duration;
 use ruprizzle::{PoolConfig, connect_with};
 
 #[test]
-fn defaults_match_sqlx() {
+fn defaults_match_ruprizzle() {
     let config = PoolConfig::default();
     assert_eq!(config.max_connections, 10);
     assert_eq!(config.min_connections, 0);
     assert_eq!(config.acquire_timeout, Duration::from_secs(30));
     assert_eq!(config.idle_timeout, Some(Duration::from_secs(600)));
     assert_eq!(config.max_lifetime, Some(Duration::from_secs(1800)));
-    assert!(config.test_before_acquire);
+    assert!(!config.test_before_acquire);
     assert_eq!(config.row_buffer_size, 1024);
 }
 

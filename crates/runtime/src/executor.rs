@@ -11,6 +11,8 @@
 //! what keeps it object-safe, and object safety is what makes the pool/tx
 //! substitution possible at all.
 
+use std::borrow::Cow;
+
 use ruprizzle_dialect::DbDialect;
 use sqlx::any::AnyRow;
 use sqlx::postgres::PgRow;
@@ -97,24 +99,23 @@ pub trait Executor: Send + Sync {
 
     /// Runs a query and returns the raw rows.
     ///
-    /// Takes the SQL by value: the returned future outlives the call, so
-    /// borrowing the query text would force every caller into a
-    /// self-referential struct. One allocation per statement is irrelevant
-    /// beside a database round trip.
+    /// `sql` is a [`Cow`] so callers with an owned `String` can pass it without
+    /// an extra clone, while the executor can still borrow the text to hand to
+    /// `sqlx`. The returned future owns the `Cow` and the binds.
     fn fetch_all_raw(
         &self,
-        sql: String,
+        sql: Cow<'static, str>,
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<RowBatch, Error>>;
 
     /// Runs a statement and returns the number of affected rows.
-    fn execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>>;
+    fn execute_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>>;
 
     /// Runs a query and yields decoded rows from a buffered result set.
     ///
     /// This deliberately fetches all rows first and then streams them. A true
     /// cursor is slower on `sqlx-sqlite` (see `docs/BenchmarkResults.md`).
-    fn stream_raw(&self, sql: String, binds: Vec<Value>) -> BoxRowStream<'_>;
+    fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_>;
 }
 
 /// A single raw row from any backend.
@@ -207,65 +208,73 @@ impl Executor for Pool {
 
     fn fetch_all_raw(
         &self,
-        sql: String,
+        sql: Cow<'static, str>,
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<RowBatch, Error>> {
         Box::pin(async move {
             let bind_count = binds.len();
-            let started = std::time::Instant::now();
-            let result = dispatch_raw_query(self, sql.clone(), binds).await;
-            let elapsed_ms = started.elapsed().as_millis() as u64;
-            match &result {
-                Ok(batch) => tracing::debug!(
-                    target: "ruprizzle::query",
-                    sql = %sql,
-                    binds = bind_count,
-                    rows = batch.len(),
-                    elapsed_ms,
-                    "query"
-                ),
-                Err(error) => tracing::warn!(
-                    target: "ruprizzle::query",
-                    sql = %sql,
-                    binds = bind_count,
-                    elapsed_ms,
-                    error = error.kind(),
-                    "query failed"
-                ),
+            if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
+                let started = std::time::Instant::now();
+                let result = dispatch_raw_query(self, &sql, &binds).await;
+                let elapsed_ms = started.elapsed().as_millis() as u64;
+                match &result {
+                    Ok(batch) => tracing::debug!(
+                        target: "ruprizzle::query",
+                        sql = %sql,
+                        binds = bind_count,
+                        rows = batch.len(),
+                        elapsed_ms,
+                        "query"
+                    ),
+                    Err(error) => tracing::warn!(
+                        target: "ruprizzle::query",
+                        sql = %sql,
+                        binds = bind_count,
+                        elapsed_ms,
+                        error = error.kind(),
+                        "query failed"
+                    ),
+                }
+                result
+            } else {
+                dispatch_raw_query(self, &sql, &binds).await
             }
-            result
         })
     }
 
-    fn execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>> {
+    fn execute_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>> {
         Box::pin(async move {
             let bind_count = binds.len();
-            let started = std::time::Instant::now();
-            let result = dispatch_raw_execute(self, sql.clone(), binds).await;
-            let elapsed_ms = started.elapsed().as_millis() as u64;
-            match &result {
-                Ok(rows_affected) => tracing::debug!(
-                    target: "ruprizzle::query",
-                    sql = %sql,
-                    binds = bind_count,
-                    rows_affected,
-                    elapsed_ms,
-                    "execute"
-                ),
-                Err(error) => tracing::warn!(
-                    target: "ruprizzle::query",
-                    sql = %sql,
-                    binds = bind_count,
-                    elapsed_ms,
-                    error = error.kind(),
-                    "execute failed"
-                ),
+            if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
+                let started = std::time::Instant::now();
+                let result = dispatch_raw_execute(self, &sql, &binds).await;
+                let elapsed_ms = started.elapsed().as_millis() as u64;
+                match &result {
+                    Ok(rows_affected) => tracing::debug!(
+                        target: "ruprizzle::query",
+                        sql = %sql,
+                        binds = bind_count,
+                        rows_affected,
+                        elapsed_ms,
+                        "execute"
+                    ),
+                    Err(error) => tracing::warn!(
+                        target: "ruprizzle::query",
+                        sql = %sql,
+                        binds = bind_count,
+                        elapsed_ms,
+                        error = error.kind(),
+                        "execute failed"
+                    ),
+                }
+                result
+            } else {
+                dispatch_raw_execute(self, &sql, &binds).await
             }
-            result
         })
     }
 
-    fn stream_raw(&self, sql: String, binds: Vec<Value>) -> BoxRowStream<'_> {
+    fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
         Box::pin(DeferredRowStream::new(Box::pin(async move {
             self.fetch_all_raw(sql, binds).await
         })))
@@ -274,20 +283,20 @@ impl Executor for Pool {
 
 async fn dispatch_raw_query(
     pool: &Pool,
-    sql: String,
-    binds: Vec<Value>,
+    sql: &str,
+    binds: &[Value],
 ) -> Result<RowBatch, Error> {
     match pool {
         Pool::Any(p) => {
-            let mut q = sqlx::query::<sqlx::Any>(&sql);
-            for bind in &binds {
+            let mut q = sqlx::query::<sqlx::Any>(sql);
+            for bind in binds {
                 q = q.bind(bind);
             }
             q.fetch_all(p).await.map(RowBatch::Any).map_err(Error::from)
         }
         Pool::Postgres(p) => {
-            let mut q = sqlx::query::<sqlx::Postgres>(&sql);
-            for bind in &binds {
+            let mut q = sqlx::query::<sqlx::Postgres>(sql);
+            for bind in binds {
                 q = q.bind(bind);
             }
             q.fetch_all(p)
@@ -296,8 +305,8 @@ async fn dispatch_raw_query(
                 .map_err(Error::from)
         }
         Pool::Sqlite(p) => {
-            let mut q = sqlx::query::<sqlx::Sqlite>(&sql);
-            for bind in &binds {
+            let mut q = sqlx::query::<sqlx::Sqlite>(sql);
+            for bind in binds {
                 q = q.bind(bind);
             }
             q.fetch_all(p)
@@ -308,11 +317,11 @@ async fn dispatch_raw_query(
     }
 }
 
-async fn dispatch_raw_execute(pool: &Pool, sql: String, binds: Vec<Value>) -> Result<u64, Error> {
+async fn dispatch_raw_execute(pool: &Pool, sql: &str, binds: &[Value]) -> Result<u64, Error> {
     match pool {
         Pool::Any(p) => {
-            let mut q = sqlx::query::<sqlx::Any>(&sql);
-            for bind in &binds {
+            let mut q = sqlx::query::<sqlx::Any>(sql);
+            for bind in binds {
                 q = q.bind(bind);
             }
             q.execute(p)
@@ -321,8 +330,8 @@ async fn dispatch_raw_execute(pool: &Pool, sql: String, binds: Vec<Value>) -> Re
                 .map_err(Error::from)
         }
         Pool::Postgres(p) => {
-            let mut q = sqlx::query::<sqlx::Postgres>(&sql);
-            for bind in &binds {
+            let mut q = sqlx::query::<sqlx::Postgres>(sql);
+            for bind in binds {
                 q = q.bind(bind);
             }
             q.execute(p)
@@ -331,8 +340,8 @@ async fn dispatch_raw_execute(pool: &Pool, sql: String, binds: Vec<Value>) -> Re
                 .map_err(Error::from)
         }
         Pool::Sqlite(p) => {
-            let mut q = sqlx::query::<sqlx::Sqlite>(&sql);
-            for bind in &binds {
+            let mut q = sqlx::query::<sqlx::Sqlite>(sql);
+            for bind in binds {
                 q = q.bind(bind);
             }
             q.execute(p)

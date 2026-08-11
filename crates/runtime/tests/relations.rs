@@ -68,13 +68,13 @@ async fn include_one_to_many_round_trip() {
     let pool = fresh_pool().await;
 
     pool.execute_raw(
-        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string(),
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string().into(),
         Vec::new(),
     )
     .await
     .unwrap();
     pool.execute_raw(
-        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)".to_string(),
+        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)".to_string().into(),
         Vec::new(),
     )
     .await
@@ -128,13 +128,13 @@ async fn include_with_filter_and_take_round_trip() {
     let pool = fresh_pool().await;
 
     pool.execute_raw(
-        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string(),
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string().into(),
         Vec::new(),
     )
     .await
     .unwrap();
     pool.execute_raw(
-        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)".to_string(),
+        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)".to_string().into(),
         Vec::new(),
     )
     .await
@@ -174,13 +174,13 @@ async fn nested_create_round_trip() {
     let pool = fresh_pool().await;
 
     pool.execute_raw(
-        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string(),
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string().into(),
         Vec::new(),
     )
     .await
     .unwrap();
     pool.execute_raw(
-        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)".to_string(),
+        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)".to_string().into(),
         Vec::new(),
     )
     .await

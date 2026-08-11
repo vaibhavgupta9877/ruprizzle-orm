@@ -3,6 +3,7 @@
 //! This measures the overhead of turning the typed query builder into SQL and
 //! binds. It does not touch a database, so it is safe to run anywhere.
 
+use std::borrow::Cow;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -37,7 +38,7 @@ impl Executor for NoopExecutor {
 
     fn fetch_all_raw(
         &self,
-        _sql: String,
+        _sql: Cow<'static, str>,
         _binds: Vec<Value>,
     ) -> ruprizzle::BoxFuture<'_, Result<ruprizzle::executor::RowBatch, ruprizzle::Error>> {
         Box::pin(async { Ok(ruprizzle::executor::RowBatch::Any(Vec::new())) })
@@ -45,13 +46,13 @@ impl Executor for NoopExecutor {
 
     fn execute_raw(
         &self,
-        _sql: String,
+        _sql: Cow<'static, str>,
         _binds: Vec<Value>,
     ) -> ruprizzle::BoxFuture<'_, Result<u64, ruprizzle::Error>> {
         Box::pin(async { Ok(0) })
     }
 
-    fn stream_raw(&self, _sql: String, _binds: Vec<Value>) -> BoxRowStream<'_> {
+    fn stream_raw(&self, _sql: Cow<'static, str>, _binds: Vec<Value>) -> BoxRowStream<'_> {
         Box::pin(NoopStream)
     }
 }

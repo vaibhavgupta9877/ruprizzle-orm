@@ -25,7 +25,7 @@ async fn many_concurrent_inserts_succeed() {
     let (pool, _tmp) = fresh_pool().await;
 
     pool.execute_raw(
-        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)".to_string(),
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)".to_string().into(),
         Vec::new(),
     )
     .await
@@ -58,7 +58,7 @@ async fn transactions_see_their_own_writes_before_commit() {
     let (pool, _tmp) = fresh_pool().await;
 
     pool.execute_raw(
-        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)".to_string(),
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)".to_string().into(),
         Vec::new(),
     )
     .await
@@ -75,14 +75,14 @@ async fn transactions_see_their_own_writes_before_commit() {
 
     tx.execute(
         "INSERT INTO tasks (id, label) VALUES (?, ?)",
-        vec![Value::I64(2), Value::Str("in-tx".into())],
+        &vec![Value::I64(2), Value::Str("in-tx".into())],
     )
     .await
     .unwrap();
 
     // The transaction should see its own uncommitted write.
     let count: (i64,) = tx
-        .fetch_one("SELECT count(*) FROM tasks", vec![])
+        .fetch_one("SELECT count(*) FROM tasks", &[])
         .await
         .unwrap();
     assert_eq!(count.0, 2);

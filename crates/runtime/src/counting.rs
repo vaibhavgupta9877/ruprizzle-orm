@@ -17,6 +17,7 @@
 //! It is deliberately in the library rather than the test harness: an
 //! application with its own hot path has the same question to ask.
 
+use std::borrow::Cow;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use ruprizzle_dialect::DbDialect;
@@ -74,19 +75,19 @@ impl Executor for CountingExecutor<'_> {
 
     fn fetch_all_raw(
         &self,
-        sql: String,
+        sql: Cow<'static, str>,
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<crate::executor::RowBatch, Error>> {
         self.tick();
         self.inner.fetch_all_raw(sql, binds)
     }
 
-    fn execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>> {
+    fn execute_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>> {
         self.tick();
         self.inner.execute_raw(sql, binds)
     }
 
-    fn stream_raw(&self, sql: String, binds: Vec<Value>) -> BoxRowStream<'_> {
+    fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
         self.tick();
         self.inner.stream_raw(sql, binds)
     }

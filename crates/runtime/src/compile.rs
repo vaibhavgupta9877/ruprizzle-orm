@@ -4,6 +4,8 @@
 //! interpolation of user data. The compiler is dialect-aware so it can quote
 //! identifiers and produce the correct parameter markers.
 
+use std::borrow::Cow;
+
 use ruprizzle_dialect::{DbDialect, dialect_for};
 
 use crate::filter::{CmpOp, FilterNode};
@@ -15,7 +17,7 @@ use crate::value::Value;
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompiledSql {
     /// The SQL string with placeholders.
-    pub sql: String,
+    pub sql: Cow<'static, str>,
     /// The values bound to the placeholders, in order.
     pub binds: Vec<Value>,
 }
@@ -464,7 +466,7 @@ impl<'d> Compiler<'d> {
 
     fn finish(self) -> CompiledSql {
         CompiledSql {
-            sql: self.sql,
+            sql: Cow::Owned(self.sql),
             binds: self.binds,
         }
     }

@@ -23,7 +23,7 @@ async fn fresh_pool() -> Pool {
     let pool = connect(&url).await.unwrap();
 
     pool.execute_raw(
-        "CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)".to_string(),
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)".to_string().into(),
         Vec::new(),
     )
     .await
@@ -118,14 +118,14 @@ async fn transaction_raw_round_trip() {
     let rows_affected = tx
         .execute(
             "INSERT INTO tasks (name) VALUES (?)",
-            vec![ruprizzle::Value::Str("in-tx".into())],
+            &vec![ruprizzle::Value::Str("in-tx".into())],
         )
         .await
         .unwrap();
     assert_eq!(rows_affected, 1);
 
     let rows: Vec<(i64, String)> = tx
-        .fetch_all("SELECT id, name FROM tasks", vec![])
+        .fetch_all("SELECT id, name FROM tasks", &[])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);

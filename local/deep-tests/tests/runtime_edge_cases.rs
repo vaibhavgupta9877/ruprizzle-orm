@@ -38,7 +38,7 @@ async fn seed(pool: &ruprizzle::Pool) {
             active INTEGER NOT NULL,
             note TEXT
         )"
-        .to_string(),
+        .to_string().into(),
         Vec::new(),
     )
     .await

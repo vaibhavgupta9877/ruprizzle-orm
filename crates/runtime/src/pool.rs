@@ -218,6 +218,9 @@ pub struct PoolConfig {
     /// Maximum connection lifetime; `None` disables recycling by age.
     pub max_lifetime: Option<Duration>,
     /// Whether to test a connection before handing it out.
+    ///
+    /// Defaults to `false` to avoid a per-query ping round-trip (or ~10 µs on
+    /// SQLite). Set `true` when connections are killed between checkouts.
     pub test_before_acquire: bool,
     /// Number of rows the SQLite driver buffers per prepared statement.
     ///
@@ -234,7 +237,7 @@ impl Default for PoolConfig {
             acquire_timeout: Duration::from_secs(30),
             idle_timeout: Some(Duration::from_secs(600)),
             max_lifetime: Some(Duration::from_secs(1800)),
-            test_before_acquire: true,
+            test_before_acquire: false,
             row_buffer_size: 1024,
         }
     }
@@ -338,7 +341,7 @@ pub fn stats(pool: &Pool) -> PoolStats {
 ///
 /// Returns an error if a connection cannot be acquired or `SELECT 1` fails.
 pub async fn ping(pool: &Pool) -> Result<(), crate::Error> {
-    crate::executor::Executor::execute_raw(pool, "SELECT 1".to_string(), Vec::new())
+    crate::executor::Executor::execute_raw(pool, std::borrow::Cow::from("SELECT 1"), Vec::new())
         .await
         .map(|_| ())
 }

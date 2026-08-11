@@ -1,7 +1,8 @@
 //! What ruprizzle's `PoolConfig` defaults cost per query.
 //!
-//! `PoolConfig::default()` sets `test_before_acquire: true`, so `sqlx` calls
-//! `Connection::ping()` on the idle connection before every checkout
+//! `PoolConfig::default()` now sets `test_before_acquire: false`; this harness
+//! measures the cost of enabling `Connection::ping()` on the idle connection
+//! before every checkout
 //! (`sqlx-core/src/pool/inner.rs`, `check_idle_conn`).
 //!
 //! On SQLite that ping is a round-trip to the connection's worker thread. On
