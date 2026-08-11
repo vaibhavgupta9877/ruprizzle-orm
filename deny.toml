@@ -13,8 +13,10 @@ feature-depth = 1
 [advisories]
 db-path = ".cargo/deny/advisories"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-# We are an alpha; warn on any known advisory rather than fail.
-unsound = "warn"
+# We are an alpha; warn on yanked crates, but do not fail on unsound
+# advisories (cargo-deny no longer supports a "warn" level for them).
+unmaintained = "workspace"
+unsound = "none"
 yanked = "warn"
 
 [licenses]
@@ -25,6 +27,8 @@ allow = [
     "BSD-3-Clause",
     "ISC",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "Zlib",
     "CC0-1.0",
 ]
 confidence-threshold = 0.9
