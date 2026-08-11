@@ -23,6 +23,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Publish dry-runs use `--no-verify` so they do not resolve workspace path dependencies against stale versions already on crates.io.
 - **Repository metadata**
   - Added `CHANGELOG.md` and `repository.workspace` / `homepage.workspace` metadata to all workspace crates.
+- **Governance**
+  - Added `SECURITY.md` with supported versions, private vulnerability reporting, and an explicit scope.
+  - Added `CONTRIBUTING.md` covering the CI gate, database testing requirements, `clippy::pedantic`-clean generated code, `trybuild` cases for compile-time guarantees, and `ProjectPlan/ImplementationPlan/` as the design record.
+  - Linked `Contributing`, `Security policy`, and `Changelog` from the `README.md` Development section.
+  - Corrected the stale status sentence in `docs/README.md` that treated docs-site deployment and public announcement as the only remaining work.
 
 ### Changed
 

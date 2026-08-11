@@ -506,6 +506,10 @@ cargo xtask ci            # everything CI runs: fmt, clippy, test, docs
 
 Without Docker, `cargo test` still passes: the Postgres half of each dual-database test skips with a printed notice. CI sets `RUPRIZZLE_REQUIRE_DB=1`, which turns that skip into a failure, so the skip can never hide real breakage.
 
+- [Contributing](CONTRIBUTING.md) — how to build, test, and what CI enforces
+- [Security policy](SECURITY.md) — how to report a vulnerability
+- [Changelog](CHANGELOG.md)
+
 ---
 
 ## Planning documents
