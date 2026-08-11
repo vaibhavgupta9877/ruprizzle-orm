@@ -32,7 +32,7 @@ hidden query engine binary.
 
 ## How do I report bugs or request features?
 
-Open an issue on the [GitHub repository](https://github.com/ruprizzle/ruprizzle-orm).
+Open an issue on the [GitHub repository](https://github.com/vaibhavgupta9877/ruprizzle-orm).
 
 <script type="application/ld+json">
 {
@@ -84,7 +84,7 @@ Open an issue on the [GitHub repository](https://github.com/ruprizzle/ruprizzle-
       "name": "How do I report bugs or request features?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Open an issue on the GitHub repository https://github.com/ruprizzle/ruprizzle-orm."
+        "text": "Open an issue on the GitHub repository https://github.com/vaibhavgupta9877/ruprizzle-orm."
       }
     }
   ]

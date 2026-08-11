@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://ruprizzle.github.io/ruprizzle-orm/sitemap.xml
+Sitemap: https://vaibhavgupta9877.github.io/ruprizzle-orm/sitemap.xml

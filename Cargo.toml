@@ -7,8 +7,8 @@ version      = "0.1.0-alpha.2"
 edition      = "2024"
 rust-version = "1.85"
 license      = "MIT OR Apache-2.0"
-repository   = "https://github.com/ruprizzle/ruprizzle-orm"
-homepage     = "https://ruprizzle.github.io/ruprizzle-orm"
+repository   = "https://github.com/vaibhavgupta9877/ruprizzle-orm"
+homepage     = "https://vaibhavgupta9877.github.io/ruprizzle-orm"
 authors      = ["Vaibhav Gupta"]
 
 [workspace.dependencies]

@@ -10,6 +10,6 @@ multilingual = false
 build-dir = "book"
 
 [output.html]
-site-url = "https://ruprizzle.github.io/ruprizzle-orm/"
-git-repository-url = "https://github.com/ruprizzle/ruprizzle-orm"
-edit-url-template = "https://github.com/ruprizzle/ruprizzle-orm/edit/main/docs/{path}"
+site-url = "https://vaibhavgupta9877.github.io/ruprizzle-orm/"
+git-repository-url = "https://github.com/vaibhavgupta9877/ruprizzle-orm"
+edit-url-template = "https://github.com/vaibhavgupta9877/ruprizzle-orm/edit/main/docs/{path}"
