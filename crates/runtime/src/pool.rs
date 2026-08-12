@@ -294,9 +294,9 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
             #[cfg(feature = "sqlite-rusqlite")]
             if url
                 .split_once('?')
-                .map_or(false, |(_, q)| q.contains("driver=rusqlite"))
+                .is_some_and(|(_, q)| q.contains("driver=rusqlite"))
             {
-                let pool = crate::rusqlite::RusqlitePool::connect(url).await?;
+                let pool = crate::rusqlite::RusqlitePool::connect(url, config).await?;
                 return Ok(Pool::SqliteNative(pool));
             }
 

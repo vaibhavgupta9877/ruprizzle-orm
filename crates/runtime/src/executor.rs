@@ -37,6 +37,9 @@ pub enum RowBatch {
     Postgres(Vec<PgRow>),
     /// Rows from the native SQLite driver.
     Sqlite(Vec<SqliteRow>),
+    /// Rows from the native `rusqlite` backend.
+    #[cfg(feature = "sqlite-rusqlite")]
+    Rusqlite(Vec<crate::rusqlite::Row>),
 }
 
 impl RowBatch {
@@ -47,6 +50,8 @@ impl RowBatch {
             Self::Any(rows) => rows.is_empty(),
             Self::Postgres(rows) => rows.is_empty(),
             Self::Sqlite(rows) => rows.is_empty(),
+            #[cfg(feature = "sqlite-rusqlite")]
+            Self::Rusqlite(rows) => rows.is_empty(),
         }
     }
 
@@ -57,6 +62,8 @@ impl RowBatch {
             Self::Any(rows) => rows.len(),
             Self::Postgres(rows) => rows.len(),
             Self::Sqlite(rows) => rows.len(),
+            #[cfg(feature = "sqlite-rusqlite")]
+            Self::Rusqlite(rows) => rows.len(),
         }
     }
 
@@ -69,6 +76,8 @@ impl RowBatch {
             (Self::Any(a), Self::Any(b)) => a.extend(b),
             (Self::Postgres(a), Self::Postgres(b)) => a.extend(b),
             (Self::Sqlite(a), Self::Sqlite(b)) => a.extend(b),
+            #[cfg(feature = "sqlite-rusqlite")]
+            (Self::Rusqlite(a), Self::Rusqlite(b)) => a.extend(b),
             _ => {
                 return Err(Error::Message(
                     "cannot merge row batches from different backends".into(),
@@ -85,6 +94,8 @@ impl std::fmt::Debug for RowBatch {
             Self::Any(rows) => f.debug_tuple("Any").field(&rows.len()).finish(),
             Self::Postgres(rows) => f.debug_tuple("Postgres").field(&rows.len()).finish(),
             Self::Sqlite(rows) => f.debug_tuple("Sqlite").field(&rows.len()).finish(),
+            #[cfg(feature = "sqlite-rusqlite")]
+            Self::Rusqlite(rows) => f.debug_tuple("Rusqlite").field(&rows.len()).finish(),
         }
     }
 }
@@ -130,6 +141,9 @@ pub enum RawRow {
     Postgres(PgRow),
     /// A row from the native SQLite driver.
     Sqlite(SqliteRow),
+    /// A row from the native `rusqlite` backend.
+    #[cfg(feature = "sqlite-rusqlite")]
+    Rusqlite(crate::rusqlite::Row),
 }
 
 /// A boxed stream of raw rows.
@@ -191,6 +205,11 @@ impl futures_core::Stream for DeferredRowStream<'_> {
                             .into_iter()
                             .map(RawRow::Sqlite)
                             .collect::<Vec<_>>(),
+                        #[cfg(feature = "sqlite-rusqlite")]
+                        RowBatch::Rusqlite(rows) => rows
+                            .into_iter()
+                            .map(RawRow::Rusqlite)
+                            .collect::<Vec<_>>(),
                     }
                     .into_iter();
                 }
@@ -215,7 +234,7 @@ impl Executor for Pool {
             let bind_count = binds.len();
             if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
                 let started = std::time::Instant::now();
-                let result = dispatch_raw_query(self, &sql, &binds).await;
+                let result = dispatch_raw_query(self, sql.clone(), binds.clone()).await;
                 let elapsed_ms = started.elapsed().as_millis() as u64;
                 match &result {
                     Ok(batch) => tracing::debug!(
@@ -237,7 +256,7 @@ impl Executor for Pool {
                 }
                 result
             } else {
-                dispatch_raw_query(self, &sql, &binds).await
+                dispatch_raw_query(self, sql, binds).await
             }
         })
     }
@@ -247,7 +266,7 @@ impl Executor for Pool {
             let bind_count = binds.len();
             if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
                 let started = std::time::Instant::now();
-                let result = dispatch_raw_execute(self, &sql, &binds).await;
+                let result = dispatch_raw_execute(self, sql.clone(), binds.clone()).await;
                 let elapsed_ms = started.elapsed().as_millis() as u64;
                 match &result {
                     Ok(rows_affected) => tracing::debug!(
@@ -269,7 +288,7 @@ impl Executor for Pool {
                 }
                 result
             } else {
-                dispatch_raw_execute(self, &sql, &binds).await
+                dispatch_raw_execute(self, sql, binds).await
             }
         })
     }
@@ -283,20 +302,20 @@ impl Executor for Pool {
 
 async fn dispatch_raw_query(
     pool: &Pool,
-    sql: &str,
-    binds: &[Value],
+    sql: Cow<'static, str>,
+    binds: Vec<Value>,
 ) -> Result<RowBatch, Error> {
     match pool {
         Pool::Any(p) => {
-            let mut q = sqlx::query::<sqlx::Any>(sql);
-            for bind in binds {
+            let mut q = sqlx::query::<sqlx::Any>(&sql);
+            for bind in &binds {
                 q = q.bind(bind);
             }
             q.fetch_all(p).await.map(RowBatch::Any).map_err(Error::from)
         }
         Pool::Postgres(p) => {
-            let mut q = sqlx::query::<sqlx::Postgres>(sql);
-            for bind in binds {
+            let mut q = sqlx::query::<sqlx::Postgres>(&sql);
+            for bind in &binds {
                 q = q.bind(bind);
             }
             q.fetch_all(p)
@@ -305,8 +324,8 @@ async fn dispatch_raw_query(
                 .map_err(Error::from)
         }
         Pool::Sqlite(p) => {
-            let mut q = sqlx::query::<sqlx::Sqlite>(sql);
-            for bind in binds {
+            let mut q = sqlx::query::<sqlx::Sqlite>(&sql);
+            for bind in &binds {
                 q = q.bind(bind);
             }
             q.fetch_all(p)
@@ -315,15 +334,19 @@ async fn dispatch_raw_query(
                 .map_err(Error::from)
         }
         #[cfg(feature = "sqlite-rusqlite")]
-        Pool::SqliteNative(_) => Err(Error::NotImplemented),
+        Pool::SqliteNative(p) => Executor::fetch_all_raw(p, sql, binds).await,
     }
 }
 
-async fn dispatch_raw_execute(pool: &Pool, sql: &str, binds: &[Value]) -> Result<u64, Error> {
+async fn dispatch_raw_execute(
+    pool: &Pool,
+    sql: Cow<'static, str>,
+    binds: Vec<Value>,
+) -> Result<u64, Error> {
     match pool {
         Pool::Any(p) => {
-            let mut q = sqlx::query::<sqlx::Any>(sql);
-            for bind in binds {
+            let mut q = sqlx::query::<sqlx::Any>(&sql);
+            for bind in &binds {
                 q = q.bind(bind);
             }
             q.execute(p)
@@ -332,8 +355,8 @@ async fn dispatch_raw_execute(pool: &Pool, sql: &str, binds: &[Value]) -> Result
                 .map_err(Error::from)
         }
         Pool::Postgres(p) => {
-            let mut q = sqlx::query::<sqlx::Postgres>(sql);
-            for bind in binds {
+            let mut q = sqlx::query::<sqlx::Postgres>(&sql);
+            for bind in &binds {
                 q = q.bind(bind);
             }
             q.execute(p)
@@ -342,8 +365,8 @@ async fn dispatch_raw_execute(pool: &Pool, sql: &str, binds: &[Value]) -> Result
                 .map_err(Error::from)
         }
         Pool::Sqlite(p) => {
-            let mut q = sqlx::query::<sqlx::Sqlite>(sql);
-            for bind in binds {
+            let mut q = sqlx::query::<sqlx::Sqlite>(&sql);
+            for bind in &binds {
                 q = q.bind(bind);
             }
             q.execute(p)
@@ -352,7 +375,7 @@ async fn dispatch_raw_execute(pool: &Pool, sql: &str, binds: &[Value]) -> Result
                 .map_err(Error::from)
         }
         #[cfg(feature = "sqlite-rusqlite")]
-        Pool::SqliteNative(_) => Err(Error::NotImplemented),
+        Pool::SqliteNative(p) => Executor::execute_raw(p, sql, binds).await,
     }
 }
 
@@ -377,5 +400,7 @@ where
             .iter()
             .map(|r| T::from_row(r).map_err(Error::Sqlx))
             .collect(),
+        #[cfg(feature = "sqlite-rusqlite")]
+        RowBatch::Rusqlite(_) => Err(Error::NotImplemented),
     }
 }
