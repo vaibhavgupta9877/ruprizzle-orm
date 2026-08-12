@@ -23,6 +23,21 @@ impl Model for Item {
     const TABLE: &'static str = "items";
 }
 
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Item {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            handle: row.get::<String>(1)?,
+            age: row.get::<i64>(2)?,
+            active: row.get::<i64>(3)?,
+            note: row.get::<Option<String>>(4)?,
+        })
+    }
+}
+
 const ID: Column<Item, i64> = Column::new("items", "id");
 const HANDLE: Column<Item, String> = Column::new("items", "handle");
 const AGE: Column<Item, i64> = Column::new("items", "age");

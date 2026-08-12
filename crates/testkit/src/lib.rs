@@ -254,6 +254,65 @@ impl TestDb {
         let file = path.to_str().unwrap().replace('\\', "/");
         let url = format!("sqlite:///{file}");
 
+        // When the `sqlite-rusqlite` feature is enabled and the environment
+        // variable is set, route the ORM pool through the native `rusqlite`
+        // backend while keeping a regular `sqlx` `Any` pool for raw helper
+        // methods.
+        #[cfg(feature = "sqlite-rusqlite")]
+        if std::env::var("RUPRIZZLE_TEST_RUSQLITE").is_ok() {
+            let driver_url = format!("{url}?mode=rwc&driver=rusqlite");
+            let mut config = ruprizzle::PoolConfig::default();
+            config.max_connections = 4;
+            let pool = ruprizzle::connect_with(&driver_url, &config)
+                .await
+                .map_err(|e| TestDbError::Unavailable {
+                    backend: Backend::Sqlite,
+                    reason: e.to_string(),
+                })?;
+
+            let any_pool = AnyPoolOptions::new()
+                .max_connections(4)
+                .acquire_timeout(Duration::from_secs(5))
+                .after_connect(|conn, _meta| {
+                    Box::pin(async move {
+                        sqlx::query("PRAGMA foreign_keys = ON")
+                            .execute(&mut *conn)
+                            .await?;
+                        Ok(())
+                    })
+                })
+                .connect(&url)
+                .await
+                .map_err(|e| TestDbError::Unavailable {
+                    backend: Backend::Sqlite,
+                    reason: e.to_string(),
+                })?;
+
+            let opts = SqliteConnectOptions::new()
+                .filename(&path)
+                .create_if_missing(true)
+                .foreign_keys(true);
+            let sqlite_pool = SqlitePoolOptions::new()
+                .max_connections(4)
+                .acquire_timeout(Duration::from_secs(5))
+                .connect_with(opts)
+                .await
+                .map_err(|e| TestDbError::Unavailable {
+                    backend: Backend::Sqlite,
+                    reason: e.to_string(),
+                })?;
+
+            return Ok(TestDb {
+                backend: Backend::Sqlite,
+                inner: Inner::Sqlite {
+                    sqlite_pool,
+                    any_pool,
+                    _dir: dir,
+                },
+                pool,
+            });
+        }
+
         let opts = SqliteConnectOptions::new()
             .filename(&path)
             .create_if_missing(true)

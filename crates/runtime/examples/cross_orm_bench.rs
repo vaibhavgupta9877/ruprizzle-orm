@@ -2,10 +2,14 @@
 //!
 //! Compares against the same `bench.sqlite3` file used by the Prisma and
 //! Drizzle benchmarks in `local/cross-orm-bench/node`.
+//!
+//! Set `RUST_BENCH_DRIVER=rusqlite` to measure the native `rusqlite` backend;
+//! otherwise the default sqlx-backed SQLite driver is used.
 
+use std::borrow::Cow;
 use std::time::Instant;
 
-use ruprizzle::{Column, Encodable, IncludeList, InsertManyQuery, Model, Related, SelectQuery};
+use ruprizzle::{Column, Encodable, Executor, IncludeList, InsertManyQuery, Model, Related, SelectQuery};
 use ruprizzle::serde::Serialize;
 use ruprizzle::serde_json;
 use sqlx::FromRow;
@@ -156,12 +160,12 @@ where
 
 #[tokio::main]
 async fn main() -> Result<(), ruprizzle::Error> {
-    let url = format!("sqlite:///{}?mode=rwc", DB_PATH);
+    let native = std::env::var("RUST_BENCH_DRIVER").is_ok_and(|v| v == "rusqlite");
+    let suffix = if native { "&driver=rusqlite" } else { "" };
+    let url = format!("sqlite:///{}?mode=rwc{}", DB_PATH, suffix);
     let pool = ruprizzle::connect(&url).await?;
 
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
-        .fetch_one(&pool)
-        .await?;
+    let count = SelectQuery::<User>::new(&pool).count().await?;
     assert_eq!(count, 1000, "expected 1000 users in bench.sqlite3");
 
     let mut results = Vec::new();
@@ -259,15 +263,15 @@ async fn main() -> Result<(), ruprizzle::Error> {
         })
         .collect();
 
-    sqlx::query("DELETE FROM bench_bulk").execute(&pool).await?;
+    pool.execute_raw(Cow::Borrowed("DELETE FROM bench_bulk"), Vec::new())
+        .await?;
 
     let pool2 = pool.clone();
     results.push(bench_async("bulk_insert_1000", 10, move || {
         let pool = pool2.clone();
         let rows = bulk_rows.clone();
         async move {
-            sqlx::query("DELETE FROM bench_bulk")
-                .execute(&pool)
+            pool.execute_raw(Cow::Borrowed("DELETE FROM bench_bulk"), Vec::new())
                 .await
                 .expect("clear bench_bulk");
             let inserted = InsertManyQuery::<BenchBulk>::new(&pool)
@@ -282,7 +286,12 @@ async fn main() -> Result<(), ruprizzle::Error> {
 
     println!("\n{}", serde_json::to_string_pretty(&results).unwrap());
 
-    let path = std::path::Path::new(DB_PATH).parent().unwrap().join("ruprizzle-results.json");
+    let filename = if native {
+        "ruprizzle-rusqlite-results.json"
+    } else {
+        "ruprizzle-results.json"
+    };
+    let path = std::path::Path::new(DB_PATH).parent().unwrap().join(filename);
     tokio::fs::write(&path, serde_json::to_string_pretty(&results).unwrap())
         .await
         .expect("write results");

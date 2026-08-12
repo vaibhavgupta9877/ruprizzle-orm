@@ -1,14 +1,14 @@
 error[E0599]: no method named `contains` found for struct `ruprizzle::Column<User, i64>` in the current scope
-  --> tests/trybuild/col_contains_on_non_string.rs:17:16
+  --> tests/trybuild/col_contains_on_non_string.rs:28:16
    |
-17 |     let _ = ID.contains("x");
+28 |     let _ = ID.contains("x");
    |                ^^^^^^^^ method not found in `ruprizzle::Column<User, i64>`
    |
    = note: the method was found for
            - `ruprizzle::Column<M, std::string::String>`
 help: some of the expressions' fields have a method of the same name
    |
-17 |     let _ = ID.column.contains("x");
+28 |     let _ = ID.column.contains("x");
    |                +++++++
-17 |     let _ = ID.table.contains("x");
+28 |     let _ = ID.table.contains("x");
    |                ++++++

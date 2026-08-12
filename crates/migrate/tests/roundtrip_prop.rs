@@ -10,10 +10,12 @@
 //! SQLite coverage for the same property is deferred; see the note in
 //! `ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md`.
 
+use std::borrow::Cow;
 use std::sync::OnceLock;
 use std::time::Duration;
 
 use proptest::prelude::*;
+use ruprizzle::Executor;
 use ruprizzle_core::ir::Schema;
 use ruprizzle_dialect::dialect_for;
 use ruprizzle_migrate::{diff, up_sql};
@@ -139,17 +141,13 @@ async fn probe_db(url: &str, config: &ruprizzle::PoolConfig) -> Result<(), Strin
 /// and applies that. The database must then report no drift against `to`.
 async fn round_trip(
     url: &str,
-    _config: &ruprizzle::PoolConfig,
+    config: &ruprizzle::PoolConfig,
     from: &Schema,
     to: &Schema,
 ) -> Result<Vec<String>, String> {
-    // Migration tests need an `Any` pool because `detect` takes `&AnyPool`.
-    let any = sqlx::any::AnyPoolOptions::new()
-        .max_connections(1)
-        .connect(url)
+    let pool = ruprizzle::connect_with(url, config)
         .await
         .map_err(|e| e.to_string())?;
-    let pool = ruprizzle::Pool::Any(any);
     let dialect = dialect_for(from.datasource.provider);
 
     // Isolate each case: drop anything a previous case left behind. The model
@@ -166,8 +164,7 @@ async fn round_trip(
         .next()
         .ok_or_else(|| "drop_table produced no statement".to_owned())?
         .sql;
-    sqlx::query(&drop_sql)
-        .execute(&pool)
+    pool.execute_raw(Cow::Owned(drop_sql), Vec::new())
         .await
         .map_err(|e| e.to_string())?;
 
@@ -177,14 +174,13 @@ async fn round_trip(
         up_sql(from, to, dialect.as_ref()),
     ] {
         for stmt in ruprizzle_migrate::runner::split_statements(&sql) {
-            sqlx::query(&stmt)
-                .execute(&pool)
+            pool.execute_raw(Cow::Owned(stmt.clone()), Vec::new())
                 .await
                 .map_err(|e| format!("{stmt}: {e}"))?;
         }
     }
 
-    detect(pool.as_any(), to).await.map_err(|e| e.to_string())
+    detect(&pool, to).await.map_err(|e| e.to_string())
 }
 
 proptest! {

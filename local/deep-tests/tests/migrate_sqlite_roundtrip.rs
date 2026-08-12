@@ -126,7 +126,7 @@ async fn round_trip(from: &Schema, to: &Schema) -> Result<Vec<String>, String> {
         apply_sql(&pool, &sql).await?;
     }
 
-    let drift = detect(pool.as_any(), to).await.map_err(|e| e.to_string())?;
+    let drift = detect(&pool, to).await.map_err(|e| e.to_string())?;
     pool.close().await;
     Ok(drift)
 }

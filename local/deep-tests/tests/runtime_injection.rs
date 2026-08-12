@@ -4,7 +4,7 @@
 //! that would be dangerous if interpolated, then assert that only the exact row
 //! matches and that the compiled SQL still uses parameter placeholders.
 
-use ruprizzle::{Column, InsertQuery, Model, SelectQuery, Value};
+use ruprizzle::{Column, Executor, InsertQuery, Model, SelectQuery, Value};
 use ruprizzle_deep_tests::fresh_pool;
 
 #[derive(Debug, Clone, sqlx::FromRow, PartialEq)]
@@ -15,6 +15,18 @@ struct Note {
 
 impl Model for Note {
     const TABLE: &'static str = "notes";
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Note {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            body: row.get::<String>(1)?,
+        })
+    }
 }
 
 const ID: Column<Note, i64> = Column::new("notes", "id");
@@ -33,10 +45,14 @@ const MALICIOUS: &[&str] = &[
 async fn exact_match_survives_injection_strings() {
     let (pool, _tmp) = fresh_pool().await;
 
-    sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)"
+            .to_string()
+            .into(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
 
     for (i, body) in MALICIOUS.iter().enumerate() {
         InsertQuery::<Note>::new(&pool)
@@ -80,10 +96,14 @@ async fn exact_match_survives_injection_strings() {
 async fn contains_pattern_is_bound_not_interpolated() {
     let (pool, _tmp) = fresh_pool().await;
 
-    sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)"
+            .to_string()
+            .into(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
 
     InsertQuery::<Note>::new(&pool)
         .set(ID, 1)
@@ -132,10 +152,14 @@ async fn contains_pattern_is_bound_not_interpolated() {
 async fn raw_fragment_with_binds_is_safe() {
     let (pool, _tmp) = fresh_pool().await;
 
-    sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)"
+            .to_string()
+            .into(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
 
     InsertQuery::<Note>::new(&pool)
         .set(ID, 1)

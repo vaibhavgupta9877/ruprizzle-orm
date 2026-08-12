@@ -1,7 +1,7 @@
 error[E0277]: the trait bound `std::string::String: From<{integer}>` is not satisfied
-  --> tests/trybuild/col_eq_wrong_type.rs:17:22
+  --> tests/trybuild/col_eq_wrong_type.rs:28:22
    |
-17 |     let _ = EMAIL.eq(42);
+28 |     let _ = EMAIL.eq(42);
    |                   -- ^^ the trait `From<{integer}>` is not implemented for `std::string::String`
    |                   |
    |                   required by a bound introduced by this call

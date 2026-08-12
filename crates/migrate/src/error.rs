@@ -18,6 +18,9 @@ pub enum Error {
     #[error("sqlx error: {0}")]
     Sqlx(#[from] sqlx::Error),
 
+    #[error("runtime error: {0}")]
+    Runtime(#[from] ruprizzle::Error),
+
     #[error("checksum mismatch for migration {id}: file has changed since it was applied")]
     ChecksumMismatch { id: String },
 
@@ -41,4 +44,7 @@ pub enum Error {
 
     #[error("migration directory not found: {0}")]
     DirectoryNotFound(PathBuf),
+
+    #[error("{0}")]
+    Message(String),
 }

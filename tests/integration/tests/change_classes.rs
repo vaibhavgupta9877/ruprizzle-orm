@@ -70,7 +70,7 @@ async fn assert_migration(
     write_migration(dir.path(), "000_init", &init_sql, "").expect("write init migration");
 
     let migrator = Migrator::new(dir.path());
-    migrator.apply_all(db.any_pool(), false).await.unwrap();
+    migrator.apply_all(db.pool(), false).await.unwrap();
 
     if !seed.is_empty() {
         db.execute(seed).await.unwrap();
@@ -79,7 +79,7 @@ async fn assert_migration(
     write_migration(dir.path(), "001_change", &change_sql, "").expect("write change migration");
 
     migrator
-        .apply_all(db.any_pool(), accept_data_loss)
+        .apply_all(db.pool(), accept_data_loss)
         .await
         .unwrap();
 
@@ -123,7 +123,7 @@ model User {
             .expect("write init");
 
         let migrator = Migrator::new(dir.path());
-        migrator.apply_all(db.any_pool(), false).await.unwrap();
+        migrator.apply_all(db.pool(), false).await.unwrap();
 
         db.execute(r#"INSERT INTO "users" (id, email) VALUES (1, 'alice@example.com')"#)
             .await
@@ -132,7 +132,7 @@ model User {
         write_migration(dir.path(), "001_change", &change_up, &change_down)
             .expect("write change");
 
-        migrator.apply_all(db.any_pool(), false).await.unwrap();
+        migrator.apply_all(db.pool(), false).await.unwrap();
 
         let phone: Option<String> = sqlx::query_scalar(
             r#"SELECT phone FROM "users" WHERE id = 1"#,
@@ -143,8 +143,8 @@ model User {
         assert!(phone.is_none());
 
         // Roll back the column, then re-apply, and the original row must survive.
-        migrator.rollback(db.any_pool(), 1).await.unwrap();
-        migrator.apply_all(db.any_pool(), false).await.unwrap();
+        migrator.rollback(db.pool(), 1).await.unwrap();
+        migrator.apply_all(db.pool(), false).await.unwrap();
 
         let count = db
             .fetch_i64(r#"SELECT count(*) FROM "users""#)
@@ -408,7 +408,7 @@ model User {
         write_migration(dir.path(), "000_init", &init_sql, "").unwrap();
 
         let migrator = Migrator::new(dir.path());
-        migrator.apply_all(db.any_pool(), false).await.unwrap();
+        migrator.apply_all(db.pool(), false).await.unwrap();
 
         // Adding a unique on an existing column with data should succeed if data is unique.
         db.execute(r#"INSERT INTO "users" (id, email) VALUES (1, 'alice@example.com')"#)
@@ -418,7 +418,7 @@ model User {
         let change_sql = ruprizzle_migrate::up_sql(&prev_s, &next_s, dialect.as_ref());
         write_migration(dir.path(), "001_change", &change_sql, "").unwrap();
 
-        migrator.apply_all(db.any_pool(), false).await.unwrap();
+        migrator.apply_all(db.pool(), false).await.unwrap();
 
         // Duplicate email must now be rejected.
         let result = db
@@ -499,7 +499,7 @@ model Post {
             write_migration(dir.path(), "000_init", &init_sql, "").unwrap();
 
             let migrator = Migrator::new(dir.path());
-            migrator.apply_all(db.any_pool(), false).await.unwrap();
+            migrator.apply_all(db.pool(), false).await.unwrap();
 
             db.execute(r#"INSERT INTO "users" (id, email) VALUES (1, 'alice@example.com')"#)
                 .await
@@ -511,7 +511,7 @@ model Post {
             let change_sql = ruprizzle_migrate::up_sql(&prev_s, &next_s, dialect.as_ref());
             write_migration(dir.path(), "001_change", &change_sql, "").unwrap();
 
-            migrator.apply_all(db.any_pool(), false).await.unwrap();
+            migrator.apply_all(db.pool(), false).await.unwrap();
 
             // A missing author must now be rejected.
             let result = db
@@ -569,7 +569,7 @@ model User {
             write_migration(dir.path(), "000_init", &init_sql, "").unwrap();
 
             let migrator = Migrator::new(dir.path());
-            migrator.apply_all(db.any_pool(), false).await.unwrap();
+            migrator.apply_all(db.pool(), false).await.unwrap();
 
             db.execute(
                 r#"INSERT INTO "users" (id, email, role) VALUES (1, 'alice@example.com', 'USER')"#,
@@ -580,7 +580,7 @@ model User {
             let change_sql = ruprizzle_migrate::up_sql(&prev_s, &next_s, dialect.as_ref());
             write_migration(dir.path(), "001_change", &change_sql, "").unwrap();
 
-            migrator.apply_all(db.any_pool(), false).await.unwrap();
+            migrator.apply_all(db.pool(), false).await.unwrap();
 
             db.execute(
                 r#"INSERT INTO "users" (id, email, role) VALUES (2, 'bob@example.com', 'ADMIN')"#,

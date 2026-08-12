@@ -18,6 +18,19 @@ impl Model for User {
     const TABLE: &'static str = "users";
 }
 
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for User {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            name: row.get::<String>(1)?,
+            posts: Related::default(),
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
 struct Post {
     id: i64,
@@ -34,6 +47,22 @@ impl Model for Post {
     const TABLE: &'static str = "posts";
 }
 
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Post {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            title: row.get::<String>(1)?,
+            published: row.get::<i64>(2)?,
+            author_id: row.get::<i64>(3)?,
+            author: Related::default(),
+            comments: Related::default(),
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
 #[allow(dead_code)]
 struct Comment {
@@ -44,6 +73,19 @@ struct Comment {
 
 impl Model for Comment {
     const TABLE: &'static str = "comments";
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Comment {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            body: row.get::<String>(1)?,
+            post_id: row.get::<i64>(2)?,
+        })
+    }
 }
 
 const USER_ID: Column<User, i64> = Column::new("users", "id");

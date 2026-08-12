@@ -58,7 +58,10 @@ impl RusqlitePool {
         let config = config.clone();
 
         let inner = tokio::task::spawn_blocking(move || -> Result<Inner, Error> {
-            let opts = sqlx::sqlite::SqliteConnectOptions::from_str(&url)
+            // `driver=rusqlite` is a ruprizzle routing parameter that sqlx does
+            // not understand, so strip it before parsing the SQLite URL.
+            let sqlx_url = strip_driver_param(&url);
+            let opts = sqlx::sqlite::SqliteConnectOptions::from_str(&sqlx_url)
                 .map_err(Error::Sqlx)?;
             let filename = opts.get_filename().to_string_lossy().into_owned();
             let capacity = config.max_connections.max(1) as usize;
@@ -70,9 +73,7 @@ impl RusqlitePool {
                 } else {
                     rusqlite::Connection::open_with_flags(
                         &filename,
-                        OpenFlags::SQLITE_OPEN_READ_WRITE
-                            | OpenFlags::SQLITE_OPEN_CREATE
-                            | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+                        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
                     )
                 }
                 .map_err(|e| Error::ConnectionFailure { reason: e.to_string() })?;
@@ -80,6 +81,12 @@ impl RusqlitePool {
                 // Use a short busy timeout so concurrent writers wait instead
                 // of immediately returning SQLITE_BUSY.
                 conn.busy_timeout(Duration::from_secs(5))
+                    .map_err(|e| Error::ConnectionFailure { reason: e.to_string() })?;
+
+                // SQLite leaves foreign keys off by default. Enabling them here
+                // matches the sqlx-based SQLite backend and keeps relation tests
+                // honest.
+                conn.execute("PRAGMA foreign_keys = ON", [])
                     .map_err(|e| Error::ConnectionFailure { reason: e.to_string() })?;
 
                 conns.push(Arc::new(tokio::sync::Mutex::new(conn)));
@@ -125,6 +132,10 @@ impl RusqlitePool {
                 guard
                     .execute("BEGIN", [])
                     .map_err(|e| Error::Message(e.to_string()))?;
+                // Each transaction can be the first operation on a connection
+                // after another connection changed the schema; refresh so that
+                // the transaction sees the current schema.
+                force_schema_reload(&guard);
             }
 
             Ok(RusqliteTransaction { pool, conn })
@@ -162,8 +173,11 @@ impl RusqliteTransaction {
             .collect::<Result<Vec<_>, _>>()?;
 
         let guard = self.conn.blocking_lock();
+        if is_ddl(sql) {
+            force_schema_reload(&guard);
+        }
         let mut stmt = guard
-            .prepare_cached(sql)
+            .prepare(sql)
             .map_err(|e| Error::Message(e.to_string()))?;
 
         let rows = stmt
@@ -185,8 +199,11 @@ impl RusqliteTransaction {
             .collect::<Result<Vec<_>, _>>()?;
 
         let guard = self.conn.blocking_lock();
+        if is_ddl(sql) {
+            force_schema_reload(&guard);
+        }
         let mut stmt = guard
-            .prepare_cached(sql)
+            .prepare(sql)
             .map_err(|e| Error::Message(e.to_string()))?;
 
         let column_count = stmt.column_count();
@@ -218,6 +235,10 @@ impl RusqliteTransaction {
         guard
             .execute("COMMIT", [])
             .map_err(|e| Error::Message(e.to_string()))?;
+        // DDL can invalidate cached prepared statements. Flush before returning
+        // the connection so the next statement recompiles against the current
+        // schema.
+        guard.flush_prepared_statement_cache();
         drop(guard);
 
         pool.return_conn(conn);
@@ -233,6 +254,7 @@ impl RusqliteTransaction {
         guard
             .execute("ROLLBACK", [])
             .map_err(|e| Error::Message(e.to_string()))?;
+        guard.flush_prepared_statement_cache();
         drop(guard);
 
         pool.return_conn(conn);
@@ -282,8 +304,11 @@ impl Executor for RusqlitePool {
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let guard = conn.blocking_lock();
+                if is_ddl(sql.as_ref()) {
+                    force_schema_reload(&guard);
+                }
                 let mut stmt = guard
-                    .prepare_cached(sql.as_ref())
+                    .prepare(sql.as_ref())
                     .map_err(|e| Error::Message(e.to_string()))?;
 
                 let column_count = stmt.column_count();
@@ -325,8 +350,11 @@ impl Executor for RusqlitePool {
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let guard = conn.blocking_lock();
+                if is_ddl(sql.as_ref()) {
+                    force_schema_reload(&guard);
+                }
                 let mut stmt = guard
-                    .prepare_cached(sql.as_ref())
+                    .prepare(sql.as_ref())
                     .map_err(|e| Error::Message(e.to_string()))?;
 
                 let rows = stmt
@@ -560,4 +588,62 @@ fn value_to_rusqlite(value: &Value) -> Result<RusqliteValue, Error> {
         Value::Bytes(b) => RusqliteValue::Blob(b.to_vec()),
         Value::Array(_) => return Err(Error::Message("array bind values are not supported yet".into())),
     })
+}
+
+/// Force `rusqlite` to reload its schema cache for the current connection.
+///
+/// SQLite's schema cookie is checked when a statement is prepared, but because
+/// the native backend may use one connection for a DDL write and a different
+/// connection for a subsequent DDL read, the read connection can have a stale
+/// schema view.  Querying `sqlite_master` forces a full schema re-parse before
+/// the real DDL is prepared.
+fn force_schema_reload(conn: &rusqlite::Connection) {
+    // The result is unimportant; an empty database simply returns no rows.
+    // `query_row` will trigger `sqlite3_prepare_v2()` and `sqlite3_step()`,
+    // which is enough to refresh the in-memory schema tables when the schema
+    // cookie has changed.
+    let _ = conn.query_row("SELECT name FROM sqlite_master LIMIT 1", [], |_| Ok(()));
+}
+
+/// Heuristic for whether a statement may change the database schema.
+fn is_ddl(sql: &str) -> bool {
+    let mut s = sql.trim_start();
+    // Skip leading single-line SQL comments so we don't misclassify a
+    // commented-out DDL statement as a schema change.
+    while s.starts_with("-- ") {
+        if let Some(nl) = s.find('\n') {
+            s = &s[nl + 1..];
+        } else {
+            return false;
+        }
+        s = s.trim_start();
+    }
+
+    let first = s
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_ascii_uppercase();
+    matches!(first.as_str(), "ALTER" | "CREATE" | "DROP" | "REINDEX" | "VACUUM")
+}
+
+/// Strips the `driver=rusqlite` routing parameter from a SQLite URL so the
+/// remainder can be parsed by `sqlx::sqlite::SqliteConnectOptions`.
+fn strip_driver_param(url: &str) -> String {
+    if let Some((base, query)) = url.split_once('?') {
+        let mut parts = Vec::new();
+        for part in query.split('&') {
+            if part == "driver=rusqlite" || part.starts_with("driver=rusqlite&") {
+                continue;
+            }
+            parts.push(part);
+        }
+        if parts.is_empty() {
+            base.to_owned()
+        } else {
+            format!("{base}?{}", parts.join("&"))
+        }
+    } else {
+        url.to_owned()
+    }
 }

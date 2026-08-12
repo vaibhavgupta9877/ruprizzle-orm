@@ -18,10 +18,12 @@ use indexmap::IndexMap;
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::borrow::Cow;
 use std::process::ExitCode;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use clap::{Parser, Subcommand};
+use ruprizzle::{Executor, Pool, Tx};
 use notify::{RecursiveMode, Watcher};
 use ruprizzle_codegen::generate_all;
 use ruprizzle_core::SchemaError;
@@ -598,16 +600,19 @@ fn write_migration(
 }
 
 async fn execute_statements(
-    pool: &sqlx::AnyPool,
+    pool: &Pool,
     sql: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut tx = pool.begin().await?;
+    let tx = Tx::begin(pool).await?;
     for (idx, stmt) in split_statements(sql).iter().enumerate() {
         let sql = stmt.trim();
         if sql.is_empty() || sql.starts_with("-- ") || sql.starts_with("/*") {
             continue;
         }
-        if let Err(e) = sqlx::query(sql).execute(&mut *tx).await {
+        if let Err(e) = tx
+            .execute_raw(Cow::Owned(sql.to_owned()), Vec::new())
+            .await
+        {
             return Err(format!("statement {} failed: {e}\n  sql: {sql}", idx + 1).into());
         }
     }
@@ -891,9 +896,8 @@ fn resolve_database_url(
     }
 }
 
-async fn connect(url: &str) -> Result<sqlx::AnyPool, Box<dyn std::error::Error + Send + Sync>> {
-    sqlx::any::install_default_drivers();
-    Ok(sqlx::AnyPool::connect(url).await?)
+async fn connect(url: &str) -> Result<Pool, Box<dyn std::error::Error + Send + Sync>> {
+    Ok(ruprizzle::connect(url).await?)
 }
 
 #[cfg(test)]

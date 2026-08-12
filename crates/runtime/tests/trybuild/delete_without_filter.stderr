@@ -7,9 +7,9 @@ warning: unused import: `Column`
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 error[E0599]: no method named `exec` found for struct `DeleteQuery<'_, Task>` in the current scope
-  --> tests/trybuild/delete_without_filter.rs:13:42
+  --> tests/trybuild/delete_without_filter.rs:24:42
    |
-13 |     let _ = DeleteQuery::<Task>::new(db).exec();
+24 |     let _ = DeleteQuery::<Task>::new(db).exec();
    |                                          ^^^^ method not found in `DeleteQuery<'_, Task>`
    |
    = note: the method was found for

@@ -1952,13 +1952,13 @@ dependencies = [
  "indexmap",
  "miette",
  "notify",
+ "ruprizzle",
  "ruprizzle-codegen",
  "ruprizzle-core",
  "ruprizzle-dialect",
  "ruprizzle-migrate",
  "ruprizzle-parser",
  "serde_json",
- "sqlx",
  "tokio",
 ]
 

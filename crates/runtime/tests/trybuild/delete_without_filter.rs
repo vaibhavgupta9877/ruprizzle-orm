@@ -9,6 +9,17 @@ impl Model for Task {
     const TABLE: &'static str = "tasks";
 }
 
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Task {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: ruprizzle::rusqlite::FromValue::from_value(&row.0[0])?,
+        })
+    }
+}
+
 fn delete_all(db: &Pool) {
     let _ = DeleteQuery::<Task>::new(db).exec();
 }

@@ -46,7 +46,7 @@ pub use col::{Column, Projection};
 pub use compile::{CompiledSql, delete, dialect_for_pool, insert, insert_many, select, update};
 pub use counting::CountingExecutor;
 pub use error::Error;
-pub use executor::Executor;
+pub use executor::{Executor, RowBatch, decode_rows};
 pub use filter::{Filter, FilterNode, RawFragment, all, any};
 pub use include::{IncludeList, IncludeOne, IncludeSet};
 pub use model::Model;

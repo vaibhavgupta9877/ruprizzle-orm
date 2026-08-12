@@ -1,0 +1,68 @@
+Cross-ORM benchmark log
+=======================
+Timestamp: 2026-08-12T08:05:16.137076+00:00
+Warm-up trials: 1
+Measured trials: 10
+Units: us/op (microseconds per operation)
+
+End-to-end results
+------------------
+Operation                      ruprizzle (sqlx)   ruprizzle (rusqlite)       Prisma      Drizzle
+------------------------------------------------------------------------------------------------
+select_by_pk                               39.8                   29.7        168.6         29.5
+find_many_1000                          1,065.1                  459.4      2,061.8        298.5
+find_filtered_ordered                   1,138.1                  539.0      2,277.6        339.1
+include_posts                          13,229.2                5,806.2     32,859.3    181,843.9
+bulk_insert_1000                        7,059.4                6,409.9     13,051.8      9,090.7
+
+Query construction (no I/O)
+---------------------------
+Operation                       ruprizzle (sqlx / rusqlite)      Drizzle
+------------------------------------------------------------------------
+to_sql_select_by_pk                                     0.5          8.5
+to_sql_select_filter_order                              1.5         10.1
+
+Per-driver, per-operation statistics
+------------------------------------
+
+ruprizzle (sqlx)
+Operation                            mean       median          min          max        stdev      CV%
+----------------------------------------------------------------------------------------------------
+select_by_pk                         40.5         39.8         31.8         54.4          7.2     17.7
+find_many_1000                     1073.0       1065.1       1038.3       1158.8         36.4      3.4
+find_filtered_ordered              1146.7       1138.1       1111.3       1205.2         29.0      2.5
+include_posts                     13166.8      13229.2      12434.5      13938.4        416.3      3.2
+bulk_insert_1000                   7289.2       7059.4       6372.7       9108.5        788.9     10.8
+to_sql_select_by_pk                   0.6          0.5          0.5          0.6          0.0      2.3
+to_sql_select_filter_order            1.5          1.5          1.4          1.6          0.0      3.2
+
+ruprizzle (rusqlite)
+Operation                            mean       median          min          max        stdev      CV%
+----------------------------------------------------------------------------------------------------
+select_by_pk                         30.7         29.7         28.4         38.6          3.1     10.2
+find_many_1000                      459.5        459.4        430.8        494.9         18.2      4.0
+find_filtered_ordered               544.7        539.0        466.8        657.0         53.6      9.8
+include_posts                      5790.5       5806.2       5600.9       6032.2        123.7      2.1
+bulk_insert_1000                   6400.2       6409.9       5944.8       6836.2        258.4      4.0
+to_sql_select_by_pk                   0.6          0.6          0.5          0.6          0.0      3.1
+to_sql_select_filter_order            1.6          1.5          1.5          1.8          0.1      8.0
+
+drizzle
+Operation                            mean       median          min          max        stdev      CV%
+----------------------------------------------------------------------------------------------------
+select_by_pk                         29.7         29.5         28.8         30.9          0.7      2.4
+find_many_1000                      303.3        298.5        291.0        345.8         16.2      5.3
+find_filtered_ordered               343.8        339.1        326.0        383.1         18.2      5.3
+include_posts                    181917.9     181843.9     180699.6     183835.3       1001.6      0.6
+bulk_insert_1000                   9206.9       9090.7       8284.9      10269.6        733.7      8.0
+to_sql_select_by_pk                   8.5          8.5          8.3          8.9          0.2      2.1
+to_sql_select_filter_order           10.1         10.1          9.9         10.4          0.2      1.6
+
+prisma
+Operation                            mean       median          min          max        stdev      CV%
+----------------------------------------------------------------------------------------------------
+select_by_pk                        167.1        168.6        154.3        176.6          7.8      4.7
+find_many_1000                     2059.4       2061.8       2003.6       2105.3         35.2      1.7
+find_filtered_ordered              2273.6       2277.6       2214.7       2330.4         33.8      1.5
+include_posts                     32821.0      32859.3      32198.7      33436.2        419.9      1.3
+bulk_insert_1000                  13172.9      13051.8      12601.4      14301.0        468.5      3.6

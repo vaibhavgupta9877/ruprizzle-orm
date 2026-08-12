@@ -91,7 +91,12 @@ async fn fresh_pool() -> (Pool, bool) {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(format!("rich_types_{}.sqlite", std::process::id()));
         let file = path.to_str().unwrap().replace('\\', "/");
-        let url = format!("sqlite:///{}?mode=rwc", file);
+        let driver = if std::env::var("RUPRIZZLE_TEST_RUSQLITE").is_ok() {
+            "&driver=rusqlite"
+        } else {
+            ""
+        };
+        let url = format!("sqlite:///{}?mode=rwc{}", file, driver);
         (url, false)
     };
 

@@ -55,3 +55,17 @@ impl ::ruprizzle::Encodable for Plan {
         Value::Str(self.as_db_str().into())
     }
 }
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromValue for Plan {
+    fn from_value(
+        value: &::ruprizzle::rusqlite::types::Value,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let s = <String as ::ruprizzle::rusqlite::FromValue>::from_value(value)?;
+        s.parse()
+            .map_err(|e: String| {
+                ::ruprizzle::Error::Message(
+                    format!("cannot parse {} from {s:?}: {e}", stringify!(Plan)),
+                )
+            })
+    }
+}

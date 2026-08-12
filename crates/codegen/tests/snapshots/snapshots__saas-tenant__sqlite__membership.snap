@@ -69,6 +69,22 @@ for Membership {
         })
     }
 }
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromRusqliteRow for Membership {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 0)?,
+            org_id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 1)?,
+            organisation: ::ruprizzle::Related::default(),
+            account_id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 2)?,
+            account: ::ruprizzle::Related::default(),
+            is_owner: ::ruprizzle::rusqlite::Row::get::<bool>(&row, 3)?,
+            updated_at: ::ruprizzle::rusqlite::Row::get::<DateTime<Utc>>(&row, 4)?,
+        })
+    }
+}
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.
 #[derive(Debug, Clone, Serialize, Deserialize)]

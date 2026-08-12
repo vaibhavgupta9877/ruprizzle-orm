@@ -31,7 +31,12 @@ async fn fresh_pool() -> Pool {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
-    let url = format!("sqlite:///{}?mode=rwc", file);
+    let driver = if std::env::var("RUPRIZZLE_TEST_RUSQLITE").is_ok() {
+        "&driver=rusqlite"
+    } else {
+        ""
+    };
+    let url = format!("sqlite:///{}?mode=rwc{}", file, driver);
     let pool = connect(&url).await.unwrap();
 
     pool.execute_raw(

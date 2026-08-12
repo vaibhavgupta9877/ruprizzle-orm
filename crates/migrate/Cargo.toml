@@ -13,7 +13,11 @@ documentation          = "https://docs.rs/ruprizzle-migrate"
 keywords    = ["orm", "sql", "database", "migrations", "schema"]
 categories  = ["database"]
 
+[features]
+sqlite-rusqlite = ["ruprizzle/sqlite-rusqlite"]
+
 [dependencies]
+ruprizzle         = { workspace = true }
 ruprizzle-core    = { workspace = true }
 ruprizzle-dialect = { workspace = true }
 ruprizzle-parser  = { workspace = true }
@@ -28,6 +32,5 @@ tracing            = { version = "0.1", default-features = false, features = ["s
 [dev-dependencies]
 proptest = "1"
 tokio    = { workspace = true }
-ruprizzle = { workspace = true }
 tempfile = { workspace = true }
 

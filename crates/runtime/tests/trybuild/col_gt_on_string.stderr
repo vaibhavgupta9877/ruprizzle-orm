@@ -1,7 +1,7 @@
 error[E0599]: the method `gt` exists for struct `ruprizzle::Column<User, std::string::String>`, but its trait bounds were not satisfied
-  --> tests/trybuild/col_gt_on_string.rs:18:19
+  --> tests/trybuild/col_gt_on_string.rs:29:19
    |
-18 |     let _ = EMAIL.gt("a");
+29 |     let _ = EMAIL.gt("a");
    |                   ^^ method cannot be called on `ruprizzle::Column<User, std::string::String>` due to unsatisfied trait bounds
    |
   ::: $RUST/alloc/src/string.rs

@@ -66,6 +66,22 @@ impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow> fo
         })
     }
 }
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromRusqliteRow for Post {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 0)?,
+            title: ::ruprizzle::rusqlite::Row::get::<String>(&row, 1)?,
+            body: ::ruprizzle::rusqlite::Row::get::<Option<String>>(&row, 2)?,
+            published: ::ruprizzle::rusqlite::Row::get::<bool>(&row, 3)?,
+            author_id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 4)?,
+            author: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::rusqlite::Row::get::<DateTime<Utc>>(&row, 5)?,
+        })
+    }
+}
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.
 #[derive(Debug, Clone, Serialize, Deserialize)]

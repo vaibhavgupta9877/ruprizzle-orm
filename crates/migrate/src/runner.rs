@@ -1,12 +1,15 @@
 //! Migration directory scanning, checksum verification, and application.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use ruprizzle::{Executor, Pool, RowBatch, Tx, Value};
+use ruprizzle_core::ir::Provider;
 use ruprizzle_dialect::DbDialect;
 use sha2::{Digest, Sha256};
-use sqlx::AnyPool;
+use sqlx::Row;
 
 use crate::Error;
 
@@ -113,39 +116,30 @@ impl Migrator {
     }
 
     /// Creates the `_ruprizzle_migrations` tracking table if it does not exist.
-    pub async fn ensure_table(&self, pool: &AnyPool) -> Result<(), Error> {
-        let created = sqlx::query(
-            "CREATE TABLE IF NOT EXISTS _ruprizzle_migrations (
-                id TEXT PRIMARY KEY,
-                checksum TEXT NOT NULL,
-                applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                execution_ms BIGINT NOT NULL DEFAULT 0,
-                rolled_back_at TIMESTAMPTZ
-            )",
-        )
-        .execute(pool)
-        .await;
+    pub async fn ensure_table(&self, pool: &Pool) -> Result<(), Error> {
+        let sql = "CREATE TABLE IF NOT EXISTS _ruprizzle_migrations (
+            id TEXT PRIMARY KEY,
+            checksum TEXT NOT NULL,
+            applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            execution_ms BIGINT NOT NULL DEFAULT 0,
+            rolled_back_at TIMESTAMPTZ
+        )";
 
-        match created {
-            Ok(_) => Ok(()),
-            // `CREATE TABLE IF NOT EXISTS` is not race-safe on Postgres: two
-            // sessions that pass the existence check together both insert into
-            // `pg_type`, and the loser fails on a duplicate key rather than
-            // becoming a no-op. This runs before the advisory lock is taken, so
-            // concurrent deployers reach it first; treat "the table exists now"
-            // as the success it is.
-            Err(e) => {
-                if tracking_table_exists(pool).await {
-                    Ok(())
-                } else {
-                    Err(Error::from(e))
-                }
+        if let Err(e) = pool
+            .execute_raw(Cow::Owned(sql.to_owned()), Vec::new())
+            .await
+        {
+            if tracking_table_exists(pool).await {
+                return Ok(());
             }
+            return Err(Error::from(e));
         }
+
+        Ok(())
     }
 
     /// Returns the IDs of migrations that have not yet been applied.
-    pub async fn pending(&self, pool: &AnyPool) -> Result<Vec<String>, Error> {
+    pub async fn pending(&self, pool: &Pool) -> Result<Vec<String>, Error> {
         self.ensure_table(pool).await?;
         let applied = self.applied_ids(pool).await?;
 
@@ -159,7 +153,7 @@ impl Migrator {
     }
 
     /// Returns applied/pending status.
-    pub async fn status(&self, pool: &AnyPool) -> Result<Status, Error> {
+    pub async fn status(&self, pool: &Pool) -> Result<Status, Error> {
         self.ensure_table(pool).await?;
         let applied = self.applied_ids(pool).await?;
         let migrations = self.migrations()?;
@@ -183,14 +177,19 @@ impl Migrator {
 
     /// Verifies that every applied migration file on disk still matches the
     /// checksum recorded in the tracking table.
-    pub async fn verify_checksums(&self, pool: &AnyPool) -> Result<(), Error> {
+    pub async fn verify_checksums(&self, pool: &Pool) -> Result<(), Error> {
         self.ensure_table(pool).await?;
 
-        let rows: Vec<(String, String)> = sqlx::query_as(
-            "SELECT id, checksum FROM _ruprizzle_migrations WHERE rolled_back_at IS NULL",
-        )
-        .fetch_all(pool)
-        .await?;
+        let batch = pool
+            .fetch_all_raw(
+                Cow::Owned(
+                    "SELECT id, checksum FROM _ruprizzle_migrations WHERE rolled_back_at IS NULL"
+                        .into(),
+                ),
+                Vec::new(),
+            )
+            .await?;
+        let rows = decode_pair(batch)?;
 
         let by_id: BTreeMap<String, Migration> = self
             .migrations()?
@@ -213,14 +212,12 @@ impl Migrator {
     /// Applies all pending migrations in a single transaction each.
     ///
     /// Pass `accept_data_loss: true` to allow destructive migrations to run.
-    pub async fn apply_all(&self, pool: &AnyPool, accept_data_loss: bool) -> Result<Report, Error> {
+    pub async fn apply_all(&self, pool: &Pool, accept_data_loss: bool) -> Result<Report, Error> {
         self.ensure_table(pool).await?;
         self.verify_checksums(pool).await?;
 
-        // Use a transaction-scoped advisory lock on Postgres to stop another
-        // `apply_all` from running concurrently.  SQLite and other backends are
-        // not handled here because they require different locking primitives.
-        let is_postgres = pool.acquire().await?.backend_name() == "PostgreSQL";
+        let is_postgres = pool.provider() == Provider::Postgres;
+        let dialect = pool.dialect();
 
         let applied = self.applied_ids(pool).await?;
         let pending: Vec<Migration> = self
@@ -248,27 +245,32 @@ impl Migrator {
                 return Err(Error::DestructiveBlocked { id: m.id });
             }
 
-            let mut tx = pool.begin().await?;
+            let tx = Tx::begin(pool).await?;
 
             if is_postgres {
-                sqlx::query("SELECT pg_advisory_xact_lock($1)")
-                    .bind(advisory_lock_key())
-                    .execute(&mut *tx)
-                    .await?;
+                tx.execute_raw(
+                    Cow::Owned("SELECT pg_advisory_xact_lock($1)".into()),
+                    vec![Value::I64(advisory_lock_key())],
+                )
+                .await?;
             }
 
             // Re-read inside the lock. Our pending set was computed before the
             // lock was held, so a concurrent deployer may have applied this
             // migration in between; re-running its DDL would fail on
             // "already exists" for what is really a no-op.
-            let already: Option<(String,)> = sqlx::query_as(
+            let already_sql = format!(
                 "SELECT id FROM _ruprizzle_migrations \
-                 WHERE id = $1 AND rolled_back_at IS NULL",
-            )
-            .bind(&m.id)
-            .fetch_optional(&mut *tx)
-            .await?;
-            if already.is_some() {
+                 WHERE id = {} AND rolled_back_at IS NULL",
+                dialect.placeholder(0)
+            );
+            let already = tx
+                .fetch_all_raw(
+                    Cow::Owned(already_sql),
+                    vec![Value::Str(m.id.clone().into())],
+                )
+                .await?;
+            if !already.is_empty() {
                 tx.rollback().await?;
                 continue;
             }
@@ -292,7 +294,10 @@ impl Migrator {
                     continue;
                 }
 
-                if let Err(e) = sqlx::query(sql).execute(&mut *tx).await {
+                if let Err(e) = tx
+                    .execute_raw(Cow::Owned(sql.to_owned()), Vec::new())
+                    .await
+                {
                     return Err(Error::StatementFailed {
                         id: m.id,
                         line: idx + 1,
@@ -302,19 +307,26 @@ impl Migrator {
             }
 
             let elapsed = stmt_start.elapsed().as_millis() as i64;
-            sqlx::query(
-                "INSERT INTO _ruprizzle_migrations (id, checksum, applied_at, execution_ms)
-                 VALUES ($1, $2, CURRENT_TIMESTAMP, $3)
-                 ON CONFLICT (id) DO UPDATE SET
-                   checksum = EXCLUDED.checksum,
-                   applied_at = CURRENT_TIMESTAMP,
-                   rolled_back_at = NULL,
+            let tracking_sql = format!(
+                "INSERT INTO _ruprizzle_migrations (id, checksum, applied_at, execution_ms) \
+                 VALUES ({}, {}, CURRENT_TIMESTAMP, {}) \
+                 ON CONFLICT (id) DO UPDATE SET \
+                   checksum = EXCLUDED.checksum, \
+                   applied_at = CURRENT_TIMESTAMP, \
+                   rolled_back_at = NULL, \
                    execution_ms = EXCLUDED.execution_ms",
+                dialect.placeholder(0),
+                dialect.placeholder(1),
+                dialect.placeholder(2)
+            );
+            tx.execute_raw(
+                Cow::Owned(tracking_sql),
+                vec![
+                    Value::Str(m.id.clone().into()),
+                    Value::Str(m.meta.checksum.clone().into()),
+                    Value::I64(elapsed),
+                ],
             )
-            .bind(&m.id)
-            .bind(&m.meta.checksum)
-            .bind(elapsed)
-            .execute(&mut *tx)
             .await?;
 
             tx.commit().await?;
@@ -334,18 +346,22 @@ impl Migrator {
     }
 
     /// Rolls back the last `n` applied migrations using their `down.sql` files.
-    pub async fn rollback(&self, pool: &AnyPool, n: usize) -> Result<Report, Error> {
+    pub async fn rollback(&self, pool: &Pool, n: usize) -> Result<Report, Error> {
         self.ensure_table(pool).await?;
 
-        let rows: Vec<(String,)> =
-            sqlx::query_as("SELECT id FROM _ruprizzle_migrations WHERE rolled_back_at IS NULL ORDER BY id DESC LIMIT $1")
-                .bind(n as i64)
-                .fetch_all(pool)
-                .await?;
+        let dialect = pool.dialect();
+        let sql = format!(
+            "SELECT id FROM _ruprizzle_migrations WHERE rolled_back_at IS NULL ORDER BY id DESC LIMIT {}",
+            dialect.placeholder(0)
+        );
+        let batch = pool
+            .fetch_all_raw(Cow::Owned(sql), vec![Value::I64(n as i64)])
+            .await?;
+        let rows = decode_string_rows(batch)?;
 
         let mut applied = Vec::new();
 
-        for (id,) in rows {
+        for id in rows {
             let m = self
                 .migrations()?
                 .into_iter()
@@ -356,15 +372,18 @@ impl Migrator {
             for stmt in statements {
                 let sql = stmt.trim();
                 if !sql.is_empty() && !sql.starts_with("-- ") {
-                    sqlx::query(sql).execute(pool).await?;
+                    pool.execute_raw(Cow::Owned(sql.to_owned()), Vec::new()).await?;
                 }
             }
 
-            sqlx::query(
-                "UPDATE _ruprizzle_migrations SET rolled_back_at = CURRENT_TIMESTAMP WHERE id = $1",
+            let update_sql = format!(
+                "UPDATE _ruprizzle_migrations SET rolled_back_at = CURRENT_TIMESTAMP WHERE id = {}",
+                dialect.placeholder(0)
+            );
+            pool.execute_raw(
+                Cow::Owned(update_sql),
+                vec![Value::Str(id.as_str().into())],
             )
-            .bind(&id)
-            .execute(pool)
             .await?;
 
             applied.push(id);
@@ -377,7 +396,7 @@ impl Migrator {
     }
 
     /// Records a migration as applied without executing its `up.sql`.
-    pub async fn resolve(&self, pool: &AnyPool, id: &str) -> Result<(), Error> {
+    pub async fn resolve(&self, pool: &Pool, id: &str) -> Result<(), Error> {
         self.ensure_table(pool).await?;
 
         let m = self
@@ -387,18 +406,22 @@ impl Migrator {
             .ok_or_else(|| Error::MissingUp { id: id.to_owned() })?;
 
         let checksum = compute_checksum(&m.up);
-        sqlx::query(
+        let dialect = pool.dialect();
+        let sql = format!(
             "INSERT INTO _ruprizzle_migrations (id, checksum, applied_at, execution_ms) \
-             VALUES ($1, $2, CURRENT_TIMESTAMP, 0) \
+             VALUES ({}, {}, CURRENT_TIMESTAMP, 0) \
              ON CONFLICT (id) DO UPDATE SET \
                checksum = EXCLUDED.checksum, \
                applied_at = CURRENT_TIMESTAMP, \
                rolled_back_at = NULL, \
                execution_ms = EXCLUDED.execution_ms",
+            dialect.placeholder(0),
+            dialect.placeholder(1)
+        );
+        pool.execute_raw(
+            Cow::Owned(sql),
+            vec![Value::Str(id.into()), Value::Str(checksum.into())],
         )
-        .bind(id)
-        .bind(&checksum)
-        .execute(pool)
         .await?;
 
         Ok(())
@@ -406,88 +429,143 @@ impl Migrator {
 
     /// Drops all user tables (except `_ruprizzle_migrations`) and clears the
     /// migration tracking table so the full migration history can be replayed.
-    pub async fn reset(&self, pool: &AnyPool, dialect: &dyn DbDialect) -> Result<(), Error> {
+    pub async fn reset(&self, pool: &Pool, dialect: &dyn DbDialect) -> Result<(), Error> {
         self.ensure_table(pool).await?;
 
         let tables = user_tables(pool).await?;
         if tables.is_empty() {
-            sqlx::query("DELETE FROM _ruprizzle_migrations")
-                .execute(pool)
-                .await?;
+            pool.execute_raw(
+                Cow::Owned("DELETE FROM _ruprizzle_migrations".into()),
+                Vec::new(),
+            )
+            .await?;
             return Ok(());
         }
 
-        let backend = pool.acquire().await?.backend_name().to_owned();
-
-        if backend == "SQLite" {
-            let mut conn = pool.acquire().await?;
-            sqlx::query("PRAGMA foreign_keys = OFF")
-                .execute(&mut *conn)
-                .await?;
+        if pool.provider() == Provider::Sqlite {
+            let tx = Tx::begin(pool).await?;
+            tx.execute_raw(
+                Cow::Owned("PRAGMA foreign_keys = OFF".into()),
+                Vec::new(),
+            )
+            .await?;
             for table in &tables {
                 let sql = format!("DROP TABLE {};", dialect.quote_ident(table));
-                sqlx::query(&sql).execute(&mut *conn).await?;
+                tx.execute_raw(Cow::Owned(sql), Vec::new()).await?;
             }
-            sqlx::query("PRAGMA foreign_keys = ON")
-                .execute(&mut *conn)
-                .await?;
+            tx.execute_raw(
+                Cow::Owned("PRAGMA foreign_keys = ON".into()),
+                Vec::new(),
+            )
+            .await?;
+            tx.commit().await?;
         } else {
-            let mut tx = pool.begin().await?;
+            let tx = Tx::begin(pool).await?;
             for table in &tables {
                 let sql = format!("DROP TABLE {} CASCADE;", dialect.quote_ident(table));
-                sqlx::query(&sql).execute(&mut *tx).await?;
+                tx.execute_raw(Cow::Owned(sql), Vec::new()).await?;
             }
             tx.commit().await?;
         }
 
-        sqlx::query("DELETE FROM _ruprizzle_migrations")
-            .execute(pool)
-            .await?;
+        pool.execute_raw(
+            Cow::Owned("DELETE FROM _ruprizzle_migrations".into()),
+            Vec::new(),
+        )
+        .await?;
 
         Ok(())
     }
 
-    async fn applied_ids(&self, pool: &AnyPool) -> Result<HashSet<String>, Error> {
-        let rows: Vec<(String,)> =
-            sqlx::query_as("SELECT id FROM _ruprizzle_migrations WHERE rolled_back_at IS NULL")
-                .fetch_all(pool)
-                .await?;
-        Ok(rows.into_iter().map(|(id,)| id).collect())
+    async fn applied_ids(&self, pool: &Pool) -> Result<HashSet<String>, Error> {
+        let batch = pool
+            .fetch_all_raw(
+                Cow::Owned(
+                    "SELECT id FROM _ruprizzle_migrations WHERE rolled_back_at IS NULL".into(),
+                ),
+                Vec::new(),
+            )
+            .await?;
+        let rows = decode_string_rows(batch)?;
+        Ok(rows.into_iter().collect())
     }
 }
 
 /// Whether the tracking table is queryable, used to tell a lost `CREATE TABLE`
 /// race apart from a genuine failure.
-async fn tracking_table_exists(pool: &AnyPool) -> bool {
-    sqlx::query("SELECT 1 FROM _ruprizzle_migrations WHERE 1 = 0")
-        .execute(pool)
-        .await
-        .is_ok()
+async fn tracking_table_exists(pool: &Pool) -> bool {
+    pool.execute_raw(
+        Cow::Owned("SELECT 1 FROM _ruprizzle_migrations WHERE 1 = 0".into()),
+        Vec::new(),
+    )
+    .await
+    .is_ok()
 }
 
-async fn user_tables(pool: &AnyPool) -> Result<Vec<String>, Error> {
-    let backend = pool.acquire().await?.backend_name().to_owned();
-
-    if backend == "SQLite" {
-        sqlx::query_scalar(
-            "SELECT name FROM sqlite_master \
-             WHERE type = 'table' \
-               AND name NOT LIKE 'sqlite_%' \
-               AND name != '_ruprizzle_migrations'",
-        )
-        .fetch_all(pool)
-        .await
-        .map_err(Error::from)
+async fn user_tables(pool: &Pool) -> Result<Vec<String>, Error> {
+    let sql = if pool.provider() == Provider::Sqlite {
+        "SELECT name FROM sqlite_master \
+         WHERE type = 'table' \
+           AND name NOT LIKE 'sqlite_%' \
+           AND name != '_ruprizzle_migrations'"
+            .to_owned()
     } else {
-        sqlx::query_scalar(
-            "SELECT table_name::text FROM information_schema.tables \
-             WHERE table_schema = current_schema() \
-               AND table_type = 'BASE TABLE' \
-               AND table_name != '_ruprizzle_migrations'",
-        )
-        .fetch_all(pool)
-        .await
-        .map_err(Error::from)
+        "SELECT table_name::text FROM information_schema.tables \
+         WHERE table_schema = current_schema() \
+           AND table_type = 'BASE TABLE' \
+           AND table_name != '_ruprizzle_migrations'"
+            .to_owned()
+    };
+
+    let batch = pool
+        .fetch_all_raw(Cow::Owned(sql), Vec::new())
+        .await?;
+    decode_string_rows(batch)
+}
+
+fn decode_string_rows(batch: RowBatch) -> Result<Vec<String>, Error> {
+    match batch {
+        RowBatch::Any(rows) => rows
+            .iter()
+            .map(|r| Ok(r.try_get::<String, _>(0)?))
+            .collect(),
+        RowBatch::Postgres(rows) => rows
+            .iter()
+            .map(|r| Ok(r.try_get::<String, _>(0)?))
+            .collect(),
+        RowBatch::Sqlite(rows) => rows
+            .iter()
+            .map(|r| Ok(r.try_get::<String, _>(0)?))
+            .collect(),
+        #[cfg(feature = "sqlite-rusqlite")]
+        RowBatch::Rusqlite(rows) => rows
+            .iter()
+            .map(|r| Ok(r.get::<String>(0)?))
+            .collect(),
+        _ => Err(Error::Message("unsupported row batch".into())),
+    }
+}
+
+fn decode_pair(batch: RowBatch) -> Result<Vec<(String, String)>, Error> {
+    match batch {
+        RowBatch::Any(rows) => rows
+            .iter()
+            .map(|r| Ok((r.try_get::<String, _>(0)?, r.try_get::<String, _>(1)?)))
+            .collect(),
+        RowBatch::Postgres(rows) => rows
+            .iter()
+            .map(|r| Ok((r.try_get::<String, _>(0)?, r.try_get::<String, _>(1)?)))
+            .collect(),
+        RowBatch::Sqlite(rows) => rows
+            .iter()
+            .map(|r| Ok((r.try_get::<String, _>(0)?, r.try_get::<String, _>(1)?)))
+            .collect(),
+        #[cfg(feature = "sqlite-rusqlite")]
+        RowBatch::Rusqlite(rows) => rows
+            .iter()
+            .map(|r| Ok((r.get::<String>(0)?, r.get::<String>(1)?)))
+            .collect(),
+        _ => Err(Error::Message("unsupported row batch".into())),
     }
 }
 
