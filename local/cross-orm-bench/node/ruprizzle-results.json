@@ -3,49 +3,49 @@
     "orm": "ruprizzle",
     "operation": "to_sql_select_by_pk",
     "iters": 100000,
-    "total_ms": 96.1721,
-    "avg_ms": 0.000961721
+    "total_ms": 93.0013,
+    "avg_ms": 0.000930013
   },
   {
     "orm": "ruprizzle",
     "operation": "to_sql_select_filter_order",
     "iters": 100000,
-    "total_ms": 330.3757,
-    "avg_ms": 0.003303757
+    "total_ms": 328.5976,
+    "avg_ms": 0.003285976
   },
   {
     "orm": "ruprizzle",
     "operation": "select_by_pk",
     "iters": 1000,
-    "total_ms": 21.4513,
-    "avg_ms": 0.0214513
+    "total_ms": 26.2532,
+    "avg_ms": 0.0262532
   },
   {
     "orm": "ruprizzle",
     "operation": "find_many_1000",
     "iters": 50,
-    "total_ms": 51.8183,
-    "avg_ms": 1.0363660000000001
+    "total_ms": 51.5368,
+    "avg_ms": 1.030736
   },
   {
     "orm": "ruprizzle",
     "operation": "find_filtered_ordered",
     "iters": 50,
-    "total_ms": 62.1636,
-    "avg_ms": 1.2432720000000002
+    "total_ms": 58.3517,
+    "avg_ms": 1.1670340000000001
   },
   {
     "orm": "ruprizzle",
     "operation": "include_posts",
     "iters": 10,
-    "total_ms": 130.8262,
-    "avg_ms": 13.08262
+    "total_ms": 131.33810000000003,
+    "avg_ms": 13.133810000000002
   },
   {
     "orm": "ruprizzle",
     "operation": "bulk_insert_1000",
     "iters": 10,
-    "total_ms": 20.498800000000003,
-    "avg_ms": 2.0498800000000004
+    "total_ms": 20.3823,
+    "avg_ms": 2.03823
   }
 ]

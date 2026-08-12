@@ -296,16 +296,27 @@ where
             .await?;
             self.nested.load(exec, &mut children).await?;
 
-            let mut map: HashMap<Key, Vec<C>> = HashMap::new();
-            for child in children {
-                let key = (self.child_key_get)(&child);
-                map.entry(key).or_default().push(child);
+            // Group children into pre-sized buckets indexed by parent position.
+            // This avoids a `HashMap` entry per child and a `remove` per parent;
+            // only a single map lookup is needed for each child.
+            let bucket_hint = children.len() / parents.len();
+            let mut parent_index: HashMap<Key, usize> = HashMap::with_capacity(parents.len());
+            for (i, parent) in parents.iter().enumerate() {
+                parent_index.entry((self.get)(parent)).or_insert(i);
             }
 
-            for parent in parents.iter_mut() {
-                let key = (self.get)(parent);
-                let related = map.remove(&key).unwrap_or_default();
-                (self.set)(parent, Related::Loaded(related));
+            let mut buckets: Vec<Vec<C>> = std::iter::repeat_with(|| Vec::with_capacity(bucket_hint))
+                .take(parents.len())
+                .collect();
+
+            for child in children {
+                if let Some(&idx) = parent_index.get(&(self.child_key_get)(&child)) {
+                    buckets[idx].push(child);
+                }
+            }
+
+            for (parent, bucket) in parents.iter_mut().zip(buckets) {
+                (self.set)(parent, Related::Loaded(bucket));
             }
 
             Ok(())
@@ -466,11 +477,14 @@ where
 
             // Only the first child per key can be attached, so keep just that
             // one rather than a `Vec` that is always length 1 in practice.
-            let mut map: HashMap<Key, C> = HashMap::new();
+            let mut map: HashMap<Key, C> = HashMap::with_capacity(parents.len());
             for child in children {
                 // First, not last: rows arrive in the relation's `ORDER BY`, so
                 // the first match is the one the ordering selected.
-                map.entry((self.child_key_get)(&child)).or_insert(child);
+                let key = (self.child_key_get)(&child);
+                if let std::collections::hash_map::Entry::Vacant(e) = map.entry(key) {
+                    e.insert(child);
+                }
             }
 
             for parent in parents.iter_mut() {

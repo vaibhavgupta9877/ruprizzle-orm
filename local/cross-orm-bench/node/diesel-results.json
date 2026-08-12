@@ -3,49 +3,49 @@
     "orm": "diesel",
     "operation": "to_sql_select_by_pk",
     "iters": 100000,
-    "total_ms": 53.497299999999996,
-    "avg_ms": 0.000534973
+    "total_ms": 52.049400000000006,
+    "avg_ms": 0.000520494
   },
   {
     "orm": "diesel",
     "operation": "to_sql_select_filter_order",
     "iters": 100000,
-    "total_ms": 67.6149,
-    "avg_ms": 0.000676149
+    "total_ms": 65.7737,
+    "avg_ms": 0.000657737
   },
   {
     "orm": "diesel",
     "operation": "select_by_pk",
     "iters": 1000,
-    "total_ms": 10.186,
-    "avg_ms": 0.010186
+    "total_ms": 9.9615,
+    "avg_ms": 0.0099615
   },
   {
     "orm": "diesel",
     "operation": "find_many_1000",
     "iters": 50,
-    "total_ms": 8.89,
-    "avg_ms": 0.1778
+    "total_ms": 9.4148,
+    "avg_ms": 0.188296
   },
   {
     "orm": "diesel",
     "operation": "find_filtered_ordered",
     "iters": 50,
-    "total_ms": 14.1509,
-    "avg_ms": 0.283018
+    "total_ms": 13.677200000000001,
+    "avg_ms": 0.273544
   },
   {
     "orm": "diesel",
     "operation": "include_posts",
     "iters": 10,
-    "total_ms": 28.1659,
-    "avg_ms": 2.81659
+    "total_ms": 27.8697,
+    "avg_ms": 2.78697
   },
   {
     "orm": "diesel",
     "operation": "bulk_insert_1000",
     "iters": 10,
-    "total_ms": 57.861000000000004,
-    "avg_ms": 5.7861
+    "total_ms": 52.7351,
+    "avg_ms": 5.27351
   }
 ]
