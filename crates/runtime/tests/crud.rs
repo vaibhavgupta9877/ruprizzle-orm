@@ -8,6 +8,18 @@ struct Task {
     name: String,
 }
 
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Task {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            name: row.get::<String>(1)?,
+        })
+    }
+}
+
 impl Model for Task {
     const TABLE: &'static str = "tasks";
 }

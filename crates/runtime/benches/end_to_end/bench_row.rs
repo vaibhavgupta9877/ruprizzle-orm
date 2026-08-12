@@ -46,6 +46,18 @@ for BenchRow {
         })
     }
 }
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromRusqliteRow for BenchRow {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::Row::get::<i64>(&row, 0)?,
+            name: ::ruprizzle::rusqlite::Row::get::<String>(&row, 1)?,
+            n: ::ruprizzle::rusqlite::Row::get::<i64>(&row, 2)?,
+        })
+    }
+}
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.
 #[derive(Debug, Clone, Serialize, Deserialize)]

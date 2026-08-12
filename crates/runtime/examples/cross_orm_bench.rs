@@ -22,6 +22,20 @@ struct User {
     posts: Related<Vec<Post>>,
 }
 
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for User {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            email: row.get::<String>(1)?,
+            age: row.get::<i64>(2)?,
+            posts: Related::default(),
+        })
+    }
+}
+
 impl Model for User {
     const TABLE: &'static str = "users";
 }
@@ -33,6 +47,19 @@ struct Post {
     title: String,
 }
 
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Post {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            author_id: row.get::<i64>(1)?,
+            title: row.get::<String>(2)?,
+        })
+    }
+}
+
 impl Model for Post {
     const TABLE: &'static str = "posts";
 }
@@ -42,6 +69,19 @@ struct BenchBulk {
     id: i64,
     name: String,
     n: i64,
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for BenchBulk {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            name: row.get::<String>(1)?,
+            n: row.get::<i64>(2)?,
+        })
+    }
 }
 
 impl Model for BenchBulk {

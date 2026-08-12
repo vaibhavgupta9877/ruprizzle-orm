@@ -30,6 +30,20 @@ struct User {
     email: String,
     age: i64,
 }
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for User {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            email: row.get::<String>(1)?,
+            age: row.get::<i64>(2)?,
+        })
+    }
+}
+
 impl Model for User {
     const TABLE: &'static str = "users";
 }

@@ -401,6 +401,9 @@ where
             .map(|r| T::from_row(r).map_err(Error::Sqlx))
             .collect(),
         #[cfg(feature = "sqlite-rusqlite")]
-        RowBatch::Rusqlite(_) => Err(Error::NotImplemented),
+        RowBatch::Rusqlite(rows) => rows
+            .iter()
+            .map(|r| T::from_rusqlite_row(r))
+            .collect(),
     }
 }

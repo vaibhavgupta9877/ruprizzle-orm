@@ -180,6 +180,19 @@ fn emit_enum(e: &EnumDef, is_postgres: bool) -> TokenStream {
                 Value::Str(self.as_db_str().into())
             }
         }
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        impl ::ruprizzle::rusqlite::FromValue for #name {
+            fn from_value(value: &::ruprizzle::rusqlite::types::Value) -> Result<Self, ::ruprizzle::Error> {
+                let s = <String as ::ruprizzle::rusqlite::FromValue>::from_value(value)?;
+                s.parse().map_err(|e: String| {
+                    ::ruprizzle::Error::Message(format!(
+                        "cannot parse {} from {s:?}: {e}",
+                        stringify!(#name)
+                    ))
+                })
+            }
+        }
     }
 }
 
@@ -495,6 +508,22 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         })
         .collect();
 
+    let mut next_rusqlite_index = 0;
+    let rusqlite_from_row_fields: Vec<_> = model
+        .fields
+        .values()
+        .map(|f| {
+            let idx = if f.has_column() {
+                let i = next_rusqlite_index;
+                next_rusqlite_index += 1;
+                Some(i)
+            } else {
+                None
+            };
+            emit_from_rusqlite_row_field(schema, model.name.as_str(), f, idx)
+        })
+        .collect();
+
     let header = header();
     let tokens = quote! {
         #header
@@ -534,6 +563,15 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
             fn from_row(row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
                 Ok(Self {
                     #( #from_row_fields )*
+                })
+            }
+        }
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        impl ::ruprizzle::rusqlite::FromRusqliteRow for #model_name {
+            fn from_rusqlite_row(row: &::ruprizzle::rusqlite::Row) -> Result<Self, ::ruprizzle::Error> {
+                Ok(Self {
+                    #( #rusqlite_from_row_fields )*
                 })
             }
         }
@@ -694,6 +732,24 @@ fn emit_from_row_field(
     };
 
     quote! { #name: #expr, }
+}
+
+fn emit_from_rusqlite_row_field(
+    schema: &Schema,
+    owner: &str,
+    field: &Field,
+    idx: Option<usize>,
+) -> TokenStream {
+    let name = safe_field_ident(field.name.as_str());
+
+    if !field.has_column() {
+        return quote! { #name: ::ruprizzle::Related::default(), };
+    }
+
+    let idx = syn::Index::from(idx.unwrap_or(0));
+    let ty = rust_type_tokens(schema, owner, field, field.optional, false);
+
+    quote! { #name: ::ruprizzle::rusqlite::Row::get::<#ty>(&row, #idx)?, }
 }
 
 fn emit_insert_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream {

@@ -278,7 +278,7 @@ where
                         crate::executor::RawRow::Postgres(r) => Out::from_row(&r).map_err(Error::Sqlx),
                         crate::executor::RawRow::Sqlite(r) => Out::from_row(&r).map_err(Error::Sqlx),
                         #[cfg(feature = "sqlite-rusqlite")]
-                        crate::executor::RawRow::Rusqlite(_) => Err(Error::NotImplemented),
+                        crate::executor::RawRow::Rusqlite(r) => Out::from_rusqlite_row(&r),
                     })
                 })
             })

@@ -54,6 +54,19 @@ struct User {
     age: i64,
 }
 
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for User {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            email: row.get::<String>(1)?,
+            age: row.get::<i64>(2)?,
+        })
+    }
+}
+
 impl Model for User {
     const TABLE: &'static str = "users";
     const COLUMNS: &'static [&'static str] = &["id", "email", "age"];
@@ -64,6 +77,19 @@ struct Post {
     id: i64,
     author_id: i64,
     title: String,
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Post {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            author_id: row.get::<i64>(1)?,
+            title: row.get::<String>(2)?,
+        })
+    }
 }
 
 impl Model for Post {

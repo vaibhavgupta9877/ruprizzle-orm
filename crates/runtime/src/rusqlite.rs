@@ -42,7 +42,7 @@ pub struct RusqlitePool {
 }
 
 struct Inner {
-    conns: Vec<Arc<tokio::sync::Mutex<rusqlite::Connection>>>,
+    conns: tokio::sync::Mutex<Vec<Arc<tokio::sync::Mutex<rusqlite::Connection>>>>,
     next: AtomicUsize,
 }
 
@@ -86,7 +86,7 @@ impl RusqlitePool {
             }
 
             Ok(Inner {
-                conns,
+                conns: tokio::sync::Mutex::new(conns),
                 next: AtomicUsize::new(0),
             })
         })
@@ -100,27 +100,164 @@ impl RusqlitePool {
 
     /// Pick a connection using round-robin load distribution.
     fn acquire(&self) -> Arc<tokio::sync::Mutex<rusqlite::Connection>> {
-        let idx = self
-            .inner
-            .next
-            .fetch_add(1, Ordering::Relaxed)
-            % self.inner.conns.len();
-        self.inner.conns[idx].clone()
+        let conns = self.inner.conns.blocking_lock();
+        let idx = self.inner.next.fetch_add(1, Ordering::Relaxed) % conns.len();
+        conns[idx].clone()
+    }
+
+    /// Take a connection from the pool and start a transaction on it.
+    ///
+    /// The connection is not returned to the pool until the transaction is
+    /// committed or rolled back, guaranteeing that all transaction statements
+    /// run on the same physical SQLite connection.
+    pub(crate) async fn begin_transaction(&self) -> Result<RusqliteTransaction, Error> {
+        let pool = self.clone();
+        tokio::task::spawn_blocking(move || -> Result<RusqliteTransaction, Error> {
+            let conn = {
+                let mut conns = pool.inner.conns.blocking_lock();
+                conns
+                    .pop()
+                    .ok_or_else(|| Error::Message("rusqlite connection pool exhausted".into()))?
+            };
+
+            {
+                let guard = conn.blocking_lock();
+                guard
+                    .execute("BEGIN", [])
+                    .map_err(|e| Error::Message(e.to_string()))?;
+            }
+
+            Ok(RusqliteTransaction { pool, conn })
+        })
+        .await
+        .map_err(|e| Error::Message(e.to_string()))?
+    }
+
+    /// Return an owned connection to the pool.
+    fn return_conn(&self, conn: Arc<tokio::sync::Mutex<rusqlite::Connection>>) {
+        self.inner.conns.blocking_lock().push(conn);
+    }
+}
+
+/// A `rusqlite` transaction that owns its connection.
+///
+/// The connection is removed from the [`RusqlitePool`] for the lifetime of the
+/// transaction and is only returned on [`Self::commit`] or [`Self::rollback`].
+#[derive(Debug, Clone)]
+pub(crate) struct RusqliteTransaction {
+    pool: RusqlitePool,
+    conn: Arc<tokio::sync::Mutex<rusqlite::Connection>>,
+}
+
+impl RusqliteTransaction {
+    /// Execute `sql` with `binds`, returning the number of affected rows.
+    pub(crate) fn execute_sync(
+        &self,
+        sql: &str,
+        binds: &[Value],
+    ) -> Result<u64, Error> {
+        let binds = binds
+            .iter()
+            .map(value_to_rusqlite)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let guard = self.conn.blocking_lock();
+        let mut stmt = guard
+            .prepare_cached(sql)
+            .map_err(|e| Error::Message(e.to_string()))?;
+
+        let rows = stmt
+            .execute(rusqlite::params_from_iter(binds.iter()))
+            .map_err(|e| Error::Message(e.to_string()))?;
+
+        Ok(rows as u64)
+    }
+
+    /// Fetch all rows from `sql` with `binds`.
+    pub(crate) fn fetch_all_sync(
+        &self,
+        sql: &str,
+        binds: &[Value],
+    ) -> Result<RowBatch, Error> {
+        let binds = binds
+            .iter()
+            .map(value_to_rusqlite)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let guard = self.conn.blocking_lock();
+        let mut stmt = guard
+            .prepare_cached(sql)
+            .map_err(|e| Error::Message(e.to_string()))?;
+
+        let column_count = stmt.column_count();
+
+        let rows = stmt
+            .query_map(
+                rusqlite::params_from_iter(binds.iter()),
+                |row| {
+                    let mut values = Vec::with_capacity(column_count);
+                    for i in 0..column_count {
+                        values.push(row.get::<_, RusqliteValue>(i)?);
+                    }
+                    Ok(Row(values))
+                },
+            )
+            .map_err(|e| Error::Message(e.to_string()))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| Error::Message(e.to_string()))?;
+
+        Ok(RowBatch::Rusqlite(rows))
+    }
+
+    /// Commit the transaction and return the connection to the pool.
+    pub(crate) fn commit(self) -> Result<(), Error> {
+        let conn = self.conn;
+        let pool = self.pool;
+
+        let guard = conn.blocking_lock();
+        guard
+            .execute("COMMIT", [])
+            .map_err(|e| Error::Message(e.to_string()))?;
+        drop(guard);
+
+        pool.return_conn(conn);
+        Ok(())
+    }
+
+    /// Roll the transaction back and return the connection to the pool.
+    pub(crate) fn rollback(self) -> Result<(), Error> {
+        let conn = self.conn;
+        let pool = self.pool;
+
+        let guard = conn.blocking_lock();
+        guard
+            .execute("ROLLBACK", [])
+            .map_err(|e| Error::Message(e.to_string()))?;
+        drop(guard);
+
+        pool.return_conn(conn);
+        Ok(())
     }
 }
 
 impl fmt::Debug for RusqlitePool {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let len = self
+            .inner
+            .conns
+            .try_lock()
+            .map_or(0, |conns| conns.len());
         f.debug_struct("RusqlitePool")
-            .field("connections", &self.inner.conns.len())
+            .field("connections", &len)
             .finish_non_exhaustive()
     }
 }
 
 impl fmt::Debug for Inner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let len = self.conns.try_lock().map_or(0, |conns| conns.len());
         f.debug_struct("Inner")
-            .field("connections", &self.conns.len())
+            .field("connections", &len)
             .finish_non_exhaustive()
     }
 }
@@ -209,6 +346,201 @@ impl Executor for RusqlitePool {
         })))
     }
 }
+
+impl Row {
+    /// Number of columns in the row.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns `true` if the row has no columns.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Decode the column at `idx` into `T`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Message`] if the index is out of bounds or the value
+    /// cannot be decoded into `T`.
+    pub fn get<T: FromValue>(&self, idx: usize) -> Result<T, Error> {
+        let value = self
+            .0
+            .get(idx)
+            .ok_or_else(|| Error::Message(format!("column index {idx} out of bounds")))?;
+        T::from_value(value)
+    }
+}
+
+/// A type that can be decoded from a `crate::rusqlite::Row`.
+pub trait FromRusqliteRow: Sized + Send + Sync + 'static {
+    /// Decode `self` from an ordered row of `rusqlite` values.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Message`] if the row cannot be decoded.
+    fn from_rusqlite_row(row: &Row) -> Result<Self, Error>;
+}
+
+/// A type that can be decoded from a single `rusqlite::types::Value`.
+pub trait FromValue: Sized + Send + Sync + 'static {
+    /// Decode `self` from a single `rusqlite` value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Message`] if the value cannot be decoded into `T`.
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error>;
+}
+
+impl FromValue for i64 {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        match value {
+            RusqliteValue::Integer(i) => Ok(*i),
+            RusqliteValue::Real(f) => Ok(*f as i64),
+            RusqliteValue::Text(s) => s
+                .parse()
+                .map_err(|e| Error::Message(format!("cannot decode i64 from {s:?}: {e}"))),
+            _ => Err(Error::Message(format!("cannot decode i64 from {value:?}"))),
+        }
+    }
+}
+
+impl FromValue for i32 {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        i64::from_value(value)?.try_into().map_err(|e| {
+            Error::Message(format!("cannot decode i32 from {value:?}: {e}"))
+        })
+    }
+}
+
+impl FromValue for f64 {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        match value {
+            RusqliteValue::Real(f) => Ok(*f),
+            RusqliteValue::Integer(i) => Ok(*i as f64),
+            RusqliteValue::Text(s) => s
+                .parse()
+                .map_err(|e| Error::Message(format!("cannot decode f64 from {s:?}: {e}"))),
+            _ => Err(Error::Message(format!("cannot decode f64 from {value:?}"))),
+        }
+    }
+}
+
+impl FromValue for bool {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        match value {
+            RusqliteValue::Integer(0) => Ok(false),
+            RusqliteValue::Integer(1) => Ok(true),
+            RusqliteValue::Text(s) if s == "0" || s.eq_ignore_ascii_case("false") => Ok(false),
+            RusqliteValue::Text(s) if s == "1" || s.eq_ignore_ascii_case("true") => Ok(true),
+            _ => Err(Error::Message(format!("cannot decode bool from {value:?}"))),
+        }
+    }
+}
+
+impl FromValue for String {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        match value {
+            RusqliteValue::Text(s) => Ok(s.clone()),
+            RusqliteValue::Integer(i) => Ok(i.to_string()),
+            RusqliteValue::Real(f) => Ok(f.to_string()),
+            RusqliteValue::Blob(_) => Err(Error::Message("cannot decode String from blob".into())),
+            RusqliteValue::Null => Err(Error::Message("cannot decode String from NULL".into())),
+        }
+    }
+}
+
+impl FromValue for crate::types::Decimal {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        let s = String::from_value(value)?;
+        s.parse()
+            .map_err(|e| Error::Message(format!("cannot decode Decimal from {s:?}: {e}")))
+    }
+}
+
+impl FromValue for crate::types::Uuid {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        let s = String::from_value(value)?;
+        s.parse()
+            .map_err(|e| Error::Message(format!("cannot decode Uuid from {s:?}: {e}")))
+    }
+}
+
+impl FromValue for crate::types::chrono::DateTime<crate::types::chrono::Utc> {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        let s = String::from_value(value)?;
+        s.parse()
+            .map_err(|e| Error::Message(format!("cannot decode DateTime from {s:?}: {e}")))
+    }
+}
+
+impl FromValue for crate::types::chrono::NaiveDate {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        let s = String::from_value(value)?;
+        s.parse()
+            .map_err(|e| Error::Message(format!("cannot decode NaiveDate from {s:?}: {e}")))
+    }
+}
+
+impl FromValue for crate::types::chrono::NaiveTime {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        let s = String::from_value(value)?;
+        s.parse()
+            .map_err(|e| Error::Message(format!("cannot decode NaiveTime from {s:?}: {e}")))
+    }
+}
+
+impl FromValue for serde_json::Value {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        let s = String::from_value(value)?;
+        serde_json::from_str(&s)
+            .map_err(|e| Error::Message(format!("cannot decode JSON from {s:?}: {e}")))
+    }
+}
+
+impl FromValue for Vec<u8> {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        match value {
+            RusqliteValue::Blob(b) => Ok(b.clone()),
+            _ => Err(Error::Message(format!("cannot decode Vec<u8> from {value:?}"))),
+        }
+    }
+}
+
+impl<T: FromValue> FromValue for Option<T> {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        match value {
+            RusqliteValue::Null => Ok(None),
+            _ => T::from_value(value).map(Some),
+        }
+    }
+}
+
+macro_rules! tuple_from_value {
+    ($($T:ident $idx:tt),+) => {
+        impl<$($T: FromValue),+> FromRusqliteRow for ($($T,)+) {
+            fn from_rusqlite_row(row: &Row) -> Result<Self, Error> {
+                Ok((
+                    $(
+                        row.get::<$T>($idx)?
+                    ,)+
+                ))
+            }
+        }
+    };
+}
+
+tuple_from_value! { A 0 }
+tuple_from_value! { A 0, B 1 }
+tuple_from_value! { A 0, B 1, C 2 }
+tuple_from_value! { A 0, B 1, C 2, D 3 }
+tuple_from_value! { A 0, B 1, C 2, D 3, E 4 }
+tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5 }
+tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5, G 6 }
+tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7 }
 
 /// Convert a ruprizzle `Value` into a `rusqlite::types::Value`.
 fn value_to_rusqlite(value: &Value) -> Result<RusqliteValue, Error> {

@@ -20,6 +20,20 @@ struct Event {
     meta: JsonValue,
 }
 
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Event {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<Uuid>(0)?,
+            created_at: row.get::<DateTime<Utc>>(1)?,
+            price: row.get::<Decimal>(2)?,
+            meta: row.get::<serde_json::Value>(3)?,
+        })
+    }
+}
+
 impl Model for Event {
     const TABLE: &'static str = "events";
     const PRIMARY_KEY: &'static str = "id";

@@ -47,6 +47,8 @@ enum TxInner {
     Any(sqlx::Transaction<'static, Any>),
     Postgres(sqlx::Transaction<'static, Postgres>),
     Sqlite(sqlx::Transaction<'static, Sqlite>),
+    #[cfg(feature = "sqlite-rusqlite")]
+    SqliteNative(crate::rusqlite::RusqliteTransaction),
 }
 
 /// A transaction in progress.
@@ -68,7 +70,7 @@ impl Tx {
             Pool::Postgres(p) => TxInner::Postgres(p.begin().await.map_err(Error::Sqlx)?),
             Pool::Sqlite(p) => TxInner::Sqlite(p.begin().await.map_err(Error::Sqlx)?),
             #[cfg(feature = "sqlite-rusqlite")]
-            Pool::SqliteNative(_) => return Err(Error::NotImplemented),
+            Pool::SqliteNative(p) => TxInner::SqliteNative(p.begin_transaction().await?),
         };
         Ok(Self {
             inner: Mutex::new(Some(tx)),
@@ -112,6 +114,12 @@ impl Tx {
                 TxInner::Any(tx) => tx.commit().await.map_err(Error::Sqlx)?,
                 TxInner::Postgres(tx) => tx.commit().await.map_err(Error::Sqlx)?,
                 TxInner::Sqlite(tx) => tx.commit().await.map_err(Error::Sqlx)?,
+                #[cfg(feature = "sqlite-rusqlite")]
+                TxInner::SqliteNative(tx) => {
+                    tokio::task::spawn_blocking(move || tx.commit())
+                        .await
+                        .map_err(|e| Error::Message(e.to_string()))??;
+                }
             };
             tracing::debug!(target: "ruprizzle::query", "transaction committed");
         }
@@ -130,6 +138,12 @@ impl Tx {
                 TxInner::Any(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
                 TxInner::Postgres(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
                 TxInner::Sqlite(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
+                #[cfg(feature = "sqlite-rusqlite")]
+                TxInner::SqliteNative(tx) => {
+                    tokio::task::spawn_blocking(move || tx.rollback())
+                        .await
+                        .map_err(|e| Error::Message(e.to_string()))??;
+                }
             };
             tracing::debug!(target: "ruprizzle::query", "transaction rolled back");
         }
@@ -179,6 +193,15 @@ impl Tx {
                     .map(|r| r.rows_affected())
                     .map_err(Error::Sqlx)
             }
+            #[cfg(feature = "sqlite-rusqlite")]
+            TxInner::SqliteNative(tx) => {
+                let sql = sql.to_owned();
+                let binds = binds.to_vec();
+                let tx = tx.clone();
+                tokio::task::spawn_blocking(move || tx.execute_sync(&sql, &binds))
+                    .await
+                    .map_err(|e| Error::Message(e.to_string()))?
+            }
         }
     }
 
@@ -218,6 +241,16 @@ impl Tx {
                     q = q.bind(b);
                 }
                 q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
+            }
+            #[cfg(feature = "sqlite-rusqlite")]
+            TxInner::SqliteNative(tx) => {
+                let sql = sql.to_owned();
+                let binds = binds.to_vec();
+                let tx = tx.clone();
+                let batch = tokio::task::spawn_blocking(move || tx.fetch_all_sync(&sql, &binds))
+                    .await
+                    .map_err(|e| Error::Message(e.to_string()))??;
+                crate::executor::decode_rows::<T>(batch)
             }
         }
     }
@@ -259,6 +292,17 @@ impl Tx {
                 }
                 q.fetch_one(&mut **tx).await.map_err(Error::Sqlx)
             }
+            #[cfg(feature = "sqlite-rusqlite")]
+            TxInner::SqliteNative(tx) => {
+                let sql = sql.to_owned();
+                let binds = binds.to_vec();
+                let tx = tx.clone();
+                let batch = tokio::task::spawn_blocking(move || tx.fetch_all_sync(&sql, &binds))
+                    .await
+                    .map_err(|e| Error::Message(e.to_string()))??;
+                let rows = crate::executor::decode_rows::<T>(batch)?;
+                rows.into_iter().next().ok_or_else(|| Error::Message("no row found".into()))
+            }
         }
     }
 
@@ -298,6 +342,17 @@ impl Tx {
                     q = q.bind(b);
                 }
                 q.fetch_optional(&mut **tx).await.map_err(Error::Sqlx)
+            }
+            #[cfg(feature = "sqlite-rusqlite")]
+            TxInner::SqliteNative(tx) => {
+                let sql = sql.to_owned();
+                let binds = binds.to_vec();
+                let tx = tx.clone();
+                let batch = tokio::task::spawn_blocking(move || tx.fetch_all_sync(&sql, &binds))
+                    .await
+                    .map_err(|e| Error::Message(e.to_string()))??;
+                let rows = crate::executor::decode_rows::<T>(batch)?;
+                Ok(rows.into_iter().next())
             }
         }
     }
@@ -345,6 +400,15 @@ impl Tx {
                     .await
                     .map(RowBatch::Sqlite)
                     .map_err(Error::Sqlx)
+            }
+            #[cfg(feature = "sqlite-rusqlite")]
+            TxInner::SqliteNative(tx) => {
+                let sql = sql.to_owned();
+                let binds = binds.to_vec();
+                let tx = tx.clone();
+                tokio::task::spawn_blocking(move || tx.fetch_all_sync(&sql, &binds))
+                    .await
+                    .map_err(|e| Error::Message(e.to_string()))?
             }
         }
     }

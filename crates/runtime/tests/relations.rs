@@ -12,6 +12,19 @@ struct User {
     posts: Related<Vec<Post>>,
 }
 
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for User {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            name: row.get::<String>(1)?,
+            posts: Related::default(),
+        })
+    }
+}
+
 impl Model for User {
     const TABLE: &'static str = "users";
 }
@@ -24,6 +37,20 @@ struct Post {
     author_id: i64,
     #[sqlx(skip)]
     author: Related<Option<User>>,
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Post {
+    fn from_rusqlite_row(
+        row: &ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            title: row.get::<String>(1)?,
+            author_id: row.get::<i64>(2)?,
+            author: Related::default(),
+        })
+    }
 }
 
 impl Model for Post {
