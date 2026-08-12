@@ -1,6 +1,9 @@
 /target
+**/target/
 **/*.rs.bk
 *.pdb
+/local/cross-orm-bench/rust/*/Cargo.lock
+__pycache__/
 
 # Local configuration and secrets
 .env

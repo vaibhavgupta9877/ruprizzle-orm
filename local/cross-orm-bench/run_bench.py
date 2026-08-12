@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """Rigorous cross-ORM SQLite benchmark.
 
-Runs the ruprizzle (sqlx + rusqlite), Drizzle and Prisma harnesses multiple
-warm-up + measurement trials, aggregates statistics, logs raw data, and updates
-docs/BenchmarkResults.md with the median numbers.
+Runs ruprizzle (sqlx + rusqlite), prax-orm, sea-orm, diesel, Drizzle and
+Prisma harnesses with warm-up + measurement trials, aggregates statistics,
+logs raw data, and updates docs/BenchmarkResults.md with the median numbers.
 """
 
 import json
 import math
 import os
+import re
 import statistics
 import subprocess
 import sys
 import time
+import tomllib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Callable, Dict, List, Tuple, Union
 
 # Number of warm-up trials to discard (JIT / cache warm-up).
 WARMUP_TRIALS = 1
@@ -25,8 +27,28 @@ MEASURE_TRIALS = 10
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NODE_DIR = REPO_ROOT / "local" / "cross-orm-bench" / "node"
+RUST_DIR = REPO_ROOT / "local" / "cross-orm-bench" / "rust"
 DOCS_PATH = REPO_ROOT / "docs" / "BenchmarkResults.md"
+DB_PATH = NODE_DIR / "bench.sqlite3"
 RUST_EXE = REPO_ROOT / "target" / "release" / "examples" / "cross_orm_bench.exe"
+
+DRIVER_ORDER = [
+    "ruprizzle (sqlx)",
+    "ruprizzle (rusqlite)",
+    "prax",
+    "sea-orm",
+    "diesel",
+    "prisma",
+    "drizzle",
+]
+
+
+@dataclass
+class Harness:
+    name: str
+    build: Callable[[], None]
+    run: Callable[[], List[List[dict]]]
+    results_json: str
 
 
 def run_cmd(
@@ -38,6 +60,8 @@ def run_cmd(
     env = os.environ.copy()
     if env_extra:
         env.update(env_extra)
+    # Always give a stable absolute path to the SQLite file.
+    env.setdefault("BENCH_SQLITE_PATH", str(DB_PATH))
     return subprocess.run(
         cmd,
         cwd=cwd,
@@ -49,7 +73,7 @@ def run_cmd(
     )
 
 
-def build_rust() -> None:
+def build_ruprizzle() -> None:
     print("Building ruprizzle cross-ORM bench binary...")
     run_cmd(
         [
@@ -67,6 +91,23 @@ def build_rust() -> None:
     )
 
 
+def build_rust_orm(crate_name: str) -> None:
+    crate_dir = RUST_DIR / f"{crate_name}-bench"
+    if not crate_dir.exists():
+        raise FileNotFoundError(f"Benchmark crate not found: {crate_dir}")
+    print(f"Building {crate_name} bench binary...")
+    run_cmd(["cargo", "build", "--release"], cwd=crate_dir)
+
+
+def package_name(crate_dir: Path) -> str:
+    with open(crate_dir / "Cargo.toml", "rb") as f:
+        return tomllib.load(f)["package"]["name"]
+
+
+def rust_orm_exe(crate_dir: Path) -> Path:
+    return crate_dir / "target" / "release" / f"{package_name(crate_dir)}.exe"
+
+
 def seed_db() -> None:
     print("Seeding bench.sqlite3...")
     run_cmd("npm run seed", cwd=NODE_DIR, shell=True)
@@ -79,13 +120,33 @@ def read_json(path: Path) -> List[dict]:
         return json.load(f)
 
 
-def run_rust_trials(env_extra: Dict[str, str] | None, results_json: str) -> List[List[dict]]:
+def run_rust_trials(
+    env_extra: Dict[str, str] | None, results_json: str, label: str
+) -> List[List[dict]]:
     seed_db()
     trials: List[List[dict]] = []
     for i in range(WARMUP_TRIALS + MEASURE_TRIALS):
-        label = "warmup" if i < WARMUP_TRIALS else f"measure-{i - WARMUP_TRIALS + 1}"
-        print(f"  ruprizzle ({env_extra or 'sqlx'}) {label}")
+        trial_label = "warmup" if i < WARMUP_TRIALS else f"measure-{i - WARMUP_TRIALS + 1}"
+        print(f"  ruprizzle ({label}) {trial_label}")
         run_cmd([str(RUST_EXE)], cwd=REPO_ROOT, env_extra=env_extra)
+        if i >= WARMUP_TRIALS:
+            trials.append(read_json(NODE_DIR / results_json))
+        if i < WARMUP_TRIALS + MEASURE_TRIALS - 1:
+            time.sleep(0.2)
+    return trials
+
+
+def run_rust_orm_trials(crate_dir: Path, results_json: str) -> List[List[dict]]:
+    seed_db()
+    crate_name = package_name(crate_dir)
+    exe = rust_orm_exe(crate_dir)
+    if not exe.exists():
+        raise FileNotFoundError(f"Benchmark binary not found: {exe}")
+    trials: List[List[dict]] = []
+    for i in range(WARMUP_TRIALS + MEASURE_TRIALS):
+        label = "warmup" if i < WARMUP_TRIALS else f"measure-{i - WARMUP_TRIALS + 1}"
+        print(f"  {crate_name} {label}")
+        run_cmd([str(exe)], cwd=crate_dir)
         if i >= WARMUP_TRIALS:
             trials.append(read_json(NODE_DIR / results_json))
         if i < WARMUP_TRIALS + MEASURE_TRIALS - 1:
@@ -141,21 +202,13 @@ def aggregate(trials: List[List[dict]]) -> Dict[str, Dict[str, float]]:
     return {op: stats(v) for op, v in by_op.items()}
 
 
-def combine(
-    ruprizzle: Dict[str, Dict[str, float]],
-    rusqlite: Dict[str, Dict[str, float]],
-    drizzle: Dict[str, Dict[str, float]],
-    prisma: Dict[str, Dict[str, float]],
-) -> Dict[str, Dict[str, Dict[str, float]]]:
-    all_ops = set(ruprizzle) | set(rusqlite) | set(drizzle) | set(prisma)
+def combine(aggregates: Dict[str, Dict[str, Dict[str, float]]]) -> Dict[str, Dict[str, Dict[str, float]]]:
+    all_ops = set()
+    for a in aggregates.values():
+        all_ops |= set(a.keys())
     combined = {}
     for op in sorted(all_ops):
-        combined[op] = {
-            "ruprizzle (sqlx)": ruprizzle.get(op, {}),
-            "ruprizzle (rusqlite)": rusqlite.get(op, {}),
-            "prisma": prisma.get(op, {}),
-            "drizzle": drizzle.get(op, {}),
-        }
+        combined[op] = {driver: aggregates.get(driver, {}).get(op, {}) for driver in DRIVER_ORDER}
     return combined
 
 
@@ -167,24 +220,16 @@ def format_table_cell(value: float) -> str:
     return f"{value:,.1f}"
 
 
-def write_raw(
-    output: Path,
-    ruprizzle_trials: List[List[dict]],
-    rusqlite_trials: List[List[dict]],
-    drizzle_trials: List[List[dict]],
-    prisma_trials: List[List[dict]],
-) -> None:
+def write_raw(output: Path, all_trials: Dict[str, List[List[dict]]]) -> None:
     raw = {
         "meta": {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "warmup_trials": WARMUP_TRIALS,
             "measure_trials": MEASURE_TRIALS,
         },
-        "ruprizzle (sqlx)": ruprizzle_trials,
-        "ruprizzle (rusqlite)": rusqlite_trials,
-        "drizzle": drizzle_trials,
-        "prisma": prisma_trials,
     }
+    for driver in DRIVER_ORDER:
+        raw[driver] = all_trials.get(driver, [])
     with open(output, "w", encoding="utf-8") as f:
         json.dump(raw, f, indent=2)
 
@@ -234,40 +279,45 @@ def write_log(
         "to_sql_select_filter_order",
     ]
 
-    header = f"{'Operation':<28} {'ruprizzle (sqlx)':>18} {'ruprizzle (rusqlite)':>22} {'Prisma':>12} {'Drizzle':>12}"
+    # End-to-end table
+    name_width = 28
+    col_width = 14
+    header = f"{'Operation':<{name_width}}" + "".join(
+        f" {d:>{col_width}}" for d in DRIVER_ORDER
+    )
     lines.append(header)
     lines.append("-" * len(header))
-
     for op in end_to_end_ops:
         row = combined.get(op, {})
-        vals = []
-        for driver in ["ruprizzle (sqlx)", "ruprizzle (rusqlite)", "prisma", "drizzle"]:
-            v = row.get(driver, {}).get("median", 0.0)
-            vals.append("—" if v == 0 else f"{v:,.1f}")
-        lines.append(f"{op:<28} {vals[0]:>18} {vals[1]:>22} {vals[2]:>12} {vals[3]:>12}")
+        vals = [format_table_cell(row.get(driver, {}).get("median", 0.0)) for driver in DRIVER_ORDER]
+        lines.append(f"{op:<{name_width}}" + "".join(f" {v:>{col_width}}" for v in vals))
 
+    # Query construction table
     lines.extend(["", "Query construction (no I/O)", "---------------------------"])
-    lines.append(f"{'Operation':<28} {'ruprizzle (sqlx / rusqlite)':>30} {'Drizzle':>12}")
-    lines.append("-" * len(lines[-1]))
+    header2 = f"{'Operation':<{name_width}}" + "".join(
+        f" {d:>{col_width}}" for d in DRIVER_ORDER
+    )
+    lines.append(header2)
+    lines.append("-" * len(header2))
     for op in query_construction_ops:
         row = combined.get(op, {})
-        v_r = row.get("ruprizzle (sqlx)", {}).get("median", 0.0)
-        v_d = row.get("drizzle", {}).get("median", 0.0)
-        lines.append(
-            f"{op:<28} {f'{v_r:,.1f}':>30} {f'{v_d:,.1f}':>12}"
-        )
+        vals = [format_table_cell(row.get(driver, {}).get("median", 0.0)) for driver in DRIVER_ORDER]
+        lines.append(f"{op:<{name_width}}" + "".join(f" {v:>{col_width}}" for v in vals))
 
     lines.extend(["", "Per-driver, per-operation statistics", "------------------------------------"])
-    for driver in ["ruprizzle (sqlx)", "ruprizzle (rusqlite)", "drizzle", "prisma"]:
+    for driver in DRIVER_ORDER:
         lines.append(f"\n{driver}")
-        lines.append(f"{'Operation':<28} {'mean':>12} {'median':>12} {'min':>12} {'max':>12} {'stdev':>12} {'CV%':>8}")
+        lines.append(
+            f"{'Operation':<{name_width}}"
+            f" {'mean':>12} {'median':>12} {'min':>12} {'max':>12} {'stdev':>12} {'CV%':>8}"
+        )
         lines.append("-" * 100)
         for op in end_to_end_ops + query_construction_ops:
             row = combined.get(op, {}).get(driver, {})
             if not row:
                 continue
             lines.append(
-                f"{op:<28} {row['mean']:>12.1f} {row['median']:>12.1f} "
+                f"{op:<{name_width}} {row['mean']:>12.1f} {row['median']:>12.1f} "
                 f"{row['min']:>12.1f} {row['max']:>12.1f} {row['stdev']:>12.1f} {row['cv']:>8.1f}"
             )
 
@@ -286,46 +336,34 @@ def write_markdown(
             return "—"
         return f"{v:,.1f}"
 
-    end_to_end_table = """| Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | Prisma | Drizzle |
-|---|---:|---:|---:|---:|
-| `select_by_pk` | {select_by_pk_rz_sqlx} | {select_by_pk_rz_rusqlite} | {select_by_pk_prisma} | {select_by_pk_drizzle} |
-| `find_many_1000` | {find_many_1000_rz_sqlx} | {find_many_1000_rz_rusqlite} | {find_many_1000_prisma} | {find_many_1000_drizzle} |
-| `find_filtered_ordered` | {find_filtered_ordered_rz_sqlx} | {find_filtered_ordered_rz_rusqlite} | {find_filtered_ordered_prisma} | {find_filtered_ordered_drizzle} |
-| `include_posts` (1,000 users + 10,000 posts) | {include_posts_rz_sqlx} | {include_posts_rz_rusqlite} | {include_posts_prisma} | {include_posts_drizzle} |
-| `bulk_insert_1000` | {bulk_insert_1000_rz_sqlx} | {bulk_insert_1000_rz_rusqlite} | {bulk_insert_1000_prisma} | {bulk_insert_1000_drizzle} |""".format(
-        select_by_pk_rz_sqlx=m("select_by_pk", "ruprizzle (sqlx)"),
-        select_by_pk_rz_rusqlite=m("select_by_pk", "ruprizzle (rusqlite)"),
-        select_by_pk_prisma=m("select_by_pk", "prisma"),
-        select_by_pk_drizzle=m("select_by_pk", "drizzle"),
-        find_many_1000_rz_sqlx=m("find_many_1000", "ruprizzle (sqlx)"),
-        find_many_1000_rz_rusqlite=m("find_many_1000", "ruprizzle (rusqlite)"),
-        find_many_1000_prisma=m("find_many_1000", "prisma"),
-        find_many_1000_drizzle=m("find_many_1000", "drizzle"),
-        find_filtered_ordered_rz_sqlx=m("find_filtered_ordered", "ruprizzle (sqlx)"),
-        find_filtered_ordered_rz_rusqlite=m("find_filtered_ordered", "ruprizzle (rusqlite)"),
-        find_filtered_ordered_prisma=m("find_filtered_ordered", "prisma"),
-        find_filtered_ordered_drizzle=m("find_filtered_ordered", "drizzle"),
-        include_posts_rz_sqlx=m("include_posts", "ruprizzle (sqlx)"),
-        include_posts_rz_rusqlite=m("include_posts", "ruprizzle (rusqlite)"),
-        include_posts_prisma=m("include_posts", "prisma"),
-        include_posts_drizzle=m("include_posts", "drizzle"),
-        bulk_insert_1000_rz_sqlx=m("bulk_insert_1000", "ruprizzle (sqlx)"),
-        bulk_insert_1000_rz_rusqlite=m("bulk_insert_1000", "ruprizzle (rusqlite)"),
-        bulk_insert_1000_prisma=m("bulk_insert_1000", "prisma"),
-        bulk_insert_1000_drizzle=m("bulk_insert_1000", "drizzle"),
-    )
+    end_to_end_ops = [
+        "select_by_pk",
+        "find_many_1000",
+        "find_filtered_ordered",
+        "include_posts",
+        "bulk_insert_1000",
+    ]
+    query_construction_ops = [
+        "to_sql_select_by_pk",
+        "to_sql_select_filter_order",
+    ]
 
-    query_construction_table = """| Operation | ruprizzle (sqlx / rusqlite) | Drizzle |
-|---|---:|---:|
-| `to_sql_select_by_pk` | {to_sql_select_by_pk_rz} | {to_sql_select_by_pk_drizzle} |
-| `to_sql_select_filter_order` | {to_sql_select_filter_order_rz} | {to_sql_select_filter_order_drizzle} |""".format(
-        to_sql_select_by_pk_rz=m("to_sql_select_by_pk", "ruprizzle (sqlx)"),
-        to_sql_select_by_pk_drizzle=m("to_sql_select_by_pk", "drizzle"),
-        to_sql_select_filter_order_rz=m("to_sql_select_filter_order", "ruprizzle (sqlx)"),
-        to_sql_select_filter_order_drizzle=m("to_sql_select_filter_order", "drizzle"),
-    )
+    # Build a markdown table with all drivers.
+    header = "| Operation | " + " | ".join(DRIVER_ORDER) + " |"
+    separator = "|" + "---|" * (len(DRIVER_ORDER) + 1)
 
-    # Read existing doc and replace the tables between section headers.
+    end_to_end_table = [header, separator]
+    for op in end_to_end_ops:
+        row = "| `" + op + "` | " + " | ".join(m(op, d) for d in DRIVER_ORDER) + " |"
+        end_to_end_table.append(row)
+    end_to_end_table = "\n".join(end_to_end_table)
+
+    query_construction_table = [header, separator]
+    for op in query_construction_ops:
+        row = "| `" + op + "` | " + " | ".join(m(op, d) for d in DRIVER_ORDER) + " |"
+        query_construction_table.append(row)
+    query_construction_table = "\n".join(query_construction_table)
+
     text = path.read_text(encoding="utf-8")
 
     # Replace end-to-end table
@@ -337,11 +375,14 @@ def write_markdown(
         text = text[: s + len(start_marker)] + end_to_end_table + text[e:]
 
     # Replace query construction table
-    start_marker2 = "## Query construction (no I/O)\n\nDrizzle exposes `.toSQL()`; ruprizzle exposes `.to_sql()`; Prisma does not expose an equivalent API.\n\n"
+    start_marker2 = "## Query construction (no I/O)\n\n"
     end_marker2 = "\n\n## Codegen / build-step comparison"
     s2 = text.find(start_marker2)
     e2 = text.find(end_marker2)
     if s2 != -1 and e2 != -1:
+        # Replace up to the first newline after the intro line; the old table
+        # may have a different number of columns so we overwrite everything
+        # between the marker and the next section.
         text = text[: s2 + len(start_marker2)] + query_construction_table + text[e2:]
 
     # Update methodology line in caveats
@@ -353,63 +394,90 @@ def write_markdown(
     path.write_text(text, encoding="utf-8")
 
 
-def write_median_trial(drivers: Dict[str, tuple[List[List[dict]], Path]]) -> None:
+def write_median_trial(
+    driver: str, trials: List[List[dict]], path: Path
+) -> None:
     """Write the trial whose total end-to-end time is closest to the median."""
-    for name, (trials, path) in drivers.items():
-        totals = [sum(r["avg_ms"] * 1000 for r in t) for t in trials]
-        med = statistics.median(totals)
-        idx = min(range(len(totals)), key=lambda i: abs(totals[i] - med))
-        path.write_text(json.dumps(trials[idx], indent=2), encoding="utf-8")
-        print(f"  {path} (median trial for {name})")
+    end_to_end_ops = {
+        "select_by_pk",
+        "find_many_1000",
+        "find_filtered_ordered",
+        "include_posts",
+        "bulk_insert_1000",
+    }
+    totals = [
+        sum(r["avg_ms"] * 1000 for r in t if r["operation"] in end_to_end_ops)
+        for t in trials
+    ]
+    med = statistics.median(totals)
+    idx = min(range(len(totals)), key=lambda i: abs(totals[i] - med))
+    path.write_text(json.dumps(trials[idx], indent=2), encoding="utf-8")
+    print(f"  {path} (median trial for {driver})")
 
 
 def main() -> int:
-    build_rust()
+    build_ruprizzle()
+
+    all_trials: Dict[str, List[List[dict]]] = {}
 
     print("Running ruprizzle (sqlx) trials...")
-    ruprizzle_trials = run_rust_trials({}, "ruprizzle-results.json")
+    all_trials["ruprizzle (sqlx)"] = run_rust_trials({}, "ruprizzle-results.json", "sqlx")
 
     print("Running ruprizzle (rusqlite) trials...")
-    rusqlite_trials = run_rust_trials({"RUST_BENCH_DRIVER": "rusqlite"}, "ruprizzle-rusqlite-results.json")
+    all_trials["ruprizzle (rusqlite)"] = run_rust_trials(
+        {"RUST_BENCH_DRIVER": "rusqlite"}, "ruprizzle-rusqlite-results.json", "rusqlite"
+    )
+
+    for crate_name in ["prax", "sea-orm", "diesel"]:
+        print(f"Building and running {crate_name} trials...")
+        crate_dir = RUST_DIR / f"{crate_name}-bench"
+        build_rust_orm(crate_name)
+        all_trials[crate_name] = run_rust_orm_trials(crate_dir, f"{crate_name}-results.json")
 
     print("Running Drizzle trials...")
-    drizzle_trials = run_node_trials("bench-drizzle.js", "drizzle-results.json")
+    all_trials["drizzle"] = run_node_trials("bench-drizzle.js", "drizzle-results.json")
 
     print("Running Prisma trials...")
-    prisma_trials = run_node_trials("bench-prisma.js", "prisma-results.json")
+    all_trials["prisma"] = run_node_trials("bench-prisma.js", "prisma-results.json")
 
-    ruprizzle = aggregate(ruprizzle_trials)
-    rusqlite = aggregate(rusqlite_trials)
-    drizzle = aggregate(drizzle_trials)
-    prisma = aggregate(prisma_trials)
-
-    combined = combine(ruprizzle, rusqlite, drizzle, prisma)
+    aggregates = {driver: aggregate(trials) for driver, trials in all_trials.items()}
+    combined = combine(aggregates)
 
     out_dir = REPO_ROOT / "local" / "cross-orm-bench"
-    write_raw(out_dir / "raw_results.json", ruprizzle_trials, rusqlite_trials, drizzle_trials, prisma_trials)
+    write_raw(out_dir / "raw_results.json", all_trials)
     write_summary(out_dir / "results.json", combined)
     write_log(out_dir / "BENCHMARKS.log", combined)
     write_markdown(DOCS_PATH, combined)
 
     # Persist the trial closest to the median as the representative per-driver JSON.
-    write_median_trial(
-        {
-            "ruprizzle (sqlx)": (ruprizzle_trials, NODE_DIR / "ruprizzle-results.json"),
-            "ruprizzle (rusqlite)": (rusqlite_trials, NODE_DIR / "ruprizzle-rusqlite-results.json"),
-            "drizzle": (drizzle_trials, NODE_DIR / "drizzle-results.json"),
-            "prisma": (prisma_trials, NODE_DIR / "prisma-results.json"),
-        }
-    )
+    for driver in DRIVER_ORDER:
+        trials = all_trials.get(driver)
+        if not trials:
+            continue
+        if driver in ("ruprizzle (sqlx)", "ruprizzle (rusqlite)"):
+            filename = {
+                "ruprizzle (sqlx)": "ruprizzle-results.json",
+                "ruprizzle (rusqlite)": "ruprizzle-rusqlite-results.json",
+            }[driver]
+        else:
+            filename = f"{driver}-results.json"
+        write_median_trial(driver, trials, NODE_DIR / filename)
 
     print(f"\nWrote:")
     print(f"  {out_dir / 'raw_results.json'}")
     print(f"  {out_dir / 'results.json'}")
     print(f"  {out_dir / 'BENCHMARKS.log'}")
     print(f"  {DOCS_PATH}")
-    print(f"  {NODE_DIR / 'ruprizzle-results.json'}")
-    print(f"  {NODE_DIR / 'ruprizzle-rusqlite-results.json'}")
-    print(f"  {NODE_DIR / 'drizzle-results.json'}")
-    print(f"  {NODE_DIR / 'prisma-results.json'}")
+    for driver in DRIVER_ORDER:
+        if driver in all_trials:
+            if driver in ("ruprizzle (sqlx)", "ruprizzle (rusqlite)"):
+                filename = {
+                    "ruprizzle (sqlx)": "ruprizzle-results.json",
+                    "ruprizzle (rusqlite)": "ruprizzle-rusqlite-results.json",
+                }[driver]
+            else:
+                filename = f"{driver}-results.json"
+            print(f"  {NODE_DIR / filename}")
 
     return 0
 

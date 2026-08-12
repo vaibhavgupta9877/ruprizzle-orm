@@ -1,0 +1,51 @@
+[
+  {
+    "orm": "diesel",
+    "operation": "to_sql_select_by_pk",
+    "iters": 100000,
+    "total_ms": 51.4016,
+    "avg_ms": 0.0005140160000000001
+  },
+  {
+    "orm": "diesel",
+    "operation": "to_sql_select_filter_order",
+    "iters": 100000,
+    "total_ms": 67.06230000000001,
+    "avg_ms": 0.0006706230000000001
+  },
+  {
+    "orm": "diesel",
+    "operation": "select_by_pk",
+    "iters": 1000,
+    "total_ms": 10.0086,
+    "avg_ms": 0.0100086
+  },
+  {
+    "orm": "diesel",
+    "operation": "find_many_1000",
+    "iters": 50,
+    "total_ms": 9.2219,
+    "avg_ms": 0.184438
+  },
+  {
+    "orm": "diesel",
+    "operation": "find_filtered_ordered",
+    "iters": 50,
+    "total_ms": 13.216500000000002,
+    "avg_ms": 0.26433
+  },
+  {
+    "orm": "diesel",
+    "operation": "include_posts",
+    "iters": 10,
+    "total_ms": 29.351599999999998,
+    "avg_ms": 2.9351599999999998
+  },
+  {
+    "orm": "diesel",
+    "operation": "bulk_insert_1000",
+    "iters": 10,
+    "total_ms": 55.0286,
+    "avg_ms": 5.50286
+  }
+]

@@ -1,0 +1,51 @@
+[
+  {
+    "orm": "prax",
+    "operation": "to_sql_select_by_pk",
+    "iters": 100000,
+    "total_ms": 43.77,
+    "avg_ms": 0.0004377
+  },
+  {
+    "orm": "prax",
+    "operation": "to_sql_select_filter_order",
+    "iters": 100000,
+    "total_ms": 39.3432,
+    "avg_ms": 0.00039343200000000004
+  },
+  {
+    "orm": "prax",
+    "operation": "select_by_pk",
+    "iters": 1000,
+    "total_ms": 24.8215,
+    "avg_ms": 0.0248215
+  },
+  {
+    "orm": "prax",
+    "operation": "find_many_1000",
+    "iters": 50,
+    "total_ms": 22.099,
+    "avg_ms": 0.44198
+  },
+  {
+    "orm": "prax",
+    "operation": "find_filtered_ordered",
+    "iters": 50,
+    "total_ms": 28.9398,
+    "avg_ms": 0.5787960000000001
+  },
+  {
+    "orm": "prax",
+    "operation": "include_posts",
+    "iters": 10,
+    "total_ms": 74.6517,
+    "avg_ms": 7.4651700000000005
+  },
+  {
+    "orm": "prax",
+    "operation": "bulk_insert_1000",
+    "iters": 10,
+    "total_ms": 15.274700000000001,
+    "avg_ms": 1.52747
+  }
+]
