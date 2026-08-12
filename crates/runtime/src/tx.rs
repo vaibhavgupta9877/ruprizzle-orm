@@ -67,6 +67,8 @@ impl Tx {
             Pool::Any(p) => TxInner::Any(p.begin().await.map_err(Error::Sqlx)?),
             Pool::Postgres(p) => TxInner::Postgres(p.begin().await.map_err(Error::Sqlx)?),
             Pool::Sqlite(p) => TxInner::Sqlite(p.begin().await.map_err(Error::Sqlx)?),
+            #[cfg(feature = "sqlite-rusqlite")]
+            Pool::SqliteNative(_) => return Err(Error::NotImplemented),
         };
         Ok(Self {
             inner: Mutex::new(Some(tx)),

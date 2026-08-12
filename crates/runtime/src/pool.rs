@@ -22,6 +22,9 @@ pub enum Pool {
     Postgres(sqlx::Pool<sqlx::Postgres>),
     /// Native SQLite pool.
     Sqlite(sqlx::Pool<sqlx::Sqlite>),
+    /// Native `rusqlite`-backed SQLite pool.
+    #[cfg(feature = "sqlite-rusqlite")]
+    SqliteNative(crate::rusqlite::RusqlitePool),
 }
 
 impl Pool {
@@ -36,6 +39,8 @@ impl Pool {
             }
             Pool::Postgres(_) => Provider::Postgres,
             Pool::Sqlite(_) => Provider::Sqlite,
+            #[cfg(feature = "sqlite-rusqlite")]
+            Pool::SqliteNative(_) => Provider::Sqlite,
         }
     }
 
@@ -55,6 +60,8 @@ impl Pool {
             Pool::Any(p) => p.size(),
             Pool::Postgres(p) => p.size(),
             Pool::Sqlite(p) => p.size(),
+            #[cfg(feature = "sqlite-rusqlite")]
+            Pool::SqliteNative(_) => 0,
         }
     }
 
@@ -65,6 +72,8 @@ impl Pool {
             Pool::Any(p) => p.num_idle(),
             Pool::Postgres(p) => p.num_idle(),
             Pool::Sqlite(p) => p.num_idle(),
+            #[cfg(feature = "sqlite-rusqlite")]
+            Pool::SqliteNative(_) => 0,
         }
     }
 
@@ -131,6 +140,8 @@ impl Pool {
             Pool::Any(p) => p.close().await,
             Pool::Postgres(p) => p.close().await,
             Pool::Sqlite(p) => p.close().await,
+            #[cfg(feature = "sqlite-rusqlite")]
+            Pool::SqliteNative(_) => (),
         }
     }
 }
@@ -280,6 +291,15 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
             Ok(Pool::Postgres(pool))
         }
         "sqlite" => {
+            #[cfg(feature = "sqlite-rusqlite")]
+            if url
+                .split_once('?')
+                .map_or(false, |(_, q)| q.contains("driver=rusqlite"))
+            {
+                let pool = crate::rusqlite::RusqlitePool::connect(url).await?;
+                return Ok(Pool::SqliteNative(pool));
+            }
+
             let mut connect_opts = sqlx::sqlite::SqliteConnectOptions::from_str(url)
                 .map_err(crate::Error::Sqlx)?;
             connect_opts = connect_opts.row_buffer_size(config.row_buffer_size as usize);

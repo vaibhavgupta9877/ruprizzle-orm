@@ -314,6 +314,8 @@ async fn dispatch_raw_query(
                 .map(RowBatch::Sqlite)
                 .map_err(Error::from)
         }
+        #[cfg(feature = "sqlite-rusqlite")]
+        Pool::SqliteNative(_) => Err(Error::NotImplemented),
     }
 }
 
@@ -349,6 +351,8 @@ async fn dispatch_raw_execute(pool: &Pool, sql: &str, binds: &[Value]) -> Result
                 .map(|r| r.rows_affected())
                 .map_err(Error::from)
         }
+        #[cfg(feature = "sqlite-rusqlite")]
+        Pool::SqliteNative(_) => Err(Error::NotImplemented),
     }
 }
 

@@ -20,6 +20,8 @@ pub mod page;
 pub mod pool;
 pub mod query;
 pub mod related;
+#[cfg(feature = "sqlite-rusqlite")]
+pub mod rusqlite;
 pub mod tx;
 pub mod value;
 

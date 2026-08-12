@@ -23,6 +23,7 @@ rust_decimal      = { workspace = true }
 serde             = { workspace = true }
 serde_json        = { workspace = true }
 sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"] }
+rusqlite          = { version = "0.32", optional = true }
 thiserror         = { workspace = true }
 tracing            = { version = "0.1", default-features = false, features = ["std"] }
 # Only for `sync::Mutex`, whose guard is `Send` across an await. The std guard
@@ -31,6 +32,10 @@ tracing            = { version = "0.1", default-features = false, features = ["s
 tokio             = { version = "1", default-features = false, features = ["sync"] }
 uuid              = { workspace = true }
 
+[features]
+default = []
+sqlite-rusqlite = ["dep:rusqlite", "rusqlite/bundled"]
+
 [dev-dependencies]
 tokio             = { workspace = true }
 tempfile          = { workspace = true }
@@ -38,7 +43,18 @@ trybuild          = "1"
 futures-util      = "0.3"
 criterion         = { workspace = true }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
-rusqlite = { version = "0.32", features = ["bundled"] }
+
+[[example]]
+name = "perrow"
+required-features = ["sqlite-rusqlite"]
+
+[[example]]
+name = "blocking_floor"
+required-features = ["sqlite-rusqlite"]
+
+[[example]]
+name = "concurrency"
+required-features = ["sqlite-rusqlite"]
 
 [[bench]]
 name    = "query_construction"
