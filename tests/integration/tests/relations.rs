@@ -6,7 +6,7 @@ use ruprizzle::{
 };
 use ruprizzle_testkit::both_dbs;
 
-#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct User {
     id: i64,
     name: String,
@@ -14,15 +14,16 @@ struct User {
     posts: Related<Vec<Post>>,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(User);
+
 impl Model for User {
     const TABLE: &'static str = "users";
 }
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             name: row.take::<String>(1)?,
@@ -31,7 +32,7 @@ impl ruprizzle::rusqlite::FromRusqliteRow for User {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct Post {
     id: i64,
     title: String,
@@ -43,15 +44,16 @@ struct Post {
     comments: Related<Vec<Comment>>,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Post);
+
 impl Model for Post {
     const TABLE: &'static str = "posts";
 }
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Post {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             title: row.take::<String>(1)?,
@@ -63,7 +65,7 @@ impl ruprizzle::rusqlite::FromRusqliteRow for Post {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 #[allow(dead_code)]
 struct Comment {
     id: i64,
@@ -71,15 +73,16 @@ struct Comment {
     post_id: i64,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Comment);
+
 impl Model for Comment {
     const TABLE: &'static str = "comments";
 }
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Comment {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             body: row.take::<String>(1)?,

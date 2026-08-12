@@ -40,6 +40,8 @@ pub async fn fresh_pool() -> (ruprizzle::Pool, TempDir) {
         ""
     };
     let url = format!("sqlite:///{}?mode=rwc{}", file, driver);
-    let pool = ruprizzle::connect(&url).await.expect("connect to local sqlite");
+    let pool = ruprizzle::connect(&url)
+        .await
+        .expect("connect to local sqlite");
     (pool, dir)
 }

@@ -22,6 +22,8 @@ pub mod query;
 pub mod related;
 #[cfg(feature = "sqlite-rusqlite")]
 pub mod rusqlite;
+#[cfg(feature = "postgres-tokio-postgres")]
+pub mod tokio_postgres;
 pub mod tx;
 pub mod value;
 

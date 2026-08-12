@@ -10,13 +10,13 @@
 use std::borrow::Cow;
 use std::fmt;
 use std::str::FromStr as _;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+use ::rusqlite::{self, OpenFlags, types::Value as RusqliteValue};
 use ruprizzle_core::ir::Provider;
 use ruprizzle_dialect::dialect_for;
-use ::rusqlite::{self, OpenFlags, types::Value as RusqliteValue};
 
 use crate::BoxFuture;
 use crate::Error;
@@ -61,8 +61,8 @@ impl RusqlitePool {
             // `driver=rusqlite` is a ruprizzle routing parameter that sqlx does
             // not understand, so strip it before parsing the SQLite URL.
             let sqlx_url = strip_driver_param(&url);
-            let opts = sqlx::sqlite::SqliteConnectOptions::from_str(&sqlx_url)
-                .map_err(Error::Sqlx)?;
+            let opts =
+                sqlx::sqlite::SqliteConnectOptions::from_str(&sqlx_url).map_err(Error::Sqlx)?;
             let filename = opts.get_filename().to_string_lossy().into_owned();
             let capacity = config.max_connections.max(1) as usize;
             let mut conns = Vec::with_capacity(capacity);
@@ -76,21 +76,32 @@ impl RusqlitePool {
                         OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
                     )
                 }
-                .map_err(|e| Error::ConnectionFailure { reason: e.to_string() })?;
+                .map_err(|e| Error::ConnectionFailure {
+                    reason: e.to_string(),
+                })?;
 
                 // Use a short busy timeout so concurrent writers wait instead
                 // of immediately returning SQLITE_BUSY.
-                conn.busy_timeout(Duration::from_secs(5))
-                    .map_err(|e| Error::ConnectionFailure { reason: e.to_string() })?;
+                conn.busy_timeout(Duration::from_secs(5)).map_err(|e| {
+                    Error::ConnectionFailure {
+                        reason: e.to_string(),
+                    }
+                })?;
 
                 // SQLite leaves foreign keys off by default. Enabling them here
                 // matches the sqlx-based SQLite backend and keeps relation tests
                 // honest.
-                conn.execute("PRAGMA foreign_keys = ON", [])
-                    .map_err(|e| Error::ConnectionFailure { reason: e.to_string() })?;
+                conn.execute("PRAGMA foreign_keys = ON", []).map_err(|e| {
+                    Error::ConnectionFailure {
+                        reason: e.to_string(),
+                    }
+                })?;
 
-                apply_pragmas(&conn, filename == ":memory:")
-                    .map_err(|e| Error::ConnectionFailure { reason: e.to_string() })?;
+                apply_pragmas(&conn, filename == ":memory:").map_err(|e| {
+                    Error::ConnectionFailure {
+                        reason: e.to_string(),
+                    }
+                })?;
 
                 conns.push(Arc::new(std::sync::Mutex::new(conn)));
             }
@@ -101,7 +112,9 @@ impl RusqlitePool {
             })
         })
         .await
-        .map_err(|e| Error::ConnectionFailure { reason: e.to_string() })?;
+        .map_err(|e| Error::ConnectionFailure {
+            reason: e.to_string(),
+        })?;
 
         Ok(Self {
             inner: Arc::new(inner?),
@@ -131,9 +144,9 @@ impl RusqlitePool {
             };
 
             {
-                let guard = conn.lock().map_err(|_| {
-                    Error::Message("rusqlite connection mutex poisoned".into())
-                })?;
+                let guard = conn
+                    .lock()
+                    .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
                 guard
                     .execute("BEGIN", [])
                     .map_err(|e| Error::Message(e.to_string()))?;
@@ -207,16 +220,13 @@ impl RusqliteTransaction {
         let column_count = stmt.column_count();
 
         let rows = stmt
-            .query_map(
-                rusqlite::params_from_iter(binds),
-                |row| {
-                    let mut values = Vec::with_capacity(column_count);
-                    for i in 0..column_count {
-                        values.push(row.get::<_, RusqliteValue>(i)?);
-                    }
-                    Ok(Row(values))
-                },
-            )
+            .query_map(rusqlite::params_from_iter(binds), |row| {
+                let mut values = Vec::with_capacity(column_count);
+                for i in 0..column_count {
+                    values.push(row.get::<_, RusqliteValue>(i)?);
+                }
+                Ok(Row(values))
+            })
             .map_err(|e| Error::Message(e.to_string()))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| Error::Message(e.to_string()))?;
@@ -271,11 +281,7 @@ impl RusqliteTransaction {
 
 impl fmt::Debug for RusqlitePool {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let len = self
-            .inner
-            .conns
-            .try_lock()
-            .map_or(0, |conns| conns.len());
+        let len = self.inner.conns.try_lock().map_or(0, |conns| conns.len());
         f.debug_struct("RusqlitePool")
             .field("connections", &len)
             .finish_non_exhaustive()
@@ -284,11 +290,7 @@ impl fmt::Debug for RusqlitePool {
 
 impl fmt::Debug for Inner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let len = self
-            .conns
-            .try_lock()
-            .ok()
-            .map_or(0, |conns| conns.len());
+        let len = self.conns.try_lock().ok().map_or(0, |conns| conns.len());
         f.debug_struct("Inner")
             .field("connections", &len)
             .finish_non_exhaustive()
@@ -319,9 +321,9 @@ impl Executor for RusqlitePool {
     }
 
     fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
-        Box::pin(crate::executor::DeferredRowStream::new(Box::pin(async move {
-            self.fetch_all_raw(sql, binds).await
-        })))
+        Box::pin(crate::executor::DeferredRowStream::new(Box::pin(
+            async move { self.fetch_all_raw(sql, binds).await },
+        )))
     }
 }
 
@@ -345,16 +347,13 @@ fn fetch_all(
     let column_count = stmt.column_count();
 
     let rows = stmt
-        .query_map(
-            rusqlite::params_from_iter(&binds),
-            |row| {
-                let mut values = Vec::with_capacity(column_count);
-                for i in 0..column_count {
-                    values.push(row.get::<_, RusqliteValue>(i)?);
-                }
-                Ok(Row(values))
-            },
-        )
+        .query_map(rusqlite::params_from_iter(&binds), |row| {
+            let mut values = Vec::with_capacity(column_count);
+            for i in 0..column_count {
+                values.push(row.get::<_, RusqliteValue>(i)?);
+            }
+            Ok(Row(values))
+        })
         .map_err(|e| Error::Message(e.to_string()))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| Error::Message(e.to_string()))?;
@@ -472,9 +471,9 @@ impl FromValue for i64 {
 
 impl FromValue for i32 {
     fn from_value(value: RusqliteValue) -> Result<Self, Error> {
-        i64::from_value(value)?.try_into().map_err(|e| {
-            Error::Message(format!("cannot decode i32 from integer: {e}"))
-        })
+        i64::from_value(value)?
+            .try_into()
+            .map_err(|e| Error::Message(format!("cannot decode i32 from integer: {e}")))
     }
 }
 
@@ -567,7 +566,9 @@ impl FromValue for Vec<u8> {
     fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         match value {
             RusqliteValue::Blob(b) => Ok(b),
-            _ => Err(Error::Message(format!("cannot decode Vec<u8> from {value:?}"))),
+            _ => Err(Error::Message(format!(
+                "cannot decode Vec<u8> from {value:?}"
+            ))),
         }
     }
 }
@@ -603,8 +604,6 @@ tuple_from_value! { A 0, B 1, C 2, D 3, E 4 }
 tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5 }
 tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5, G 6 }
 tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7 }
-
-
 
 /// Apply performance and correctness PRAGMAs to a fresh `rusqlite` connection.
 ///
@@ -665,7 +664,10 @@ fn is_ddl(sql: &str) -> bool {
         .next()
         .unwrap_or("")
         .to_ascii_uppercase();
-    matches!(first.as_str(), "ALTER" | "CREATE" | "DROP" | "REINDEX" | "VACUUM")
+    matches!(
+        first.as_str(),
+        "ALTER" | "CREATE" | "DROP" | "REINDEX" | "VACUUM"
+    )
 }
 
 /// Strips the `driver=rusqlite` routing parameter from a SQLite URL so the

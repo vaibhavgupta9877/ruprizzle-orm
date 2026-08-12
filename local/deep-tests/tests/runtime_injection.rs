@@ -7,11 +7,14 @@
 use ruprizzle::{Column, Executor, InsertQuery, Model, SelectQuery, Value};
 use ruprizzle_deep_tests::fresh_pool;
 
-#[derive(Debug, Clone, sqlx::FromRow, PartialEq)]
+#[derive(Debug, Clone, Default, sqlx::FromRow, PartialEq)]
 struct Note {
     id: i64,
     body: String,
 }
+
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Note);
 
 impl Model for Note {
     const TABLE: &'static str = "notes";
@@ -19,9 +22,7 @@ impl Model for Note {
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Note {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             body: row.take::<String>(1)?,
@@ -144,8 +145,14 @@ async fn contains_pattern_is_bound_not_interpolated() {
         .fetch_all()
         .await
         .unwrap();
-    assert!(rows.iter().any(|r| r.id == 3), "pattern with underscore bound as value");
-    assert!(!rows.iter().any(|r| r.id == 1), "did not match plain text row");
+    assert!(
+        rows.iter().any(|r| r.id == 3),
+        "pattern with underscore bound as value"
+    );
+    assert!(
+        !rows.iter().any(|r| r.id == 1),
+        "did not match plain text row"
+    );
 }
 
 #[tokio::test]

@@ -294,10 +294,7 @@ impl Migrator {
                     continue;
                 }
 
-                if let Err(e) = tx
-                    .execute_raw(Cow::Owned(sql.to_owned()), Vec::new())
-                    .await
-                {
+                if let Err(e) = tx.execute_raw(Cow::Owned(sql.to_owned()), Vec::new()).await {
                     return Err(Error::StatementFailed {
                         id: m.id,
                         line: idx + 1,
@@ -372,7 +369,8 @@ impl Migrator {
             for stmt in statements {
                 let sql = stmt.trim();
                 if !sql.is_empty() && !sql.starts_with("-- ") {
-                    pool.execute_raw(Cow::Owned(sql.to_owned()), Vec::new()).await?;
+                    pool.execute_raw(Cow::Owned(sql.to_owned()), Vec::new())
+                        .await?;
                 }
             }
 
@@ -380,11 +378,8 @@ impl Migrator {
                 "UPDATE _ruprizzle_migrations SET rolled_back_at = CURRENT_TIMESTAMP WHERE id = {}",
                 dialect.placeholder(0)
             );
-            pool.execute_raw(
-                Cow::Owned(update_sql),
-                vec![Value::Str(id.as_str().into())],
-            )
-            .await?;
+            pool.execute_raw(Cow::Owned(update_sql), vec![Value::Str(id.as_str().into())])
+                .await?;
 
             applied.push(id);
         }
@@ -444,20 +439,14 @@ impl Migrator {
 
         if pool.provider() == Provider::Sqlite {
             let tx = Tx::begin(pool).await?;
-            tx.execute_raw(
-                Cow::Owned("PRAGMA foreign_keys = OFF".into()),
-                Vec::new(),
-            )
-            .await?;
+            tx.execute_raw(Cow::Owned("PRAGMA foreign_keys = OFF".into()), Vec::new())
+                .await?;
             for table in &tables {
                 let sql = format!("DROP TABLE {};", dialect.quote_ident(table));
                 tx.execute_raw(Cow::Owned(sql), Vec::new()).await?;
             }
-            tx.execute_raw(
-                Cow::Owned("PRAGMA foreign_keys = ON".into()),
-                Vec::new(),
-            )
-            .await?;
+            tx.execute_raw(Cow::Owned("PRAGMA foreign_keys = ON".into()), Vec::new())
+                .await?;
             tx.commit().await?;
         } else {
             let tx = Tx::begin(pool).await?;
@@ -517,9 +506,7 @@ async fn user_tables(pool: &Pool) -> Result<Vec<String>, Error> {
             .to_owned()
     };
 
-    let batch = pool
-        .fetch_all_raw(Cow::Owned(sql), Vec::new())
-        .await?;
+    let batch = pool.fetch_all_raw(Cow::Owned(sql), Vec::new()).await?;
     decode_string_rows(batch)
 }
 
@@ -538,10 +525,7 @@ fn decode_string_rows(batch: RowBatch) -> Result<Vec<String>, Error> {
             .map(|r| Ok(r.try_get::<String, _>(0)?))
             .collect(),
         #[cfg(feature = "sqlite-rusqlite")]
-        RowBatch::Rusqlite(rows) => rows
-            .iter()
-            .map(|r| Ok(r.get::<String>(0)?))
-            .collect(),
+        RowBatch::Rusqlite(rows) => rows.iter().map(|r| Ok(r.get::<String>(0)?)).collect(),
         _ => Err(Error::Message("unsupported row batch".into())),
     }
 }

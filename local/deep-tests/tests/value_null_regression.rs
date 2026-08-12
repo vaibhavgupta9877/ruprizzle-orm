@@ -12,11 +12,7 @@ async fn value_null_in_middle_does_not_shift() {
     let batch = pool
         .fetch_all_raw(
             Cow::Borrowed("SELECT ? AS a, ? AS b, ? AS c"),
-            vec![
-                Value::Str("hello".into()),
-                Value::Null,
-                Value::I64(42),
-            ],
+            vec![Value::Str("hello".into()), Value::Null, Value::I64(42)],
         )
         .await
         .unwrap();
@@ -35,11 +31,7 @@ async fn option_none_in_middle_does_not_shift() {
     let batch = pool
         .fetch_all_raw(
             Cow::Borrowed("SELECT ? AS a, ? AS b, ? AS c"),
-            vec![
-                Value::Str("hello".into()),
-                Value::Null,
-                Value::I64(42),
-            ],
+            vec![Value::Str("hello".into()), Value::Null, Value::I64(42)],
         )
         .await
         .unwrap();

@@ -1,17 +1,18 @@
 //! The `Model` trait that generated entities implement.
 
-/// A type that can be decoded from `AnyRow`, `PgRow`, `SqliteRow`, and
-/// `rusqlite` rows.
+/// A type that can be decoded from `AnyRow`, `PgRow`, `SqliteRow`,
+/// `rusqlite` rows, and (when enabled) `tokio-postgres` rows.
 ///
 /// This is an object-safe-ish bound used by `Executor` so it can return a
 /// backend-tagged `RowBatch` and still have the caller decode it. Generated
-/// models provide all three `sqlx::FromRow` implementations and (when the
-/// `sqlite-rusqlite` feature is enabled) a `crate::rusqlite::FromRusqliteRow`
-/// implementation. Hand-written tests can either derive `sqlx::FromRow` (which
-/// is generic over `R: Row` for simple scalars) or implement the three impls
-/// explicitly; when `sqlite-rusqlite` is on they must also implement
-/// `rusqlite::FromRusqliteRow`.
-#[cfg(not(feature = "sqlite-rusqlite"))]
+/// models provide all three `sqlx::FromRow` implementations and optional
+/// `FromRusqliteRow` / `FromTokioPostgresRow` implementations. Hand-written
+/// tests can either derive `sqlx::FromRow` (which is generic over `R: Row` for
+/// simple scalars) or implement the concrete backend traits.
+#[cfg(all(
+    not(feature = "sqlite-rusqlite"),
+    not(feature = "postgres-tokio-postgres")
+))]
 pub trait RowDecode:
     Sized
     + Send
@@ -23,9 +24,9 @@ pub trait RowDecode:
 {
 }
 
-/// A type that can be decoded from `AnyRow`, `PgRow`, `SqliteRow`, and
-/// `rusqlite` rows.
-#[cfg(feature = "sqlite-rusqlite")]
+/// Row decode bound when the `sqlite-rusqlite` backend is enabled but not the
+/// `tokio-postgres` backend.
+#[cfg(all(feature = "sqlite-rusqlite", not(feature = "postgres-tokio-postgres")))]
 pub trait RowDecode:
     Sized
     + Send
@@ -38,7 +39,41 @@ pub trait RowDecode:
 {
 }
 
-#[cfg(not(feature = "sqlite-rusqlite"))]
+/// Row decode bound when the `tokio-postgres` backend is enabled but not the
+/// `sqlite-rusqlite` backend.
+#[cfg(all(not(feature = "sqlite-rusqlite"), feature = "postgres-tokio-postgres"))]
+pub trait RowDecode:
+    Sized
+    + Send
+    + Sync
+    + 'static
+    + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>
+    + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
+    + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
+    + crate::tokio_postgres::FromTokioPostgresRow
+{
+}
+
+/// Row decode bound when both `sqlite-rusqlite` and `tokio-postgres` native
+/// backends are enabled.
+#[cfg(all(feature = "sqlite-rusqlite", feature = "postgres-tokio-postgres"))]
+pub trait RowDecode:
+    Sized
+    + Send
+    + Sync
+    + 'static
+    + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>
+    + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
+    + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
+    + crate::rusqlite::FromRusqliteRow
+    + crate::tokio_postgres::FromTokioPostgresRow
+{
+}
+
+#[cfg(all(
+    not(feature = "sqlite-rusqlite"),
+    not(feature = "postgres-tokio-postgres")
+))]
 impl<T> RowDecode for T where
     T: Sized
         + Send
@@ -50,7 +85,7 @@ impl<T> RowDecode for T where
 {
 }
 
-#[cfg(feature = "sqlite-rusqlite")]
+#[cfg(all(feature = "sqlite-rusqlite", not(feature = "postgres-tokio-postgres")))]
 impl<T> RowDecode for T where
     T: Sized
         + Send
@@ -60,6 +95,33 @@ impl<T> RowDecode for T where
         + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
         + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
         + crate::rusqlite::FromRusqliteRow
+{
+}
+
+#[cfg(all(not(feature = "sqlite-rusqlite"), feature = "postgres-tokio-postgres"))]
+impl<T> RowDecode for T where
+    T: Sized
+        + Send
+        + Sync
+        + 'static
+        + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>
+        + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
+        + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
+        + crate::tokio_postgres::FromTokioPostgresRow
+{
+}
+
+#[cfg(all(feature = "sqlite-rusqlite", feature = "postgres-tokio-postgres"))]
+impl<T> RowDecode for T where
+    T: Sized
+        + Send
+        + Sync
+        + 'static
+        + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>
+        + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
+        + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
+        + crate::rusqlite::FromRusqliteRow
+        + crate::tokio_postgres::FromTokioPostgresRow
 {
 }
 

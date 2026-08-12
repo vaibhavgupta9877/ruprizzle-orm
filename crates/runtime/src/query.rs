@@ -215,8 +215,7 @@ where
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn count(self) -> Result<i64, Error> {
         let dialect = self.exec.dialect();
-        let compiled =
-            crate::compile::count::<M>(dialect.as_ref(), M::TABLE, &self.filter.node);
+        let compiled = crate::compile::count::<M>(dialect.as_ref(), M::TABLE, &self.filter.node);
 
         let batch = self
             .exec
@@ -240,8 +239,7 @@ where
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exists(self) -> Result<bool, Error> {
         let dialect = self.exec.dialect();
-        let compiled =
-            crate::compile::exists::<M>(dialect.as_ref(), M::TABLE, &self.filter.node);
+        let compiled = crate::compile::exists::<M>(dialect.as_ref(), M::TABLE, &self.filter.node);
 
         let batch = self
             .exec
@@ -269,19 +267,19 @@ where
     ) -> std::task::Poll<Option<Self::Item>> {
         // Both fields are `Unpin`, so no `unsafe` projection is needed.
         let this = self.get_mut();
-        std::pin::Pin::new(&mut this.inner)
-            .poll_next(cx)
-            .map(|o| {
-                o.map(|r| {
-                    r.and_then(|raw| match raw {
-                        crate::executor::RawRow::Any(r) => Out::from_row(&r).map_err(Error::Sqlx),
-                        crate::executor::RawRow::Postgres(r) => Out::from_row(&r).map_err(Error::Sqlx),
-                        crate::executor::RawRow::Sqlite(r) => Out::from_row(&r).map_err(Error::Sqlx),
-                        #[cfg(feature = "sqlite-rusqlite")]
-                        crate::executor::RawRow::Rusqlite(mut r) => Out::from_rusqlite_row(&mut r),
-                    })
+        std::pin::Pin::new(&mut this.inner).poll_next(cx).map(|o| {
+            o.map(|r| {
+                r.and_then(|raw| match raw {
+                    crate::executor::RawRow::Any(r) => Out::from_row(&r).map_err(Error::Sqlx),
+                    crate::executor::RawRow::Postgres(r) => Out::from_row(&r).map_err(Error::Sqlx),
+                    crate::executor::RawRow::Sqlite(r) => Out::from_row(&r).map_err(Error::Sqlx),
+                    #[cfg(feature = "sqlite-rusqlite")]
+                    crate::executor::RawRow::Rusqlite(mut r) => Out::from_rusqlite_row(&mut r),
+                    #[cfg(feature = "postgres-tokio-postgres")]
+                    crate::executor::RawRow::PostgresNative(r) => Out::from_tokio_postgres_row(&r),
                 })
             })
+        })
     }
 }
 
@@ -583,9 +581,14 @@ impl<'db, M: Model> InsertQuery<'db, M> {
                 }
             }
 
-            nested.setter.set(&mut parent, child_rows.unwrap_or(crate::executor::RowBatch::Any(Vec::new())));
+            nested.setter.set(
+                &mut parent,
+                child_rows.unwrap_or(crate::executor::RowBatch::Any(Vec::new())),
+            );
         } else {
-            nested.setter.set(&mut parent, crate::executor::RowBatch::Any(Vec::new()));
+            nested
+                .setter
+                .set(&mut parent, crate::executor::RowBatch::Any(Vec::new()));
         }
 
         tx.commit().await?;
@@ -683,7 +686,10 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
                 M::COLUMNS
             };
             let compiled = insert_many::<M>(dialect.as_ref(), M::TABLE, chunk, returning);
-            let batch = self.pool.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            let batch = self
+                .pool
+                .fetch_all_raw(compiled.sql, compiled.binds)
+                .await?;
             let mut rows = crate::executor::decode_rows::<M>(batch)?;
             out.append(&mut rows);
         }

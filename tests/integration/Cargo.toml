@@ -31,3 +31,4 @@ sqlite-rusqlite = [
     "ruprizzle-migrate/sqlite-rusqlite",
     "ruprizzle-testkit/sqlite-rusqlite",
 ]
+postgres-tokio-postgres = ["ruprizzle/postgres-tokio-postgres"]

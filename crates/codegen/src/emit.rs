@@ -524,6 +524,22 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         })
         .collect();
 
+    let mut next_tokio_postgres_index = 0;
+    let tokio_postgres_from_row_fields: Vec<_> = model
+        .fields
+        .values()
+        .map(|f| {
+            let idx = if f.has_column() {
+                let i = next_tokio_postgres_index;
+                next_tokio_postgres_index += 1;
+                Some(i)
+            } else {
+                None
+            };
+            emit_from_tokio_postgres_row_field(schema, model.name.as_str(), f, idx)
+        })
+        .collect();
+
     let header = header();
     let tokens = quote! {
         #header
@@ -572,6 +588,15 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
             fn from_rusqlite_row(row: &mut ::ruprizzle::rusqlite::Row) -> Result<Self, ::ruprizzle::Error> {
                 Ok(Self {
                     #( #rusqlite_from_row_fields )*
+                })
+            }
+        }
+
+        #[cfg(feature = "postgres-tokio-postgres")]
+        impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for #model_name {
+            fn from_tokio_postgres_row(row: &::ruprizzle::tokio_postgres::Row) -> Result<Self, ::ruprizzle::Error> {
+                Ok(Self {
+                    #( #tokio_postgres_from_row_fields )*
                 })
             }
         }
@@ -697,11 +722,25 @@ fn emit_from_row_field(
             | ruprizzle_core::ir::ScalarType::Int
             | ruprizzle_core::ir::ScalarType::BigInt
             | ruprizzle_core::ir::ScalarType::Float => {
-                let helper = format_ident!("{}", if optional { "direct_opt_idx" } else { "direct_idx" });
+                let helper = format_ident!(
+                    "{}",
+                    if optional {
+                        "direct_opt_idx"
+                    } else {
+                        "direct_idx"
+                    }
+                );
                 quote! { ::ruprizzle::decode::#helper(row, #idx)? }
             }
             ruprizzle_core::ir::ScalarType::Boolean => {
-                let helper = format_ident!("{}", if optional { "boolean_opt_idx" } else { "boolean_idx" });
+                let helper = format_ident!(
+                    "{}",
+                    if optional {
+                        "boolean_opt_idx"
+                    } else {
+                        "boolean_idx"
+                    }
+                );
                 quote! { ::ruprizzle::decode::#helper(row, #idx)? }
             }
             ruprizzle_core::ir::ScalarType::Decimal
@@ -709,15 +748,24 @@ fn emit_from_row_field(
             | ruprizzle_core::ir::ScalarType::Date
             | ruprizzle_core::ir::ScalarType::Time
             | ruprizzle_core::ir::ScalarType::Uuid => {
-                let helper = format_ident!("{}", if optional { "text_opt_idx" } else { "text_idx" });
+                let helper =
+                    format_ident!("{}", if optional { "text_opt_idx" } else { "text_idx" });
                 quote! { ::ruprizzle::decode::#helper(row, #idx)? }
             }
             ruprizzle_core::ir::ScalarType::Json => {
-                let helper = format_ident!("{}", if optional { "json_opt_idx" } else { "json_idx" });
+                let helper =
+                    format_ident!("{}", if optional { "json_opt_idx" } else { "json_idx" });
                 quote! { ::ruprizzle::decode::#helper(row, #idx)? }
             }
             ruprizzle_core::ir::ScalarType::Bytes => {
-                let helper = format_ident!("{}", if optional { "bytes_opt_idx" } else { "bytes_idx" });
+                let helper = format_ident!(
+                    "{}",
+                    if optional {
+                        "bytes_opt_idx"
+                    } else {
+                        "bytes_idx"
+                    }
+                );
                 quote! { ::ruprizzle::decode::#helper(row, #idx)? }
             }
         },
@@ -726,7 +774,14 @@ fn emit_from_row_field(
             quote! { ::ruprizzle::decode::#helper(row, #idx)? }
         }
         _ => {
-            let helper = format_ident!("{}", if optional { "direct_opt_idx" } else { "direct_idx" });
+            let helper = format_ident!(
+                "{}",
+                if optional {
+                    "direct_opt_idx"
+                } else {
+                    "direct_idx"
+                }
+            );
             quote! { ::ruprizzle::decode::#helper(row, #idx)? }
         }
     };
@@ -750,6 +805,49 @@ fn emit_from_rusqlite_row_field(
     let ty = rust_type_tokens(schema, owner, field, field.optional, false);
 
     quote! { #name: row.take::<#ty>(#idx)?, }
+}
+
+fn emit_from_tokio_postgres_row_field(
+    schema: &Schema,
+    owner: &str,
+    field: &Field,
+    idx: Option<usize>,
+) -> TokenStream {
+    let name = safe_field_ident(field.name.as_str());
+
+    if !field.has_column() {
+        return quote! { #name: ::ruprizzle::Related::default(), };
+    }
+
+    let idx = syn::Index::from(idx.unwrap_or(0));
+    let ty = rust_type_tokens(schema, owner, field, false, false);
+
+    match &field.kind {
+        ruprizzle_core::ir::FieldKind::Enum(_) => {
+            if field.optional {
+                quote! {
+                    #name: row.try_get::<usize, Option<String>>(#idx)
+                        .map_err(::ruprizzle::Error::TokioPostgres)?
+                        .map(|s| s.parse::<#ty>().map_err(|e| ::ruprizzle::Error::Message(format!("cannot parse enum: {e}"))))
+                        .transpose()?,
+                }
+            } else {
+                quote! {
+                    #name: row.try_get::<usize, String>(#idx)
+                        .map_err(::ruprizzle::Error::TokioPostgres)?
+                        .parse::<#ty>()
+                        .map_err(|e| ::ruprizzle::Error::Message(format!("cannot parse enum: {e}")))?,
+                }
+            }
+        }
+        _ => {
+            if field.optional {
+                quote! { #name: row.try_get::<usize, Option<#ty>>(#idx).map_err(::ruprizzle::Error::TokioPostgres)?, }
+            } else {
+                quote! { #name: row.try_get::<usize, #ty>(#idx).map_err(::ruprizzle::Error::TokioPostgres)?, }
+            }
+        }
+    }
 }
 
 fn emit_insert_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream {

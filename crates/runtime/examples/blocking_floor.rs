@@ -120,18 +120,15 @@ impl ThreadConn {
             let mut cache: std::collections::HashMap<String, rusqlite::Statement<'_>> =
                 std::collections::HashMap::new();
             while let Ok((sql, reply)) = rx.recv() {
-                let stmt = cache
-                    .entry(sql.clone())
-                    .or_insert_with(|| unsafe {
-                        // The connection outlives every statement: it is owned
-                        // by this thread and dropped only when the loop ends,
-                        // after the cache. The transmute launders the borrow so
-                        // the cache can be held alongside it.
-                        std::mem::transmute::<
-                            rusqlite::Statement<'_>,
-                            rusqlite::Statement<'static>,
-                        >(conn.prepare(&sql).unwrap())
-                    });
+                let stmt = cache.entry(sql.clone()).or_insert_with(|| unsafe {
+                    // The connection outlives every statement: it is owned
+                    // by this thread and dropped only when the loop ends,
+                    // after the cache. The transmute launders the borrow so
+                    // the cache can be held alongside it.
+                    std::mem::transmute::<rusqlite::Statement<'_>, rusqlite::Statement<'static>>(
+                        conn.prepare(&sql).unwrap(),
+                    )
+                });
                 let _ = reply.send(map_users(stmt));
             }
         });

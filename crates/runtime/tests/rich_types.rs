@@ -6,10 +6,10 @@
 //! After the native-backend work (P2-2) the Postgres branch should be changed
 //! from `assert!(insert.is_err())` to the same round-trip assertions as SQLite.
 
-use ruprizzle::{Column, Executor, InsertQuery, Model, Pool, SelectQuery, connect, decode};
+use ruprizzle::sqlx::Row;
 use ruprizzle::types::chrono::{DateTime, Utc};
 use ruprizzle::types::{Decimal, Uuid};
-use ruprizzle::sqlx::Row;
+use ruprizzle::{Column, Executor, InsertQuery, Model, Pool, SelectQuery, connect, decode};
 use serde_json::Value as JsonValue;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -20,11 +20,23 @@ struct Event {
     meta: JsonValue,
 }
 
+impl Default for Event {
+    fn default() -> Self {
+        Self {
+            id: Uuid::default(),
+            created_at: DateTime::from_timestamp(0, 0).unwrap(),
+            price: Decimal::ZERO,
+            meta: JsonValue::Null,
+        }
+    }
+}
+
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Event);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Event {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<Uuid>(0)?,
             created_at: row.take::<DateTime<Utc>>(1)?,
@@ -66,7 +78,9 @@ impl<'r> ruprizzle::sqlx::FromRow<'r, ruprizzle::sqlx::postgres::PgRow> for Even
 }
 
 impl<'r> ruprizzle::sqlx::FromRow<'r, ruprizzle::sqlx::sqlite::SqliteRow> for Event {
-    fn from_row(row: &'r ruprizzle::sqlx::sqlite::SqliteRow) -> Result<Self, ruprizzle::sqlx::Error> {
+    fn from_row(
+        row: &'r ruprizzle::sqlx::sqlite::SqliteRow,
+    ) -> Result<Self, ruprizzle::sqlx::Error> {
         Ok(Self {
             id: decode::rich(row, "id")?,
             created_at: decode::rich(row, "created_at")?,

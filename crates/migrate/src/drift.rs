@@ -93,9 +93,7 @@ async fn sqlite_tables(pool: &Pool) -> Result<TableMap, Error> {
     let mut out = TableMap::new();
     for name in names {
         let sql = format!("PRAGMA table_info({name})");
-        let rows = pool
-            .fetch_all_raw(Cow::Owned(sql), Vec::new())
-            .await?;
+        let rows = pool.fetch_all_raw(Cow::Owned(sql), Vec::new()).await?;
         let mut cols = ColumnMap::new();
         for (col, notnull) in decode_sqlite_columns(rows)? {
             // INTEGER PRIMARY KEY in SQLite may report notnull=0 even though the
@@ -126,10 +124,7 @@ async fn postgres_tables(pool: &Pool) -> Result<TableMap, Error> {
             dialect.placeholder(0)
         );
         let rows = pool
-            .fetch_all_raw(
-                Cow::Owned(sql),
-                vec![Value::Str(name.as_str().into())],
-            )
+            .fetch_all_raw(Cow::Owned(sql), vec![Value::Str(name.as_str().into())])
             .await?;
         let mut cols = ColumnMap::new();
         for (col, nullable) in decode_pair(rows)? {
@@ -156,10 +151,7 @@ fn decode_string_rows(batch: RowBatch) -> Result<Vec<String>, Error> {
             .map(|r| Ok(r.try_get::<String, _>(0)?))
             .collect(),
         #[cfg(feature = "sqlite-rusqlite")]
-        RowBatch::Rusqlite(rows) => rows
-            .iter()
-            .map(|r| Ok(r.get::<String>(0)?))
-            .collect(),
+        RowBatch::Rusqlite(rows) => rows.iter().map(|r| Ok(r.get::<String>(0)?)).collect(),
         _ => Err(Error::Message("unsupported row batch".into())),
     }
 }

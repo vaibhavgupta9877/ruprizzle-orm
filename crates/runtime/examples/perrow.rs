@@ -47,18 +47,19 @@ fn db_path() -> String {
     abs.strip_prefix("//?/").unwrap_or(&abs).to_owned()
 }
 
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, Default, FromRow)]
 struct User {
     id: i64,
     email: String,
     age: i64,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(User);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             email: row.take::<String>(1)?,
@@ -72,18 +73,19 @@ impl Model for User {
     const COLUMNS: &'static [&'static str] = &["id", "email", "age"];
 }
 
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, Default, FromRow)]
 struct Post {
     id: i64,
     author_id: i64,
     title: String,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Post);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Post {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             author_id: row.take::<i64>(1)?,
@@ -198,10 +200,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts: sqlx::sqlite::SqliteConnectOptions = db_path().parse()?;
 
     let native = sqlx::SqlitePool::connect_with(opts.clone().read_only(true)).await?;
-    let buffered = sqlx::SqlitePool::connect_with(
-        opts.clone().read_only(true).row_buffer_size(16384),
-    )
-    .await?;
+    let buffered =
+        sqlx::SqlitePool::connect_with(opts.clone().read_only(true).row_buffer_size(16384)).await?;
     let any = ruprizzle::connect(&url).await?;
 
     // ---------------- users: 1000 rows, 3 columns -------------------
@@ -252,7 +252,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     rows.push(Row {
         label: "5 ruprizzle SelectQuery",
         samples: sample(300, || async {
-            SelectQuery::<User>::new(&any).fetch_all().await.unwrap().len()
+            SelectQuery::<User>::new(&any)
+                .fetch_all()
+                .await
+                .unwrap()
+                .len()
         })
         .await,
         rows: 1000.0,
@@ -341,7 +345,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     rows.push(Row {
         label: "5 ruprizzle SelectQuery",
         samples: sample(40, || async {
-            SelectQuery::<Post>::new(&any).fetch_all().await.unwrap().len()
+            SelectQuery::<Post>::new(&any)
+                .fetch_all()
+                .await
+                .unwrap()
+                .len()
         })
         .await,
         rows: 10000.0,

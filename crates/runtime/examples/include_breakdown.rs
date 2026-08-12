@@ -28,7 +28,7 @@ fn db_path() -> String {
     abs.strip_prefix("//?/").unwrap_or(&abs).to_owned()
 }
 
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, Default, FromRow)]
 struct User {
     id: i64,
     email: String,
@@ -37,11 +37,12 @@ struct User {
     posts: Related<Vec<Post>>,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(User);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             email: row.take::<String>(1)?,
@@ -55,18 +56,19 @@ impl Model for User {
     const TABLE: &'static str = "users";
 }
 
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, Default, FromRow)]
 struct Post {
     id: i64,
     author_id: i64,
     title: String,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Post);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Post {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             author_id: row.take::<i64>(1)?,
@@ -82,7 +84,12 @@ impl Model for Post {
 const POST_AUTHOR_ID: Column<Post, i64> = Column::new("posts", "author_id");
 
 fn posts_include() -> IncludeList<'static, User, Post, i64, ()> {
-    IncludeList::new(|u| u.id, |u, p| u.posts = p, POST_AUTHOR_ID, |p| p.author_id)
+    IncludeList::new(
+        |u| u.id,
+        |u, p| u.posts = p,
+        POST_AUTHOR_ID,
+        |p| p.author_id,
+    )
 }
 
 async fn bench<F, Fut>(label: &str, iters: u32, mut f: F) -> f64
@@ -109,14 +116,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let url = format!("sqlite:///{}?mode=ro", db_path());
     let any = ruprizzle::connect(&url).await?;
     let native = sqlx::SqlitePool::connect_with(
-        db_path().parse::<sqlx::sqlite::SqliteConnectOptions>()?.read_only(true),
+        db_path()
+            .parse::<sqlx::sqlite::SqliteConnectOptions>()?
+            .read_only(true),
     )
     .await?;
 
     println!("\n--- floors ---");
     let t_native = bench("A native sqlx: 2 queries, no grouping", 30, || async {
-        let u: Vec<(i64, String, i64)> =
-            sqlx::query_as("SELECT id, email, age FROM users").fetch_all(&native).await.unwrap();
+        let u: Vec<(i64, String, i64)> = sqlx::query_as("SELECT id, email, age FROM users")
+            .fetch_all(&native)
+            .await
+            .unwrap();
         let p: Vec<(i64, i64, String)> = sqlx::query_as("SELECT id, author_id, title FROM posts")
             .fetch_all(&native)
             .await
@@ -140,10 +151,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await;
 
     let t_manual = bench("C B + hand-rolled HashMap group + attach", 30, || async {
-        let mut u: Vec<User> = sqlx::query_as::<sqlx::Any, User>("SELECT id, email, age FROM users")
-            .fetch_all(&any)
-            .await
-            .unwrap();
+        let mut u: Vec<User> =
+            sqlx::query_as::<sqlx::Any, User>("SELECT id, email, age FROM users")
+                .fetch_all(&any)
+                .await
+                .unwrap();
         let p: Vec<Post> =
             sqlx::query_as::<sqlx::Any, Post>("SELECT id, author_id, title FROM posts")
                 .fetch_all(&any)
@@ -171,8 +183,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await
             .unwrap();
         let loaded = users.iter().filter(|u| u.posts.is_loaded()).count();
-        let attached: usize = users.iter().map(|u| u.posts.try_get().map_or(0, Vec::len)).sum();
-        println!("  [sanity] users={} loaded={} attached_posts={}", users.len(), loaded, attached);
+        let attached: usize = users
+            .iter()
+            .map(|u| u.posts.try_get().map_or(0, Vec::len))
+            .sum();
+        println!(
+            "  [sanity] users={} loaded={} attached_posts={}",
+            users.len(),
+            loaded,
+            attached
+        );
     }
 
     let t_rz = bench("D ruprizzle .include(posts())", 30, || async {
@@ -181,19 +201,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .exec()
             .await
             .unwrap();
-        users.iter().map(|u| u.posts.try_get().map_or(0, Vec::len)).sum()
+        users
+            .iter()
+            .map(|u| u.posts.try_get().map_or(0, Vec::len))
+            .sum()
     })
     .await;
 
     println!("\n--- attribution ---");
     println!("  transport floor (A)                {t_native:>8.2} ms");
-    println!("  Any wrapper     (B-A)              {:>8.2} ms", t_any - t_native);
-    println!("  group + attach  (C-B)              {:>8.2} ms", t_manual - t_any);
-    println!("  ruprizzle extra (D-C)              {:>8.2} ms", t_rz - t_manual);
+    println!(
+        "  Any wrapper     (B-A)              {:>8.2} ms",
+        t_any - t_native
+    );
+    println!(
+        "  group + attach  (C-B)              {:>8.2} ms",
+        t_manual - t_any
+    );
+    println!(
+        "  ruprizzle extra (D-C)              {:>8.2} ms",
+        t_rz - t_manual
+    );
     println!("  ---");
     println!("  ruprizzle total (D)                {t_rz:>8.2} ms");
-    println!("  headroom above hand-written (D-C)  {:>8.2} ms  ({:.0}%)",
-        t_rz - t_manual, (t_rz / t_manual - 1.0) * 100.0);
+    println!(
+        "  headroom above hand-written (D-C)  {:>8.2} ms  ({:.0}%)",
+        t_rz - t_manual,
+        (t_rz / t_manual - 1.0) * 100.0
+    );
 
     // What does the IN-list / dedup path cost on its own?
     println!("\n--- the 1000-key IN list the loader builds ---");
@@ -205,19 +240,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let d: Vec<i64> = keys.iter().copied().filter(|k| seen.insert(*k)).collect();
         total += d.len();
     }
-    println!("  dedup 1000 keys                    {:>8.2} us  ({total})",
-        start.elapsed().as_secs_f64() * 1e6 / 1000.0);
+    println!(
+        "  dedup 1000 keys                    {:>8.2} us  ({total})",
+        start.elapsed().as_secs_f64() * 1e6 / 1000.0
+    );
 
     let sq = SelectQuery::<Post>::new(&any).filter(POST_AUTHOR_ID.in_set(keys.clone()));
     let start = Instant::now();
     for _ in 0..1000 {
         std::hint::black_box(sq.to_sql());
     }
-    println!("  compile IN(1000) to SQL            {:>8.2} us",
-        start.elapsed().as_secs_f64() * 1e6 / 1000.0);
+    println!(
+        "  compile IN(1000) to SQL            {:>8.2} us",
+        start.elapsed().as_secs_f64() * 1e6 / 1000.0
+    );
 
     let compiled = sq.to_sql();
-    println!("  -> sql len {} bytes, {} binds", compiled.sql.len(), compiled.binds.len());
+    println!(
+        "  -> sql len {} bytes, {} binds",
+        compiled.sql.len(),
+        compiled.binds.len()
+    );
 
     Ok(())
 }

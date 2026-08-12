@@ -24,18 +24,19 @@ fn db_path() -> String {
     abs.strip_prefix("//?/").unwrap_or(&abs).to_owned()
 }
 
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, Default, FromRow)]
 struct User {
     id: i64,
     email: String,
     age: i64,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(User);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             email: row.take::<String>(1)?,
@@ -89,9 +90,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::hint::black_box(u);
     }
     let with = us(start, iters);
-    println!("  fetch_optional() as-is        {without:>9.1} us  (fetches + decodes all 1000 rows)");
+    println!(
+        "  fetch_optional() as-is        {without:>9.1} us  (fetches + decodes all 1000 rows)"
+    );
     println!("  fetch_optional() with .limit(1){with:>9.1} us");
-    println!("  -> cost of the missing LIMIT   {:>8.1} us  ({:.0}x)", without - with, without / with);
+    println!(
+        "  -> cost of the missing LIMIT   {:>8.1} us  ({:.0}x)",
+        without - with,
+        without / with
+    );
 
     // ---- 2. count() keeps ORDER BY ----
     println!("\n--- 2. count() rewrites SQL by string surgery ---");
@@ -118,7 +125,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for _ in 0..iters {
         std::hint::black_box(ruprizzle::compile::dialect_for_pool(&any));
     }
-    println!("  Executor::dialect() -> Box<dyn DbDialect>  {:>7.3} us/call", us(start, iters));
+    println!(
+        "  Executor::dialect() -> Box<dyn DbDialect>  {:>7.3} us/call",
+        us(start, iters)
+    );
 
     let q = SelectQuery::<User>::new(&any).filter(USER_ID.eq(1i64));
     let start = Instant::now();
@@ -136,7 +146,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ---- 5. name vs ordinal decode, isolated ----
     println!("\n--- 5. decode by name vs by ordinal (1000 rows x 3 cols) ---");
-    let rows = sqlx::query("SELECT id, email, age FROM users").fetch_all(&any).await?;
+    let rows = sqlx::query("SELECT id, email, age FROM users")
+        .fetch_all(&any)
+        .await?;
     use sqlx::Row;
     let iters = 500;
     let start = Instant::now();
@@ -163,7 +175,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let by_ord = us(start, iters);
     println!("  by name    {by_name:>9.1} us");
     println!("  by ordinal {by_ord:>9.1} us");
-    println!("  -> {:.0}% of decode time is the name->ordinal hash lookup", (1.0 - by_ord / by_name) * 100.0);
+    println!(
+        "  -> {:.0}% of decode time is the name->ordinal hash lookup",
+        (1.0 - by_ord / by_name) * 100.0
+    );
 
     // ---- 6. the boolean decode helper's error-path fallback ----
     println!("\n--- 6. decode::boolean tries i64 first, then falls back ---");
@@ -187,7 +202,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sad = us(start, iters);
     println!("  1000x boolean() on an INTEGER column (hit)   {happy:>9.1} us");
     println!("  1000x boolean() on a TEXT column (miss+box)  {sad:>9.1} us");
-    println!("  -> discarded-error path costs {:.0}x more per column", sad / happy);
+    println!(
+        "  -> discarded-error path costs {:.0}x more per column",
+        sad / happy
+    );
 
     Ok(())
 }

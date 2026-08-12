@@ -94,11 +94,7 @@ pub fn select<M: Model>(
 /// Skips `ORDER BY`, `LIMIT` and `OFFSET` because an aggregate count over an
 /// unordered, unlimited relation is what callers of `SelectQuery::count` want.
 #[must_use]
-pub fn count<M: Model>(
-    dialect: &dyn DbDialect,
-    table: &str,
-    filter: &FilterNode,
-) -> CompiledSql {
+pub fn count<M: Model>(dialect: &dyn DbDialect, table: &str, filter: &FilterNode) -> CompiledSql {
     let mut c = Compiler::new(dialect);
 
     c.push_str("SELECT COUNT(*) FROM ");
@@ -114,11 +110,7 @@ pub fn count<M: Model>(
 
 /// Compile an `EXISTS`-style `SELECT 1 ... LIMIT 1` for `M`.
 #[must_use]
-pub fn exists<M: Model>(
-    dialect: &dyn DbDialect,
-    table: &str,
-    filter: &FilterNode,
-) -> CompiledSql {
+pub fn exists<M: Model>(dialect: &dyn DbDialect, table: &str, filter: &FilterNode) -> CompiledSql {
     let mut c = Compiler::new(dialect);
 
     c.push_str("SELECT 1 FROM ");
@@ -701,6 +693,15 @@ mod tests {
                     Ok(v)
                 }
             }
+            #[cfg(feature = "postgres-tokio-postgres")]
+            impl crate::tokio_postgres::FromTokioPostgresRow for $t {
+                fn from_tokio_postgres_row(
+                    _: &crate::tokio_postgres::Row,
+                ) -> Result<Self, crate::Error> {
+                    let v: $t = Default::default();
+                    Ok(v)
+                }
+            }
         };
     }
 
@@ -852,7 +853,6 @@ mod tests {
 
     #[test]
     fn relation_exists_filter() {
-
         let child = Filter::<Post>::new(FilterNode::Cmp {
             table: "posts",
             column: "published",

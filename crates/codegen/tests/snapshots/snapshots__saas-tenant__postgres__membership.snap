@@ -85,6 +85,32 @@ impl ::ruprizzle::rusqlite::FromRusqliteRow for Membership {
         })
     }
 }
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for Membership {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: row
+                .try_get::<usize, Uuid>(0)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            org_id: row
+                .try_get::<usize, Uuid>(1)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            organisation: ::ruprizzle::Related::default(),
+            account_id: row
+                .try_get::<usize, Uuid>(2)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            account: ::ruprizzle::Related::default(),
+            is_owner: row
+                .try_get::<usize, bool>(3)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            updated_at: row
+                .try_get::<usize, DateTime<Utc>>(4)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+        })
+    }
+}
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.
 #[derive(Debug, Clone, Serialize, Deserialize)]

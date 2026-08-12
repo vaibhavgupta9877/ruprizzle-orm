@@ -80,6 +80,35 @@ impl ::ruprizzle::rusqlite::FromRusqliteRow for Organisation {
         })
     }
 }
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for Organisation {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: row
+                .try_get::<usize, Uuid>(0)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            slug: row
+                .try_get::<usize, String>(1)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            plan: row
+                .try_get::<usize, String>(2)
+                .map_err(::ruprizzle::Error::TokioPostgres)?
+                .parse::<super::enums::Plan>()
+                .map_err(|e| ::ruprizzle::Error::Message(
+                    format!("cannot parse enum: {e}"),
+                ))?,
+            settings: row
+                .try_get::<usize, Option<JsonValue>>(3)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            members: ::ruprizzle::Related::default(),
+            created_at: row
+                .try_get::<usize, DateTime<Utc>>(4)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+        })
+    }
+}
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.
 #[derive(Debug, Clone, Serialize, Deserialize)]

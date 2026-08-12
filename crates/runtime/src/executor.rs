@@ -40,6 +40,9 @@ pub enum RowBatch {
     /// Rows from the native `rusqlite` backend.
     #[cfg(feature = "sqlite-rusqlite")]
     Rusqlite(Vec<crate::rusqlite::Row>),
+    /// Rows from the native `tokio-postgres` backend.
+    #[cfg(feature = "postgres-tokio-postgres")]
+    PostgresNative(Vec<tokio_postgres::Row>),
 }
 
 impl RowBatch {
@@ -52,6 +55,8 @@ impl RowBatch {
             Self::Sqlite(rows) => rows.is_empty(),
             #[cfg(feature = "sqlite-rusqlite")]
             Self::Rusqlite(rows) => rows.is_empty(),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Self::PostgresNative(rows) => rows.is_empty(),
         }
     }
 
@@ -64,6 +69,8 @@ impl RowBatch {
             Self::Sqlite(rows) => rows.len(),
             #[cfg(feature = "sqlite-rusqlite")]
             Self::Rusqlite(rows) => rows.len(),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Self::PostgresNative(rows) => rows.len(),
         }
     }
 
@@ -78,6 +85,8 @@ impl RowBatch {
             (Self::Sqlite(a), Self::Sqlite(b)) => a.extend(b),
             #[cfg(feature = "sqlite-rusqlite")]
             (Self::Rusqlite(a), Self::Rusqlite(b)) => a.extend(b),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            (Self::PostgresNative(a), Self::PostgresNative(b)) => a.extend(b),
             _ => {
                 return Err(Error::Message(
                     "cannot merge row batches from different backends".into(),
@@ -96,6 +105,10 @@ impl std::fmt::Debug for RowBatch {
             Self::Sqlite(rows) => f.debug_tuple("Sqlite").field(&rows.len()).finish(),
             #[cfg(feature = "sqlite-rusqlite")]
             Self::Rusqlite(rows) => f.debug_tuple("Rusqlite").field(&rows.len()).finish(),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Self::PostgresNative(rows) => {
+                f.debug_tuple("PostgresNative").field(&rows.len()).finish()
+            }
         }
     }
 }
@@ -120,7 +133,11 @@ pub trait Executor: Send + Sync {
     ) -> BoxFuture<'_, Result<RowBatch, Error>>;
 
     /// Runs a statement and returns the number of affected rows.
-    fn execute_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>>;
+    fn execute_raw(
+        &self,
+        sql: Cow<'static, str>,
+        binds: Vec<Value>,
+    ) -> BoxFuture<'_, Result<u64, Error>>;
 
     /// Runs a query and yields decoded rows from a buffered result set.
     ///
@@ -144,6 +161,9 @@ pub enum RawRow {
     /// A row from the native `rusqlite` backend.
     #[cfg(feature = "sqlite-rusqlite")]
     Rusqlite(crate::rusqlite::Row),
+    /// A row from the native `tokio-postgres` backend.
+    #[cfg(feature = "postgres-tokio-postgres")]
+    PostgresNative(tokio_postgres::Row),
 }
 
 /// A boxed stream of raw rows.
@@ -193,22 +213,23 @@ impl futures_core::Stream for DeferredRowStream<'_> {
                 Poll::Ready(Ok(batch)) => {
                     this.done = true;
                     this.buffered = match batch {
-                        RowBatch::Any(rows) => rows
-                            .into_iter()
-                            .map(RawRow::Any)
-                            .collect::<Vec<_>>(),
-                        RowBatch::Postgres(rows) => rows
-                            .into_iter()
-                            .map(RawRow::Postgres)
-                            .collect::<Vec<_>>(),
-                        RowBatch::Sqlite(rows) => rows
-                            .into_iter()
-                            .map(RawRow::Sqlite)
-                            .collect::<Vec<_>>(),
+                        RowBatch::Any(rows) => {
+                            rows.into_iter().map(RawRow::Any).collect::<Vec<_>>()
+                        }
+                        RowBatch::Postgres(rows) => {
+                            rows.into_iter().map(RawRow::Postgres).collect::<Vec<_>>()
+                        }
+                        RowBatch::Sqlite(rows) => {
+                            rows.into_iter().map(RawRow::Sqlite).collect::<Vec<_>>()
+                        }
                         #[cfg(feature = "sqlite-rusqlite")]
-                        RowBatch::Rusqlite(rows) => rows
+                        RowBatch::Rusqlite(rows) => {
+                            rows.into_iter().map(RawRow::Rusqlite).collect::<Vec<_>>()
+                        }
+                        #[cfg(feature = "postgres-tokio-postgres")]
+                        RowBatch::PostgresNative(rows) => rows
                             .into_iter()
-                            .map(RawRow::Rusqlite)
+                            .map(RawRow::PostgresNative)
                             .collect::<Vec<_>>(),
                     }
                     .into_iter();
@@ -261,7 +282,11 @@ impl Executor for Pool {
         })
     }
 
-    fn execute_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>> {
+    fn execute_raw(
+        &self,
+        sql: Cow<'static, str>,
+        binds: Vec<Value>,
+    ) -> BoxFuture<'_, Result<u64, Error>> {
         Box::pin(async move {
             let bind_count = binds.len();
             if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
@@ -335,6 +360,8 @@ async fn dispatch_raw_query(
         }
         #[cfg(feature = "sqlite-rusqlite")]
         Pool::SqliteNative(p) => Executor::fetch_all_raw(p, sql, binds).await,
+        #[cfg(feature = "postgres-tokio-postgres")]
+        Pool::PostgresNative(p) => Executor::fetch_all_raw(p, sql, binds).await,
     }
 }
 
@@ -376,6 +403,8 @@ async fn dispatch_raw_execute(
         }
         #[cfg(feature = "sqlite-rusqlite")]
         Pool::SqliteNative(p) => Executor::execute_raw(p, sql, binds).await,
+        #[cfg(feature = "postgres-tokio-postgres")]
+        Pool::PostgresNative(p) => Executor::execute_raw(p, sql, binds).await,
     }
 }
 
@@ -401,9 +430,10 @@ where
             .map(|r| T::from_row(r).map_err(Error::Sqlx))
             .collect(),
         #[cfg(feature = "sqlite-rusqlite")]
-        RowBatch::Rusqlite(mut rows) => rows
-            .iter_mut()
-            .map(|r| T::from_rusqlite_row(r))
-            .collect(),
+        RowBatch::Rusqlite(mut rows) => rows.iter_mut().map(|r| T::from_rusqlite_row(r)).collect(),
+        #[cfg(feature = "postgres-tokio-postgres")]
+        RowBatch::PostgresNative(rows) => {
+            rows.iter().map(|r| T::from_tokio_postgres_row(r)).collect()
+        }
     }
 }

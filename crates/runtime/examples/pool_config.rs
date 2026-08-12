@@ -19,8 +19,8 @@
 
 use std::time::Instant;
 
-use sqlx::any::AnyPoolOptions;
 use sqlx::FromRow;
+use sqlx::any::AnyPoolOptions;
 
 const REPEATS: usize = 7;
 
@@ -111,7 +111,11 @@ fn summarise(label: &str, mut on: Vec<f64>, mut off: Vec<f64>) {
         "  -> ping cost: {:+.2} us/query ({:+.1}%)   [ranges {}overlap]",
         mon - moff,
         (mon / moff - 1.0) * 100.0,
-        if on[0] > off[off.len() - 1] { "do not " } else { "" }
+        if on[0] > off[off.len() - 1] {
+            "do not "
+        } else {
+            ""
+        }
     );
 }
 

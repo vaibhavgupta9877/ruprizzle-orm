@@ -18,13 +18,16 @@ use sqlx::sqlite::SqlitePoolOptions;
 pub enum Pool {
     /// Generic `sqlx::Any` pool, chosen by URL scheme.
     Any(sqlx::Pool<sqlx::Any>),
-    /// Native Postgres pool.
+    /// Native Postgres pool using `sqlx`.
     Postgres(sqlx::Pool<sqlx::Postgres>),
     /// Native SQLite pool.
     Sqlite(sqlx::Pool<sqlx::Sqlite>),
     /// Native `rusqlite`-backed SQLite pool.
     #[cfg(feature = "sqlite-rusqlite")]
     SqliteNative(crate::rusqlite::RusqlitePool),
+    /// Native `tokio-postgres`-backed Postgres pool.
+    #[cfg(feature = "postgres-tokio-postgres")]
+    PostgresNative(crate::tokio_postgres::TokioPostgresPool),
 }
 
 impl Pool {
@@ -38,6 +41,8 @@ impl Pool {
                 Provider::parse(scheme).unwrap_or(Provider::Postgres)
             }
             Pool::Postgres(_) => Provider::Postgres,
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(_) => Provider::Postgres,
             Pool::Sqlite(_) => Provider::Sqlite,
             #[cfg(feature = "sqlite-rusqlite")]
             Pool::SqliteNative(_) => Provider::Sqlite,
@@ -62,6 +67,8 @@ impl Pool {
             Pool::Sqlite(p) => p.size(),
             #[cfg(feature = "sqlite-rusqlite")]
             Pool::SqliteNative(_) => 0,
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(p) => p.size(),
         }
     }
 
@@ -74,6 +81,8 @@ impl Pool {
             Pool::Sqlite(p) => p.num_idle(),
             #[cfg(feature = "sqlite-rusqlite")]
             Pool::SqliteNative(_) => 0,
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(p) => p.num_idle(),
         }
     }
 
@@ -142,6 +151,8 @@ impl Pool {
             Pool::Sqlite(p) => p.close().await,
             #[cfg(feature = "sqlite-rusqlite")]
             Pool::SqliteNative(_) => (),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(p) => p.close().await,
         }
     }
 }
@@ -278,6 +289,15 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
     let scheme = url.split(':').next().unwrap_or("");
     match scheme {
         "postgres" | "postgresql" => {
+            #[cfg(feature = "postgres-tokio-postgres")]
+            if url
+                .split_once('?')
+                .is_some_and(|(_, q)| q.contains("driver=tokio-postgres"))
+            {
+                let pool = crate::tokio_postgres::TokioPostgresPool::connect(url, config).await?;
+                return Ok(Pool::PostgresNative(pool));
+            }
+
             let pool = sqlx::postgres::PgPoolOptions::new()
                 .max_connections(config.max_connections)
                 .min_connections(config.min_connections)
@@ -300,8 +320,8 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
                 return Ok(Pool::SqliteNative(pool));
             }
 
-            let mut connect_opts = sqlx::sqlite::SqliteConnectOptions::from_str(url)
-                .map_err(crate::Error::Sqlx)?;
+            let mut connect_opts =
+                sqlx::sqlite::SqliteConnectOptions::from_str(url).map_err(crate::Error::Sqlx)?;
             connect_opts = connect_opts
                 .row_buffer_size(config.row_buffer_size as usize)
                 .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)

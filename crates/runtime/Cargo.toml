@@ -24,6 +24,9 @@ serde             = { workspace = true }
 serde_json        = { workspace = true }
 sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"] }
 rusqlite          = { version = "0.32", optional = true }
+bytes             = { version = "1", optional = true }
+deadpool-postgres = { version = "0.14", optional = true }
+tokio-postgres    = { version = "0.7", default-features = false, features = ["with-chrono-0_4", "with-uuid-1", "with-serde_json-1"], optional = true }
 thiserror         = { workspace = true }
 tracing            = { version = "0.1", default-features = false, features = ["std"] }
 # Only for `sync::Mutex`, whose guard is `Send` across an await. The std guard
@@ -35,6 +38,7 @@ uuid              = { workspace = true }
 [features]
 default = []
 sqlite-rusqlite = ["dep:rusqlite", "rusqlite/bundled"]
+postgres-tokio-postgres = ["dep:bytes", "dep:deadpool-postgres", "dep:tokio-postgres", "rust_decimal/db-tokio-postgres"]
 
 [dev-dependencies]
 tokio             = { workspace = true }

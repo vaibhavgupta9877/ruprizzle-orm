@@ -8,11 +8,14 @@ use futures_core::Stream;
 use ruprizzle::{Column, Executor, InsertQuery, IsolationLevel, Model, SelectQuery, Tx};
 use ruprizzle_testkit::both_dbs;
 
-#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct Task {
     id: i64,
     name: String,
 }
+
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Task);
 
 impl Model for Task {
     const TABLE: &'static str = "tasks";
@@ -21,9 +24,7 @@ impl Model for Task {
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Task {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             name: row.take::<String>(1)?,

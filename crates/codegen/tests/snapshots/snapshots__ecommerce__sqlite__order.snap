@@ -77,6 +77,33 @@ impl ::ruprizzle::rusqlite::FromRusqliteRow for Order {
         })
     }
 }
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for Order {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: row
+                .try_get::<usize, Uuid>(0)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            status: row
+                .try_get::<usize, String>(1)
+                .map_err(::ruprizzle::Error::TokioPostgres)?
+                .parse::<super::enums::OrderStatus>()
+                .map_err(|e| ::ruprizzle::Error::Message(
+                    format!("cannot parse enum: {e}"),
+                ))?,
+            customer_id: row
+                .try_get::<usize, Uuid>(2)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            customer: ::ruprizzle::Related::default(),
+            items: ::ruprizzle::Related::default(),
+            placed_at: row
+                .try_get::<usize, DateTime<Utc>>(3)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+        })
+    }
+}
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -26,13 +26,17 @@ fn db_path() -> String {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n{:<16} {:>14} {:>16}", "row_buffer_size", "users (1k)", "posts (10k)");
+    println!(
+        "\n{:<16} {:>14} {:>16}",
+        "row_buffer_size", "users (1k)", "posts (10k)"
+    );
     println!("{}", "-".repeat(50));
 
     let mut baseline = (0.0f64, 0.0f64);
     for size in [50usize, 200, 1000, 4096, 16384] {
         let opts: sqlx::sqlite::SqliteConnectOptions = db_path().parse()?;
-        let pool = sqlx::SqlitePool::connect_with(opts.read_only(true).row_buffer_size(size)).await?;
+        let pool =
+            sqlx::SqlitePool::connect_with(opts.read_only(true).row_buffer_size(size)).await?;
 
         let t_users = time(&pool, "SELECT id, email, age FROM users", 200).await;
         let t_posts = time(&pool, "SELECT id, author_id, title FROM posts", 40).await;

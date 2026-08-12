@@ -34,18 +34,19 @@ fn db_path() -> String {
     abs.strip_prefix("//?/").unwrap_or(&abs).to_owned()
 }
 
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, Default, FromRow)]
 struct User {
     id: i64,
     email: String,
     age: i64,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(User);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             email: row.take::<String>(1)?,
@@ -113,13 +114,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     })
     .await;
     let b = bench("2 any-driver     query_as", 2000, || async {
-        let u: User = sqlx::query_as::<sqlx::Any, User>(
-            "SELECT id, email, age FROM users WHERE id = ?",
-        )
-        .bind(500i64)
-        .fetch_one(&any)
-        .await
-        .unwrap();
+        let u: User =
+            sqlx::query_as::<sqlx::Any, User>("SELECT id, email, age FROM users WHERE id = ?")
+                .bind(500i64)
+                .fetch_one(&any)
+                .await
+                .unwrap();
         u.id as usize
     })
     .await;
@@ -169,7 +169,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     })
     .await;
     let d = bench("4 ruprizzle      SelectQuery", 200, || async {
-        SelectQuery::<User>::new(&any).fetch_all().await.unwrap().len()
+        SelectQuery::<User>::new(&any)
+            .fetch_all()
+            .await
+            .unwrap()
+            .len()
     })
     .await;
     report(a, b, c, d);
@@ -252,8 +256,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn report(native: f64, any: f64, any_manual: f64, ruprizzle: f64) {
-    println!("  Any-driver tax   (2-1): {:>8.1} us  ({:.2}x native)", any - native, any / native);
+    println!(
+        "  Any-driver tax   (2-1): {:>8.1} us  ({:.2}x native)",
+        any - native,
+        any / native
+    );
     println!("  decode-helper tax(3-2): {:>8.1} us", any_manual - any);
-    println!("  builder tax      (4-3): {:>8.1} us", ruprizzle - any_manual);
-    println!("  total vs native  (4-1): {:>8.1} us  ({:.2}x native)", ruprizzle - native, ruprizzle / native);
+    println!(
+        "  builder tax      (4-3): {:>8.1} us",
+        ruprizzle - any_manual
+    );
+    println!(
+        "  total vs native  (4-1): {:>8.1} us  ({:.2}x native)",
+        ruprizzle - native,
+        ruprizzle / native
+    );
 }

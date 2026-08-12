@@ -37,6 +37,10 @@ pub enum Error {
     #[error("sqlx error: {0}")]
     Sqlx(sqlx::Error),
 
+    #[cfg(feature = "postgres-tokio-postgres")]
+    #[error("tokio-postgres error: {0}")]
+    TokioPostgres(tokio_postgres::Error),
+
     #[error("operation not yet implemented")]
     NotImplemented,
 
@@ -57,6 +61,8 @@ impl Error {
             Self::SerializationFailure => "serialization_failure",
             Self::ConnectionFailure { .. } => "connection_failure",
             Self::Sqlx(_) => "sqlx",
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Self::TokioPostgres(_) => "tokio_postgres",
             Self::NotImplemented => "not_implemented",
             Self::Message(_) => "message",
         }
@@ -78,11 +84,18 @@ impl Error {
 
 impl From<sqlx::Error> for Error {
     fn from(err: sqlx::Error) -> Self {
-        classify(err)
+        classify_sqlx(err)
     }
 }
 
-fn classify(err: sqlx::Error) -> Error {
+#[cfg(feature = "postgres-tokio-postgres")]
+impl From<tokio_postgres::Error> for Error {
+    fn from(err: tokio_postgres::Error) -> Self {
+        classify_tokio_postgres(err)
+    }
+}
+
+fn classify_sqlx(err: sqlx::Error) -> Error {
     use sqlx::Error as SqlxError;
 
     match err {
@@ -265,4 +278,48 @@ fn parse_sqlite_constraint_columns(msg: &str, prefix: &str) -> (String, String) 
 
 fn parse_sqlite_table_column(msg: &str, prefix: &str) -> (String, String) {
     parse_sqlite_constraint_columns(msg, prefix)
+}
+
+#[cfg(feature = "postgres-tokio-postgres")]
+fn classify_tokio_postgres(err: tokio_postgres::Error) -> Error {
+    if let Some(db) = err.as_db_error() {
+        let msg = db.message().to_owned();
+        let code = db.code().code();
+
+        if is_connection_code(code) {
+            return Error::ConnectionFailure { reason: msg };
+        }
+
+        // Postgres SQLSTATE class 40 is transaction rollback; 40P01 is deadlock.
+        if code == "40P01" {
+            return Error::Deadlock;
+        }
+        if code == "40001" {
+            return Error::SerializationFailure;
+        }
+
+        // Postgres specific codes.
+        if code == "23505" {
+            return parse_unique_violation(&msg);
+        }
+        if code == "23503" {
+            return parse_foreign_key_violation(&msg);
+        }
+        if code == "23502" {
+            return parse_not_null_violation(&msg);
+        }
+        if code == "23514" || code == "23507" {
+            return parse_check_violation(&msg);
+        }
+
+        return Error::TokioPostgres(err);
+    }
+
+    if err.is_closed() {
+        return Error::ConnectionFailure {
+            reason: err.to_string(),
+        };
+    }
+
+    Error::TokioPostgres(err)
 }

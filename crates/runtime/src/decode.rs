@@ -230,8 +230,8 @@ where
     R: Row,
     usize: ColumnIndex<R>,
     for<'a> &'a str: ColumnIndex<R>,
-    sqlx::types::Json<serde_json::Value>: for<'r> sqlx::Decode<'r, R::Database>
-        + sqlx::Type<R::Database>,
+    sqlx::types::Json<serde_json::Value>:
+        for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
     String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
     Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {
@@ -252,8 +252,8 @@ where
     R: Row,
     usize: ColumnIndex<R>,
     for<'a> &'a str: ColumnIndex<R>,
-    sqlx::types::Json<serde_json::Value>: for<'r> sqlx::Decode<'r, R::Database>
-        + sqlx::Type<R::Database>,
+    sqlx::types::Json<serde_json::Value>:
+        for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
     String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
     Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {
@@ -274,8 +274,8 @@ where
     R: Row,
     usize: ColumnIndex<R>,
     for<'a> &'a str: ColumnIndex<R>,
-    sqlx::types::Json<serde_json::Value>: for<'r> sqlx::Decode<'r, R::Database>
-        + sqlx::Type<R::Database>,
+    sqlx::types::Json<serde_json::Value>:
+        for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
     String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
     Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {
@@ -306,8 +306,8 @@ where
     R: Row,
     usize: ColumnIndex<R>,
     for<'a> &'a str: ColumnIndex<R>,
-    sqlx::types::Json<serde_json::Value>: for<'r> sqlx::Decode<'r, R::Database>
-        + sqlx::Type<R::Database>,
+    sqlx::types::Json<serde_json::Value>:
+        for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
     String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
     Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {

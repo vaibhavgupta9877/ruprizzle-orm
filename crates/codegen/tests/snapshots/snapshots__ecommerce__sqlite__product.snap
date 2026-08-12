@@ -73,6 +73,28 @@ impl ::ruprizzle::rusqlite::FromRusqliteRow for Product {
         })
     }
 }
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for Product {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: row
+                .try_get::<usize, Uuid>(0)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            sku: row
+                .try_get::<usize, String>(1)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            name: row
+                .try_get::<usize, String>(2)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            price: row
+                .try_get::<usize, Decimal>(3)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            items: ::ruprizzle::Related::default(),
+        })
+    }
+}
 /// Insert shape: required fields are required, defaulted/optional fields
 /// are `Option` so the database can fill them in.
 #[derive(Debug, Clone, Serialize, Deserialize)]

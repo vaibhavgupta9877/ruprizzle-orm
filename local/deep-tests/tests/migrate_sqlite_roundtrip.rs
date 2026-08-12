@@ -6,11 +6,11 @@
 
 use proptest::prelude::*;
 use ruprizzle::Pool;
-use std::time::Duration;
 use ruprizzle_core::ir::Schema;
 use ruprizzle_dialect::dialect_for;
 use ruprizzle_migrate::{detect, diff, up_sql};
 use ruprizzle_parser::parse;
+use std::time::Duration;
 use tempfile::TempDir;
 
 async fn local_pool() -> (Pool, TempDir) {
@@ -122,7 +122,10 @@ async fn round_trip(from: &Schema, to: &Schema) -> Result<Vec<String>, String> {
     apply_sql(&pool, &drop).await?;
 
     let empty = empty_schema();
-    for sql in [up_sql(&empty, from, dialect.as_ref()), up_sql(from, to, dialect.as_ref())] {
+    for sql in [
+        up_sql(&empty, from, dialect.as_ref()),
+        up_sql(from, to, dialect.as_ref()),
+    ] {
         apply_sql(&pool, &sql).await?;
     }
 

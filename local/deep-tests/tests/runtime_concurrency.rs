@@ -6,12 +6,15 @@
 use ruprizzle::{Column, Executor, InsertManyQuery, InsertQuery, Model, SelectQuery, Value};
 use ruprizzle_deep_tests::fresh_pool;
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, Default, sqlx::FromRow)]
 #[allow(dead_code)]
 struct Task {
     id: i64,
     label: String,
 }
+
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Task);
 
 impl Model for Task {
     const TABLE: &'static str = "tasks";
@@ -19,9 +22,7 @@ impl Model for Task {
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Task {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             label: row.take::<String>(1)?,
@@ -37,7 +38,9 @@ async fn many_concurrent_inserts_succeed() {
     let (pool, _tmp) = fresh_pool().await;
 
     pool.execute_raw(
-        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)".to_string().into(),
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)"
+            .to_string()
+            .into(),
         Vec::new(),
     )
     .await
@@ -70,7 +73,9 @@ async fn transactions_see_their_own_writes_before_commit() {
     let (pool, _tmp) = fresh_pool().await;
 
     pool.execute_raw(
-        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)".to_string().into(),
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)"
+            .to_string()
+            .into(),
         Vec::new(),
     )
     .await

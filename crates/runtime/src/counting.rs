@@ -82,7 +82,11 @@ impl Executor for CountingExecutor<'_> {
         self.inner.fetch_all_raw(sql, binds)
     }
 
-    fn execute_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>> {
+    fn execute_raw(
+        &self,
+        sql: Cow<'static, str>,
+        binds: Vec<Value>,
+    ) -> BoxFuture<'_, Result<u64, Error>> {
         self.tick();
         self.inner.execute_raw(sql, binds)
     }

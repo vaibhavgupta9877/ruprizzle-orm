@@ -15,16 +15,16 @@
 use std::collections::BTreeMap;
 
 use indexmap::IndexMap;
+use std::borrow::Cow;
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::borrow::Cow;
 use std::process::ExitCode;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use clap::{Parser, Subcommand};
-use ruprizzle::{Executor, Pool, Tx};
 use notify::{RecursiveMode, Watcher};
+use ruprizzle::{Executor, Pool, Tx};
 use ruprizzle_codegen::generate_all;
 use ruprizzle_core::SchemaError;
 use ruprizzle_core::ir::{DatasourceUrl, Provider, Schema};
@@ -609,10 +609,7 @@ async fn execute_statements(
         if sql.is_empty() || sql.starts_with("-- ") || sql.starts_with("/*") {
             continue;
         }
-        if let Err(e) = tx
-            .execute_raw(Cow::Owned(sql.to_owned()), Vec::new())
-            .await
-        {
+        if let Err(e) = tx.execute_raw(Cow::Owned(sql.to_owned()), Vec::new()).await {
             return Err(format!("statement {} failed: {e}\n  sql: {sql}", idx + 1).into());
         }
     }

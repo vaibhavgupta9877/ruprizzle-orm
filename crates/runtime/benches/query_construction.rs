@@ -13,7 +13,7 @@ use ruprizzle::executor::BoxRowStream;
 use ruprizzle::{Column, Executor, Model, SelectQuery, Value};
 use ruprizzle_dialect::{DbDialect, SqliteDialect};
 
-#[derive(sqlx::FromRow)]
+#[derive(Default, sqlx::FromRow)]
 #[allow(dead_code)]
 struct User {
     id: i64,
@@ -21,11 +21,12 @@ struct User {
     age: i32,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(User);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             email: row.take::<String>(1)?,

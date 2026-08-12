@@ -4,7 +4,7 @@ use ruprizzle::{
 };
 use sqlx::FromRow;
 
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, Default, FromRow)]
 struct User {
     id: i64,
     name: String,
@@ -12,11 +12,12 @@ struct User {
     posts: Related<Vec<Post>>,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(User);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             name: row.take::<String>(1)?,
@@ -29,7 +30,7 @@ impl Model for User {
     const TABLE: &'static str = "users";
 }
 
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, Default, FromRow)]
 #[allow(dead_code)]
 struct Post {
     id: i64,
@@ -39,11 +40,12 @@ struct Post {
     author: Related<Option<User>>,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Post);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Post {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             title: row.take::<String>(1)?,
@@ -100,7 +102,9 @@ async fn include_one_to_many_round_trip() {
     let pool = fresh_pool().await;
 
     pool.execute_raw(
-        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string().into(),
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
+            .to_string()
+            .into(),
         Vec::new(),
     )
     .await
@@ -160,7 +164,9 @@ async fn include_with_filter_and_take_round_trip() {
     let pool = fresh_pool().await;
 
     pool.execute_raw(
-        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string().into(),
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
+            .to_string()
+            .into(),
         Vec::new(),
     )
     .await
@@ -206,7 +212,9 @@ async fn nested_create_round_trip() {
     let pool = fresh_pool().await;
 
     pool.execute_raw(
-        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string().into(),
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
+            .to_string()
+            .into(),
         Vec::new(),
     )
     .await
@@ -221,7 +229,8 @@ async fn nested_create_round_trip() {
     struct SetPosts;
     impl NestedSetter<User> for SetPosts {
         fn set(&self, parent: &mut User, batch: ruprizzle::executor::RowBatch) {
-            parent.posts = Related::Loaded(ruprizzle::executor::decode_rows::<Post>(batch).unwrap());
+            parent.posts =
+                Related::Loaded(ruprizzle::executor::decode_rows::<Post>(batch).unwrap());
         }
     }
 

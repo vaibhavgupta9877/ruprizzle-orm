@@ -95,20 +95,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(ruprizzle::Pool::Any)?;
 
     let with_ping = bench("select_by_pk  test_before_acquire=true", 3000, || async {
-        let u: User = sqlx::query_as::<sqlx::Any, User>("SELECT id, email, age FROM users WHERE id = ?")
-            .bind(500i64)
-            .fetch_one(&tested)
-            .await
-            .unwrap();
+        let u: User =
+            sqlx::query_as::<sqlx::Any, User>("SELECT id, email, age FROM users WHERE id = ?")
+                .bind(500i64)
+                .fetch_one(&tested)
+                .await
+                .unwrap();
         u.id as usize
     })
     .await;
     let no_ping = bench("select_by_pk  test_before_acquire=false", 3000, || async {
-        let u: User = sqlx::query_as::<sqlx::Any, User>("SELECT id, email, age FROM users WHERE id = ?")
-            .bind(500i64)
-            .fetch_one(&untested)
-            .await
-            .unwrap();
+        let u: User =
+            sqlx::query_as::<sqlx::Any, User>("SELECT id, email, age FROM users WHERE id = ?")
+                .bind(500i64)
+                .fetch_one(&untested)
+                .await
+                .unwrap();
         u.id as usize
     })
     .await;
@@ -162,7 +164,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             checksum += u.id as usize;
         }
         let held = start.elapsed().as_secs_f64() * 1e6 / f64::from(ITERS);
-        println!("{:<46} {held:>10.2} us/op   ({checksum})", "select_by_pk  held connection");
+        println!(
+            "{:<46} {held:>10.2} us/op   ({checksum})",
+            "select_by_pk  held connection"
+        );
         delta("pool checkout per query", held, no_ping);
     }
 
@@ -179,7 +184,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for (label, sql) in [
         ("2 int cols   (id, age)", "SELECT id, age FROM users"),
-        ("3 cols w/text(id, email, age)", "SELECT id, email, age FROM users"),
+        (
+            "3 cols w/text(id, email, age)",
+            "SELECT id, email, age FROM users",
+        ),
     ] {
         let n = bench(&format!("native SqliteRow  {label}"), 300, || async {
             sqlx::query(sql).fetch_all(&native).await.unwrap().len()
@@ -198,18 +206,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== 4. Vec<AnyRow> then decode, vs decode as rows arrive ===");
     let sql = "SELECT id, email, age FROM users";
 
-    let two_pass = bench("fetch_all -> Vec<AnyRow> -> decode (ruprizzle)", 300, || async {
-        let rows = sqlx::query(sql).fetch_all(&untested).await.unwrap();
-        let out: Vec<User> = rows
-            .iter()
-            .map(|r| User {
-                id: r.get::<i64, _>(0),
-                email: r.get::<String, _>(1),
-                age: r.get::<i64, _>(2),
-            })
-            .collect();
-        out.len()
-    })
+    let two_pass = bench(
+        "fetch_all -> Vec<AnyRow> -> decode (ruprizzle)",
+        300,
+        || async {
+            let rows = sqlx::query(sql).fetch_all(&untested).await.unwrap();
+            let out: Vec<User> = rows
+                .iter()
+                .map(|r| User {
+                    id: r.get::<i64, _>(0),
+                    email: r.get::<String, _>(1),
+                    age: r.get::<i64, _>(2),
+                })
+                .collect();
+            out.len()
+        },
+    )
     .await;
 
     use futures_util::TryStreamExt;
@@ -226,10 +238,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         out.len()
     })
     .await;
-    delta("cost of materialising Vec<AnyRow> first", one_pass, two_pass);
+    delta(
+        "cost of materialising Vec<AnyRow> first",
+        one_pass,
+        two_pass,
+    );
 
     let query_as = bench("query_as::<Any, User> (sqlx's own map)", 300, || async {
-        sqlx::query_as::<sqlx::Any, User>(sql).fetch_all(&untested).await.unwrap().len()
+        sqlx::query_as::<sqlx::Any, User>(sql)
+            .fetch_all(&untested)
+            .await
+            .unwrap()
+            .len()
     })
     .await;
     delta("vs sqlx query_as", one_pass, query_as);
@@ -268,17 +288,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         s.push(')');
         s
     };
-    let children_in = bench("c. fetch 10000 posts WHERE id IN (1000 binds)", 60, || async {
-        let mut q = sqlx::query(&in_list);
-        for i in 1..=1000i64 {
-            q = q.bind(i);
-        }
-        q.fetch_all(&untested).await.unwrap().len()
-    })
+    let children_in = bench(
+        "c. fetch 10000 posts WHERE id IN (1000 binds)",
+        60,
+        || async {
+            let mut q = sqlx::query(&in_list);
+            for i in 1..=1000i64 {
+                q = q.bind(i);
+            }
+            q.fetch_all(&untested).await.unwrap().len()
+        },
+    )
     .await;
-    delta("cost of the 1000-element IN list", children_all, children_in);
+    delta(
+        "cost of the 1000-element IN list",
+        children_all,
+        children_in,
+    );
 
-    println!("\n  parents + children (b) = {:.1} us; measured include_posts is ~16700 us", parents + children_all);
+    println!(
+        "\n  parents + children (b) = {:.1} us; measured include_posts is ~16700 us",
+        parents + children_all
+    );
     println!("  parents + children (c) = {:.1} us", parents + children_in);
 
     // ------------------------------------------------------------------
@@ -296,7 +327,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             conn.ping().await?;
         }
         let ping = start.elapsed().as_secs_f64() * 1e6 / 3000.0;
-        println!("{:<46} {ping:>10.2} us/op", "Connection::ping (sqlite worker round-trip)");
+        println!(
+            "{:<46} {ping:>10.2} us/op",
+            "Connection::ping (sqlite worker round-trip)"
+        );
         println!("  (Postgres ping = write_sync + wait_until_ready = one NETWORK round-trip)");
     }
     bench("SELECT 1  (Any, pooled)", 3000, || async {
@@ -341,7 +375,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .count()
     })
     .await;
-    delta("Executor wrapper (String alloc, Instant, tracing)", raw, via_exec);
+    delta(
+        "Executor wrapper (String alloc, Instant, tracing)",
+        raw,
+        via_exec,
+    );
 
     Ok(())
 }

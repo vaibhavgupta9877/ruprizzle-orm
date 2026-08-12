@@ -49,6 +49,8 @@ enum TxInner {
     Sqlite(sqlx::Transaction<'static, Sqlite>),
     #[cfg(feature = "sqlite-rusqlite")]
     SqliteNative(crate::rusqlite::RusqliteTransaction),
+    #[cfg(feature = "postgres-tokio-postgres")]
+    PostgresNative(crate::tokio_postgres::TokioPostgresTransaction),
 }
 
 /// A transaction in progress.
@@ -71,6 +73,8 @@ impl Tx {
             Pool::Sqlite(p) => TxInner::Sqlite(p.begin().await.map_err(Error::Sqlx)?),
             #[cfg(feature = "sqlite-rusqlite")]
             Pool::SqliteNative(p) => TxInner::SqliteNative(p.begin_transaction().await?),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(p) => TxInner::PostgresNative(p.begin().await?),
         };
         Ok(Self {
             inner: Mutex::new(Some(tx)),
@@ -118,6 +122,10 @@ impl Tx {
                 TxInner::SqliteNative(tx) => {
                     tx.commit()?;
                 }
+                #[cfg(feature = "postgres-tokio-postgres")]
+                TxInner::PostgresNative(tx) => {
+                    tx.commit().await?;
+                }
             };
             tracing::debug!(target: "ruprizzle::query", "transaction committed");
         }
@@ -139,6 +147,10 @@ impl Tx {
                 #[cfg(feature = "sqlite-rusqlite")]
                 TxInner::SqliteNative(tx) => {
                     tx.rollback()?;
+                }
+                #[cfg(feature = "postgres-tokio-postgres")]
+                TxInner::PostgresNative(tx) => {
+                    tx.rollback().await?;
                 }
             };
             tracing::debug!(target: "ruprizzle::query", "transaction rolled back");
@@ -190,7 +202,9 @@ impl Tx {
                     .map_err(Error::Sqlx)
             }
             #[cfg(feature = "sqlite-rusqlite")]
-            TxInner::SqliteNative(tx) => tx.execute_sync(sql, binds)
+            TxInner::SqliteNative(tx) => tx.execute_sync(sql, binds),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            TxInner::PostgresNative(tx) => tx.execute(sql, binds).await,
         }
     }
 
@@ -234,6 +248,11 @@ impl Tx {
             #[cfg(feature = "sqlite-rusqlite")]
             TxInner::SqliteNative(tx) => {
                 let batch = tx.fetch_all_sync(sql, binds)?;
+                crate::executor::decode_rows::<T>(batch)
+            }
+            #[cfg(feature = "postgres-tokio-postgres")]
+            TxInner::PostgresNative(tx) => {
+                let batch = tx.fetch_all(sql, binds).await?;
                 crate::executor::decode_rows::<T>(batch)
             }
         }
@@ -280,7 +299,17 @@ impl Tx {
             TxInner::SqliteNative(tx) => {
                 let batch = tx.fetch_all_sync(sql, binds)?;
                 let rows = crate::executor::decode_rows::<T>(batch)?;
-                rows.into_iter().next().ok_or_else(|| Error::Message("no row found".into()))
+                rows.into_iter()
+                    .next()
+                    .ok_or_else(|| Error::Message("no row found".into()))
+            }
+            #[cfg(feature = "postgres-tokio-postgres")]
+            TxInner::PostgresNative(tx) => {
+                let batch = tx.fetch_all(sql, binds).await?;
+                let rows = crate::executor::decode_rows::<T>(batch)?;
+                rows.into_iter()
+                    .next()
+                    .ok_or_else(|| Error::Message("no row found".into()))
             }
         }
     }
@@ -328,6 +357,12 @@ impl Tx {
                 let rows = crate::executor::decode_rows::<T>(batch)?;
                 Ok(rows.into_iter().next())
             }
+            #[cfg(feature = "postgres-tokio-postgres")]
+            TxInner::PostgresNative(tx) => {
+                let batch = tx.fetch_all(sql, binds).await?;
+                let rows = crate::executor::decode_rows::<T>(batch)?;
+                Ok(rows.into_iter().next())
+            }
         }
     }
 
@@ -353,7 +388,10 @@ impl Tx {
                 for b in binds {
                     q = q.bind(b);
                 }
-                q.fetch_all(&mut **tx).await.map(RowBatch::Any).map_err(Error::Sqlx)
+                q.fetch_all(&mut **tx)
+                    .await
+                    .map(RowBatch::Any)
+                    .map_err(Error::Sqlx)
             }
             TxInner::Postgres(tx) => {
                 let mut q = sqlx::query::<Postgres>(sql);
@@ -376,7 +414,9 @@ impl Tx {
                     .map_err(Error::Sqlx)
             }
             #[cfg(feature = "sqlite-rusqlite")]
-            TxInner::SqliteNative(tx) => tx.fetch_all_sync(sql, binds)
+            TxInner::SqliteNative(tx) => tx.fetch_all_sync(sql, binds),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            TxInner::PostgresNative(tx) => tx.fetch_all(sql, binds).await,
         }
     }
 }
@@ -465,10 +505,14 @@ impl crate::executor::Executor for Tx {
     /// statement issued on the same transaction, so the rows are fetched up
     /// front. Streaming a very large result set is therefore something to do on
     /// the pool, not inside a transaction.
-    fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> crate::executor::BoxRowStream<'_> {
-        Box::pin(crate::executor::DeferredRowStream::new(Box::pin(async move {
-            crate::executor::Executor::fetch_all_raw(self, sql, binds).await
-        })))
+    fn stream_raw(
+        &self,
+        sql: Cow<'static, str>,
+        binds: Vec<Value>,
+    ) -> crate::executor::BoxRowStream<'_> {
+        Box::pin(crate::executor::DeferredRowStream::new(Box::pin(
+            async move { crate::executor::Executor::fetch_all_raw(self, sql, binds).await },
+        )))
     }
 }
 
@@ -480,15 +524,33 @@ impl crate::executor::Executor for Tx {
 /// constraint violation just multiplies the work before failing anyway.
 #[must_use]
 pub fn is_retryable(err: &Error) -> bool {
-    let Error::Sqlx(e) = err else { return false };
-    let Some(db) = e.as_database_error() else {
-        return false;
+    let (code, message) = match err {
+        Error::Sqlx(e) => {
+            let Some(db) = e.as_database_error() else {
+                return false;
+            };
+            (
+                db.code().map(|c| c.to_string()),
+                Some(db.message().to_string()),
+            )
+        }
+        #[cfg(feature = "postgres-tokio-postgres")]
+        Error::TokioPostgres(e) => {
+            let Some(db) = e.as_db_error() else {
+                return false;
+            };
+            (
+                Some(db.code().code().to_owned()),
+                Some(db.message().to_owned()),
+            )
+        }
+        _ => return false,
     };
-    match db.code().as_deref() {
+
+    match code.as_deref() {
         Some("40001" | "40P01") => true,
-        // SQLite surfaces these as extended result codes in the message.
         _ => {
-            let m = db.message().to_ascii_lowercase();
+            let m = message.unwrap_or_default().to_ascii_lowercase();
             m.contains("database is locked") || m.contains("database table is locked")
         }
     }

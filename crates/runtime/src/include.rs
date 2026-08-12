@@ -305,9 +305,10 @@ where
                 parent_index.entry((self.get)(parent)).or_insert(i);
             }
 
-            let mut buckets: Vec<Vec<C>> = std::iter::repeat_with(|| Vec::with_capacity(bucket_hint))
-                .take(parents.len())
-                .collect();
+            let mut buckets: Vec<Vec<C>> =
+                std::iter::repeat_with(|| Vec::with_capacity(bucket_hint))
+                    .take(parents.len())
+                    .collect();
 
             for child in children {
                 if let Some(&idx) = parent_index.get(&(self.child_key_get)(&child)) {

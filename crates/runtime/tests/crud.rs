@@ -1,18 +1,21 @@
 //! End-to-end CRUD round-trip using a live SQLite `Any` pool.
 
-use ruprizzle::{Column, DeleteQuery, Executor, InsertQuery, Model, Pool, SelectQuery, UpdateQuery, connect};
+use ruprizzle::{
+    Column, DeleteQuery, Executor, InsertQuery, Model, Pool, SelectQuery, UpdateQuery, connect,
+};
 
-#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct Task {
     id: i64,
     name: String,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Task);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Task {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             name: row.take::<String>(1)?,
@@ -40,7 +43,9 @@ async fn fresh_pool() -> Pool {
     let pool = connect(&url).await.unwrap();
 
     pool.execute_raw(
-        "CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)".to_string().into(),
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)"
+            .to_string()
+            .into(),
         Vec::new(),
     )
     .await

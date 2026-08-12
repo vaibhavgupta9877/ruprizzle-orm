@@ -9,14 +9,16 @@
 use std::borrow::Cow;
 use std::time::Instant;
 
-use ruprizzle::{Column, Encodable, Executor, IncludeList, InsertManyQuery, Model, Related, SelectQuery};
 use ruprizzle::serde::Serialize;
 use ruprizzle::serde_json;
+use ruprizzle::{
+    Column, Encodable, Executor, IncludeList, InsertManyQuery, Model, Related, SelectQuery,
+};
 use sqlx::FromRow;
 
 const DB_PATH: &str = "D:/SaaS/rust/ruprizzle-orm/local/cross-orm-bench/node/bench.sqlite3";
 
-#[derive(Debug, Clone, FromRow, Serialize)]
+#[derive(Debug, Clone, Default, FromRow, Serialize)]
 struct User {
     id: i64,
     email: String,
@@ -26,11 +28,12 @@ struct User {
     posts: Related<Vec<Post>>,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(User);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             email: row.take::<String>(1)?,
@@ -44,18 +47,19 @@ impl Model for User {
     const TABLE: &'static str = "users";
 }
 
-#[derive(Debug, Clone, FromRow, Serialize)]
+#[derive(Debug, Clone, Default, FromRow, Serialize)]
 struct Post {
     id: i64,
     author_id: i64,
     title: String,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Post);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Post {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             author_id: row.take::<i64>(1)?,
@@ -68,18 +72,19 @@ impl Model for Post {
     const TABLE: &'static str = "posts";
 }
 
-#[derive(Debug, Clone, FromRow, Serialize)]
+#[derive(Debug, Clone, Default, FromRow, Serialize)]
 struct BenchBulk {
     id: i64,
     name: String,
     n: i64,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(BenchBulk);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for BenchBulk {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: row.take::<i64>(0)?,
             name: row.take::<String>(1)?,
@@ -119,7 +124,13 @@ struct BenchResult {
 fn record_result(name: &str, iters: u32, total: Instant) -> BenchResult {
     let total_ms = total.elapsed().as_secs_f64() * 1000.0;
     let avg_ms = total_ms / iters as f64;
-    println!("{:>28} {:>10.3} us/op  (total {:>7.1} ms, {} iters)", name, avg_ms * 1000.0, total_ms, iters);
+    println!(
+        "{:>28} {:>10.3} us/op  (total {:>7.1} ms, {} iters)",
+        name,
+        avg_ms * 1000.0,
+        total_ms,
+        iters
+    );
     BenchResult {
         orm: "ruprizzle".to_string(),
         operation: name.to_string(),
@@ -191,66 +202,82 @@ async fn main() -> Result<(), ruprizzle::Error> {
 
     // End-to-end: select by PK.
     let pool2 = pool.clone();
-    results.push(bench_async("select_by_pk", 1000, move || {
-        let pool = pool2.clone();
-        async move {
-            let row = SelectQuery::<User>::new(&pool)
-                .filter(USER_ID.eq(500i64))
-                .fetch_one()
-                .await
-                .expect("fetch one user");
-            assert_eq!(row.id, 500);
-            std::hint::black_box(row);
-        }
-    }).await);
+    results.push(
+        bench_async("select_by_pk", 1000, move || {
+            let pool = pool2.clone();
+            async move {
+                let row = SelectQuery::<User>::new(&pool)
+                    .filter(USER_ID.eq(500i64))
+                    .fetch_one()
+                    .await
+                    .expect("fetch one user");
+                assert_eq!(row.id, 500);
+                std::hint::black_box(row);
+            }
+        })
+        .await,
+    );
 
     // End-to-end: find many 1000 rows.
     let pool2 = pool.clone();
-    results.push(bench_async("find_many_1000", 50, move || {
-        let pool = pool2.clone();
-        async move {
-            let rows = SelectQuery::<User>::new(&pool)
-                .fetch_all()
-                .await
-                .expect("fetch all users");
-            assert_eq!(rows.len(), 1000);
-            std::hint::black_box(rows);
-        }
-    }).await);
+    results.push(
+        bench_async("find_many_1000", 50, move || {
+            let pool = pool2.clone();
+            async move {
+                let rows = SelectQuery::<User>::new(&pool)
+                    .fetch_all()
+                    .await
+                    .expect("fetch all users");
+                assert_eq!(rows.len(), 1000);
+                std::hint::black_box(rows);
+            }
+        })
+        .await,
+    );
 
     // End-to-end: filtered + ordered.
     let pool2 = pool.clone();
-    results.push(bench_async("find_filtered_ordered", 50, move || {
-        let pool = pool2.clone();
-        async move {
-            let rows = SelectQuery::<User>::new(&pool)
-                .filter(USER_AGE.gt(18i64))
-                .order_by(USER_AGE.asc())
-                .order_by(USER_EMAIL.asc())
-                .fetch_all()
-                .await
-                .expect("fetch filtered users");
-            assert!(rows.len() >= 980, "expected ~1000 users, got {}", rows.len());
-            std::hint::black_box(rows);
-        }
-    }).await);
+    results.push(
+        bench_async("find_filtered_ordered", 50, move || {
+            let pool = pool2.clone();
+            async move {
+                let rows = SelectQuery::<User>::new(&pool)
+                    .filter(USER_AGE.gt(18i64))
+                    .order_by(USER_AGE.asc())
+                    .order_by(USER_EMAIL.asc())
+                    .fetch_all()
+                    .await
+                    .expect("fetch filtered users");
+                assert!(
+                    rows.len() >= 980,
+                    "expected ~1000 users, got {}",
+                    rows.len()
+                );
+                std::hint::black_box(rows);
+            }
+        })
+        .await,
+    );
 
     // End-to-end: include posts for all users.
     let pool2 = pool.clone();
-    results.push(bench_async("include_posts", 10, move || {
-        let pool = pool2.clone();
-        async move {
-            let rows = SelectQuery::<User>::new(&pool)
-                .include(posts())
-                .exec()
-                .await
-                .expect("fetch users with posts");
-            assert_eq!(rows.len(), 1000);
-            let total_posts: usize = rows.iter().map(|u| u.posts.get().len()).sum();
-            assert_eq!(total_posts, 10000);
-            std::hint::black_box(rows);
-        }
-    }).await);
+    results.push(
+        bench_async("include_posts", 10, move || {
+            let pool = pool2.clone();
+            async move {
+                let rows = SelectQuery::<User>::new(&pool)
+                    .include(posts())
+                    .exec()
+                    .await
+                    .expect("fetch users with posts");
+                assert_eq!(rows.len(), 1000);
+                let total_posts: usize = rows.iter().map(|u| u.posts.get().len()).sum();
+                assert_eq!(total_posts, 10000);
+                std::hint::black_box(rows);
+            }
+        })
+        .await,
+    );
 
     // Bulk insert 1000 rows into bench_bulk.
     let bulk_rows: Vec<_> = (0..1000)
@@ -267,22 +294,25 @@ async fn main() -> Result<(), ruprizzle::Error> {
         .await?;
 
     let pool2 = pool.clone();
-    results.push(bench_async("bulk_insert_1000", 10, move || {
-        let pool = pool2.clone();
-        let rows = bulk_rows.clone();
-        async move {
-            pool.execute_raw(Cow::Borrowed("DELETE FROM bench_bulk"), Vec::new())
-                .await
-                .expect("clear bench_bulk");
-            let inserted = InsertManyQuery::<BenchBulk>::new(&pool)
-                .rows(rows.iter().map(|r| r.iter().cloned()))
-                .exec()
-                .await
-                .expect("bulk insert");
-            assert_eq!(inserted.len(), 1000);
-            std::hint::black_box(inserted);
-        }
-    }).await);
+    results.push(
+        bench_async("bulk_insert_1000", 10, move || {
+            let pool = pool2.clone();
+            let rows = bulk_rows.clone();
+            async move {
+                pool.execute_raw(Cow::Borrowed("DELETE FROM bench_bulk"), Vec::new())
+                    .await
+                    .expect("clear bench_bulk");
+                let inserted = InsertManyQuery::<BenchBulk>::new(&pool)
+                    .rows(rows.iter().map(|r| r.iter().cloned()))
+                    .exec()
+                    .await
+                    .expect("bulk insert");
+                assert_eq!(inserted.len(), 1000);
+                std::hint::black_box(inserted);
+            }
+        })
+        .await,
+    );
 
     println!("\n{}", serde_json::to_string_pretty(&results).unwrap());
 
@@ -291,7 +321,10 @@ async fn main() -> Result<(), ruprizzle::Error> {
     } else {
         "ruprizzle-results.json"
     };
-    let path = std::path::Path::new(DB_PATH).parent().unwrap().join(filename);
+    let path = std::path::Path::new(DB_PATH)
+        .parent()
+        .unwrap()
+        .join(filename);
     tokio::fs::write(&path, serde_json::to_string_pretty(&results).unwrap())
         .await
         .expect("write results");

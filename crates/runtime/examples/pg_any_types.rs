@@ -27,11 +27,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("DateTime", "TIMESTAMPTZ", "now()::timestamptz"),
         ("Date", "DATE", "now()::date"),
         ("Time", "TIME", "now()::time"),
-        ("Uuid", "UUID", "'00000000-0000-0000-0000-000000000000'::uuid"),
+        (
+            "Uuid",
+            "UUID",
+            "'00000000-0000-0000-0000-000000000000'::uuid",
+        ),
         ("Json", "JSONB", "'{}'::jsonb"),
     ];
 
-    println!("\n{:<10} {:<20} {:<8} {}", "rz type", "PG DDL type", "reads?", "detail");
+    println!(
+        "\n{:<10} {:<20} {:<8} {}",
+        "rz type", "PG DDL type", "reads?", "detail"
+    );
     println!("{}", "-".repeat(96));
     let mut broken = vec![];
     for (rz, ddl, expr) in cases {
@@ -40,15 +47,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(_) => println!("{rz:<10} {ddl:<20} {:<8} -", "OK"),
             Err(e) => {
                 let msg = e.to_string();
-                let msg = msg.lines().next().unwrap_or("").chars().take(60).collect::<String>();
+                let msg = msg
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .chars()
+                    .take(60)
+                    .collect::<String>();
                 println!("{rz:<10} {ddl:<20} {:<8} {msg}", "FAIL");
                 broken.push((rz, ddl));
             }
         }
     }
 
-    println!("\n{} of {} scalar types ruprizzle emits in Postgres DDL cannot be read back through sqlx::Any:",
-        broken.len(), cases.len());
+    println!(
+        "\n{} of {} scalar types ruprizzle emits in Postgres DDL cannot be read back through sqlx::Any:",
+        broken.len(),
+        cases.len()
+    );
     for (rz, ddl) in &broken {
         println!("  - {rz} -> {ddl}");
     }
