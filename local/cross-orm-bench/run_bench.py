@@ -21,9 +21,9 @@ from pathlib import Path
 from typing import Callable, Dict, List, Tuple, Union
 
 # Number of warm-up trials to discard (JIT / cache warm-up).
-WARMUP_TRIALS = 1
+WARMUP_TRIALS = int(os.environ.get("BENCH_WARMUP", "1"))
 # Number of measured trials.
-MEASURE_TRIALS = 10
+MEASURE_TRIALS = int(os.environ.get("BENCH_TRIALS", "10"))
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NODE_DIR = REPO_ROOT / "local" / "cross-orm-bench" / "node"
@@ -70,6 +70,8 @@ def run_cmd(
         check=True,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
 
 
@@ -115,6 +117,12 @@ def seed_db() -> None:
     time.sleep(0.5)
 
 
+def generate_prisma_client() -> None:
+    print("Generating Prisma client...")
+    run_cmd("npx prisma generate", cwd=NODE_DIR, shell=True)
+    time.sleep(0.5)
+
+
 def read_json(path: Path) -> List[dict]:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -142,13 +150,14 @@ def run_rust_orm_trials(crate_dir: Path, results_json: str) -> List[List[dict]]:
     exe = rust_orm_exe(crate_dir)
     if not exe.exists():
         raise FileNotFoundError(f"Benchmark binary not found: {exe}")
+    results_path = crate_dir / results_json
     trials: List[List[dict]] = []
     for i in range(WARMUP_TRIALS + MEASURE_TRIALS):
         label = "warmup" if i < WARMUP_TRIALS else f"measure-{i - WARMUP_TRIALS + 1}"
         print(f"  {crate_name} {label}")
         run_cmd([str(exe)], cwd=crate_dir)
         if i >= WARMUP_TRIALS:
-            trials.append(read_json(NODE_DIR / results_json))
+            trials.append(read_json(results_path))
         if i < WARMUP_TRIALS + MEASURE_TRIALS - 1:
             time.sleep(0.2)
     return trials
@@ -271,12 +280,24 @@ def write_log(
         "select_by_pk",
         "find_many_1000",
         "find_filtered_ordered",
+        "find_filtered_paginated",
+        "find_in_list",
+        "find_complex_filter",
+        "count_filtered",
+        "exists_filtered",
         "include_posts",
+        "include_author",
+        "include_posts_and_comments",
+        "include_posts_with_tags",
+        "find_popular_posts",
         "bulk_insert_1000",
     ]
     query_construction_ops = [
         "to_sql_select_by_pk",
         "to_sql_select_filter_order",
+        "to_sql_select_in_list",
+        "to_sql_select_complex_filter",
+        "to_sql_select_paginated",
     ]
 
     # End-to-end table
@@ -329,6 +350,11 @@ def write_markdown(
     path: Path,
     combined: Dict[str, Dict[str, Dict[str, float]]],
 ) -> None:
+    """Append a new timestamped benchmark-run section to the docs file.
+
+    Previous runs are preserved, so the file becomes a historical record.
+    """
+
     def m(op: str, driver: str) -> str:
         row = combined.get(op, {}).get(driver, {})
         v = row.get("median", 0.0)
@@ -340,58 +366,77 @@ def write_markdown(
         "select_by_pk",
         "find_many_1000",
         "find_filtered_ordered",
+        "find_filtered_paginated",
+        "find_in_list",
+        "find_complex_filter",
+        "count_filtered",
+        "exists_filtered",
         "include_posts",
+        "include_author",
+        "include_posts_and_comments",
+        "include_posts_with_tags",
+        "find_popular_posts",
         "bulk_insert_1000",
     ]
     query_construction_ops = [
         "to_sql_select_by_pk",
         "to_sql_select_filter_order",
+        "to_sql_select_in_list",
+        "to_sql_select_complex_filter",
+        "to_sql_select_paginated",
     ]
 
-    # Build a markdown table with all drivers.
     header = "| Operation | " + " | ".join(DRIVER_ORDER) + " |"
     separator = "|" + "---|" * (len(DRIVER_ORDER) + 1)
 
-    end_to_end_table = [header, separator]
-    for op in end_to_end_ops:
-        row = "| `" + op + "` | " + " | ".join(m(op, d) for d in DRIVER_ORDER) + " |"
-        end_to_end_table.append(row)
-    end_to_end_table = "\n".join(end_to_end_table)
+    def make_table(ops: List[str]) -> str:
+        rows = [header, separator]
+        for op in ops:
+            cells = " | ".join(m(op, d) for d in DRIVER_ORDER)
+            rows.append(f"| `{op}` | {cells} |")
+        return "\n".join(rows)
 
-    query_construction_table = [header, separator]
-    for op in query_construction_ops:
-        row = "| `" + op + "` | " + " | ".join(m(op, d) for d in DRIVER_ORDER) + " |"
-        query_construction_table.append(row)
-    query_construction_table = "\n".join(query_construction_table)
+    end_to_end_table = make_table(end_to_end_ops)
+    query_construction_table = make_table(query_construction_ops)
 
-    text = path.read_text(encoding="utf-8")
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-    # Replace end-to-end table
-    start_marker = "## End-to-end results\n\nAll times are microseconds per operation (lower is better).\n\n"
-    end_marker = "\n\n## Query construction (no I/O)"
-    s = text.find(start_marker)
-    e = text.find(end_marker)
-    if s != -1 and e != -1:
-        text = text[: s + len(start_marker)] + end_to_end_table + text[e:]
+    section = [
+        "",
+        f"## Benchmark run: {timestamp}",
+        "",
+        "### Environment",
+        "",
+        f"- **Warm-up trials:** {WARMUP_TRIALS}",
+        f"- **Measured trials:** {MEASURE_TRIALS}",
+        "- **Dataset:**",
+        "  - 1,000 users",
+        "  - 20 categories",
+        "  - 10,000 posts",
+        "  - 50,000 comments",
+        "  - 100 tags",
+        "  - 30,000 post_tags",
+        "  - 5,000 followers",
+        "  - 20,000 likes",
+        "",
+        "### End-to-end results",
+        "",
+        "All times are microseconds per operation (lower is better).",
+        "",
+        end_to_end_table,
+        "",
+        "### Query construction (no I/O)",
+        "",
+        query_construction_table,
+        "",
+    ]
 
-    # Replace query construction table
-    start_marker2 = "## Query construction (no I/O)\n\n"
-    end_marker2 = "\n\n## Codegen / build-step comparison"
-    s2 = text.find(start_marker2)
-    e2 = text.find(end_marker2)
-    if s2 != -1 and e2 != -1:
-        # Replace up to the first newline after the intro line; the old table
-        # may have a different number of columns so we overwrite everything
-        # between the marker and the next section.
-        text = text[: s2 + len(start_marker2)] + query_construction_table + text[e2:]
+    # If the docs file does not yet exist, create a minimal header.
+    if not path.exists():
+        path.write_text("# Cross-ORM benchmark results\n\n", encoding="utf-8")
 
-    # Update methodology line in caveats
-    text = text.replace(
-        "5. **This run was on a development machine.** Run-to-run variance can be 5–10% on Windows. The main take-away is the relative shape between backends, not single-digit absolute values.",
-        f"5. **This run used {WARMUP_TRIALS} warm-up + {MEASURE_TRIALS} measured trials per driver.** Medians are reported. See `local/cross-orm-bench/BENCHMARKS.log` and `local/cross-orm-bench/raw_results.json` for full per-trial data. Run-to-run variance can be 5–10% on Windows. The main take-away is the relative shape between backends, not single-digit absolute values.",
-    )
-
-    path.write_text(text, encoding="utf-8")
+    with open(path, "a", encoding="utf-8") as f:
+        f.write("\n".join(section))
 
 
 def write_median_trial(
@@ -402,7 +447,16 @@ def write_median_trial(
         "select_by_pk",
         "find_many_1000",
         "find_filtered_ordered",
+        "find_filtered_paginated",
+        "find_in_list",
+        "find_complex_filter",
+        "count_filtered",
+        "exists_filtered",
         "include_posts",
+        "include_author",
+        "include_posts_and_comments",
+        "include_posts_with_tags",
+        "find_popular_posts",
         "bulk_insert_1000",
     }
     totals = [
@@ -436,6 +490,8 @@ def main() -> int:
 
     print("Running Drizzle trials...")
     all_trials["drizzle"] = run_node_trials("bench-drizzle.js", "drizzle-results.json")
+
+    generate_prisma_client()
 
     print("Running Prisma trials...")
     all_trials["prisma"] = run_node_trials("bench-prisma.js", "prisma-results.json")

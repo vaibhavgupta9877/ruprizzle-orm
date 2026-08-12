@@ -3,35 +3,168 @@
     "orm": "prisma",
     "operation": "select_by_pk",
     "iters": 1000,
-    "total_ms": 150.1773,
-    "avg_ms": 0.1501773
+    "total_ms": 176.7637,
+    "avg_ms": 0.1767637,
+    "qps": 5657.270129557143,
+    "rows_returned": 1,
+    "queries_issued": 1,
+    "peak_rss_mb": 74.66015625,
+    "cpu_time_ms": 172
   },
   {
     "orm": "prisma",
     "operation": "find_many_1000",
     "iters": 50,
-    "total_ms": 99.58159999999998,
-    "avg_ms": 1.9916319999999996
+    "total_ms": 141.74360000000001,
+    "avg_ms": 2.8348720000000003,
+    "qps": 352.7496126809252,
+    "rows_returned": 1000,
+    "queries_issued": 1,
+    "peak_rss_mb": 86.09765625,
+    "cpu_time_ms": 141
   },
   {
     "orm": "prisma",
     "operation": "find_filtered_ordered",
     "iters": 50,
-    "total_ms": 113.71660000000003,
-    "avg_ms": 2.2743320000000007
+    "total_ms": 164.0444,
+    "avg_ms": 3.280888,
+    "qps": 304.79553096600677,
+    "rows_returned": 980,
+    "queries_issued": 1,
+    "peak_rss_mb": 104.625,
+    "cpu_time_ms": 156
+  },
+  {
+    "orm": "prisma",
+    "operation": "find_filtered_paginated",
+    "iters": 50,
+    "total_ms": 30.935600000000022,
+    "avg_ms": 0.6187120000000005,
+    "qps": 1616.260877435704,
+    "rows_returned": 20,
+    "queries_issued": 1,
+    "peak_rss_mb": 104.62890625,
+    "cpu_time_ms": 31
+  },
+  {
+    "orm": "prisma",
+    "operation": "find_in_list",
+    "iters": 100,
+    "total_ms": 40.858400000000074,
+    "avg_ms": 0.4085840000000007,
+    "qps": 2447.477140563503,
+    "rows_returned": 50,
+    "queries_issued": 1,
+    "peak_rss_mb": 104.7734375,
+    "cpu_time_ms": 31
+  },
+  {
+    "orm": "prisma",
+    "operation": "find_complex_filter",
+    "iters": 50,
+    "total_ms": 37.83140000000003,
+    "avg_ms": 0.7566280000000006,
+    "qps": 1321.6534413212294,
+    "rows_returned": 100,
+    "queries_issued": 1,
+    "peak_rss_mb": 104.55859375,
+    "cpu_time_ms": 46
+  },
+  {
+    "orm": "prisma",
+    "operation": "count_filtered",
+    "iters": 100,
+    "total_ms": 18.676699999999983,
+    "avg_ms": 0.18676699999999982,
+    "qps": 5354.264939737753,
+    "rows_returned": 980,
+    "queries_issued": 1,
+    "peak_rss_mb": 105.82421875,
+    "cpu_time_ms": 16
+  },
+  {
+    "orm": "prisma",
+    "operation": "exists_filtered",
+    "iters": 100,
+    "total_ms": 14.294099999999958,
+    "avg_ms": 0.14294099999999957,
+    "qps": 6995.893410568017,
+    "rows_returned": 1,
+    "queries_issued": 1,
+    "peak_rss_mb": 105.8515625,
+    "cpu_time_ms": 0
   },
   {
     "orm": "prisma",
     "operation": "include_posts",
     "iters": 10,
-    "total_ms": 340.2593999999999,
-    "avg_ms": 34.02593999999999
+    "total_ms": 420.71669999999995,
+    "avg_ms": 42.07167,
+    "qps": 23.768963770632354,
+    "rows_returned": 1000,
+    "queries_issued": 2,
+    "peak_rss_mb": 138.3046875,
+    "cpu_time_ms": 406
+  },
+  {
+    "orm": "prisma",
+    "operation": "include_author",
+    "iters": 10,
+    "total_ms": 836.4752999999998,
+    "avg_ms": 83.64752999999999,
+    "qps": 11.95492562661444,
+    "rows_returned": 10000,
+    "queries_issued": 2,
+    "peak_rss_mb": 173.8203125,
+    "cpu_time_ms": 844
+  },
+  {
+    "orm": "prisma",
+    "operation": "include_posts_and_comments",
+    "iters": 10,
+    "total_ms": 2633.288,
+    "avg_ms": 263.3288,
+    "qps": 3.797533729694587,
+    "rows_returned": 1000,
+    "queries_issued": 3,
+    "peak_rss_mb": 276.5703125,
+    "cpu_time_ms": 2610
+  },
+  {
+    "orm": "prisma",
+    "operation": "include_posts_with_tags",
+    "iters": 10,
+    "total_ms": 2677.432599999999,
+    "avg_ms": 267.7432599999999,
+    "qps": 3.7349212824255607,
+    "rows_returned": 10000,
+    "queries_issued": 3,
+    "peak_rss_mb": 375.3203125,
+    "cpu_time_ms": 2578
+  },
+  {
+    "orm": "prisma",
+    "operation": "find_popular_posts",
+    "iters": 50,
+    "total_ms": 125.19900000000052,
+    "avg_ms": 2.5039800000000105,
+    "qps": 399.36421217421696,
+    "rows_returned": 100,
+    "queries_issued": 2,
+    "peak_rss_mb": 375.3203125,
+    "cpu_time_ms": 109
   },
   {
     "orm": "prisma",
     "operation": "bulk_insert_1000",
     "iters": 10,
-    "total_ms": 130.3255999999999,
-    "avg_ms": 13.03255999999999
+    "total_ms": 122.83129999999983,
+    "avg_ms": 12.283129999999982,
+    "qps": 81.41247385641945,
+    "rows_returned": 1000,
+    "queries_issued": 2,
+    "peak_rss_mb": 375.65625,
+    "cpu_time_ms": 79
   }
 ]

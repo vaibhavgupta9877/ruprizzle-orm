@@ -18,7 +18,9 @@ use ruprizzle_dialect::{DbDialect, SqliteDialect};
 struct User {
     id: i64,
     email: String,
-    age: i32,
+    age: i64,
+    name: String,
+    created_at: i64,
 }
 
 #[cfg(feature = "postgres-tokio-postgres")]
@@ -30,7 +32,9 @@ impl ruprizzle::rusqlite::FromRusqliteRow for User {
         Ok(Self {
             id: row.take::<i64>(0)?,
             email: row.take::<String>(1)?,
-            age: row.take::<i32>(2)?,
+            age: row.take::<i64>(2)?,
+            name: row.take::<String>(3)?,
+            created_at: row.take::<i64>(4)?,
         })
     }
 }
@@ -41,7 +45,8 @@ impl Model for User {
 
 const ID: Column<User, i64> = Column::new("users", "id");
 const EMAIL: Column<User, String> = Column::new("users", "email");
-const AGE: Column<User, i32> = Column::new("users", "age");
+const AGE: Column<User, i64> = Column::new("users", "age");
+
 
 struct NoopExecutor;
 
@@ -84,24 +89,63 @@ impl Stream for NoopStream {
 fn query_construction(c: &mut Criterion) {
     let exec = NoopExecutor;
 
-    c.bench_function("select_by_pk", |b| {
+    c.bench_function("to_sql_select_by_pk", |b| {
         b.iter(|| {
             let q = SelectQuery::<User>::new(black_box(&exec))
-                .filter(ID.eq(1))
+                .filter(ID.eq(500i64))
                 .limit(1)
                 .offset(0);
             let _ = q.to_sql();
         })
     });
 
-    c.bench_function("select_with_filter_and_order", |b| {
+    c.bench_function("to_sql_select_filter_order", |b| {
         b.iter(|| {
             let q = SelectQuery::<User>::new(black_box(&exec))
-                .filter(AGE.gte(18).and(EMAIL.contains("example")))
-                .order_by(AGE.desc())
+                .filter(AGE.gt(18i64).and(EMAIL.contains("@example.com")))
+                .order_by(AGE.asc())
                 .order_by(EMAIL.asc())
-                .limit(100)
+                .limit(1000)
                 .offset(0);
+            let _ = q.to_sql();
+        })
+    });
+
+    c.bench_function("to_sql_select_in_list", |b| {
+        let ids: Vec<i64> = (1..=50).collect();
+        b.iter(|| {
+            let q = SelectQuery::<User>::new(black_box(&exec))
+                .filter(ID.in_set(ids.clone()))
+                .order_by(ID.asc())
+                .limit(50);
+            let _ = q.to_sql();
+        })
+    });
+
+    c.bench_function("to_sql_select_complex_filter", |b| {
+        b.iter(|| {
+            let q = SelectQuery::<User>::new(black_box(&exec))
+                .filter(
+                    AGE
+                        .gt(18i64)
+                        .and(EMAIL.contains("example.com"))
+                        .and(ID.between(100i64, 900i64)),
+                )
+                .order_by(AGE.asc())
+                .order_by(EMAIL.asc())
+                .limit(100);
+            let _ = q.to_sql();
+        })
+    });
+
+    c.bench_function("to_sql_select_paginated", |b| {
+        b.iter(|| {
+            let q = SelectQuery::<User>::new(black_box(&exec))
+                .filter(AGE.gt(18i64).and(EMAIL.contains("example.com")))
+                .order_by(AGE.asc())
+                .order_by(EMAIL.asc())
+                .limit(20)
+                .offset(500);
             let _ = q.to_sql();
         })
     });

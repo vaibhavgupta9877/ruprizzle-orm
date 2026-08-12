@@ -7,7 +7,13 @@ This document records an apples-to-apples benchmark of **ruprizzle**, **prax**, 
 - **Host:** Windows 11, local SQLite file
 - **Dataset:**
   - `users`: 1,000 rows
+  - `categories`: 20 rows
   - `posts`: 10,000 rows (10 posts per user)
+  - `comments`: 50,000 rows (5 comments per post)
+  - `tags`: 100 rows
+  - `post_tags`: 30,000 rows (3 tags per post)
+  - `followers`: 5,000 rows
+  - `likes`: 20,000 rows
   - `bench_bulk`: empty table used for bulk-insert tests
 - **Versions:**
   - ruprizzle `0.1.0-alpha.3` (this repo)
@@ -152,3 +158,50 @@ Query construction remains a sub-microsecond win for ruprizzle (rusqlite); the b
 - [Performance](Performance.md) — Postgres vs `sqlx` measurements and the `sqlx::Any` text-marshalling note.
 - [Known limitations](KnownLimitations.md) — honest boundaries of the alpha.
 - `ProjectPlan/ImplementationPlan/ImplPlan09TestingRelease.md` — original testing-and-benchmark plan.
+
+## Benchmark run: 2026-08-12 18:28 UTC
+
+### Environment
+
+- **Warm-up trials:** 1
+- **Measured trials:** 10
+- **Dataset:**
+  - 1,000 users
+  - 20 categories
+  - 10,000 posts
+  - 50,000 comments
+  - 100 tags
+  - 30,000 post_tags
+  - 5,000 followers
+  - 20,000 likes
+
+### End-to-end results
+
+All times are microseconds per operation (lower is better).
+
+| Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
+|---|---|---|---|---|---|---|---|
+| `select_by_pk` | 25.2 | 3.4 | 19.5 | 68.6 | 10.2 | 186.8 | 38.9 |
+| `find_many_1000` | 1,618.2 | 514.5 | 782.3 | 1,636.1 | 303.4 | 2,884.1 | 425.2 |
+| `find_filtered_ordered` | 1,763.2 | 655.1 | 945.1 | 1,661.4 | 422.0 | 3,276.3 | 535.2 |
+| `find_filtered_paginated` | 377.7 | 299.4 | 373.2 | 420.6 | 301.0 | 650.8 | 363.1 |
+| `find_in_list` | 100.8 | 37.9 | 98.4 | 127.0 | 40.5 | 408.0 | 121.4 |
+| `find_complex_filter` | 304.6 | 175.4 | 250.8 | 348.3 | 163.0 | 796.9 | 249.0 |
+| `count_filtered` | 40.3 | 20.2 | 40.0 | 80.0 | 25.4 | 188.3 | 52.3 |
+| `exists_filtered` | 16.8 | 2.8 | 17.5 | 57.1 | 9.4 | 150.8 | 46.6 |
+| `include_posts` | 22,644.6 | 10,839.1 | 11,218.6 | 20,282.9 | 3,705.6 | 42,644.6 | 187,433.5 |
+| `include_author` | 20,932.7 | 9,277.0 | 9,209.0 | 20,215.4 | 3,451.3 | 82,831.2 | 16,354.5 |
+| `include_posts_and_comments` | 143,276.3 | 82,912.5 | 43,477.4 | 112,618.8 | 21,091.7 | 263,108.5 | 9,141,225.9 |
+| `include_posts_with_tags` | 57,020.1 | 36,122.3 | 26,001.2 | 53,798.5 | 8,288.7 | 267,395.4 | 36,562.8 |
+| `find_popular_posts` | 1,467.8 | 1,285.7 | 2,164.5 | 1,604.4 | 1,293.6 | 2,533.2 | 5,537.0 |
+| `bulk_insert_1000` | 1,768.7 | 1,055.6 | 1,190.5 | 6,096.3 | 7,785.9 | 12,336.9 | 8,959.0 |
+
+### Query construction (no I/O)
+
+| Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
+|---|---|---|---|---|---|---|---|
+| `to_sql_select_by_pk` | 0.6 | 0.6 | 0.4 | 7.4 | 0.7 | — | 11.7 |
+| `to_sql_select_filter_order` | 1.5 | 1.5 | 1.1 | 12.1 | 1.0 | — | 16.8 |
+| `to_sql_select_in_list` | 2.3 | 2.4 | 4.4 | 25.3 | 2.7 | — | 39.2 |
+| `to_sql_select_complex_filter` | 1.8 | 1.8 | 1.5 | 14.3 | 1.1 | — | 19.0 |
+| `to_sql_select_paginated` | 1.5 | 1.5 | 1.1 | 11.8 | 1.0 | — | 17.3 |

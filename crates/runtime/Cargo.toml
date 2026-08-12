@@ -47,6 +47,7 @@ trybuild          = "1"
 futures-util      = "0.3"
 criterion         = { workspace = true }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
+simple-process-stats = "2"
 
 [[example]]
 name = "perrow"
