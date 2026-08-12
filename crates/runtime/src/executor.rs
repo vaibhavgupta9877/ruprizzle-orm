@@ -401,8 +401,8 @@ where
             .map(|r| T::from_row(r).map_err(Error::Sqlx))
             .collect(),
         #[cfg(feature = "sqlite-rusqlite")]
-        RowBatch::Rusqlite(rows) => rows
-            .iter()
+        RowBatch::Rusqlite(mut rows) => rows
+            .iter_mut()
             .map(|r| T::from_rusqlite_row(r))
             .collect(),
     }

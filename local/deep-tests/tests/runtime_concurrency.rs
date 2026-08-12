@@ -20,11 +20,11 @@ impl Model for Task {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Task {
     fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::Row,
+        row: &mut ruprizzle::rusqlite::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.get::<i64>(0)?,
-            label: row.get::<String>(1)?,
+            id: row.take::<i64>(0)?,
+            label: row.take::<String>(1)?,
         })
     }
 }

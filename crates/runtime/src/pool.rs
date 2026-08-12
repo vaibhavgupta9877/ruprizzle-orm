@@ -302,7 +302,15 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
 
             let mut connect_opts = sqlx::sqlite::SqliteConnectOptions::from_str(url)
                 .map_err(crate::Error::Sqlx)?;
-            connect_opts = connect_opts.row_buffer_size(config.row_buffer_size as usize);
+            connect_opts = connect_opts
+                .row_buffer_size(config.row_buffer_size as usize)
+                .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+                .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+                .statement_cache_capacity(256)
+                .pragma("cache_size", "-64000")
+                .pragma("mmap_size", "268435456")
+                .pragma("temp_store", "MEMORY");
+
             let pool = SqlitePoolOptions::new()
                 .max_connections(config.max_connections)
                 .min_connections(config.min_connections)

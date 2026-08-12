@@ -89,6 +89,9 @@ impl RusqlitePool {
                 conn.execute("PRAGMA foreign_keys = ON", [])
                     .map_err(|e| Error::ConnectionFailure { reason: e.to_string() })?;
 
+                apply_pragmas(&conn, filename == ":memory:")
+                    .map_err(|e| Error::ConnectionFailure { reason: e.to_string() })?;
+
                 conns.push(Arc::new(tokio::sync::Mutex::new(conn)));
             }
 
@@ -177,12 +180,17 @@ impl RusqliteTransaction {
             force_schema_reload(&guard);
         }
         let mut stmt = guard
-            .prepare(sql)
+            .prepare_cached(sql)
             .map_err(|e| Error::Message(e.to_string()))?;
 
         let rows = stmt
             .execute(rusqlite::params_from_iter(binds.iter()))
             .map_err(|e| Error::Message(e.to_string()))?;
+
+        if is_ddl(sql) {
+            stmt.discard();
+            guard.flush_prepared_statement_cache();
+        }
 
         Ok(rows as u64)
     }
@@ -203,7 +211,7 @@ impl RusqliteTransaction {
             force_schema_reload(&guard);
         }
         let mut stmt = guard
-            .prepare(sql)
+            .prepare_cached(sql)
             .map_err(|e| Error::Message(e.to_string()))?;
 
         let column_count = stmt.column_count();
@@ -222,6 +230,11 @@ impl RusqliteTransaction {
             .map_err(|e| Error::Message(e.to_string()))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| Error::Message(e.to_string()))?;
+
+        if is_ddl(sql) {
+            stmt.discard();
+            guard.flush_prepared_statement_cache();
+        }
 
         Ok(RowBatch::Rusqlite(rows))
     }
@@ -308,7 +321,7 @@ impl Executor for RusqlitePool {
                     force_schema_reload(&guard);
                 }
                 let mut stmt = guard
-                    .prepare(sql.as_ref())
+                    .prepare_cached(sql.as_ref())
                     .map_err(|e| Error::Message(e.to_string()))?;
 
                 let column_count = stmt.column_count();
@@ -327,6 +340,11 @@ impl Executor for RusqlitePool {
                     .map_err(|e| Error::Message(e.to_string()))?
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|e| Error::Message(e.to_string()))?;
+
+                if is_ddl(sql.as_ref()) {
+                    stmt.discard();
+                    guard.flush_prepared_statement_cache();
+                }
 
                 Ok(RowBatch::Rusqlite(rows))
             })
@@ -354,12 +372,17 @@ impl Executor for RusqlitePool {
                     force_schema_reload(&guard);
                 }
                 let mut stmt = guard
-                    .prepare(sql.as_ref())
+                    .prepare_cached(sql.as_ref())
                     .map_err(|e| Error::Message(e.to_string()))?;
 
                 let rows = stmt
                     .execute(rusqlite::params_from_iter(binds.iter()))
                     .map_err(|e| Error::Message(e.to_string()))?;
+
+                if is_ddl(sql.as_ref()) {
+                    stmt.discard();
+                    guard.flush_prepared_statement_cache();
+                }
 
                 Ok(rows as u64)
             })
@@ -388,7 +411,7 @@ impl Row {
         self.0.is_empty()
     }
 
-    /// Decode the column at `idx` into `T`.
+    /// Decode the column at `idx` into `T`, cloning the underlying value.
     ///
     /// # Errors
     ///
@@ -398,7 +421,24 @@ impl Row {
         let value = self
             .0
             .get(idx)
-            .ok_or_else(|| Error::Message(format!("column index {idx} out of bounds")))?;
+            .ok_or_else(|| Error::Message(format!("column index {idx} out of bounds")))?
+            .clone();
+        T::from_value(value)
+    }
+
+    /// Take the column at `idx` and decode it into `T` without cloning.
+    ///
+    /// The slot is replaced with `Null`, so this consumes the value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Message`] if the index is out of bounds or the value
+    /// cannot be decoded into `T`.
+    pub fn take<T: FromValue>(&mut self, idx: usize) -> Result<T, Error> {
+        if idx >= self.0.len() {
+            return Err(Error::Message(format!("column index {idx} out of bounds")));
+        }
+        let value = std::mem::replace(&mut self.0[idx], RusqliteValue::Null);
         T::from_value(value)
     }
 }
@@ -410,7 +450,7 @@ pub trait FromRusqliteRow: Sized + Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`Error::Message`] if the row cannot be decoded.
-    fn from_rusqlite_row(row: &Row) -> Result<Self, Error>;
+    fn from_rusqlite_row(row: &mut Row) -> Result<Self, Error>;
 }
 
 /// A type that can be decoded from a single `rusqlite::types::Value`.
@@ -420,14 +460,14 @@ pub trait FromValue: Sized + Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`Error::Message`] if the value cannot be decoded into `T`.
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error>;
+    fn from_value(value: RusqliteValue) -> Result<Self, Error>;
 }
 
 impl FromValue for i64 {
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         match value {
-            RusqliteValue::Integer(i) => Ok(*i),
-            RusqliteValue::Real(f) => Ok(*f as i64),
+            RusqliteValue::Integer(i) => Ok(i),
+            RusqliteValue::Real(f) => Ok(f as i64),
             RusqliteValue::Text(s) => s
                 .parse()
                 .map_err(|e| Error::Message(format!("cannot decode i64 from {s:?}: {e}"))),
@@ -437,18 +477,18 @@ impl FromValue for i64 {
 }
 
 impl FromValue for i32 {
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         i64::from_value(value)?.try_into().map_err(|e| {
-            Error::Message(format!("cannot decode i32 from {value:?}: {e}"))
+            Error::Message(format!("cannot decode i32 from integer: {e}"))
         })
     }
 }
 
 impl FromValue for f64 {
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         match value {
-            RusqliteValue::Real(f) => Ok(*f),
-            RusqliteValue::Integer(i) => Ok(*i as f64),
+            RusqliteValue::Real(f) => Ok(f),
+            RusqliteValue::Integer(i) => Ok(i as f64),
             RusqliteValue::Text(s) => s
                 .parse()
                 .map_err(|e| Error::Message(format!("cannot decode f64 from {s:?}: {e}"))),
@@ -458,7 +498,7 @@ impl FromValue for f64 {
 }
 
 impl FromValue for bool {
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         match value {
             RusqliteValue::Integer(0) => Ok(false),
             RusqliteValue::Integer(1) => Ok(true),
@@ -470,9 +510,9 @@ impl FromValue for bool {
 }
 
 impl FromValue for String {
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         match value {
-            RusqliteValue::Text(s) => Ok(s.clone()),
+            RusqliteValue::Text(s) => Ok(s),
             RusqliteValue::Integer(i) => Ok(i.to_string()),
             RusqliteValue::Real(f) => Ok(f.to_string()),
             RusqliteValue::Blob(_) => Err(Error::Message("cannot decode String from blob".into())),
@@ -482,7 +522,7 @@ impl FromValue for String {
 }
 
 impl FromValue for crate::types::Decimal {
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         let s = String::from_value(value)?;
         s.parse()
             .map_err(|e| Error::Message(format!("cannot decode Decimal from {s:?}: {e}")))
@@ -490,7 +530,7 @@ impl FromValue for crate::types::Decimal {
 }
 
 impl FromValue for crate::types::Uuid {
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         let s = String::from_value(value)?;
         s.parse()
             .map_err(|e| Error::Message(format!("cannot decode Uuid from {s:?}: {e}")))
@@ -498,7 +538,7 @@ impl FromValue for crate::types::Uuid {
 }
 
 impl FromValue for crate::types::chrono::DateTime<crate::types::chrono::Utc> {
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         let s = String::from_value(value)?;
         s.parse()
             .map_err(|e| Error::Message(format!("cannot decode DateTime from {s:?}: {e}")))
@@ -506,7 +546,7 @@ impl FromValue for crate::types::chrono::DateTime<crate::types::chrono::Utc> {
 }
 
 impl FromValue for crate::types::chrono::NaiveDate {
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         let s = String::from_value(value)?;
         s.parse()
             .map_err(|e| Error::Message(format!("cannot decode NaiveDate from {s:?}: {e}")))
@@ -514,7 +554,7 @@ impl FromValue for crate::types::chrono::NaiveDate {
 }
 
 impl FromValue for crate::types::chrono::NaiveTime {
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         let s = String::from_value(value)?;
         s.parse()
             .map_err(|e| Error::Message(format!("cannot decode NaiveTime from {s:?}: {e}")))
@@ -522,7 +562,7 @@ impl FromValue for crate::types::chrono::NaiveTime {
 }
 
 impl FromValue for serde_json::Value {
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         let s = String::from_value(value)?;
         serde_json::from_str(&s)
             .map_err(|e| Error::Message(format!("cannot decode JSON from {s:?}: {e}")))
@@ -530,16 +570,16 @@ impl FromValue for serde_json::Value {
 }
 
 impl FromValue for Vec<u8> {
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         match value {
-            RusqliteValue::Blob(b) => Ok(b.clone()),
+            RusqliteValue::Blob(b) => Ok(b),
             _ => Err(Error::Message(format!("cannot decode Vec<u8> from {value:?}"))),
         }
     }
 }
 
 impl<T: FromValue> FromValue for Option<T> {
-    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
         match value {
             RusqliteValue::Null => Ok(None),
             _ => T::from_value(value).map(Some),
@@ -550,10 +590,10 @@ impl<T: FromValue> FromValue for Option<T> {
 macro_rules! tuple_from_value {
     ($($T:ident $idx:tt),+) => {
         impl<$($T: FromValue),+> FromRusqliteRow for ($($T,)+) {
-            fn from_rusqlite_row(row: &Row) -> Result<Self, Error> {
+            fn from_rusqlite_row(row: &mut Row) -> Result<Self, Error> {
                 Ok((
                     $(
-                        row.get::<$T>($idx)?
+                        row.take::<$T>($idx)?
                     ,)+
                 ))
             }
@@ -588,6 +628,31 @@ fn value_to_rusqlite(value: &Value) -> Result<RusqliteValue, Error> {
         Value::Bytes(b) => RusqliteValue::Blob(b.to_vec()),
         Value::Array(_) => return Err(Error::Message("array bind values are not supported yet".into())),
     })
+}
+
+/// Apply performance and correctness PRAGMAs to a fresh `rusqlite` connection.
+///
+/// WAL mode, a relaxed synchronous setting and a larger page/mmap cache are
+/// standard SQLite tuning for local-file workloads.  They are applied per
+/// connection; WAL is persistent once set on the database file.
+fn apply_pragmas(conn: &rusqlite::Connection, is_memory: bool) -> Result<(), rusqlite::Error> {
+    // WAL is not meaningful for in-memory databases and may error.
+    if !is_memory {
+        // `journal_mode` returns a row, so we need the checking variant.
+        let _ = conn.pragma_update_and_check(None, "journal_mode", "WAL", |_| Ok(()));
+    }
+
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
+    conn.pragma_update(None, "temp_store", "MEMORY")?;
+    conn.pragma_update(None, "cache_size", -64_000i64)?;
+    conn.pragma_update(None, "mmap_size", 268_435_456i64)?;
+
+    // Allow more prepared statements to stay live across queries; the DDL-safe
+    // flush logic in commit/rollback keeps the cache consistent with schema
+    // changes.
+    conn.set_prepared_statement_cache_capacity(256);
+
+    Ok(())
 }
 
 /// Force `rusqlite` to reload its schema cache for the current connection.

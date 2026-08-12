@@ -21,11 +21,11 @@ impl Model for User {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
     fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::Row,
+        row: &mut ruprizzle::rusqlite::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.get::<i64>(0)?,
-            name: row.get::<String>(1)?,
+            id: row.take::<i64>(0)?,
+            name: row.take::<String>(1)?,
             posts: Related::default(),
         })
     }
@@ -50,13 +50,13 @@ impl Model for Post {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Post {
     fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::Row,
+        row: &mut ruprizzle::rusqlite::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.get::<i64>(0)?,
-            title: row.get::<String>(1)?,
-            published: row.get::<i64>(2)?,
-            author_id: row.get::<i64>(3)?,
+            id: row.take::<i64>(0)?,
+            title: row.take::<String>(1)?,
+            published: row.take::<i64>(2)?,
+            author_id: row.take::<i64>(3)?,
             author: Related::default(),
             comments: Related::default(),
         })
@@ -78,12 +78,12 @@ impl Model for Comment {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Comment {
     fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::Row,
+        row: &mut ruprizzle::rusqlite::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.get::<i64>(0)?,
-            body: row.get::<String>(1)?,
-            post_id: row.get::<i64>(2)?,
+            id: row.take::<i64>(0)?,
+            body: row.take::<String>(1)?,
+            post_id: row.take::<i64>(2)?,
         })
     }
 }

@@ -569,7 +569,7 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
 
         #[cfg(feature = "sqlite-rusqlite")]
         impl ::ruprizzle::rusqlite::FromRusqliteRow for #model_name {
-            fn from_rusqlite_row(row: &::ruprizzle::rusqlite::Row) -> Result<Self, ::ruprizzle::Error> {
+            fn from_rusqlite_row(row: &mut ::ruprizzle::rusqlite::Row) -> Result<Self, ::ruprizzle::Error> {
                 Ok(Self {
                     #( #rusqlite_from_row_fields )*
                 })
@@ -749,7 +749,7 @@ fn emit_from_rusqlite_row_field(
     let idx = syn::Index::from(idx.unwrap_or(0));
     let ty = rust_type_tokens(schema, owner, field, field.optional, false);
 
-    quote! { #name: ::ruprizzle::rusqlite::Row::get::<#ty>(&row, #idx)?, }
+    quote! { #name: row.take::<#ty>(#idx)?, }
 }
 
 fn emit_insert_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream {

@@ -65,17 +65,15 @@ impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow> fo
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for Order {
     fn from_rusqlite_row(
-        row: &::ruprizzle::rusqlite::Row,
+        row: &mut ::ruprizzle::rusqlite::Row,
     ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 0)?,
-            status: ::ruprizzle::rusqlite::Row::get::<
-                super::enums::OrderStatus,
-            >(&row, 1)?,
-            customer_id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 2)?,
+            id: row.take::<Uuid>(0)?,
+            status: row.take::<super::enums::OrderStatus>(1)?,
+            customer_id: row.take::<Uuid>(2)?,
             customer: ::ruprizzle::Related::default(),
             items: ::ruprizzle::Related::default(),
-            placed_at: ::ruprizzle::rusqlite::Row::get::<DateTime<Utc>>(&row, 3)?,
+            placed_at: row.take::<DateTime<Utc>>(3)?,
         })
     }
 }

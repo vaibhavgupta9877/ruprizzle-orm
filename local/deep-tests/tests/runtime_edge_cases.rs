@@ -26,14 +26,14 @@ impl Model for Item {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Item {
     fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::Row,
+        row: &mut ruprizzle::rusqlite::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.get::<i64>(0)?,
-            handle: row.get::<String>(1)?,
-            age: row.get::<i64>(2)?,
-            active: row.get::<i64>(3)?,
-            note: row.get::<Option<String>>(4)?,
+            id: row.take::<i64>(0)?,
+            handle: row.take::<String>(1)?,
+            age: row.take::<i64>(2)?,
+            active: row.take::<i64>(3)?,
+            note: row.take::<Option<String>>(4)?,
         })
     }
 }

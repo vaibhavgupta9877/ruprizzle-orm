@@ -23,13 +23,13 @@ struct Event {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Event {
     fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::Row,
+        row: &mut ruprizzle::rusqlite::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.get::<Uuid>(0)?,
-            created_at: row.get::<DateTime<Utc>>(1)?,
-            price: row.get::<Decimal>(2)?,
-            meta: row.get::<serde_json::Value>(3)?,
+            id: row.take::<Uuid>(0)?,
+            created_at: row.take::<DateTime<Utc>>(1)?,
+            price: row.take::<Decimal>(2)?,
+            meta: row.take::<serde_json::Value>(3)?,
         })
     }
 }

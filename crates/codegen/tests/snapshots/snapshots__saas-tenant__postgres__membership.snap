@@ -72,16 +72,16 @@ for Membership {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for Membership {
     fn from_rusqlite_row(
-        row: &::ruprizzle::rusqlite::Row,
+        row: &mut ::ruprizzle::rusqlite::Row,
     ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 0)?,
-            org_id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 1)?,
+            id: row.take::<Uuid>(0)?,
+            org_id: row.take::<Uuid>(1)?,
             organisation: ::ruprizzle::Related::default(),
-            account_id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 2)?,
+            account_id: row.take::<Uuid>(2)?,
             account: ::ruprizzle::Related::default(),
-            is_owner: ::ruprizzle::rusqlite::Row::get::<bool>(&row, 3)?,
-            updated_at: ::ruprizzle::rusqlite::Row::get::<DateTime<Utc>>(&row, 4)?,
+            is_owner: row.take::<bool>(3)?,
+            updated_at: row.take::<DateTime<Utc>>(4)?,
         })
     }
 }

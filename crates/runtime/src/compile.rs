@@ -696,7 +696,7 @@ mod tests {
             }
             #[cfg(feature = "sqlite-rusqlite")]
             impl crate::rusqlite::FromRusqliteRow for $t {
-                fn from_rusqlite_row(_: &crate::rusqlite::Row) -> Result<Self, crate::Error> {
+                fn from_rusqlite_row(_: &mut crate::rusqlite::Row) -> Result<Self, crate::Error> {
                     let v: $t = Default::default();
                     Ok(v)
                 }

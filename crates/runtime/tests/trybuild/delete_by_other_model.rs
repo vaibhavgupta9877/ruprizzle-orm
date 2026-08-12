@@ -12,10 +12,10 @@ impl Model for Task {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Task {
     fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::Row,
+        row: &mut ruprizzle::rusqlite::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: ruprizzle::rusqlite::FromValue::from_value(&row.0[0])?,
+            id: ruprizzle::rusqlite::FromValue::from_value(row.0.remove(0))?,
         })
     }
 }
@@ -32,10 +32,10 @@ impl Model for User {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
     fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::Row,
+        row: &mut ruprizzle::rusqlite::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: ruprizzle::rusqlite::FromValue::from_value(&row.0[0])?,
+            id: ruprizzle::rusqlite::FromValue::from_value(row.0.remove(0))?,
         })
     }
 }

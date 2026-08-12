@@ -1,6 +1,6 @@
 Cross-ORM benchmark log
 =======================
-Timestamp: 2026-08-12T08:05:16.137076+00:00
+Timestamp: 2026-08-12T09:13:34.623502+00:00
 Warm-up trials: 1
 Measured trials: 10
 Units: us/op (microseconds per operation)
@@ -9,18 +9,18 @@ End-to-end results
 ------------------
 Operation                      ruprizzle (sqlx)   ruprizzle (rusqlite)       Prisma      Drizzle
 ------------------------------------------------------------------------------------------------
-select_by_pk                               39.8                   29.7        168.6         29.5
-find_many_1000                          1,065.1                  459.4      2,061.8        298.5
-find_filtered_ordered                   1,138.1                  539.0      2,277.6        339.1
-include_posts                          13,229.2                5,806.2     32,859.3    181,843.9
-bulk_insert_1000                        7,059.4                6,409.9     13,051.8      9,090.7
+select_by_pk                               23.5                   16.7        162.5         29.8
+find_many_1000                          1,058.9                  311.9      2,043.7        308.4
+find_filtered_ordered                   1,186.2                  469.7      2,235.8        338.1
+include_posts                          12,800.4                5,017.5     32,406.6    182,360.5
+bulk_insert_1000                        2,031.6                1,418.7     12,762.0      8,823.9
 
 Query construction (no I/O)
 ---------------------------
 Operation                       ruprizzle (sqlx / rusqlite)      Drizzle
 ------------------------------------------------------------------------
-to_sql_select_by_pk                                     0.5          8.5
-to_sql_select_filter_order                              1.5         10.1
+to_sql_select_by_pk                                     0.9          8.5
+to_sql_select_filter_order                              3.3         10.1
 
 Per-driver, per-operation statistics
 ------------------------------------
@@ -28,41 +28,41 @@ Per-driver, per-operation statistics
 ruprizzle (sqlx)
 Operation                            mean       median          min          max        stdev      CV%
 ----------------------------------------------------------------------------------------------------
-select_by_pk                         40.5         39.8         31.8         54.4          7.2     17.7
-find_many_1000                     1073.0       1065.1       1038.3       1158.8         36.4      3.4
-find_filtered_ordered              1146.7       1138.1       1111.3       1205.2         29.0      2.5
-include_posts                     13166.8      13229.2      12434.5      13938.4        416.3      3.2
-bulk_insert_1000                   7289.2       7059.4       6372.7       9108.5        788.9     10.8
-to_sql_select_by_pk                   0.6          0.5          0.5          0.6          0.0      2.3
-to_sql_select_filter_order            1.5          1.5          1.4          1.6          0.0      3.2
+select_by_pk                         23.7         23.5         19.0         29.8          3.4     14.4
+find_many_1000                     1076.6       1058.9        997.8       1186.5         59.0      5.5
+find_filtered_ordered              1190.5       1186.2       1115.8       1299.6         53.5      4.5
+include_posts                     12956.1      12800.4      12300.8      13525.3        409.4      3.2
+bulk_insert_1000                   2342.8       2031.6       1875.5       4975.8        935.1     39.9
+to_sql_select_by_pk                   1.0          0.9          0.9          1.0          0.0      2.6
+to_sql_select_filter_order            3.3          3.3          3.3          3.4          0.0      1.3
 
 ruprizzle (rusqlite)
 Operation                            mean       median          min          max        stdev      CV%
 ----------------------------------------------------------------------------------------------------
-select_by_pk                         30.7         29.7         28.4         38.6          3.1     10.2
-find_many_1000                      459.5        459.4        430.8        494.9         18.2      4.0
-find_filtered_ordered               544.7        539.0        466.8        657.0         53.6      9.8
-include_posts                      5790.5       5806.2       5600.9       6032.2        123.7      2.1
-bulk_insert_1000                   6400.2       6409.9       5944.8       6836.2        258.4      4.0
-to_sql_select_by_pk                   0.6          0.6          0.5          0.6          0.0      3.1
-to_sql_select_filter_order            1.6          1.5          1.5          1.8          0.1      8.0
+select_by_pk                         21.4         16.7         15.3         40.5          8.5     39.6
+find_many_1000                      333.7        311.9        271.2        441.1         53.8     16.1
+find_filtered_ordered               489.4        469.7        441.1        569.4         40.5      8.3
+include_posts                      5014.1       5017.5       4887.0       5151.4         67.2      1.3
+bulk_insert_1000                   1425.3       1418.7       1334.7       1539.2         64.3      4.5
+to_sql_select_by_pk                   0.6          0.6          0.5          0.6          0.0      2.7
+to_sql_select_filter_order            1.5          1.5          1.5          1.6          0.0      2.2
 
 drizzle
 Operation                            mean       median          min          max        stdev      CV%
 ----------------------------------------------------------------------------------------------------
-select_by_pk                         29.7         29.5         28.8         30.9          0.7      2.4
-find_many_1000                      303.3        298.5        291.0        345.8         16.2      5.3
-find_filtered_ordered               343.8        339.1        326.0        383.1         18.2      5.3
-include_posts                    181917.9     181843.9     180699.6     183835.3       1001.6      0.6
-bulk_insert_1000                   9206.9       9090.7       8284.9      10269.6        733.7      8.0
-to_sql_select_by_pk                   8.5          8.5          8.3          8.9          0.2      2.1
-to_sql_select_filter_order           10.1         10.1          9.9         10.4          0.2      1.6
+select_by_pk                         30.0         29.8         28.9         31.7          1.0      3.3
+find_many_1000                      307.8        308.4        292.8        321.2          9.8      3.2
+find_filtered_ordered               340.4        338.1        316.7        358.6         12.6      3.7
+include_posts                    182720.6     182360.5     181120.3     185118.9       1459.1      0.8
+bulk_insert_1000                   8760.8       8823.9       7633.8      10116.9        652.8      7.5
+to_sql_select_by_pk                   8.6          8.5          8.3          9.2          0.2      2.9
+to_sql_select_filter_order           10.3         10.1          9.8         11.4          0.5      4.8
 
 prisma
 Operation                            mean       median          min          max        stdev      CV%
 ----------------------------------------------------------------------------------------------------
-select_by_pk                        167.1        168.6        154.3        176.6          7.8      4.7
-find_many_1000                     2059.4       2061.8       2003.6       2105.3         35.2      1.7
-find_filtered_ordered              2273.6       2277.6       2214.7       2330.4         33.8      1.5
-include_posts                     32821.0      32859.3      32198.7      33436.2        419.9      1.3
-bulk_insert_1000                  13172.9      13051.8      12601.4      14301.0        468.5      3.6
+select_by_pk                        160.7        162.5        142.1        174.8         11.4      7.1
+find_many_1000                     2035.3       2043.7       1973.2       2087.5         33.5      1.6
+find_filtered_ordered              2241.6       2235.8       2165.9       2319.7         44.9      2.0
+include_posts                     32544.9      32406.6      31954.0      33409.4        507.9      1.6
+bulk_insert_1000                  12964.8      12762.0      12541.0      13842.4        468.9      3.6

@@ -69,15 +69,15 @@ for OrderItem {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for OrderItem {
     fn from_rusqlite_row(
-        row: &::ruprizzle::rusqlite::Row,
+        row: &mut ::ruprizzle::rusqlite::Row,
     ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            order_id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 0)?,
+            order_id: row.take::<Uuid>(0)?,
             order: ::ruprizzle::Related::default(),
-            product_id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 1)?,
+            product_id: row.take::<Uuid>(1)?,
             product: ::ruprizzle::Related::default(),
-            quantity: ::ruprizzle::rusqlite::Row::get::<i32>(&row, 2)?,
-            unit_price: ::ruprizzle::rusqlite::Row::get::<Decimal>(&row, 3)?,
+            quantity: row.take::<i32>(2)?,
+            unit_price: row.take::<Decimal>(3)?,
         })
     }
 }

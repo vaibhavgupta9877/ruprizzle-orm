@@ -24,12 +24,12 @@ struct User {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
     fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::Row,
+        row: &mut ruprizzle::rusqlite::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.get::<i64>(0)?,
-            email: row.get::<String>(1)?,
-            age: row.get::<i32>(2)?,
+            id: row.take::<i64>(0)?,
+            email: row.take::<String>(1)?,
+            age: row.take::<i32>(2)?,
         })
     }
 }

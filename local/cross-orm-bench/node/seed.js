@@ -4,8 +4,13 @@ import path from 'node:path';
 
 const DB_PATH = path.join(import.meta.dirname, 'bench.sqlite3');
 
-if (fs.existsSync(DB_PATH)) {
-  fs.unlinkSync(DB_PATH);
+// Remove any SQLite side-car files as well as the main database. This keeps
+// the seeded file clean even when the drivers switch the database to WAL mode.
+for (const suffix of ['', '-wal', '-shm', '-journal']) {
+  const p = `${DB_PATH}${suffix}`;
+  if (fs.existsSync(p)) {
+    fs.unlinkSync(p);
+  }
 }
 
 const db = new Database(DB_PATH);

@@ -69,16 +69,16 @@ impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow> fo
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for User {
     fn from_rusqlite_row(
-        row: &::ruprizzle::rusqlite::Row,
+        row: &mut ::ruprizzle::rusqlite::Row,
     ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 0)?,
-            email: ::ruprizzle::rusqlite::Row::get::<String>(&row, 1)?,
-            name: ::ruprizzle::rusqlite::Row::get::<Option<String>>(&row, 2)?,
-            role: ::ruprizzle::rusqlite::Row::get::<super::enums::Role>(&row, 3)?,
+            id: row.take::<Uuid>(0)?,
+            email: row.take::<String>(1)?,
+            name: row.take::<Option<String>>(2)?,
+            role: row.take::<super::enums::Role>(3)?,
             posts: ::ruprizzle::Related::default(),
-            created_at: ::ruprizzle::rusqlite::Row::get::<DateTime<Utc>>(&row, 4)?,
-            updated_at: ::ruprizzle::rusqlite::Row::get::<DateTime<Utc>>(&row, 5)?,
+            created_at: row.take::<DateTime<Utc>>(4)?,
+            updated_at: row.take::<DateTime<Utc>>(5)?,
         })
     }
 }

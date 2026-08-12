@@ -62,14 +62,14 @@ for Account {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for Account {
     fn from_rusqlite_row(
-        row: &::ruprizzle::rusqlite::Row,
+        row: &mut ::ruprizzle::rusqlite::Row,
     ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: ::ruprizzle::rusqlite::Row::get::<Uuid>(&row, 0)?,
-            email: ::ruprizzle::rusqlite::Row::get::<String>(&row, 1)?,
-            display_name: ::ruprizzle::rusqlite::Row::get::<Option<String>>(&row, 2)?,
+            id: row.take::<Uuid>(0)?,
+            email: row.take::<String>(1)?,
+            display_name: row.take::<Option<String>>(2)?,
             memberships: ::ruprizzle::Related::default(),
-            created_at: ::ruprizzle::rusqlite::Row::get::<DateTime<Utc>>(&row, 3)?,
+            created_at: row.take::<DateTime<Utc>>(3)?,
         })
     }
 }

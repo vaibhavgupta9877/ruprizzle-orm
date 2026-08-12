@@ -20,11 +20,11 @@ impl Model for Note {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Note {
     fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::Row,
+        row: &mut ruprizzle::rusqlite::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.get::<i64>(0)?,
-            body: row.get::<String>(1)?,
+            id: row.take::<i64>(0)?,
+            body: row.take::<String>(1)?,
         })
     }
 }
