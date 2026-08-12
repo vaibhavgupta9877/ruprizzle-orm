@@ -116,9 +116,7 @@ impl Tx {
                 TxInner::Sqlite(tx) => tx.commit().await.map_err(Error::Sqlx)?,
                 #[cfg(feature = "sqlite-rusqlite")]
                 TxInner::SqliteNative(tx) => {
-                    tokio::task::spawn_blocking(move || tx.commit())
-                        .await
-                        .map_err(|e| Error::Message(e.to_string()))??;
+                    tx.commit()?;
                 }
             };
             tracing::debug!(target: "ruprizzle::query", "transaction committed");
@@ -140,9 +138,7 @@ impl Tx {
                 TxInner::Sqlite(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
                 #[cfg(feature = "sqlite-rusqlite")]
                 TxInner::SqliteNative(tx) => {
-                    tokio::task::spawn_blocking(move || tx.rollback())
-                        .await
-                        .map_err(|e| Error::Message(e.to_string()))??;
+                    tx.rollback()?;
                 }
             };
             tracing::debug!(target: "ruprizzle::query", "transaction rolled back");
@@ -194,14 +190,7 @@ impl Tx {
                     .map_err(Error::Sqlx)
             }
             #[cfg(feature = "sqlite-rusqlite")]
-            TxInner::SqliteNative(tx) => {
-                let sql = sql.to_owned();
-                let binds = binds.to_vec();
-                let tx = tx.clone();
-                tokio::task::spawn_blocking(move || tx.execute_sync(&sql, &binds))
-                    .await
-                    .map_err(|e| Error::Message(e.to_string()))?
-            }
+            TxInner::SqliteNative(tx) => tx.execute_sync(sql, binds)
         }
     }
 
@@ -244,12 +233,7 @@ impl Tx {
             }
             #[cfg(feature = "sqlite-rusqlite")]
             TxInner::SqliteNative(tx) => {
-                let sql = sql.to_owned();
-                let binds = binds.to_vec();
-                let tx = tx.clone();
-                let batch = tokio::task::spawn_blocking(move || tx.fetch_all_sync(&sql, &binds))
-                    .await
-                    .map_err(|e| Error::Message(e.to_string()))??;
+                let batch = tx.fetch_all_sync(sql, binds)?;
                 crate::executor::decode_rows::<T>(batch)
             }
         }
@@ -294,12 +278,7 @@ impl Tx {
             }
             #[cfg(feature = "sqlite-rusqlite")]
             TxInner::SqliteNative(tx) => {
-                let sql = sql.to_owned();
-                let binds = binds.to_vec();
-                let tx = tx.clone();
-                let batch = tokio::task::spawn_blocking(move || tx.fetch_all_sync(&sql, &binds))
-                    .await
-                    .map_err(|e| Error::Message(e.to_string()))??;
+                let batch = tx.fetch_all_sync(sql, binds)?;
                 let rows = crate::executor::decode_rows::<T>(batch)?;
                 rows.into_iter().next().ok_or_else(|| Error::Message("no row found".into()))
             }
@@ -345,12 +324,7 @@ impl Tx {
             }
             #[cfg(feature = "sqlite-rusqlite")]
             TxInner::SqliteNative(tx) => {
-                let sql = sql.to_owned();
-                let binds = binds.to_vec();
-                let tx = tx.clone();
-                let batch = tokio::task::spawn_blocking(move || tx.fetch_all_sync(&sql, &binds))
-                    .await
-                    .map_err(|e| Error::Message(e.to_string()))??;
+                let batch = tx.fetch_all_sync(sql, binds)?;
                 let rows = crate::executor::decode_rows::<T>(batch)?;
                 Ok(rows.into_iter().next())
             }
@@ -402,14 +376,7 @@ impl Tx {
                     .map_err(Error::Sqlx)
             }
             #[cfg(feature = "sqlite-rusqlite")]
-            TxInner::SqliteNative(tx) => {
-                let sql = sql.to_owned();
-                let binds = binds.to_vec();
-                let tx = tx.clone();
-                tokio::task::spawn_blocking(move || tx.fetch_all_sync(&sql, &binds))
-                    .await
-                    .map_err(|e| Error::Message(e.to_string()))?
-            }
+            TxInner::SqliteNative(tx) => tx.fetch_all_sync(sql, binds)
         }
     }
 }

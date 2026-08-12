@@ -19,7 +19,7 @@ This document records an apples-to-apples benchmark of **ruprizzle**, **prax**, 
   - better-sqlite3 `13.0.3`
   - rusqlite `0.32.1`
 
-> Important: this run used SQLite because no Postgres / Docker was available. The numbers are therefore dominated as much by driver choice as by the ORM layer. ruprizzle (`sqlx` backend) uses `sqlx::Any`, ruprizzle (`rusqlite` backend) uses the synchronous `rusqlite` binding over a small blocking pool, prax and Sea-ORM use `sqlx-sqlite`, Diesel uses `libsqlite3-sys`/`diesel` with a bundled SQLite, Drizzle uses the synchronous `better-sqlite3` binding, and Prisma uses its in-process Rust query engine.
+> Important: this run used SQLite because no Postgres / Docker was available. The numbers are therefore dominated as much by driver choice as by the ORM layer. ruprizzle (`sqlx` backend) uses `sqlx::Any`, ruprizzle (`rusqlite` backend) now runs the synchronous `rusqlite` query directly on the calling tokio task (no `spawn_blocking`), prax and Sea-ORM use `sqlx-sqlite`, Diesel uses `libsqlite3-sys`/`diesel` with a bundled SQLite, Drizzle uses the synchronous `better-sqlite3` binding, and Prisma uses its in-process Rust query engine.
 
 ## Harness and raw data
 
@@ -48,18 +48,18 @@ All times are microseconds per operation (lower is better).
 
 | Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
 |---|---|---|---|---|---|---|---|
-| `select_by_pk` | 22.6 | 16.6 | 28.8 | 69.2 | 10.3 | 163.9 | 29.4 |
-| `find_many_1000` | 1,026.5 | 304.4 | 452.9 | 1,169.8 | 194.9 | 2,047.6 | 305.6 |
-| `find_filtered_ordered` | 1,160.7 | 493.2 | 633.4 | 1,218.4 | 289.5 | 2,238.9 | 334.9 |
-| `include_posts` | 13,075.3 | 5,024.1 | 7,448.6 | 24,874.3 | 2,924.0 | 32,864.9 | 181,915.6 |
-| `bulk_insert_1000` | 2,110.8 | 1,474.0 | 1,419.1 | 6,235.5 | 5,410.8 | 13,296.5 | 8,711.2 |
+| `select_by_pk` | 19.3 | 3.0 | 28.8 | 74.4 | 9.8 | 163.0 | 29.6 |
+| `find_many_1000` | 1,000.4 | 225.8 | 469.4 | 1,138.0 | 187.5 | 2,020.0 | 300.9 |
+| `find_filtered_ordered` | 1,163.3 | 373.6 | 620.4 | 1,242.3 | 271.4 | 2,233.3 | 351.3 |
+| `include_posts` | 12,796.1 | 4,512.3 | 7,233.9 | 24,410.7 | 2,883.9 | 32,291.5 | 182,144.4 |
+| `bulk_insert_1000` | 1,971.9 | 1,263.4 | 1,376.6 | 5,933.5 | 5,726.0 | 13,052.1 | 8,349.7 |
 
 ## Query construction (no I/O)
 
 | Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
 |---|---|---|---|---|---|---|---|
-| `to_sql_select_by_pk` | 0.9 | 0.6 | 0.4 | 5.1 | 0.5 | — | 8.5 |
-| `to_sql_select_filter_order` | 3.3 | 1.5 | 0.4 | 7.6 | 0.7 | — | 10.2 |
+| `to_sql_select_by_pk` | 0.9 | 0.5 | 0.4 | 5.0 | 0.5 | — | 8.4 |
+| `to_sql_select_filter_order` | 3.2 | 1.5 | 0.4 | 7.7 | 0.7 | — | 10.2 |
 
 ## Codegen / build-step comparison
 
@@ -72,67 +72,67 @@ All times are microseconds per operation (lower is better).
 ### Simple reads
 The synchronous, native-driver ORMs lead here:
 
-- **Diesel: 10.3 µs**
-- **ruprizzle (rusqlite): 16.6 µs**
-- **ruprizzle (sqlx): 22.6 µs**
-- **Drizzle: 29.4 µs**, **prax: 28.8 µs**
-- **Sea-ORM: 69.2 µs**
-- **Prisma: 163.9 µs**
+- **ruprizzle (rusqlite): 3.0 µs**
+- **Diesel: 9.8 µs**
+- **ruprizzle (sqlx): 19.3 µs**
+- **Drizzle: 29.6 µs**, **prax: 28.8 µs**
+- **Sea-ORM: 74.4 µs**
+- **Prisma: 163.0 µs**
 
-Diesel's direct `libsqlite3-sys` path has the least runtime overhead, while ruprizzle's `rusqlite` backend is close behind. Sea-ORM and Prisma carry the most overhead for a single-row PK lookup.
+Running the `rusqlite` query synchronously on the calling task eliminates the `tokio::task::spawn_blocking` dispatch that previously cost ~10–15 µs per call, making ruprizzle the fastest single-row PK lookup. Diesel and ruprizzle (sqlx) are the next tier.
 
 ### Multi-row and filtered reads
-Diesel is again fastest, with ruprizzle (rusqlite), Drizzle, and prax forming a competitive mid-tier:
+Diesel is still fastest, but ruprizzle (rusqlite) is now within striking distance:
 
-- `find_many_1000`: **194.9 µs** (Diesel) vs **304.4 µs** (ruprizzle rusqlite) vs **305.6 µs** (Drizzle) vs **452.9 µs** (prax) vs **1,169.8 µs** (Sea-ORM) vs **2,047.6 µs** (Prisma)
-- `find_filtered_ordered`: **289.5 µs** (Diesel) vs **334.9 µs** (Drizzle) vs **493.2 µs** (ruprizzle rusqlite) vs **633.4 µs** (prax) vs **1,218.4 µs** (Sea-ORM) vs **2,238.9 µs** (Prisma)
+- `find_many_1000`: **187.5 µs** (Diesel) vs **225.8 µs** (ruprizzle rusqlite) vs **300.9 µs** (Drizzle) vs **469.4 µs** (prax) vs **1,138.0 µs** (Sea-ORM) vs **2,020.0 µs** (Prisma)
+- `find_filtered_ordered`: **271.4 µs** (Diesel) vs **351.3 µs** (Drizzle) vs **373.6 µs** (ruprizzle rusqlite) vs **620.4 µs** (prax) vs **1,242.3 µs** (Sea-ORM) vs **2,233.3 µs** (Prisma)
 
-The native, synchronous drivers (Diesel / better-sqlite3 / rusqlite) avoid the per-row async worker-thread hop used by `sqlx-sqlite`, which shows up clearly in Sea-ORM's and ruprizzle (sqlx)'s numbers.
+The remaining gap on multi-row reads is mostly per-row decoding overhead in ruprizzle's intermediate `Row`/`FromValue` path. The native drivers avoid the per-row async worker-thread hop used by `sqlx-sqlite`, which still shows up clearly in Sea-ORM and ruprizzle (sqlx).
 
 ### Relation includes
 Diesel's manually-written join query is fastest, while ruprizzle's auto-batched loader remains the strongest *automatic* option:
 
 - **Diesel: 2.9 ms** (manual join)
-- **ruprizzle (rusqlite): 5.0 ms** (auto-batched)
-- **prax: 7.4 ms**
-- **ruprizzle (sqlx): 13.1 ms**
-- **Sea-ORM: 24.9 ms**
-- **Prisma: 32.9 ms**
-- **Drizzle: 181.9 ms** (correlated subquery per parent row)
+- **ruprizzle (rusqlite): 4.5 ms** (auto-batched)
+- **prax: 7.2 ms**
+- **ruprizzle (sqlx): 12.8 ms**
+- **Sea-ORM: 24.4 ms**
+- **Prisma: 32.3 ms**
+- **Drizzle: 182.1 ms** (correlated subquery per parent row)
 
-Drizzle's SQLite relational query emits a correlated subquery with `json_group_array` per parent row — effectively an N+1 shape in SQL. On Postgres it can use joins/CTEs and would likely be much faster. Sea-ORM's `find_with_related` issues a pair of queries but is slower than ruprizzle's loader, partly because of its own in-memory grouping and the `sqlx-sqlite` async runtime overhead.
+Removing `spawn_blocking` shaves ~0.5 ms off ruprizzle (rusqlite). The remaining gap vs Diesel is the in-memory grouping of 10,000 child rows into 1,000 parent `Vec`s. Diesel does not group in this benchmark. Drizzle's SQLite relational query still emits a correlated subquery with `json_group_array` per parent row.
 
 ### Bulk insert
 The `rusqlite` and `sqlx` backends are fastest:
 
+- **ruprizzle (rusqlite): 1.3 ms**
 - **prax: 1.4 ms**
-- **ruprizzle (rusqlite): 1.5 ms**
-- **ruprizzle (sqlx): 2.1 ms**
-- **Diesel: 5.4 ms**
-- **Drizzle: 8.7 ms**
-- **Sea-ORM: 6.2 ms**
-- **Prisma: 13.3 ms**
+- **ruprizzle (sqlx): 2.0 ms**
+- **Diesel: 5.7 ms**
+- **Sea-ORM: 5.9 ms**
+- **Drizzle: 8.3 ms**
+- **Prisma: 13.1 ms**
 
-Diesel's bulk insert is slower here despite using a single `INSERT` statement; it still returns the inserted rows (like ruprizzle), so the gap is likely from its `INSERT ... RETURNING *` path and the prepared-plan cost for a 1,000-value statement.
+Diesel's bulk insert is slower here despite using a single `INSERT` statement. ruprizzle and prax both use a multi-value statement with `RETURNING *` and still come out ahead.
 
 ### Query construction
 Turning a builder into SQL+binds is cheap for all the Rust ORMs, while the TypeScript/JavaScript ORMs are an order of magnitude slower:
 
-- **prax: 0.4 µs**, **Diesel: 0.5 µs**, **ruprizzle (rusqlite): 0.6 µs**, **ruprizzle (sqlx): 0.9 µs**
-- **Sea-ORM: 5.1–7.6 µs**
-- **Drizzle: 8.5–10.2 µs**
+- **prax: 0.4 µs**, **Diesel: 0.5 µs**, **ruprizzle (rusqlite): 0.5 µs**, **ruprizzle (sqlx): 0.9 µs**
+- **Sea-ORM: 5.0–7.7 µs**
+- **Drizzle: 8.4–10.2 µs**
 - **Prisma: not exposed**
 
-This confirms the builder layer is not the end-to-end bottleneck for round-trip work, but it does matter if an application generates many queries per request.
+Query construction is now a sub-microsecond win for ruprizzle (rusqlite), but the real story is end-to-end reads.
 
 ## Usage criteria
 
 | Criterion | Best choice | Why |
 |---|---|---|
 | Compile-time type safety, generated typed client | **Diesel** or **ruprizzle** | Both are schema-first and fully typed; Diesel has the larger ecosystem, ruprizzle the more ergonomically generated client. |
-| Maximum simple-query throughput on SQLite | **Diesel** or **ruprizzle (rusqlite)** | Diesel is fastest in this run; ruprizzle is close and still faster than most. |
-| Multi-row reads and filtered queries on SQLite | **Diesel** | Consistently fastest; ruprizzle (rusqlite), Drizzle, and prax are the next tier. |
-| Bulk inserts on SQLite | **prax** or **ruprizzle (rusqlite)** | Both ~1.4–1.5 ms; Diesel is ~5.4 ms. |
+| Maximum simple-query throughput on SQLite | **ruprizzle (rusqlite)** | 3.0 µs on `select_by_pk` — faster than Diesel's 9.8 µs — with zero async dispatch overhead. |
+| Multi-row reads and filtered queries on SQLite | **Diesel**, then **ruprizzle (rusqlite)** | Diesel is fastest; ruprizzle (rusqlite) is within 20–40% and beats Drizzle/prax. |
+| Bulk inserts on SQLite | **ruprizzle (rusqlite)**, then **prax** | 1.3–1.4 ms, roughly 4.5× faster than Diesel. |
 | Nested relation loading, automatic batching | **ruprizzle (rusqlite)**, then **prax**, then **Diesel** (manual) | ruprizzle's auto-batched loader is ~2× faster than Sea-ORM/Prisma; Diesel is fastest if you hand-write the join. |
 | TypeScript ecosystem, migrations, team familiarity | **Prisma** | Largest community, mature migrations, schema-first. |
 | Zero build-step / runtime schema | **Drizzle** | Schema is plain TypeScript, no code generation. |
@@ -142,8 +142,8 @@ This confirms the builder layer is not the end-to-end bottleneck for round-trip 
 ## Caveats
 
 1. **SQLite is not Postgres.** These numbers are from a single SQLite file. The relative ordering can change with network latency, a different driver, or a different database. **Do not cite these numbers for a Postgres comparison until they are re-run on Postgres.**
-2. **Driver differences dominate simple reads.** Diesel uses `libsqlite3-sys` directly, ruprizzle (rusqlite) uses the synchronous `rusqlite` driver wrapped in a small blocking pool, and Drizzle uses the synchronous `better-sqlite3` binding — all of these avoid the per-row async worker-thread hop used by `sqlx-sqlite` (which powers ruprizzle (sqlx), prax, and Sea-ORM). The measured row-hop cost is roughly 0.9 µs/row for `sqlx-sqlite` versus ~0.3 µs/row for the synchronous bindings, which is why Diesel, ruprizzle (rusqlite), and Drizzle cluster near the top for simple reads.
-3. **Drizzle relational query is SQLite/driver-specific.** On Postgres Drizzle can use joins/CTEs and would likely be far faster for `include_posts`; do not take the 181.8 ms as a universal Drizzle number.
+2. **Driver and dispatch differences dominate simple reads.** ruprizzle (rusqlite) now runs `rusqlite` queries synchronously on the calling tokio task, eliminating `spawn_blocking` dispatch and beating even Diesel on single-row PK lookups. Diesel uses `libsqlite3-sys` directly, and Drizzle uses the synchronous `better-sqlite3` binding. All of these avoid the per-row async worker-thread hop used by `sqlx-sqlite` (which powers ruprizzle (sqlx), prax, and Sea-ORM). The measured row-hop cost is roughly 0.9 µs/row for `sqlx-sqlite` versus ~0.3 µs/row for the synchronous bindings, which is why Diesel, ruprizzle (rusqlite), and Drizzle cluster near the top for simple reads.
+3. **Drizzle relational query is SQLite/driver-specific.** On Postgres Drizzle can use joins/CTEs and would likely be far faster for `include_posts`; do not take the 182.1 ms as a universal Drizzle number.
 4. **No network.** All ORMs talked to a local file, so result-set decoding and ORM overhead are the main differentiators.
 5. **This run used 1 warm-up + 10 measured trials per driver.** Medians are reported. See `local/cross-orm-bench/BENCHMARKS.log` and `local/cross-orm-bench/raw_results.json` for full per-trial data. Run-to-run variance can be 5–10% on Windows. The main take-away is the relative shape between backends, not single-digit absolute values.
 

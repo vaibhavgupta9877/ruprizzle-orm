@@ -3,49 +3,49 @@
     "orm": "diesel",
     "operation": "to_sql_select_by_pk",
     "iters": 100000,
-    "total_ms": 51.4016,
-    "avg_ms": 0.0005140160000000001
+    "total_ms": 52.2022,
+    "avg_ms": 0.000522022
   },
   {
     "orm": "diesel",
     "operation": "to_sql_select_filter_order",
     "iters": 100000,
-    "total_ms": 67.06230000000001,
-    "avg_ms": 0.0006706230000000001
+    "total_ms": 67.5051,
+    "avg_ms": 0.000675051
   },
   {
     "orm": "diesel",
     "operation": "select_by_pk",
     "iters": 1000,
-    "total_ms": 10.0086,
-    "avg_ms": 0.0100086
+    "total_ms": 9.8164,
+    "avg_ms": 0.0098164
   },
   {
     "orm": "diesel",
     "operation": "find_many_1000",
     "iters": 50,
-    "total_ms": 9.2219,
-    "avg_ms": 0.184438
+    "total_ms": 9.762099999999998,
+    "avg_ms": 0.19524199999999997
   },
   {
     "orm": "diesel",
     "operation": "find_filtered_ordered",
     "iters": 50,
-    "total_ms": 13.216500000000002,
-    "avg_ms": 0.26433
+    "total_ms": 14.952399999999999,
+    "avg_ms": 0.299048
   },
   {
     "orm": "diesel",
     "operation": "include_posts",
     "iters": 10,
-    "total_ms": 29.351599999999998,
-    "avg_ms": 2.9351599999999998
+    "total_ms": 28.471,
+    "avg_ms": 2.8471
   },
   {
     "orm": "diesel",
     "operation": "bulk_insert_1000",
     "iters": 10,
-    "total_ms": 55.0286,
-    "avg_ms": 5.50286
+    "total_ms": 57.6712,
+    "avg_ms": 5.76712
   }
 ]

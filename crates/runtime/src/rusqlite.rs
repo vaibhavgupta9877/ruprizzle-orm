@@ -34,15 +34,15 @@ pub struct Row(pub Vec<RusqliteValue>);
 /// A pool of synchronous `rusqlite` connections.
 ///
 /// This type is intentionally cheap to clone and holds a shared set of
-/// `tokio::sync::Mutex<rusqlite::Connection>` handles. Operations are run on
-/// the blocking pool so they do not starve the async runtime.
+/// `std::sync::Mutex<rusqlite::Connection>` handles. Queries run synchronously
+/// on the calling task to avoid the dispatch cost of `spawn_blocking`.
 #[derive(Clone)]
 pub struct RusqlitePool {
     inner: Arc<Inner>,
 }
 
 struct Inner {
-    conns: tokio::sync::Mutex<Vec<Arc<tokio::sync::Mutex<rusqlite::Connection>>>>,
+    conns: std::sync::Mutex<Vec<Arc<std::sync::Mutex<rusqlite::Connection>>>>,
     next: AtomicUsize,
 }
 
@@ -92,11 +92,11 @@ impl RusqlitePool {
                 apply_pragmas(&conn, filename == ":memory:")
                     .map_err(|e| Error::ConnectionFailure { reason: e.to_string() })?;
 
-                conns.push(Arc::new(tokio::sync::Mutex::new(conn)));
+                conns.push(Arc::new(std::sync::Mutex::new(conn)));
             }
 
             Ok(Inner {
-                conns: tokio::sync::Mutex::new(conns),
+                conns: std::sync::Mutex::new(conns),
                 next: AtomicUsize::new(0),
             })
         })
@@ -109,8 +109,8 @@ impl RusqlitePool {
     }
 
     /// Pick a connection using round-robin load distribution.
-    fn acquire(&self) -> Arc<tokio::sync::Mutex<rusqlite::Connection>> {
-        let conns = self.inner.conns.blocking_lock();
+    fn acquire(&self) -> Arc<std::sync::Mutex<rusqlite::Connection>> {
+        let conns = self.inner.conns.lock().unwrap();
         let idx = self.inner.next.fetch_add(1, Ordering::Relaxed) % conns.len();
         conns[idx].clone()
     }
@@ -124,14 +124,16 @@ impl RusqlitePool {
         let pool = self.clone();
         tokio::task::spawn_blocking(move || -> Result<RusqliteTransaction, Error> {
             let conn = {
-                let mut conns = pool.inner.conns.blocking_lock();
+                let mut conns = pool.inner.conns.lock().unwrap();
                 conns
                     .pop()
                     .ok_or_else(|| Error::Message("rusqlite connection pool exhausted".into()))?
             };
 
             {
-                let guard = conn.blocking_lock();
+                let guard = conn.lock().map_err(|_| {
+                    Error::Message("rusqlite connection mutex poisoned".into())
+                })?;
                 guard
                     .execute("BEGIN", [])
                     .map_err(|e| Error::Message(e.to_string()))?;
@@ -148,8 +150,8 @@ impl RusqlitePool {
     }
 
     /// Return an owned connection to the pool.
-    fn return_conn(&self, conn: Arc<tokio::sync::Mutex<rusqlite::Connection>>) {
-        self.inner.conns.blocking_lock().push(conn);
+    fn return_conn(&self, conn: Arc<std::sync::Mutex<rusqlite::Connection>>) {
+        self.inner.conns.lock().unwrap().push(conn);
     }
 }
 
@@ -160,22 +162,21 @@ impl RusqlitePool {
 #[derive(Debug, Clone)]
 pub(crate) struct RusqliteTransaction {
     pool: RusqlitePool,
-    conn: Arc<tokio::sync::Mutex<rusqlite::Connection>>,
+    conn: Arc<std::sync::Mutex<rusqlite::Connection>>,
 }
 
 impl RusqliteTransaction {
     /// Execute `sql` with `binds`, returning the number of affected rows.
-    pub(crate) fn execute_sync(
-        &self,
-        sql: &str,
-        binds: &[Value],
-    ) -> Result<u64, Error> {
+    pub(crate) fn execute_sync(&self, sql: &str, binds: &[Value]) -> Result<u64, Error> {
         let binds = binds
             .iter()
             .map(value_to_rusqlite)
             .collect::<Result<Vec<_>, _>>()?;
 
-        let guard = self.conn.blocking_lock();
+        let guard = self
+            .conn
+            .lock()
+            .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
         if is_ddl(sql) {
             force_schema_reload(&guard);
         }
@@ -196,17 +197,16 @@ impl RusqliteTransaction {
     }
 
     /// Fetch all rows from `sql` with `binds`.
-    pub(crate) fn fetch_all_sync(
-        &self,
-        sql: &str,
-        binds: &[Value],
-    ) -> Result<RowBatch, Error> {
+    pub(crate) fn fetch_all_sync(&self, sql: &str, binds: &[Value]) -> Result<RowBatch, Error> {
         let binds = binds
             .iter()
             .map(value_to_rusqlite)
             .collect::<Result<Vec<_>, _>>()?;
 
-        let guard = self.conn.blocking_lock();
+        let guard = self
+            .conn
+            .lock()
+            .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
         if is_ddl(sql) {
             force_schema_reload(&guard);
         }
@@ -244,7 +244,9 @@ impl RusqliteTransaction {
         let conn = self.conn;
         let pool = self.pool;
 
-        let guard = conn.blocking_lock();
+        let guard = conn
+            .lock()
+            .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
         guard
             .execute("COMMIT", [])
             .map_err(|e| Error::Message(e.to_string()))?;
@@ -263,7 +265,9 @@ impl RusqliteTransaction {
         let conn = self.conn;
         let pool = self.pool;
 
-        let guard = conn.blocking_lock();
+        let guard = conn
+            .lock()
+            .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
         guard
             .execute("ROLLBACK", [])
             .map_err(|e| Error::Message(e.to_string()))?;
@@ -290,7 +294,11 @@ impl fmt::Debug for RusqlitePool {
 
 impl fmt::Debug for Inner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let len = self.conns.try_lock().map_or(0, |conns| conns.len());
+        let len = self
+            .conns
+            .try_lock()
+            .ok()
+            .map_or(0, |conns| conns.len());
         f.debug_struct("Inner")
             .field("connections", &len)
             .finish_non_exhaustive()
@@ -308,49 +316,7 @@ impl Executor for RusqlitePool {
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<RowBatch, Error>> {
         let pool = self.clone();
-        Box::pin(async move {
-            tokio::task::spawn_blocking(move || -> Result<RowBatch, Error> {
-                let conn = pool.acquire();
-                let binds = binds
-                    .iter()
-                    .map(value_to_rusqlite)
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                let guard = conn.blocking_lock();
-                if is_ddl(sql.as_ref()) {
-                    force_schema_reload(&guard);
-                }
-                let mut stmt = guard
-                    .prepare_cached(sql.as_ref())
-                    .map_err(|e| Error::Message(e.to_string()))?;
-
-                let column_count = stmt.column_count();
-
-                let rows = stmt
-                    .query_map(
-                        rusqlite::params_from_iter(binds.iter()),
-                        |row| {
-                            let mut values = Vec::with_capacity(column_count);
-                            for i in 0..column_count {
-                                values.push(row.get::<_, RusqliteValue>(i)?);
-                            }
-                            Ok(Row(values))
-                        },
-                    )
-                    .map_err(|e| Error::Message(e.to_string()))?
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| Error::Message(e.to_string()))?;
-
-                if is_ddl(sql.as_ref()) {
-                    stmt.discard();
-                    guard.flush_prepared_statement_cache();
-                }
-
-                Ok(RowBatch::Rusqlite(rows))
-            })
-            .await
-            .map_err(|e| Error::Message(e.to_string()))?
-        })
+        Box::pin(async move { fetch_all(pool, sql, binds) })
     }
 
     fn execute_raw(
@@ -359,36 +325,7 @@ impl Executor for RusqlitePool {
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<u64, Error>> {
         let pool = self.clone();
-        Box::pin(async move {
-            tokio::task::spawn_blocking(move || -> Result<u64, Error> {
-                let conn = pool.acquire();
-                let binds = binds
-                    .iter()
-                    .map(value_to_rusqlite)
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                let guard = conn.blocking_lock();
-                if is_ddl(sql.as_ref()) {
-                    force_schema_reload(&guard);
-                }
-                let mut stmt = guard
-                    .prepare_cached(sql.as_ref())
-                    .map_err(|e| Error::Message(e.to_string()))?;
-
-                let rows = stmt
-                    .execute(rusqlite::params_from_iter(binds.iter()))
-                    .map_err(|e| Error::Message(e.to_string()))?;
-
-                if is_ddl(sql.as_ref()) {
-                    stmt.discard();
-                    guard.flush_prepared_statement_cache();
-                }
-
-                Ok(rows as u64)
-            })
-            .await
-            .map_err(|e| Error::Message(e.to_string()))?
-        })
+        Box::pin(async move { execute(pool, sql, binds) })
     }
 
     fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
@@ -396,6 +333,81 @@ impl Executor for RusqlitePool {
             self.fetch_all_raw(sql, binds).await
         })))
     }
+}
+
+fn fetch_all(
+    pool: RusqlitePool,
+    sql: Cow<'static, str>,
+    binds: Vec<Value>,
+) -> Result<RowBatch, Error> {
+    let conn = pool.acquire();
+    let binds = binds
+        .iter()
+        .map(value_to_rusqlite)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let guard = conn
+        .lock()
+        .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
+    if is_ddl(sql.as_ref()) {
+        force_schema_reload(&guard);
+    }
+    let mut stmt = guard
+        .prepare_cached(sql.as_ref())
+        .map_err(|e| Error::Message(e.to_string()))?;
+
+    let column_count = stmt.column_count();
+
+    let rows = stmt
+        .query_map(
+            rusqlite::params_from_iter(binds.iter()),
+            |row| {
+                let mut values = Vec::with_capacity(column_count);
+                for i in 0..column_count {
+                    values.push(row.get::<_, RusqliteValue>(i)?);
+                }
+                Ok(Row(values))
+            },
+        )
+        .map_err(|e| Error::Message(e.to_string()))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| Error::Message(e.to_string()))?;
+
+    if is_ddl(sql.as_ref()) {
+        stmt.discard();
+        guard.flush_prepared_statement_cache();
+    }
+
+    Ok(RowBatch::Rusqlite(rows))
+}
+
+fn execute(pool: RusqlitePool, sql: Cow<'static, str>, binds: Vec<Value>) -> Result<u64, Error> {
+    let conn = pool.acquire();
+    let binds = binds
+        .iter()
+        .map(value_to_rusqlite)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let guard = conn
+        .lock()
+        .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
+    if is_ddl(sql.as_ref()) {
+        force_schema_reload(&guard);
+    }
+    let mut stmt = guard
+        .prepare_cached(sql.as_ref())
+        .map_err(|e| Error::Message(e.to_string()))?;
+
+    let rows = stmt
+        .execute(rusqlite::params_from_iter(binds.iter()))
+        .map_err(|e| Error::Message(e.to_string()))?;
+
+    if is_ddl(sql.as_ref()) {
+        stmt.discard();
+        guard.flush_prepared_statement_cache();
+    }
+
+    Ok(rows as u64)
 }
 
 impl Row {
