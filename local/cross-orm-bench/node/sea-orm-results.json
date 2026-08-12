@@ -3,49 +3,49 @@
     "orm": "sea-orm",
     "operation": "to_sql_select_by_pk",
     "iters": 100000,
-    "total_ms": 505.3082,
-    "avg_ms": 0.005053082
+    "total_ms": 503.77970000000005,
+    "avg_ms": 0.005037797
   },
   {
     "orm": "sea-orm",
     "operation": "to_sql_select_filter_order",
     "iters": 100000,
-    "total_ms": 796.1215000000001,
-    "avg_ms": 0.007961215
+    "total_ms": 758.0982,
+    "avg_ms": 0.007580982
   },
   {
     "orm": "sea-orm",
     "operation": "select_by_pk",
     "iters": 1000,
-    "total_ms": 82.0933,
-    "avg_ms": 0.0820933
+    "total_ms": 61.4878,
+    "avg_ms": 0.0614878
   },
   {
     "orm": "sea-orm",
     "operation": "find_many_1000",
     "iters": 50,
-    "total_ms": 55.1533,
-    "avg_ms": 1.103066
+    "total_ms": 58.8463,
+    "avg_ms": 1.176926
   },
   {
     "orm": "sea-orm",
     "operation": "find_filtered_ordered",
     "iters": 50,
-    "total_ms": 62.6961,
-    "avg_ms": 1.253922
+    "total_ms": 58.7902,
+    "avg_ms": 1.175804
   },
   {
     "orm": "sea-orm",
     "operation": "include_posts",
     "iters": 10,
-    "total_ms": 244.50130000000001,
-    "avg_ms": 24.45013
+    "total_ms": 233.5028,
+    "avg_ms": 23.35028
   },
   {
     "orm": "sea-orm",
     "operation": "bulk_insert_1000",
     "iters": 10,
-    "total_ms": 59.479200000000006,
-    "avg_ms": 5.947920000000001
+    "total_ms": 67.589,
+    "avg_ms": 6.7589
   }
 ]

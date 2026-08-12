@@ -3,35 +3,35 @@
     "orm": "prisma",
     "operation": "select_by_pk",
     "iters": 1000,
-    "total_ms": 172.6265,
-    "avg_ms": 0.1726265
+    "total_ms": 153.30700000000002,
+    "avg_ms": 0.15330700000000003
   },
   {
     "orm": "prisma",
     "operation": "find_many_1000",
     "iters": 50,
-    "total_ms": 100.94990000000001,
-    "avg_ms": 2.0189980000000003
+    "total_ms": 98.86550000000003,
+    "avg_ms": 1.9773100000000006
   },
   {
     "orm": "prisma",
     "operation": "find_filtered_ordered",
     "iters": 50,
-    "total_ms": 113.0283,
-    "avg_ms": 2.260566
+    "total_ms": 111.44319999999999,
+    "avg_ms": 2.2288639999999997
   },
   {
     "orm": "prisma",
     "operation": "include_posts",
     "iters": 10,
-    "total_ms": 322.3044,
-    "avg_ms": 32.23044
+    "total_ms": 324.5834,
+    "avg_ms": 32.45834
   },
   {
     "orm": "prisma",
     "operation": "bulk_insert_1000",
     "iters": 10,
-    "total_ms": 130.45950000000005,
-    "avg_ms": 13.045950000000005
+    "total_ms": 137.1694000000001,
+    "avg_ms": 13.716940000000012
   }
 ]

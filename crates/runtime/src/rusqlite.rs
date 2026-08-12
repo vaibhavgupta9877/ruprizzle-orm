@@ -168,11 +168,6 @@ pub(crate) struct RusqliteTransaction {
 impl RusqliteTransaction {
     /// Execute `sql` with `binds`, returning the number of affected rows.
     pub(crate) fn execute_sync(&self, sql: &str, binds: &[Value]) -> Result<u64, Error> {
-        let binds = binds
-            .iter()
-            .map(value_to_rusqlite)
-            .collect::<Result<Vec<_>, _>>()?;
-
         let guard = self
             .conn
             .lock()
@@ -185,7 +180,7 @@ impl RusqliteTransaction {
             .map_err(|e| Error::Message(e.to_string()))?;
 
         let rows = stmt
-            .execute(rusqlite::params_from_iter(binds.iter()))
+            .execute(rusqlite::params_from_iter(binds))
             .map_err(|e| Error::Message(e.to_string()))?;
 
         if is_ddl(sql) {
@@ -198,11 +193,6 @@ impl RusqliteTransaction {
 
     /// Fetch all rows from `sql` with `binds`.
     pub(crate) fn fetch_all_sync(&self, sql: &str, binds: &[Value]) -> Result<RowBatch, Error> {
-        let binds = binds
-            .iter()
-            .map(value_to_rusqlite)
-            .collect::<Result<Vec<_>, _>>()?;
-
         let guard = self
             .conn
             .lock()
@@ -218,7 +208,7 @@ impl RusqliteTransaction {
 
         let rows = stmt
             .query_map(
-                rusqlite::params_from_iter(binds.iter()),
+                rusqlite::params_from_iter(binds),
                 |row| {
                     let mut values = Vec::with_capacity(column_count);
                     for i in 0..column_count {
@@ -341,10 +331,6 @@ fn fetch_all(
     binds: Vec<Value>,
 ) -> Result<RowBatch, Error> {
     let conn = pool.acquire();
-    let binds = binds
-        .iter()
-        .map(value_to_rusqlite)
-        .collect::<Result<Vec<_>, _>>()?;
 
     let guard = conn
         .lock()
@@ -360,7 +346,7 @@ fn fetch_all(
 
     let rows = stmt
         .query_map(
-            rusqlite::params_from_iter(binds.iter()),
+            rusqlite::params_from_iter(&binds),
             |row| {
                 let mut values = Vec::with_capacity(column_count);
                 for i in 0..column_count {
@@ -383,10 +369,6 @@ fn fetch_all(
 
 fn execute(pool: RusqlitePool, sql: Cow<'static, str>, binds: Vec<Value>) -> Result<u64, Error> {
     let conn = pool.acquire();
-    let binds = binds
-        .iter()
-        .map(value_to_rusqlite)
-        .collect::<Result<Vec<_>, _>>()?;
 
     let guard = conn
         .lock()
@@ -399,7 +381,7 @@ fn execute(pool: RusqlitePool, sql: Cow<'static, str>, binds: Vec<Value>) -> Res
         .map_err(|e| Error::Message(e.to_string()))?;
 
     let rows = stmt
-        .execute(rusqlite::params_from_iter(binds.iter()))
+        .execute(rusqlite::params_from_iter(&binds))
         .map_err(|e| Error::Message(e.to_string()))?;
 
     if is_ddl(sql.as_ref()) {
@@ -622,25 +604,7 @@ tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5 }
 tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5, G 6 }
 tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7 }
 
-/// Convert a ruprizzle `Value` into a `rusqlite::types::Value`.
-fn value_to_rusqlite(value: &Value) -> Result<RusqliteValue, Error> {
-    Ok(match value {
-        Value::Null => RusqliteValue::Null,
-        Value::Bool(b) => RusqliteValue::Integer(i64::from(*b)),
-        Value::I32(i) => RusqliteValue::Integer(i64::from(*i)),
-        Value::I64(i) => RusqliteValue::Integer(*i),
-        Value::F64(f) => RusqliteValue::Real(*f),
-        Value::Decimal(d) => RusqliteValue::Text(d.to_string()),
-        Value::Str(s) => RusqliteValue::Text(s.to_string()),
-        Value::Uuid(u) => RusqliteValue::Text(u.to_string()),
-        Value::DateTime(dt) => RusqliteValue::Text(dt.to_rfc3339()),
-        Value::Date(d) => RusqliteValue::Text(d.to_string()),
-        Value::Time(t) => RusqliteValue::Text(t.to_string()),
-        Value::Json(v) => RusqliteValue::Text(v.to_string()),
-        Value::Bytes(b) => RusqliteValue::Blob(b.to_vec()),
-        Value::Array(_) => return Err(Error::Message("array bind values are not supported yet".into())),
-    })
-}
+
 
 /// Apply performance and correctness PRAGMAs to a fresh `rusqlite` connection.
 ///

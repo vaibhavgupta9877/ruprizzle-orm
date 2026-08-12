@@ -3,49 +3,49 @@
     "orm": "prax",
     "operation": "to_sql_select_by_pk",
     "iters": 100000,
-    "total_ms": 42.3301,
-    "avg_ms": 0.000423301
+    "total_ms": 41.8809,
+    "avg_ms": 0.00041880899999999997
   },
   {
     "orm": "prax",
     "operation": "to_sql_select_filter_order",
     "iters": 100000,
-    "total_ms": 39.5678,
-    "avg_ms": 0.000395678
+    "total_ms": 40.8474,
+    "avg_ms": 0.000408474
   },
   {
     "orm": "prax",
     "operation": "select_by_pk",
     "iters": 1000,
-    "total_ms": 26.3849,
-    "avg_ms": 0.0263849
+    "total_ms": 24.0375,
+    "avg_ms": 0.0240375
   },
   {
     "orm": "prax",
     "operation": "find_many_1000",
     "iters": 50,
-    "total_ms": 24.1319,
-    "avg_ms": 0.482638
+    "total_ms": 22.805200000000003,
+    "avg_ms": 0.45610400000000006
   },
   {
     "orm": "prax",
     "operation": "find_filtered_ordered",
     "iters": 50,
-    "total_ms": 30.5879,
-    "avg_ms": 0.611758
+    "total_ms": 33.2125,
+    "avg_ms": 0.66425
   },
   {
     "orm": "prax",
     "operation": "include_posts",
     "iters": 10,
-    "total_ms": 72.8652,
-    "avg_ms": 7.28652
+    "total_ms": 71.93249999999999,
+    "avg_ms": 7.193249999999999
   },
   {
     "orm": "prax",
     "operation": "bulk_insert_1000",
     "iters": 10,
-    "total_ms": 13.0803,
-    "avg_ms": 1.30803
+    "total_ms": 14.9988,
+    "avg_ms": 1.4998799999999999
   }
 ]

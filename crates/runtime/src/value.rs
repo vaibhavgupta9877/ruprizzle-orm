@@ -107,6 +107,47 @@ impl Encodable for Value {
     }
 }
 
+#[cfg(feature = "sqlite-rusqlite")]
+impl rusqlite::ToSql for Value {
+    fn to_sql(
+        &self,
+    ) -> Result<rusqlite::types::ToSqlOutput<'_>, rusqlite::Error> {
+        use rusqlite::types::{ToSqlOutput, ValueRef};
+        Ok(match self {
+            Value::Null => ToSqlOutput::Borrowed(ValueRef::Null),
+            Value::Bool(b) => ToSqlOutput::Borrowed(ValueRef::Integer(i64::from(*b))),
+            Value::I32(i) => ToSqlOutput::Borrowed(ValueRef::Integer(i64::from(*i))),
+            Value::I64(i) => ToSqlOutput::Borrowed(ValueRef::Integer(*i)),
+            Value::F64(f) => ToSqlOutput::Borrowed(ValueRef::Real(*f)),
+            Value::Decimal(d) => {
+                ToSqlOutput::Owned(rusqlite::types::Value::Text(d.to_string()))
+            }
+            Value::Str(s) => ToSqlOutput::Borrowed(ValueRef::Text(s.as_bytes())),
+            Value::Uuid(u) => {
+                ToSqlOutput::Owned(rusqlite::types::Value::Text(u.to_string()))
+            }
+            Value::DateTime(dt) => {
+                ToSqlOutput::Owned(rusqlite::types::Value::Text(dt.to_rfc3339()))
+            }
+            Value::Date(d) => {
+                ToSqlOutput::Owned(rusqlite::types::Value::Text(d.to_string()))
+            }
+            Value::Time(t) => {
+                ToSqlOutput::Owned(rusqlite::types::Value::Text(t.to_string()))
+            }
+            Value::Json(v) => {
+                ToSqlOutput::Owned(rusqlite::types::Value::Text(v.to_string()))
+            }
+            Value::Bytes(b) => ToSqlOutput::Borrowed(ValueRef::Blob(b.as_ref())),
+            Value::Array(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "array bind values are not supported yet".into(),
+                ));
+            }
+        })
+    }
+}
+
 impl Encodable for Uuid {
     fn to_value(&self) -> Value {
         Value::Uuid(*self)
