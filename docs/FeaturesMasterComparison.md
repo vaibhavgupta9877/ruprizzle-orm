@@ -26,7 +26,7 @@ variants.
 | Feature | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
 |---|---|---|---|---|---|---|---|
 | Language | Rust | Rust | Rust | Rust | Rust | TypeScript | TypeScript |
-| Measured version | 0.1.0-alpha.3 | 0.1.0-alpha.3 | 0.11 | 1.1 | 2.2 | 6.19.3 | 0.43.0 |
+| Measured version | 0.1.1-beta.1 | 0.1.1-beta.1 | 0.11 | 1.1 | 2.2 | 6.19.3 | 0.43.0 |
 | Primary driver | sqlx (Any) | sqlx for Postgres, rusqlite for SQLite | tokio-postgres / sqlx / mysql_async / tokio-rusqlite | sqlx | libsqlite3-sys / mysqlclient / libpq | Prisma query engine + driver adapters | Node database drivers |
 | Async API | Yes | Yes (sync driver called on Tokio task) | Yes | Yes | Sync (blocking) | Yes | Yes / sync driver option |
 | Query style | Schema-first typed builder | Same as sqlx variant | Prisma-like fluent builder | ActiveRecord / Entity + builder | Type-safe DSL | Generated fluent client | SQL-like typed builder |
