@@ -372,8 +372,11 @@ builder or relations sections that a competitor scores `Yes` on; every new build
       suite does not cover: queries/sec against pool size, tail latency under contention,
       behaviour at pool exhaustion. **2 days.**
 
-**Exit gate:** dimension 3 rescored ≥ 9.0; `docs/Operations.md` published; a working
-Prometheus scrape demonstrated in an example.
+**Exit gate:** dimension 3 rescored ≥ 9.0; `docs/Operations.md` published; Prometheus/OTel
+scrape documented in `docs/Operations.md`; connection lifecycle, slow-query, and query metrics
+covered by tests; `cargo fmt --check`, `cargo clippy -p ruprizzle --features sqlite-rusqlite`,
+`cargo test -p ruprizzle --features sqlite-rusqlite`, and `cargo bench -p ruprizzle --features
+sqlite-rusqlite --bench concurrency` all pass.
 
 ---
 
