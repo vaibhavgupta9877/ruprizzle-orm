@@ -5,8 +5,9 @@
 # Test tool (default cargo)
 test_tool = "cargo"
 
-# Build timeouts (relative to baseline)
+# Build and test timeouts (relative to baseline)
 build_timeout_multiplier = 3.0
+timeout_multiplier = 3.0
 
 # Cap lints so warning-as-error doesn't stop a mutant build.
 cap_lints = true

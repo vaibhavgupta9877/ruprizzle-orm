@@ -408,7 +408,8 @@ sqlite-rusqlite --bench concurrency` all pass.
       *(finding #11)*
 
 **Exit gate:** fuzzers run ≥ 4 CPU-hours per target with no crashes and are wired into a
-scheduled CI job; soak report published; mutation score recorded as a baseline.
+scheduled CI job (`.github/workflows/fuzz.yml`); soak report published; mutation score recorded
+as a baseline (`docs/MutationTesting.md`).
 
 ---
 

@@ -25,7 +25,7 @@ cargo mutants -p ruprizzle --list
 
 # Run the baseline for a crate
 RUST_BACKTRACE=0 RUPRIZZLE_SOAK_DURATION_SECONDS=0 cargo mutants -p ruprizzle-migrate --jobs 4 --minimum-test-timeout 5
-RUST_BACKTRACE=0 RUPRIZZLE_SOAK_DURATION_SECONDS=0 cargo mutants -p ruprizzle --jobs 4 --minimum-test-timeout 5 --output local/mutants-runtime
+RUST_BACKTRACE=0 RUPRIZZLE_SOAK_DURATION_SECONDS=0 cargo mutants -p ruprizzle --jobs 4 --minimum-test-timeout 30 --output local/mutants-runtime
 ```
 
 ## Baseline results
@@ -62,23 +62,20 @@ asserting the actual behaviour.
 
 `cargo mutants -p ruprizzle --list` reports **1004 mutants** in the runtime crate.
 
-A full run with the soak test disabled (`RUPRIZZLE_SOAK_DURATION_SECONDS=0`) was
-started with:
+A full local run is expensive: the default copy-per-mutant mode recompiles the
+runtime integration tests for each of the 1004 mutants (many hours on a
+single-core path), and `--in-place` on Windows can fail to overwrite mapped
+source files. The baseline is therefore generated in CI
+(`.github/workflows/mutants.yml`), which shards the runtime run across four
+parallel jobs.
 
-```bash
-RUST_BACKTRACE=0 RUPRIZZLE_SOAK_DURATION_SECONDS=0 cargo mutants -p ruprizzle --jobs 4 --minimum-test-timeout 5 --output local/mutants-runtime
-```
-
-The auto-set test timeout rose to ~95 s per mutant because the runtime test
-suite compiles and runs several integration test binaries per mutant, even with
-soak disabled. At 1004 mutants the full run would take roughly two wall-clock
-hours, so it is left as a follow-up activity:
+For an abbreviated local run:
 
 ```bash
 RUST_BACKTRACE=0 RUPRIZZLE_SOAK_DURATION_SECONDS=0 cargo mutants -p ruprizzle --jobs 4 --minimum-test-timeout 30 --output local/mutants-runtime
 ```
 
-The `crates/migrate` baseline is the current recorded score.
+The full runtime baseline will be recorded here once the CI run completes.
 
 ## Next steps
 

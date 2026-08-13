@@ -1,0 +1,13 @@
+W4 follow-up: scheduled fuzz and mutation-testing CI.
+
+- Add `.github/workflows/fuzz.yml` to run the `parser` and `migrate_splitter`
+  `cargo-fuzz` targets for 4 wall-clock hours each on a weekly schedule.
+- Add `.github/workflows/mutants.yml` to run `cargo-mutants` for
+  `crates/migrate` and sharded `crates/runtime` on a weekly schedule.
+- Tune `.cargo/mutants.toml` with `timeout_multiplier = 3.0`.
+- Update `docs/MutationTesting.md` and `ProjectPlan/v1/PathToStableV1.md` to
+  document the CI-driven baseline and the W4 exit gate status.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
