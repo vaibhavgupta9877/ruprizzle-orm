@@ -66,6 +66,21 @@ for OrderItem {
         })
     }
 }
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>
+for OrderItem {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::mysql::MySqlRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            order_id: ::ruprizzle::decode::text_idx(row, 0)?,
+            order: ::ruprizzle::Related::default(),
+            product_id: ::ruprizzle::decode::text_idx(row, 1)?,
+            product: ::ruprizzle::Related::default(),
+            quantity: ::ruprizzle::decode::direct_idx(row, 2)?,
+            unit_price: ::ruprizzle::decode::text_idx(row, 3)?,
+        })
+    }
+}
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for OrderItem {
     fn from_rusqlite_row(

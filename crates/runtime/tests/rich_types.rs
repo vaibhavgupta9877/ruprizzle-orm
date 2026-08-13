@@ -102,6 +102,17 @@ impl<'r> ruprizzle::sqlx::FromRow<'r, ruprizzle::sqlx::sqlite::SqliteRow> for Ev
     }
 }
 
+impl<'r> ruprizzle::sqlx::FromRow<'r, ruprizzle::sqlx::mysql::MySqlRow> for Event {
+    fn from_row(row: &'r ruprizzle::sqlx::mysql::MySqlRow) -> Result<Self, ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: decode::rich(row, "id")?,
+            created_at: decode::rich(row, "created_at")?,
+            price: decode::text(row, "price")?,
+            meta: decode::json(row, "meta")?,
+        })
+    }
+}
+
 const ID: Column<Event, Uuid> = Column::new("events", "id");
 const CREATED_AT: Column<Event, DateTime<Utc>> = Column::new("events", "created_at");
 const PRICE: Column<Event, Decimal> = Column::new("events", "price");

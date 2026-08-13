@@ -1,6 +1,6 @@
 # Path to Stable v1.0
 
-> **Status:** ACTIVE — currently at W0 (immediate hygiene); W1–W6 are pending.
+> **Status:** ACTIVE — W5-01 (MySQL/MariaDB) complete; W5-02 is next. W1, W2, and W5-03–W5-07 remain pending.
 
 **From:** `0.1.1-beta.1` (published to crates.io 2026-08-13, 84/100 production readiness)
 **To:** `1.0.0` — a version whose API we commit to under semver and whose capability surface
@@ -418,10 +418,7 @@ as a baseline (`docs/MutationTesting.md`).
 **Goal:** the features that decide adoption rather than evaluation. **Effort:** ~2.5 weeks.
 May run in parallel with W2 — different crates.
 
-- [ ] **W5-01 · MySQL / MariaDB dialect.** The single largest database-support gap; every
-      competitor supports it. Additive behind `DbDialect`. Needs dialect SQL generation,
-      migration DDL, a `both_dbs!` extension to three databases, and CI service containers.
-      **5 days.**
+- [x] **W5-01 · MySQL / MariaDB dialect.** Added the `mysql`/`mariadb` providers, a native SQLx MySQL pool and transaction path, MySQL/MariaDB DDL/DML generation, portable insert follow-up lookup, the three-backend `both_dbs!` harness, conformance coverage, Docker Compose, and CI service/matrix jobs. **5 days.**
 - [ ] **W5-02 · Introspection (`ruprizzle db pull`).** Generate `schema.ruprizzle` from an
       existing database. Currently `Planned` in the comparison table while Prisma, Drizzle,
       and SeaORM all ship it. This is the on-ramp for every existing project — arguably the

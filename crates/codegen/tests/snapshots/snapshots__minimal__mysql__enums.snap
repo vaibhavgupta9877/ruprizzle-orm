@@ -1,0 +1,8 @@
+---
+source: crates/codegen/tests/snapshots.rs
+expression: content
+---
+#![allow(clippy::all, clippy::pedantic, unused_imports)]
+use ::ruprizzle::serde::{Deserialize, Serialize};
+use ::ruprizzle::sqlx::Type;
+use ::ruprizzle::Value;

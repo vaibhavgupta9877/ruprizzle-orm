@@ -17,7 +17,8 @@
 //! }
 //! ```
 //!
-//! This generates `insert_then_count::postgres` and `insert_then_count::sqlite`.
+//! This generates `insert_then_count::postgres`, `insert_then_count::sqlite`,
+//! and `insert_then_count::mysql`.
 //!
 //! # Isolation
 //!
@@ -41,6 +42,7 @@ use sqlx::any::AnyPoolOptions;
 
 /// A `sqlx` pool over the `Any` driver.
 pub type AnyPool = sqlx::Pool<sqlx::Any>;
+use sqlx::mysql::{MySqlPool, MySqlPoolOptions};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use tempfile::TempDir;
@@ -59,6 +61,11 @@ pub const PG_URL_ENV: &str = "RUPRIZZLE_TEST_PG_URL";
 
 const DEFAULT_PG_URL: &str = "postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test";
 
+/// Environment variable holding the `MySQL` / `MariaDB` URL used by tests.
+pub const MYSQL_URL_ENV: &str = "RUPRIZZLE_TEST_MYSQL_URL";
+
+const DEFAULT_MYSQL_URL: &str = "mysql://ruprizzle:ruprizzle@localhost:3306";
+
 /// A database backend under test.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Backend {
@@ -66,6 +73,8 @@ pub enum Backend {
     Postgres,
     /// `SQLite`, in a temporary file. Always available.
     Sqlite,
+    /// `MySQL` / `MariaDB`, reached over the network. May be unavailable locally.
+    MySql,
 }
 
 impl Backend {
@@ -75,6 +84,7 @@ impl Backend {
         match self {
             Backend::Postgres => "postgres",
             Backend::Sqlite => "sqlite",
+            Backend::MySql => "mysql",
         }
     }
 }
@@ -126,6 +136,10 @@ enum Inner {
         schema: String,
         admin_url: String,
     },
+    MySql {
+        _mysql_pool: MySqlPool,
+        any_pool: AnyPool,
+    },
     Sqlite {
         sqlite_pool: SqlitePool,
         any_pool: AnyPool,
@@ -154,6 +168,7 @@ impl TestDb {
         let db = match backend {
             Backend::Postgres => Self::connect_postgres().await?,
             Backend::Sqlite => Self::connect_sqlite().await?,
+            Backend::MySql => Self::connect_mysql().await?,
         };
 
         if !setup_sql.trim().is_empty() {
@@ -243,6 +258,61 @@ impl TestDb {
                 any_pool,
                 schema,
                 admin_url: url,
+            },
+            pool,
+        })
+    }
+
+    #[allow(clippy::too_many_lines)]
+    async fn connect_mysql() -> std::result::Result<Self, TestDbError> {
+        let url = std::env::var(MYSQL_URL_ENV)
+            .or_else(|_| std::env::var("DATABASE_URL"))
+            .unwrap_or_else(|_| DEFAULT_MYSQL_URL.to_owned());
+
+        let mysql_pool = MySqlPoolOptions::new()
+            .max_connections(4)
+            .acquire_timeout(Duration::from_secs(5))
+            .after_connect(|conn, _meta| {
+                Box::pin(async move {
+                    sqlx::query("SET SESSION sql_mode = 'ANSI_QUOTES'")
+                        .execute(conn)
+                        .await?;
+                    Ok(())
+                })
+            })
+            .connect(&url)
+            .await
+            .map_err(|e| TestDbError::Unavailable {
+                backend: Backend::MySql,
+                reason: format!(
+                    "{e} (url from {MYSQL_URL_ENV}/DATABASE_URL, default {DEFAULT_MYSQL_URL})"
+                ),
+            })?;
+
+        let any_pool = AnyPoolOptions::new()
+            .max_connections(4)
+            .acquire_timeout(Duration::from_secs(5))
+            .after_connect(|conn, _meta| {
+                Box::pin(async move {
+                    sqlx::query("SET SESSION sql_mode = 'ANSI_QUOTES'")
+                        .execute(&mut *conn)
+                        .await?;
+                    Ok(())
+                })
+            })
+            .connect(&url)
+            .await
+            .map_err(|e| TestDbError::Unavailable {
+                backend: Backend::MySql,
+                reason: e.to_string(),
+            })?;
+
+        let pool = ruprizzle::Pool::Mysql(mysql_pool.clone());
+        Ok(TestDb {
+            backend: Backend::MySql,
+            inner: Inner::MySql {
+                _mysql_pool: mysql_pool,
+                any_pool,
             },
             pool,
         })
@@ -394,7 +464,9 @@ impl TestDb {
     #[must_use]
     pub fn any_pool(&self) -> &AnyPool {
         match &self.inner {
-            Inner::Postgres { any_pool, .. } | Inner::Sqlite { any_pool, .. } => any_pool,
+            Inner::Postgres { any_pool, .. }
+            | Inner::MySql { any_pool, .. }
+            | Inner::Sqlite { any_pool, .. } => any_pool,
         }
     }
 
@@ -403,7 +475,7 @@ impl TestDb {
     pub fn pg_pool(&self) -> Option<&PgPool> {
         match &self.inner {
             Inner::Postgres { pg_pool, .. } => Some(pg_pool),
-            Inner::Sqlite { .. } => None,
+            Inner::MySql { .. } | Inner::Sqlite { .. } => None,
         }
     }
 
@@ -412,7 +484,7 @@ impl TestDb {
     pub fn sqlite_pool(&self) -> Option<&SqlitePool> {
         match &self.inner {
             Inner::Sqlite { sqlite_pool, .. } => Some(sqlite_pool),
-            Inner::Postgres { .. } => None,
+            Inner::Postgres { .. } | Inner::MySql { .. } => None,
         }
     }
 
@@ -533,6 +605,11 @@ macro_rules! both_dbs {
             #[::tokio::test]
             async fn sqlite() {
                 $crate::run_case($crate::Backend::Sqlite, $setup, case).await;
+            }
+
+            #[::tokio::test]
+            async fn mysql() {
+                $crate::run_case($crate::Backend::MySql, $setup, case).await;
             }
         }
     };

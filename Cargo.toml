@@ -25,7 +25,7 @@ ruprizzle-testkit = { path = "crates/testkit", version = "0.1.1-beta.1" }
 # --- external ---
 pest         = "2.8"
 pest_derive  = "2.8"
-sqlx         = { version = "0.8", default-features = false, features = ["runtime-tokio", "any", "postgres", "sqlite", "macros", "uuid", "chrono", "json", "rust_decimal"] }
+sqlx         = { version = "0.8", default-features = false, features = ["runtime-tokio", "any", "postgres", "sqlite", "mysql", "macros", "uuid", "chrono", "json", "rust_decimal"] }
 chrono       = { version = "0.4", features = ["serde"] }
 rust_decimal = { version = "1", default-features = false, features = ["serde"] }
 thiserror    = "2"

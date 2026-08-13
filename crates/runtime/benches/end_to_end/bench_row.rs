@@ -46,6 +46,18 @@ for BenchRow {
         })
     }
 }
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>
+for BenchRow {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::mysql::MySqlRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            name: ::ruprizzle::decode::direct_idx(row, 1)?,
+            n: ::ruprizzle::decode::direct_idx(row, 2)?,
+        })
+    }
+}
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for BenchRow {
     fn from_rusqlite_row(

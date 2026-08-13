@@ -15,6 +15,7 @@ use std::borrow::Cow;
 
 use ruprizzle_dialect::DbDialect;
 use sqlx::any::AnyRow;
+use sqlx::mysql::MySqlRow;
 use sqlx::postgres::PgRow;
 use sqlx::sqlite::SqliteRow;
 
@@ -73,6 +74,8 @@ pub enum RowBatch {
     Postgres(Vec<PgRow>),
     /// Rows from the native SQLite driver.
     Sqlite(Vec<SqliteRow>),
+    /// Rows from the native MySQL / MariaDB driver.
+    Mysql(Vec<MySqlRow>),
     /// Rows from the native `rusqlite` backend.
     #[cfg(feature = "sqlite-rusqlite")]
     Rusqlite(Vec<crate::rusqlite::Row>),
@@ -89,6 +92,7 @@ impl RowBatch {
             Self::Any(rows) => rows.is_empty(),
             Self::Postgres(rows) => rows.is_empty(),
             Self::Sqlite(rows) => rows.is_empty(),
+            Self::Mysql(rows) => rows.is_empty(),
             #[cfg(feature = "sqlite-rusqlite")]
             Self::Rusqlite(rows) => rows.is_empty(),
             #[cfg(feature = "postgres-tokio-postgres")]
@@ -103,6 +107,7 @@ impl RowBatch {
             Self::Any(rows) => rows.len(),
             Self::Postgres(rows) => rows.len(),
             Self::Sqlite(rows) => rows.len(),
+            Self::Mysql(rows) => rows.len(),
             #[cfg(feature = "sqlite-rusqlite")]
             Self::Rusqlite(rows) => rows.len(),
             #[cfg(feature = "postgres-tokio-postgres")]
@@ -119,6 +124,7 @@ impl RowBatch {
             (Self::Any(a), Self::Any(b)) => a.extend(b),
             (Self::Postgres(a), Self::Postgres(b)) => a.extend(b),
             (Self::Sqlite(a), Self::Sqlite(b)) => a.extend(b),
+            (Self::Mysql(a), Self::Mysql(b)) => a.extend(b),
             #[cfg(feature = "sqlite-rusqlite")]
             (Self::Rusqlite(a), Self::Rusqlite(b)) => a.extend(b),
             #[cfg(feature = "postgres-tokio-postgres")]
@@ -139,6 +145,7 @@ impl std::fmt::Debug for RowBatch {
             Self::Any(rows) => f.debug_tuple("Any").field(&rows.len()).finish(),
             Self::Postgres(rows) => f.debug_tuple("Postgres").field(&rows.len()).finish(),
             Self::Sqlite(rows) => f.debug_tuple("Sqlite").field(&rows.len()).finish(),
+            Self::Mysql(rows) => f.debug_tuple("Mysql").field(&rows.len()).finish(),
             #[cfg(feature = "sqlite-rusqlite")]
             Self::Rusqlite(rows) => f.debug_tuple("Rusqlite").field(&rows.len()).finish(),
             #[cfg(feature = "postgres-tokio-postgres")]
@@ -222,6 +229,8 @@ pub enum RawRow {
     Postgres(PgRow),
     /// A row from the native SQLite driver.
     Sqlite(SqliteRow),
+    /// A row from the native MySQL / MariaDB driver.
+    Mysql(MySqlRow),
     /// A row from the native `rusqlite` backend.
     #[cfg(feature = "sqlite-rusqlite")]
     Rusqlite(crate::rusqlite::Row),
@@ -448,6 +457,9 @@ impl futures_core::Stream for DeferredRowStream<'_> {
                         RowBatch::Sqlite(rows) => {
                             rows.into_iter().map(RawRow::Sqlite).collect::<Vec<_>>()
                         }
+                        RowBatch::Mysql(rows) => {
+                            rows.into_iter().map(RawRow::Mysql).collect::<Vec<_>>()
+                        }
                         #[cfg(feature = "sqlite-rusqlite")]
                         RowBatch::Rusqlite(rows) => {
                             rows.into_iter().map(RawRow::Rusqlite).collect::<Vec<_>>()
@@ -548,6 +560,16 @@ async fn dispatch_raw_query(
                 .map(RowBatch::Sqlite)
                 .map_err(Error::from)
         }
+        Pool::Mysql(p) => {
+            let mut q = sqlx::query::<sqlx::MySql>(&sql);
+            for bind in &binds {
+                q = q.bind(bind);
+            }
+            q.fetch_all(p)
+                .await
+                .map(RowBatch::Mysql)
+                .map_err(Error::from)
+        }
         #[cfg(feature = "sqlite-rusqlite")]
         Pool::SqliteNative(p) => Executor::fetch_all_raw(p, sql, binds).await,
         #[cfg(feature = "postgres-tokio-postgres")]
@@ -591,6 +613,16 @@ async fn dispatch_raw_execute(
                 .map(|r| r.rows_affected())
                 .map_err(Error::from)
         }
+        Pool::Mysql(p) => {
+            let mut q = sqlx::query::<sqlx::MySql>(&sql);
+            for bind in &binds {
+                q = q.bind(bind);
+            }
+            q.execute(p)
+                .await
+                .map(|r| r.rows_affected())
+                .map_err(Error::from)
+        }
         #[cfg(feature = "sqlite-rusqlite")]
         Pool::SqliteNative(p) => Executor::execute_raw(p, sql, binds).await,
         #[cfg(feature = "postgres-tokio-postgres")]
@@ -616,6 +648,10 @@ where
             .map(|r| T::from_row(r).map_err(Error::Sqlx))
             .collect(),
         RowBatch::Sqlite(rows) => rows
+            .iter()
+            .map(|r| T::from_row(r).map_err(Error::Sqlx))
+            .collect(),
+        RowBatch::Mysql(rows) => rows
             .iter()
             .map(|r| T::from_row(r).map_err(Error::Sqlx))
             .collect(),

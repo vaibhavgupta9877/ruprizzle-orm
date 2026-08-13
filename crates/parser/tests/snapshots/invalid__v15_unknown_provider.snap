@@ -6,14 +6,14 @@ expression: rendered
     Diagnostic severity: error
 diagnostic code: ruprizzle::schema_invalid
 
-Error: unknown provider `mysql`
+Error: unknown provider `mssql`
     Diagnostic severity: error
 
 Begin snippet for v15_unknown_provider starting at line 1, column 1
 
 snippet line 1: datasource db {
-snippet line 2:   provider = "mysql"
+snippet line 2:   provider = "mssql"
     label at line 2, columns 14 to 20: not a supported database provider
 snippet line 3:   url      = env("DATABASE_URL")
-diagnostic help: supported providers are: postgres, sqlite
+diagnostic help: supported providers are: postgres, sqlite, mysql
 diagnostic code: ruprizzle::unknown_provider

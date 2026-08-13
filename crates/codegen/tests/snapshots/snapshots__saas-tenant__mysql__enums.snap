@@ -1,0 +1,71 @@
+---
+source: crates/codegen/tests/snapshots.rs
+expression: content
+---
+#![allow(clippy::all, clippy::pedantic, unused_imports)]
+use ::ruprizzle::serde::{Deserialize, Serialize};
+use ::ruprizzle::sqlx::Type;
+use ::ruprizzle::Value;
+///Billing tier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Type, Serialize, Deserialize)]
+#[sqlx(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(crate = "::ruprizzle::serde")]
+pub enum Plan {
+    Free,
+    Pro,
+    Enterprise,
+}
+impl Plan {
+    /// All variants in declaration order.
+    pub const ALL: &'static [Plan] = &[Plan::Free, Plan::Pro, Plan::Enterprise];
+    /// The database string for this variant.
+    #[must_use]
+    pub const fn as_db_str(&self) -> &'static str {
+        match self {
+            Self::Free => "FREE",
+            Self::Pro => "PRO",
+            Self::Enterprise => "ENTERPRISE",
+        }
+    }
+    /// Parse a database string into a variant.
+    #[must_use]
+    pub fn from_db_str(s: &str) -> Option<Self> {
+        match s {
+            "FREE" => Some(Self::Free),
+            "PRO" => Some(Self::Pro),
+            "ENTERPRISE" => Some(Self::Enterprise),
+            _ => None,
+        }
+    }
+}
+impl std::fmt::Display for Plan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_db_str())
+    }
+}
+impl std::str::FromStr for Plan {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_db_str(s)
+            .ok_or_else(|| format!("unknown {0}: {1}", stringify!(Plan), s))
+    }
+}
+impl ::ruprizzle::Encodable for Plan {
+    fn to_value(&self) -> Value {
+        Value::Str(self.as_db_str().into())
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromValue for Plan {
+    fn from_value(
+        value: &::ruprizzle::rusqlite::types::Value,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let s = <String as ::ruprizzle::rusqlite::FromValue>::from_value(value)?;
+        s.parse()
+            .map_err(|e: String| {
+                ::ruprizzle::Error::Message(
+                    format!("cannot parse {} from {s:?}: {e}", stringify!(Plan)),
+                )
+            })
+    }
+}

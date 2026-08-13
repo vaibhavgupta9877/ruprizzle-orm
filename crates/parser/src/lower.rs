@@ -162,7 +162,7 @@ fn lower_datasource(ast: &Ast, diags: &mut Diagnostics) -> Datasource {
         None => {
             diags.push(config_error(
                 "`datasource` block has no `provider`",
-                "add `provider = \"postgres\"` or `provider = \"sqlite\"`",
+                "add `provider = \"postgres\"`, `provider = \"sqlite\"`, or `provider = \"mysql\"`",
                 block.span,
             ));
             Provider::Postgres

@@ -217,6 +217,14 @@ impl sqlx::Type<sqlx::Sqlite> for Value {
     }
 }
 
+impl sqlx::Type<sqlx::MySql> for Value {
+    fn type_info() -> <sqlx::MySql as sqlx::Database>::TypeInfo {
+        // Concrete type is reported through `Encode::produces`; this is a
+        // harmless placeholder for `Value::Null`.
+        <String as sqlx::Type<sqlx::MySql>>::type_info()
+    }
+}
+
 // P1-4: encode `&'q Value` by reference so `Str`/`Bytes` never re-allocate.
 // Binding `&Value` instead of `Value` lets sqlx see the `'q` lifetime it needs
 // to borrow `Arc<str>` / `Arc<[u8]>` data directly.
@@ -336,6 +344,70 @@ impl<'q> sqlx::Encode<'q, sqlx::Postgres> for &'q Value {
                 <sqlx::types::Json<serde_json::Value> as sqlx::Type<sqlx::Postgres>>::type_info()
             }
             Value::Bytes(_) => <Vec<u8> as sqlx::Type<sqlx::Postgres>>::type_info(),
+            Value::Array(_) => return None,
+        })
+    }
+}
+
+impl<'q> sqlx::Encode<'q, sqlx::MySql> for &'q Value {
+    fn encode_by_ref(
+        &self,
+        buf: &mut <sqlx::MySql as sqlx::Database>::ArgumentBuffer<'q>,
+    ) -> Result<sqlx::encode::IsNull, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        match *self {
+            Value::Null => {
+                let n: Option<String> = None;
+                sqlx::Encode::<sqlx::MySql>::encode_by_ref(&n, buf)
+            }
+            Value::Bool(b) => sqlx::Encode::<sqlx::MySql>::encode_by_ref(&b, buf),
+            Value::I32(i) => sqlx::Encode::<sqlx::MySql>::encode_by_ref(&i, buf),
+            Value::I64(i) => sqlx::Encode::<sqlx::MySql>::encode_by_ref(&i, buf),
+            Value::F64(f) => sqlx::Encode::<sqlx::MySql>::encode_by_ref(&f, buf),
+            Value::Decimal(d) => {
+                let s = d.to_string();
+                sqlx::Encode::<sqlx::MySql>::encode_by_ref(&s, buf)
+            }
+            Value::Str(s) => sqlx::Encode::<sqlx::MySql>::encode(s.as_ref(), buf),
+            Value::Uuid(u) => {
+                let s = u.to_string();
+                sqlx::Encode::<sqlx::MySql>::encode_by_ref(&s, buf)
+            }
+            Value::DateTime(dt) => {
+                let s = dt.to_rfc3339();
+                sqlx::Encode::<sqlx::MySql>::encode_by_ref(&s, buf)
+            }
+            Value::Date(d) => {
+                let s = d.to_string();
+                sqlx::Encode::<sqlx::MySql>::encode_by_ref(&s, buf)
+            }
+            Value::Time(t) => {
+                let s = t.to_string();
+                sqlx::Encode::<sqlx::MySql>::encode_by_ref(&s, buf)
+            }
+            Value::Json(v) => {
+                let s = v.to_string();
+                sqlx::Encode::<sqlx::MySql>::encode_by_ref(&s, buf)
+            }
+            Value::Bytes(b) => sqlx::Encode::<sqlx::MySql>::encode(b.as_ref(), buf),
+            Value::Array(_) => Err("array bind values are not supported yet".into()),
+        }
+    }
+
+    fn produces(&self) -> Option<<sqlx::MySql as sqlx::Database>::TypeInfo> {
+        Some(match *self {
+            Value::Null
+            | Value::Decimal(_)
+            | Value::Str(_)
+            | Value::Uuid(_)
+            | Value::DateTime(_)
+            | Value::Date(_)
+            | Value::Time(_)
+            | Value::Json(_) => <String as sqlx::Type<sqlx::MySql>>::type_info(),
+            Value::Bool(_) => <bool as sqlx::Type<sqlx::MySql>>::type_info(),
+            Value::I32(_) => <i32 as sqlx::Type<sqlx::MySql>>::type_info(),
+            Value::I64(_) => <i64 as sqlx::Type<sqlx::MySql>>::type_info(),
+            Value::F64(_) => <f64 as sqlx::Type<sqlx::MySql>>::type_info(),
+            Value::Bytes(_) => <Vec<u8> as sqlx::Type<sqlx::MySql>>::type_info(),
             Value::Array(_) => return None,
         })
     }

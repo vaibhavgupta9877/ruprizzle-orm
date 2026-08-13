@@ -58,6 +58,20 @@ for BenchChild {
         })
     }
 }
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>
+for BenchChild {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::mysql::MySqlRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            parent_id: ::ruprizzle::decode::direct_idx(row, 1)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2)?,
+            parent: ::ruprizzle::Related::default(),
+            grandchildren: ::ruprizzle::Related::default(),
+        })
+    }
+}
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for BenchChild {
     fn from_rusqlite_row(

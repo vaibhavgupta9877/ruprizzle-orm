@@ -43,7 +43,7 @@ variants.
 | Database | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
 |---|---|---|---|---|---|---|---|
 | PostgreSQL | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| MySQL / MariaDB | No | No | Yes | Yes | Yes | Yes | Yes |
+| MySQL / MariaDB | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | SQLite | Yes | Yes (native) | Yes | Yes | Yes | Yes | Yes |
 | Microsoft SQL Server | No | No | Yes | Partial | No | Yes | Yes |
 | MongoDB | No | No | Yes | No | No | Yes | No |

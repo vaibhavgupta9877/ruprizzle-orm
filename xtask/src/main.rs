@@ -133,12 +133,12 @@ fn run_all(tasks: &[&str]) -> ExitCode {
 
 fn run_examples() -> ExitCode {
     eprintln!("--- xtask: examples ---");
-    // The first test generates all example schemas for both dialects into a
+    // The first test generates all example schemas for all SQL dialects into a
     // throw-away crate in `target/generated-check`; the second clippys it under
     // `clippy::pedantic`. They must run sequentially because the second reuses
     // the crate the first materialises.
     for test in [
-        "all_examples_both_dialects_compile",
+        "all_examples_all_dialects_compile",
         "generated_code_is_pedantic_clean",
     ] {
         eprintln!("--- xtask: examples: {test} ---");

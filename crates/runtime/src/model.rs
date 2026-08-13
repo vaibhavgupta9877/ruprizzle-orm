@@ -21,6 +21,7 @@ pub trait RowDecode:
     + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>
     + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
     + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
+    + for<'r> sqlx::FromRow<'r, sqlx::mysql::MySqlRow>
 {
 }
 
@@ -35,6 +36,7 @@ pub trait RowDecode:
     + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>
     + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
     + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
+    + for<'r> sqlx::FromRow<'r, sqlx::mysql::MySqlRow>
     + crate::rusqlite::FromRusqliteRow
     + crate::rusqlite::FromOwnedRow
 {
@@ -51,6 +53,7 @@ pub trait RowDecode:
     + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>
     + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
     + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
+    + for<'r> sqlx::FromRow<'r, sqlx::mysql::MySqlRow>
     + crate::tokio_postgres::FromTokioPostgresRow
 {
 }
@@ -66,6 +69,7 @@ pub trait RowDecode:
     + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>
     + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
     + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
+    + for<'r> sqlx::FromRow<'r, sqlx::mysql::MySqlRow>
     + crate::rusqlite::FromRusqliteRow
     + crate::rusqlite::FromOwnedRow
     + crate::tokio_postgres::FromTokioPostgresRow
@@ -84,6 +88,7 @@ impl<T> RowDecode for T where
         + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>
         + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
         + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
+        + for<'r> sqlx::FromRow<'r, sqlx::mysql::MySqlRow>
 {
 }
 
@@ -96,6 +101,7 @@ impl<T> RowDecode for T where
         + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>
         + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
         + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
+        + for<'r> sqlx::FromRow<'r, sqlx::mysql::MySqlRow>
         + crate::rusqlite::FromRusqliteRow
         + crate::rusqlite::FromOwnedRow
 {
@@ -110,6 +116,7 @@ impl<T> RowDecode for T where
         + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>
         + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
         + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
+        + for<'r> sqlx::FromRow<'r, sqlx::mysql::MySqlRow>
         + crate::tokio_postgres::FromTokioPostgresRow
 {
 }
@@ -123,6 +130,7 @@ impl<T> RowDecode for T where
         + for<'r> sqlx::FromRow<'r, sqlx::any::AnyRow>
         + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
         + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
+        + for<'r> sqlx::FromRow<'r, sqlx::mysql::MySqlRow>
         + crate::rusqlite::FromRusqliteRow
         + crate::rusqlite::FromOwnedRow
         + crate::tokio_postgres::FromTokioPostgresRow

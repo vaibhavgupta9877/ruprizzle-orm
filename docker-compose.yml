@@ -23,3 +23,19 @@ services:
       # The test database is disposable; keeping it in RAM makes the suite
       # noticeably faster and leaves nothing behind.
       - /var/lib/postgresql/data
+
+  mysql:
+    image: mysql:8.4
+    container_name: ruprizzle-mysql
+    environment:
+      MYSQL_USER: ruprizzle
+      MYSQL_PASSWORD: ruprizzle
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ruprizzle_test
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uruprizzle", "-pruprizzle"]
+      interval: 2s
+      timeout: 5s
+      retries: 30

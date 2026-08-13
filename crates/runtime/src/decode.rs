@@ -300,6 +300,54 @@ where
     }
 }
 
+/// Decode JSON from a text/blob column without requiring a native JSON type.
+///
+/// This is used by generated `AnyRow` implementations because `sqlx::Any`
+/// does not expose a native JSON type. Native-dialect implementations use
+/// [`json_idx`] instead.
+pub fn json_text_idx<R>(row: &R, idx: usize) -> Result<serde_json::Value, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(s) = row.try_get::<String, _>(idx) {
+        return serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)));
+    }
+    let bytes: Vec<u8> = row.try_get(idx)?;
+    let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+    serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+}
+
+/// Decode an optional JSON text/blob column without a native JSON type.
+pub fn json_text_opt_idx<R>(row: &R, idx: usize) -> Result<Option<serde_json::Value>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    match row.try_get::<Option<String>, _>(idx) {
+        Ok(Some(s)) => serde_json::from_str(&s)
+            .map(Some)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e))),
+        Ok(None) => Ok(None),
+        Err(_) => match row.try_get::<Option<Vec<u8>>, _>(idx) {
+            Ok(Some(bytes)) => {
+                let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+                serde_json::from_str(&s)
+                    .map(Some)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        },
+    }
+}
+
 /// Ordinal version of [`json_opt`].
 pub fn json_opt_idx<R>(row: &R, idx: usize) -> Result<Option<serde_json::Value>, sqlx::Error>
 where

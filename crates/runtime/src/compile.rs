@@ -686,6 +686,12 @@ mod tests {
                     Ok(v)
                 }
             }
+            impl<'r> sqlx::FromRow<'r, sqlx::mysql::MySqlRow> for $t {
+                fn from_row(_: &'r sqlx::mysql::MySqlRow) -> Result<Self, sqlx::Error> {
+                    let v: $t = Default::default();
+                    Ok(v)
+                }
+            }
             #[cfg(feature = "sqlite-rusqlite")]
             impl crate::rusqlite::FromRusqliteRow for $t {
                 fn from_rusqlite_row(

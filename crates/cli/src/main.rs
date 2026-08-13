@@ -261,6 +261,7 @@ fn init(schema_path: &str, provider: &str) -> Result<(), Box<dyn std::error::Err
     let default_url = match provider {
         Provider::Postgres => "postgres://localhost:5432/postgres?sslmode=disable",
         Provider::Sqlite => "sqlite:test.db?mode=rwc",
+        Provider::Mysql => "mysql://localhost:3306/app",
     };
 
     fs::create_dir_all(base)?;

@@ -492,21 +492,27 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         .map(|f| f.column.as_str())
         .collect();
 
-    let mut next_index = 0;
-    let from_row_fields: Vec<_> = model
-        .fields
-        .values()
-        .map(|f| {
-            let idx = if f.has_column() {
-                let i = next_index;
-                next_index += 1;
-                Some(i)
-            } else {
-                None
-            };
-            emit_from_row_field(schema, model.name.as_str(), f, idx)
-        })
-        .collect();
+    let row_fields = |native_json: bool| {
+        let mut next_index = 0;
+        model
+            .fields
+            .values()
+            .map(|f| {
+                let idx = if f.has_column() {
+                    let i = next_index;
+                    next_index += 1;
+                    Some(i)
+                } else {
+                    None
+                };
+                emit_from_row_field(schema, model.name.as_str(), f, idx, native_json)
+            })
+            .collect::<Vec<_>>()
+    };
+    let any_from_row_fields = row_fields(false);
+    let postgres_from_row_fields = row_fields(true);
+    let sqlite_from_row_fields = row_fields(true);
+    let mysql_from_row_fields = row_fields(true);
 
     let mut next_rusqlite_index = 0;
     let rusqlite_from_row_fields: Vec<_> = model
@@ -578,7 +584,7 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for #model_name {
             fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
                 Ok(Self {
-                    #( #from_row_fields )*
+                    #( #any_from_row_fields )*
                 })
             }
         }
@@ -586,7 +592,7 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow> for #model_name {
             fn from_row(row: &'r ::ruprizzle::sqlx::postgres::PgRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
                 Ok(Self {
-                    #( #from_row_fields )*
+                    #( #postgres_from_row_fields )*
                 })
             }
         }
@@ -594,7 +600,15 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow> for #model_name {
             fn from_row(row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
                 Ok(Self {
-                    #( #from_row_fields )*
+                    #( #sqlite_from_row_fields )*
+                })
+            }
+        }
+
+        impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow> for #model_name {
+            fn from_row(row: &'r ::ruprizzle::sqlx::mysql::MySqlRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+                Ok(Self {
+                    #( #mysql_from_row_fields )*
                 })
             }
         }
@@ -730,6 +744,7 @@ fn emit_from_row_field(
     owner: &str,
     field: &Field,
     idx: Option<usize>,
+    native_json: bool,
 ) -> TokenStream {
     let name = safe_field_ident(field.name.as_str());
 
@@ -778,8 +793,18 @@ fn emit_from_row_field(
                 quote! { ::ruprizzle::decode::#helper(row, #idx)? }
             }
             ruprizzle_core::ir::ScalarType::Json => {
-                let helper =
-                    format_ident!("{}", if optional { "json_opt_idx" } else { "json_idx" });
+                let helper = if native_json {
+                    format_ident!("{}", if optional { "json_opt_idx" } else { "json_idx" })
+                } else {
+                    format_ident!(
+                        "{}",
+                        if optional {
+                            "json_text_opt_idx"
+                        } else {
+                            "json_text_idx"
+                        }
+                    )
+                };
                 quote! { ::ruprizzle::decode::#helper(row, #idx)? }
             }
             ruprizzle_core::ir::ScalarType::Bytes => {

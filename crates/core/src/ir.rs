@@ -135,6 +135,8 @@ pub enum Provider {
     Postgres,
     /// `SQLite` 3.35 or newer, the first version with `DROP COLUMN` and `RETURNING`.
     Sqlite,
+    /// `MySQL` 8.0+ and `MariaDB` 10.5+.
+    Mysql,
 }
 
 impl Provider {
@@ -144,6 +146,7 @@ impl Provider {
         match s {
             "postgres" | "postgresql" => Some(Provider::Postgres),
             "sqlite" => Some(Provider::Sqlite),
+            "mysql" | "mariadb" => Some(Provider::Mysql),
             _ => None,
         }
     }
@@ -154,11 +157,12 @@ impl Provider {
         match self {
             Provider::Postgres => "postgres",
             Provider::Sqlite => "sqlite",
+            Provider::Mysql => "mysql",
         }
     }
 
     /// Every provider this build supports, for error suggestions.
-    pub const ALL: &'static [Provider] = &[Provider::Postgres, Provider::Sqlite];
+    pub const ALL: &'static [Provider] = &[Provider::Postgres, Provider::Sqlite, Provider::Mysql];
 }
 
 impl std::fmt::Display for Provider {
