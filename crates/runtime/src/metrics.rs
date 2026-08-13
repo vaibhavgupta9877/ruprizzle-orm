@@ -13,7 +13,11 @@ pub fn counter(name: &'static str, n: u64) {
 
 /// Increment a counter with label values.
 #[allow(unused_variables)]
-pub fn counter_with<K: AsRef<[(&'static str, &'static str)]>>(name: &'static str, labels: K, n: u64) {
+pub fn counter_with<K: AsRef<[(&'static str, &'static str)]>>(
+    name: &'static str,
+    labels: K,
+    n: u64,
+) {
     #[cfg(feature = "metrics")]
     metrics::counter!(name, labels.as_ref()).increment(n);
 }

@@ -81,10 +81,7 @@ fn field<'a>(event: &'a EventRecord, name: &str) -> Option<&'a str> {
 }
 
 fn events_with_target<'a>(events: &'a [EventRecord], target: &str) -> Vec<&'a EventRecord> {
-    events
-        .iter()
-        .filter(|e| e.target == target)
-        .collect()
+    events.iter().filter(|e| e.target == target).collect()
 }
 
 #[test]

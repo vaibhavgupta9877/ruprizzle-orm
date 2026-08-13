@@ -487,9 +487,11 @@ impl Executor for Pool {
     ) -> BoxFuture<'_, Result<RowBatch, Error>> {
         let bind_count = binds.len();
         let pool = self.clone();
-        Box::pin(trace_and_record_query(sql.clone(), bind_count, async move {
-            dispatch_raw_query(&pool, sql, binds).await
-        }))
+        Box::pin(trace_and_record_query(
+            sql.clone(),
+            bind_count,
+            async move { dispatch_raw_query(&pool, sql, binds).await },
+        ))
     }
 
     fn execute_raw(
@@ -499,9 +501,11 @@ impl Executor for Pool {
     ) -> BoxFuture<'_, Result<u64, Error>> {
         let bind_count = binds.len();
         let pool = self.clone();
-        Box::pin(trace_and_record_execute(sql.clone(), bind_count, async move {
-            dispatch_raw_execute(&pool, sql, binds).await
-        }))
+        Box::pin(trace_and_record_execute(
+            sql.clone(),
+            bind_count,
+            async move { dispatch_raw_execute(&pool, sql, binds).await },
+        ))
     }
 
     fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {

@@ -85,9 +85,7 @@ fn bench_tail_latency_under_contention(c: &mut Criterion) {
                 for _ in 0..100 {
                     let pool = Arc::clone(&pool);
                     handles.push(tokio::spawn(async move {
-                        let _ = pool
-                            .execute_raw(QUERY.to_owned().into(), Vec::new())
-                            .await;
+                        let _ = pool.execute_raw(QUERY.to_owned().into(), Vec::new()).await;
                     }));
                 }
                 for h in handles {

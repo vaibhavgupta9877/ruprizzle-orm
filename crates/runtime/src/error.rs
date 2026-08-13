@@ -160,11 +160,9 @@ fn classify_sqlx(err: sqlx::Error) -> Error {
         SqlxError::PoolTimedOut => Error::AcquireTimeout {
             reason: err.to_string(),
         },
-        SqlxError::PoolClosed | SqlxError::Io(_) => {
-            Error::ConnectionFailure {
-                reason: err.to_string(),
-            }
-        }
+        SqlxError::PoolClosed | SqlxError::Io(_) => Error::ConnectionFailure {
+            reason: err.to_string(),
+        },
         _ => Error::Sqlx(err),
     }
 }

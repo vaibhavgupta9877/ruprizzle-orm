@@ -58,8 +58,6 @@ impl Pool {
         crate::tx::Tx::begin(self).await
     }
 
-
-
     /// Total connections currently held by the pool.
     #[must_use]
     pub fn size(&self) -> u32 {
