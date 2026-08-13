@@ -121,6 +121,15 @@ enum MigrateCommand {
         #[arg(long)]
         force: bool,
     },
+    /// Collapse applied migration history into one baseline, archiving old files.
+    Squash {
+        /// Name for the generated baseline migration.
+        #[arg(long)]
+        name: Option<String>,
+        /// Required because this rewrites migration history and tracking metadata.
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -193,6 +202,12 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 return Err("migrate reset is destructive; pass --force to proceed".into());
             }
             migrate_reset(&cli.schema, "migrations", cli.verbose).await
+        }
+        Command::Migrate(MigrateCommand::Squash { name, force }) => {
+            if !force {
+                return Err("migrate squash rewrites history; pass --force to proceed".into());
+            }
+            migrate_squash(&cli.schema, "migrations", name.as_ref(), cli.verbose).await
         }
         Command::Db(DbCommand::Push { accept_data_loss }) => {
             db_push(&cli.schema, "migrations", *accept_data_loss, cli.verbose).await
@@ -796,6 +811,71 @@ async fn migrate_status(
     Ok(())
 }
 
+async fn migrate_squash(
+    schema_path: &str,
+    migrations_dir: &str,
+    name: Option<&String>,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (schema, source, warnings) = parse_schema(schema_path)?;
+    print_warnings(&source, warnings);
+
+    let url = resolve_database_url(schema_path, verbose)?;
+    let pool = connect(&url).await?;
+    let migrator = Migrator::new(migrations_dir);
+    let status = migrator.status(&pool).await?;
+    if !status.pending.is_empty() {
+        return Err(format!(
+            "cannot squash with pending migrations; deploy first: {}",
+            status.pending.join(", ")
+        )
+        .into());
+    }
+    if status.applied.is_empty() {
+        return Err("cannot squash an empty migration history".into());
+    }
+    migrator.verify_checksums(&pool).await?;
+
+    let dialect = dialect_for(schema.datasource.provider);
+    let empty = empty_schema_like(&schema);
+    let up = up_sql(&empty, &schema, dialect);
+    let down = down_sql(&empty, &schema, dialect);
+    let default_name = "baseline".to_owned();
+    let baseline_id = migration_id(name.or(Some(&default_name)));
+    let migrations_path = Path::new(migrations_dir);
+    let archive = migrations_path.join(".archive").join(&baseline_id);
+    fs::create_dir_all(&archive)?;
+
+    for migration in migrator.migrations()? {
+        fs::rename(
+            migrations_path.join(&migration.id),
+            archive.join(&migration.id),
+        )?;
+    }
+
+    write_migration(
+        migrations_dir,
+        &baseline_id,
+        &up,
+        &down,
+        down.to_ascii_lowercase().contains("drop table"),
+    )?;
+    pool.execute_raw(
+        Cow::Owned("DELETE FROM _ruprizzle_migrations".to_owned()),
+        Vec::new(),
+    )
+    .await?;
+    migrator.resolve(&pool, &baseline_id).await?;
+
+    println!(
+        "Squashed {} migration{} into {baseline_id}; archived old files under {}",
+        status.applied.len(),
+        if status.applied.len() == 1 { "" } else { "s" },
+        archive.display()
+    );
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // db push / seed
 // ---------------------------------------------------------------------------
@@ -968,6 +1048,74 @@ mod tests {
         let cli =
             Cli::try_parse_from(["ruprizzle", "--schema", "db/app.ruprizzle", "validate"]).unwrap();
         assert_eq!(cli.schema, "db/app.ruprizzle");
+    }
+
+    #[tokio::test]
+    async fn migrate_squash_archives_history_and_marks_baseline_applied() {
+        use ruprizzle::Executor;
+        use std::borrow::Cow;
+
+        let root =
+            std::env::temp_dir().join(format!("ruprizzle-cli-squash-{}", std::process::id()));
+        let migrations = root.join("migrations");
+        std::fs::create_dir_all(&migrations).unwrap();
+        let schema_path = root.join("schema.ruprizzle");
+        let database_path = root.join("database.sqlite");
+        let file = database_path.to_string_lossy().replace('\\', "/");
+        let url = format!("sqlite:///{file}?mode=rwc");
+        std::fs::write(
+            &schema_path,
+            format!(
+                r#"datasource db {{ provider = "sqlite" url = "{url}" }}
+
+generator client {{ provider = "rust" }}
+
+model User {{
+  id Int @id
+  name String
+}}
+"#
+            ),
+        )
+        .unwrap();
+        let initial = migrations.join("20240101_init");
+        std::fs::create_dir_all(&initial).unwrap();
+        std::fs::write(
+            initial.join("up.sql"),
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);",
+        )
+        .unwrap();
+        std::fs::write(initial.join("down.sql"), "DROP TABLE users;").unwrap();
+
+        let pool = ruprizzle::connect(&url).await.unwrap();
+        Migrator::new(&migrations)
+            .apply_all(&pool, false)
+            .await
+            .unwrap();
+        migrate_squash(
+            schema_path.to_str().unwrap(),
+            migrations.to_str().unwrap(),
+            None,
+            false,
+        )
+        .await
+        .unwrap();
+
+        let status = Migrator::new(&migrations).status(&pool).await.unwrap();
+        assert_eq!(status.applied.len(), 1);
+        assert!(status.pending.is_empty());
+        assert!(migrations.join(".archive").exists());
+        let baseline_count = std::fs::read_dir(&migrations)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.path().join("up.sql").exists())
+            .count();
+        assert_eq!(baseline_count, 1);
+        pool.execute_raw(Cow::Owned("SELECT 1".to_owned()), Vec::new())
+            .await
+            .unwrap();
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[tokio::test]

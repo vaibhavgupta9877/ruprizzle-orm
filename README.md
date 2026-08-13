@@ -500,7 +500,7 @@ P0–P7 are complete, P8 is mostly complete (docs site / announcement pending), 
 - Database introspection → schema (`db pull`).
 - Raw-SQL compile-time verification (`sqlx::query!` style).
 - Full LSP for the schema DSL.
-- Migration squashing and connection pool metrics.
+- Connection pool metrics.
 
 See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md) and [decisions log](ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md) for the full phase-by-phase state and ADRs.
 

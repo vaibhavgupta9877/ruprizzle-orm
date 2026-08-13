@@ -117,13 +117,26 @@ impl Migrator {
 
     /// Creates the `_ruprizzle_migrations` tracking table if it does not exist.
     pub async fn ensure_table(&self, pool: &Pool) -> Result<(), Error> {
-        let sql = "CREATE TABLE IF NOT EXISTS _ruprizzle_migrations (
-            id TEXT PRIMARY KEY,
-            checksum TEXT NOT NULL,
-            applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            execution_ms BIGINT NOT NULL DEFAULT 0,
-            rolled_back_at TIMESTAMPTZ
-        )";
+        let sql = match pool.provider() {
+            Provider::Mysql => {
+                "CREATE TABLE IF NOT EXISTS _ruprizzle_migrations (
+                id VARCHAR(255) PRIMARY KEY,
+                checksum VARCHAR(255) NOT NULL,
+                applied_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                execution_ms BIGINT NOT NULL DEFAULT 0,
+                rolled_back_at DATETIME(6)
+            )"
+            }
+            _ => {
+                "CREATE TABLE IF NOT EXISTS _ruprizzle_migrations (
+                id TEXT PRIMARY KEY,
+                checksum TEXT NOT NULL,
+                applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                execution_ms BIGINT NOT NULL DEFAULT 0,
+                rolled_back_at TIMESTAMPTZ
+            )"
+            }
+        };
 
         if let Err(e) = pool
             .execute_raw(Cow::Owned(sql.to_owned()), Vec::new())
@@ -307,18 +320,7 @@ impl Migrator {
             ruprizzle::metrics::counter(ruprizzle::metrics::MIGRATION_APPLIED_TOTAL, 1);
             ruprizzle::metrics::histogram(ruprizzle::metrics::MIGRATION_DURATION_SECONDS, elapsed);
             let elapsed_ms = (elapsed * 1000.0) as i64;
-            let tracking_sql = format!(
-                "INSERT INTO _ruprizzle_migrations (id, checksum, applied_at, execution_ms) \
-                 VALUES ({}, {}, CURRENT_TIMESTAMP, {}) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                   checksum = EXCLUDED.checksum, \
-                   applied_at = CURRENT_TIMESTAMP, \
-                   rolled_back_at = NULL, \
-                   execution_ms = EXCLUDED.execution_ms",
-                dialect.placeholder(0),
-                dialect.placeholder(1),
-                dialect.placeholder(2)
-            );
+            let tracking_sql = tracking_upsert_sql(dialect, 3);
             tx.execute_raw(
                 Cow::Owned(tracking_sql),
                 vec![
@@ -405,17 +407,7 @@ impl Migrator {
 
         let checksum = compute_checksum(&m.up);
         let dialect = pool.dialect();
-        let sql = format!(
-            "INSERT INTO _ruprizzle_migrations (id, checksum, applied_at, execution_ms) \
-             VALUES ({}, {}, CURRENT_TIMESTAMP, 0) \
-             ON CONFLICT (id) DO UPDATE SET \
-               checksum = EXCLUDED.checksum, \
-               applied_at = CURRENT_TIMESTAMP, \
-               rolled_back_at = NULL, \
-               execution_ms = EXCLUDED.execution_ms",
-            dialect.placeholder(0),
-            dialect.placeholder(1)
-        );
+        let sql = tracking_upsert_sql(dialect, 2);
         pool.execute_raw(
             Cow::Owned(sql),
             vec![Value::Str(id.into()), Value::Str(checksum.into())],
@@ -483,6 +475,32 @@ impl Migrator {
     }
 }
 
+fn tracking_upsert_sql(dialect: &dyn DbDialect, parameter_count: usize) -> String {
+    let id = dialect.placeholder(0);
+    let checksum = dialect.placeholder(1);
+    if dialect.name() == "mysql" {
+        if parameter_count == 3 {
+            format!(
+                "INSERT INTO _ruprizzle_migrations (id, checksum, applied_at, execution_ms) VALUES ({id}, {checksum}, CURRENT_TIMESTAMP(6), {}) ON DUPLICATE KEY UPDATE checksum = VALUES(checksum), applied_at = CURRENT_TIMESTAMP(6), rolled_back_at = NULL, execution_ms = VALUES(execution_ms)",
+                dialect.placeholder(2)
+            )
+        } else {
+            format!(
+                "INSERT INTO _ruprizzle_migrations (id, checksum, applied_at, execution_ms) VALUES ({id}, {checksum}, CURRENT_TIMESTAMP(6), 0) ON DUPLICATE KEY UPDATE checksum = VALUES(checksum), applied_at = CURRENT_TIMESTAMP(6), rolled_back_at = NULL"
+            )
+        }
+    } else if parameter_count == 3 {
+        format!(
+            "INSERT INTO _ruprizzle_migrations (id, checksum, applied_at, execution_ms) VALUES ({id}, {checksum}, CURRENT_TIMESTAMP, {}) ON CONFLICT (id) DO UPDATE SET checksum = EXCLUDED.checksum, applied_at = CURRENT_TIMESTAMP, rolled_back_at = NULL, execution_ms = EXCLUDED.execution_ms",
+            dialect.placeholder(2)
+        )
+    } else {
+        format!(
+            "INSERT INTO _ruprizzle_migrations (id, checksum, applied_at, execution_ms) VALUES ({id}, {checksum}, CURRENT_TIMESTAMP, 0) ON CONFLICT (id) DO UPDATE SET checksum = EXCLUDED.checksum, applied_at = CURRENT_TIMESTAMP, rolled_back_at = NULL"
+        )
+    }
+}
+
 /// Whether the tracking table is queryable, used to tell a lost `CREATE TABLE`
 /// race apart from a genuine failure.
 async fn tracking_table_exists(pool: &Pool) -> bool {
@@ -495,18 +513,22 @@ async fn tracking_table_exists(pool: &Pool) -> bool {
 }
 
 async fn user_tables(pool: &Pool) -> Result<Vec<String>, Error> {
-    let sql = if pool.provider() == Provider::Sqlite {
-        "SELECT name FROM sqlite_master \
-         WHERE type = 'table' \
-           AND name NOT LIKE 'sqlite_%' \
-           AND name != '_ruprizzle_migrations'"
-            .to_owned()
-    } else {
-        "SELECT table_name::text FROM information_schema.tables \
-         WHERE table_schema = current_schema() \
-           AND table_type = 'BASE TABLE' \
-           AND table_name != '_ruprizzle_migrations'"
-            .to_owned()
+    let sql = match pool.provider() {
+        Provider::Sqlite => "SELECT name FROM sqlite_master \
+             WHERE type = 'table' \
+               AND name NOT LIKE 'sqlite_%' \
+               AND name != '_ruprizzle_migrations'"
+            .to_owned(),
+        Provider::Postgres => "SELECT table_name::text FROM information_schema.tables \
+             WHERE table_schema = current_schema() \
+               AND table_type = 'BASE TABLE' \
+               AND table_name != '_ruprizzle_migrations'"
+            .to_owned(),
+        Provider::Mysql => "SELECT table_name FROM information_schema.tables \
+             WHERE table_schema = DATABASE() \
+               AND table_type = 'BASE TABLE' \
+               AND table_name != '_ruprizzle_migrations'"
+            .to_owned(),
     };
 
     let batch = pool.fetch_all_raw(Cow::Owned(sql), Vec::new()).await?;
@@ -527,6 +549,10 @@ fn decode_string_rows(batch: RowBatch) -> Result<Vec<String>, Error> {
             .iter()
             .map(|r| Ok(r.try_get::<String, _>(0)?))
             .collect(),
+        RowBatch::Mysql(rows) => rows
+            .iter()
+            .map(|r| Ok(r.try_get::<String, _>(0)?))
+            .collect(),
         #[cfg(feature = "sqlite-rusqlite")]
         RowBatch::Rusqlite(rows) => rows.iter().map(|r| Ok(r.get::<String>(0)?)).collect(),
         _ => Err(Error::Message("unsupported row batch".into())),
@@ -544,6 +570,10 @@ fn decode_pair(batch: RowBatch) -> Result<Vec<(String, String)>, Error> {
             .map(|r| Ok((r.try_get::<String, _>(0)?, r.try_get::<String, _>(1)?)))
             .collect(),
         RowBatch::Sqlite(rows) => rows
+            .iter()
+            .map(|r| Ok((r.try_get::<String, _>(0)?, r.try_get::<String, _>(1)?)))
+            .collect(),
+        RowBatch::Mysql(rows) => rows
             .iter()
             .map(|r| Ok((r.try_get::<String, _>(0)?, r.try_get::<String, _>(1)?)))
             .collect(),

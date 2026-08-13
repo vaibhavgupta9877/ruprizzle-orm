@@ -36,7 +36,6 @@ whether the tool is right for your project.
 ## Deferrals to 0.2
 
 - Full LSP (completion, diagnostics, go-to-definition).
-- Migration squashing.
 - Support for additional databases (MSSQL).
 
 ## When to choose something else

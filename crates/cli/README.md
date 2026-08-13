@@ -14,7 +14,7 @@ Command-line interface for `ruprizzle-orm`.
 - `ruprizzle generate` — parse the schema and emit the generated Rust client.
 - `ruprizzle validate` — parse and validate the schema without writing files; useful in CI.
 - `ruprizzle format` — rewrite the schema file in canonical form.
-- `ruprizzle migrate` — plan, apply, and inspect schema migrations.
+- `ruprizzle migrate` — plan, apply, inspect, and squash schema migrations.
 - `ruprizzle db pull` — introspect an existing database into `schema.ruprizzle`.
 - `ruprizzle db seed` — transactionally apply idempotent rows from `seeds/main.json`.
 - `ruprizzle db push` — push schema changes directly without migration files.
