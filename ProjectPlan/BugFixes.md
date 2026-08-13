@@ -117,22 +117,33 @@ which hid the hazard.
 
 **Files:** `crates/runtime/src/rusqlite.rs`, `crates/runtime/tests/tx_lifecycle.rs`
 
-- [ ] **Step 1 — Failing test first.** Pool of 1, hold one transaction open, run any query.
+- [x] **Step 1 — Failing test first.** Pool of 1, hold one transaction open, run any query.
       Confirm the panic at `rusqlite.rs:134`.
-- [ ] **Step 2 — Guard before the modulo.** Return the existing exhaustion error when
+      *Confirmed: `attempt to calculate the remainder with a divisor of zero`.*
+- [x] **Step 2 — Guard before the modulo.** Return the existing exhaustion error when
       `conns.is_empty()`. Do not silently create a new connection — that would make
       `max_connections` a suggestion.
-- [ ] **Step 3 — Use a typed error.** `Error::Message("rusqlite connection pool exhausted")`
+      *The subsequent index is now `get(idx).cloned()` too, so no bare slice index remains
+      on this path for FIX-11 to flag.*
+- [x] **Step 3 — Use a typed error.** `Error::Message("rusqlite connection pool exhausted")`
       is a string today; promote it to a real variant so callers can match it and so it
       carries a stable `kind()` for telemetry. `Error` is `#[non_exhaustive]`, so adding a
       variant is not breaking.
-- [ ] **Step 4 — Reconsider the sharing model.** Non-transactional `acquire` round-robins a
+      *Added `Error::PoolExhausted { backend: &'static str }`, `kind() == "pool_exhausted"`,
+      used by both `acquire` and `begin_transaction`.*
+- [x] **Step 4 — Reconsider the sharing model.** Non-transactional `acquire` round-robins a
       *cloned* `Arc` without removing it, while `begin_transaction` *pops*. The two disagree
       about what "acquire" means, which is why the pool can empty under one and not the
       other. Document the split explicitly, or unify. **Do not change the semantics in this
       task** — note the decision and open a follow-up; correctness first.
-- [ ] **Step 5 — Test** exhaustion returns `Err` rather than panicking, and that the pool
+      *Decision: keep the split, documented on `acquire`. Sharing is correct for one-shot
+      statements because SQLite serialises on the connection mutex anyway; unifying would
+      redefine what `max_connections` means for non-transactional queries. Follow-up left
+      to the v1 plan rather than changing semantics in a bug fix.*
+- [x] **Step 5 — Test** exhaustion returns `Err` rather than panicking, and that the pool
       recovers once a transaction commits.
+      *`an_exhausted_pool_errors_instead_of_panicking` and `beginning_past_capacity_errors`,
+      both matching on the typed variant.*
 
 ## FIX-03 · `Drop` for `TokioPostgresTransaction`
 

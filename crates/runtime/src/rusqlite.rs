@@ -124,22 +124,44 @@ impl RusqlitePool {
         })
     }
 
-    /// Pick a connection using round-robin load distribution.
+    /// Pick a connection for a single statement using round-robin distribution.
+    ///
+    /// This *shares* a connection rather than checking it out: SQLite
+    /// serialises on the connection mutex anyway, and a one-shot statement has
+    /// no state to keep private. [`Self::begin_transaction`] is the opposite —
+    /// it removes the connection from the pool for the transaction's lifetime,
+    /// because a transaction's statements must all land on the same connection
+    /// and must not interleave with anyone else's.
+    ///
+    /// The consequence of that split is that transactions can empty the pool
+    /// out from under this method, which is why the empty case is a real error
+    /// here. Unifying the two models is worth considering, but it changes what
+    /// `max_connections` means for non-transactional queries and is out of
+    /// scope for a bug fix.
     fn acquire(&self) -> Result<Arc<std::sync::Mutex<rusqlite::Connection>>, Error> {
         let conns = self
             .inner
             .conns
             .lock()
             .map_err(|_| Error::Message("rusqlite connection pool mutex poisoned".into()))?;
+        if conns.is_empty() {
+            // Before the guard this fell through to `% conns.len()` and
+            // panicked with a divide-by-zero (BUG-02).
+            return Err(Error::PoolExhausted {
+                backend: "rusqlite",
+            });
+        }
         let idx = self.inner.next.fetch_add(1, Ordering::Relaxed) % conns.len();
-        Ok(conns[idx].clone())
+        conns.get(idx).cloned().ok_or(Error::PoolExhausted {
+            backend: "rusqlite",
+        })
     }
 
     /// Take a connection from the pool and start a transaction on it.
     ///
-    /// The connection is not returned to the pool until the transaction is
-    /// committed or rolled back, guaranteeing that all transaction statements
-    /// run on the same physical SQLite connection.
+    /// The connection is removed from the pool until the transaction is
+    /// committed, rolled back, or dropped, guaranteeing that all transaction
+    /// statements run on the same physical SQLite connection.
     pub(crate) async fn begin_transaction(&self) -> Result<RusqliteTransaction, Error> {
         let pool = self.clone();
         tokio::task::spawn_blocking(move || -> Result<RusqliteTransaction, Error> {
@@ -147,9 +169,9 @@ impl RusqlitePool {
                 let mut conns = pool.inner.conns.lock().map_err(|_| {
                     Error::Message("rusqlite connection pool mutex poisoned".into())
                 })?;
-                conns
-                    .pop()
-                    .ok_or_else(|| Error::Message("rusqlite connection pool exhausted".into()))?
+                conns.pop().ok_or(Error::PoolExhausted {
+                    backend: "rusqlite",
+                })?
             };
 
             {

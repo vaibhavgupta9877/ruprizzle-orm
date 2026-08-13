@@ -154,3 +154,44 @@ async fn many_abandoned_transactions_leave_the_pool_intact() {
 
     assert_eq!(kv_count(&pool).await, 0);
 }
+
+/// BUG-02: with every connection checked out by a transaction, an ordinary
+/// query took `% conns.len()` on an empty vector and panicked.
+#[tokio::test]
+async fn an_exhausted_pool_errors_instead_of_panicking() {
+    let (pool, _dir) = rusqlite_pool(1).await;
+
+    let tx = pool.begin().await.expect("begin");
+
+    let err = try_kv_count(&pool)
+        .await
+        .expect_err("query on an exhausted pool must return an error");
+    assert!(
+        matches!(err, Error::PoolExhausted { .. }),
+        "unexpected error: {err}"
+    );
+
+    // And the pool recovers once the transaction finishes.
+    tx.commit().await.expect("commit");
+    assert_eq!(kv_count(&pool).await, 0);
+}
+
+/// The same typed error must come out of `begin`, which pops a connection
+/// rather than round-robining over the live ones.
+#[tokio::test]
+async fn beginning_past_capacity_errors() {
+    let (pool, _dir) = rusqlite_pool(1).await;
+
+    let held = pool.begin().await.expect("begin");
+    let err = pool
+        .begin()
+        .await
+        .expect_err("second begin past capacity must fail");
+    assert!(
+        matches!(err, Error::PoolExhausted { .. }),
+        "unexpected error: {err}"
+    );
+
+    held.rollback().await.expect("rollback");
+    pool.begin().await.expect("begin after rollback");
+}

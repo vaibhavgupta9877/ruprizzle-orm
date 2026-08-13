@@ -34,6 +34,14 @@ pub enum Error {
     #[error("connection failed: {reason}")]
     ConnectionFailure { reason: String },
 
+    /// Every connection in the pool is checked out.
+    ///
+    /// `backend` is a static driver name rather than a `String` because this is
+    /// raised on the acquire path of every query, and the caller is expected to
+    /// match on the variant rather than read the text.
+    #[error("{backend} connection pool exhausted")]
+    PoolExhausted { backend: &'static str },
+
     #[error("sqlx error: {0}")]
     Sqlx(sqlx::Error),
 
@@ -60,6 +68,7 @@ impl Error {
             Self::Deadlock => "deadlock",
             Self::SerializationFailure => "serialization_failure",
             Self::ConnectionFailure { .. } => "connection_failure",
+            Self::PoolExhausted { .. } => "pool_exhausted",
             Self::Sqlx(_) => "sqlx",
             #[cfg(feature = "postgres-tokio-postgres")]
             Self::TokioPostgres(_) => "tokio_postgres",
