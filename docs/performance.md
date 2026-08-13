@@ -18,29 +18,25 @@ still works offline.
 ## P8-02 thresholds and measured results
 
 Measured on a single workstation (Intel Core Ultra 7 265K, 20 logical cores,
-32 GB RAM) against a local PostgreSQL database.
+32 GB RAM) against a local PostgreSQL database using `sqlx::Any`.
 
 | Benchmark | Hand-written sqlx | ruprizzle | Acceptance | Status |
 |---|---|---|---|---|
-| single-row select by PK | 87.0 µs | 91.5 µs | within 5% | **exceeds** (+5.2%) |
-| 1 000-row select | 719.6 µs | 718.9 µs | within 5% | within threshold |
-| 2-level include (100 parents × 10 children × 10 grandchildren) | 7.38 ms | 9.78 ms | within 15% | **exceeds** (+32.5%) |
-| bulk insert 10 000 rows | — | — | within 10% | **not measured** |
+| single-row select by PK | 49.9 µs | 53.5 µs | within 5% | **exceeds** (+7.2%) |
+| 1 000-row select | 602.3 µs | 674.7 µs | within 5% | **exceeds** (+12.0%) |
+| 2-level include (100 parents × 10 children × 10 grandchildren) | 7.14 ms | 7.84 ms | within 15% | within threshold (+9.8%) |
+| bulk insert 10 000 rows | 35.4 ms | 36.0 ms | within 10% | within threshold (+1.8%) |
 
-The bulk-insert case could not be completed because the local PostgreSQL
-instance, which uses a tmpfs-backed data directory for the integration suite,
-ran out of WAL space (`could not write to file "pg_wal/xlogtemp...": No space
-left on device`) during the 10 000-row insert and became unreachable for new
-connections afterwards.
+The bulk-insert case now completes successfully on the local PostgreSQL
+instance; the previous run was blocked by a tmpfs WAL-space exhaustion.
 
-The 1 000-row case is within the 5% threshold; the single-row case is 5.2%
-slower, just outside the target, so it is not at parity on this run. The 2-level
-include is the only case that currently shows a meaningful overhead; the likely
-contributors are the extra in-Rust decoding and the attachment/grouping step.
-P8-02 measures this overhead against the thresholds; actually optimising the
-2-level include grouping belongs to a separate work item (for example, P5-03).
-The exceeded thresholds and the unmeasured bulk insert are tracked as follow-up
-issues (`Issue #TBD`) and will be opened before the next release.
+On this run the 1 000-row and single-row selects are both above the 5% parity
+target. The 2-level include and bulk insert are within their thresholds. The
+single/1 000-row overhead is likely dominated by `sqlx::Any` text marshalling
+and the extra row-by-row decoding in the ORM path; the 2-level include grouping
+has improved substantially. P8-02 measures this overhead against the thresholds;
+actually optimising the remaining per-row decode cost belongs to a separate work
+item.
 
 ## Text-marshalling cost
 

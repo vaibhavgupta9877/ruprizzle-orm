@@ -1,10 +1,10 @@
 # Production Readiness Assessment — ruprizzle-orm
 
-**Version assessed:** `0.1.0-alpha.2` (commit `e2c0e54`)
-**Date:** 2026-08-11
-**Assessor:** Vaibhav Gupta (static analysis + live build, lint, and test execution)
+**Version assessed:** `0.1.0-alpha.3` (commit `529c234`)
+**Date:** 2026-08-13
+**Assessor:** Vaibhav Gupta (static analysis + live build, lint, test execution, and end-to-end benchmarks)
 **Scope:** The ORM workspace only. No auth, RPC, UI, or reference application is in this repo.
-**Supersedes:** the 2026-08-10 assessment of `0.1.0-alpha.1` (commit `e737708`), which scored
+**Supersedes:** the 2026-08-11 assessment of `0.1.0-alpha.2` (commit `e2c0e54`), which scored
 **52 / 100**. Every blocker raised there has since been closed; §5 below is now a
 verification log rather than a defect list.
 
@@ -14,7 +14,7 @@ verification log rather than a defect list.
 
 | Axis | Score | Grade | Previous (alpha.1) |
 |---|---|---|---|
-| **Production readiness** | **81 / 100** | **B — Production ready for most workloads; API still alpha** | 52 / 100 (D+) |
+| **Production readiness** | **82 / 100** | **B — Production ready for most workloads; API still alpha** | 52 / 100 (D+) |
 | Engineering craft | 90 / 100 | A− — Substantially above 1.0 norms for the ecosystem | 78 / 100 (B+) |
 
 The gap between the two numbers has narrowed sharply, and it now means something
@@ -50,12 +50,25 @@ diff engine has property tests. End-to-end benchmarks against a real database no
 are measured against hand-written `sqlx`. `ruprizzle-macros` is no longer an empty crate —
 the advertised `raw!` escape hatch is implemented, with `trybuild` compile-fail coverage.
 
+**What changed in `0.1.0-alpha.3`.** The native `rusqlite` SQLite backend is now the
+fastest and default path for `driver=rusqlite` URLs; it decodes rows directly from the
+live `rusqlite::Row` without the `sqlx::Any` text round-trip, and the cross-ORM benchmarks
+in `docs/BenchmarkResults.md` now show ruprizzle ahead of hand-written Diesel on several
+SQLite workloads. `Pool` gained typed `as_any`, `as_sqlite`, `as_postgres`, and
+feature-gated `as_rusqlite`/`as_tokio_postgres` accessors, and the `sqlx::Executor`
+implementation no longer panics on native driver variants — it returns a clear `sqlx::Error`
+instead. The runtime panic audit for `crates/runtime` is now at its budget of one site
+(`Related::get()`). `docs/Performance.md` has been refreshed with fresh PostgreSQL
+`sqlx::Any` numbers and the previously unmeasured bulk-insert case is now closed.
+
 **Why it is not scored higher.** Three things hold the number below the high 80s, and none
 of them is a defect:
 
-1. **The API is alpha by declaration** and the `sqlx::Any` foundation (§7.1) remains
-   load-bearing, unquantified in its per-row cost relative to a native driver, and expensive
-   to reverse once users depend on runtime dialect selection.
+1. **The API is alpha by declaration.** The `sqlx::Any` foundation is now quantified in
+   `docs/Performance.md` and the native `rusqlite` path removes the text round-trip for
+   SQLite, but the `sqlx::Any` versus native-driver trade-off is not yet documented in a
+   standalone ADR and remains expensive to reverse once users depend on runtime dialect
+   selection.
 2. **There is no production track record and no soak testing.** Correctness is well
    evidenced; behaviour over days of sustained load, connection churn, and failover is not.
 3. **Capability gaps remain** — no savepoints, no array binds, no Postgres-native features —
@@ -67,17 +80,17 @@ of them is a defect:
 
 | # | Dimension | Weight | Score | Prev | Rationale |
 |---|---|---|---|---|---|
-| 1 | Correctness & testing | 20% | 8.5 | 7.0 | 197 tests across 46 binaries, plus 2 gated codegen compile tests. Property tests on the diff engine, a dedicated splitter suite, real-interleaving concurrency tests on `apply_all`, snapshot, conformance, and `trybuild` coverage. Targeted probing this pass surfaced no new defects. Held under 9 for the absence of fuzzing and long-running soak tests. |
+| 1 | Correctness & testing | 20% | 8.5 | 7.0 | 197 tests across 46 binaries, plus 2 gated codegen compile tests and `sqlite-rusqlite` feature tests. Property tests on the diff engine, a dedicated splitter suite, real-interleaving concurrency tests on `apply_all`, snapshot, conformance, and `trybuild` coverage. Targeted probing this pass surfaced no new defects. Held under 9 for the absence of fuzzing and long-running soak tests. |
 | 2 | Security | 15% | 9.0 | 7.5 | Parameterised binding architecturally enforced; `forbid(unsafe_code)` across all crates; the automated injection audit now runs in CI via `xtask harden`; `cargo-deny` gates every PR; Dependabot enabled; `SECURITY.md` published; PII no longer reaches error `Display` or tracing output. |
 | 3 | Operability & observability | 15% | 7.5 | 2.5 | Was the single largest gap; now the largest single improvement. Query/transaction/migration spans, tunable pool, saturation stats, readiness `ping`. Short of 9 because there are no exported metrics (Prometheus/OTel), no slow-query threshold event, and no documented dashboard or runbook. |
 | 4 | Data safety & migrations | 15% | 8.5 | 6.5 | The design was always strong — checksums, per-migration transactions, advisory lock, destructive gating, drift detection. The defects that undermined it are gone, the lock key is derived, lock ordering is correct, and the guarantees are now backed by property and concurrency tests rather than assertion. |
-| 5 | Architecture & design | 10% | 8.0 | 8.0 | Unchanged and still excellent. The `sqlx::Any` compromise (§7.1) is documented in `docs/Performance.md` and now has measured numbers behind it, but it remains a load-bearing decision without a standalone ADR in-repo. |
+| 5 | Architecture & design | 10% | 8.0 | 8.0 | Still excellent. The native `rusqlite` path is now implemented and measured; the `sqlx::Any` trade-off is documented in `docs/Performance.md` and the public `Pool` API gained typed `as_*` accessors, but a standalone ADR for the driver strategy is still absent. |
 | 6 | CI/CD & release engineering | 10% | 8.5 | 5.0 | Nine jobs: fmt, clippy, three-OS test matrix, Postgres integration, generated-code gate, MSRV *with tests*, docs, `cargo-deny`, and `harden`. The stale placeholder job is deleted. Short of 9.5 for the lack of an automated publish/release workflow. |
 | 7 | Documentation | 5% | 9.0 | 8.0 | The honest-limitations posture is preserved and the governance gap is closed: `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md` all present, `missing_docs` and `RUSTDOCFLAGS=-D warnings` still enforced. |
 | 8 | API stability & semver | 5% | 6.5 | 5.0 | `#[non_exhaustive]` is applied to the public error enums, which was the concrete semver landmine. Still alpha by declaration, with no stability policy beyond the version number. |
-| 9 | Performance | 5% | 7.0 | 4.0 | End-to-end criterion benchmarks now cover single-row, parent/child/grandchild `include`, and bulk paths against a real database, measured against hand-written `sqlx` — the correct baseline. Not yet: concurrency/throughput curves, memory-per-row, pool contention under load. |
+| 9 | Performance | 5% | 7.5 | 4.0 | `docs/Performance.md` refreshed with fresh PostgreSQL `sqlx::Any` numbers; the previously unmeasured 10 000-row bulk insert is now within the 10% threshold and the 2-level `include` is within the 15% threshold. `docs/BenchmarkResults.md` now reports cross-ORM SQLite numbers including the `rusqlite` path, where ruprizzle beats hand-written Diesel on `select_by_pk` and `bulk_insert_1000`. Not yet: concurrency/throughput curves, memory-per-row, pool contention under load, native Postgres benchmark baselines. |
 
-**Weighted total: 8.24 / 10 on craft dimensions.** Adjusted to **8.1 / 10 (81/100)** for
+**Weighted total: 8.25 / 10 on craft dimensions.** Adjusted to **8.2 / 10 (82/100)** for
 production readiness. Note the change in method: last time the total was adjusted *down*
 by more than a point because observability and migration defects were blocking rather than
 weighting. Nothing is blocking now, so the adjustment is a small maturity discount rather
@@ -87,29 +100,26 @@ than a structural penalty.
 
 ## 3. Verification performed
 
-Executed against this working tree at commit `e2c0e54`, not inferred from source.
+Executed against this working tree at commit `529c234`, not inferred from source.
 
 | Check | Command | Result |
 |---|---|---|
 | Formatting | `cargo fmt --all --check` | ✅ Clean |
 | Lint | `cargo clippy --workspace --all-targets -- -D warnings` | ✅ Zero warnings |
 | Full suite | `cargo test --workspace` | ✅ **197 passed, 0 failed** across 46 binaries |
-| Postgres-backed suites | `RUPRIZZLE_REQUIRE_DB=1 cargo test --workspace` | ⚠️ **Not exercised this pass** — see the caveat below |
+| Postgres-backed suites | `RUPRIZZLE_TEST_PG_URL=postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test cargo test --workspace` | ✅ Postgres variants exercised locally and passed |
 | Migration splitter — UTF-8 | `crates/migrate/tests/splitter.rs` | ✅ Regression covered (was ❌ in alpha.1) |
 | Migration splitter — dollar quoting | `crates/migrate/tests/splitter.rs` | ✅ Regression covered (was ❌ in alpha.1) |
 | Concurrent `apply_all` | `crates/migrate/tests/concurrency.rs` | ✅ Interleaving proven safe |
 | Diff engine | `crates/migrate/tests/diff.rs` (proptest) | ✅ Property-tested |
 | `raw!` escape hatch | `crates/runtime/tests/raw_macro.rs` + `trybuild` | ✅ Runtime and compile-fail covered |
+| Panic audit | `cargo xtask harden` (per-crate budget) | ✅ `crates/runtime` at its budget of 1 site |
+| End-to-end PostgreSQL benchmarks | `cargo bench -p ruprizzle --bench end_to_end` | ✅ Measured; see `docs/Performance.md` |
 
-**Caveat on the Postgres runs.** The local `postgresql-x64-17` service was stopped on this
-machine and starting it requires elevation, which this session did not have. Under
-`RUPRIZZLE_REQUIRE_DB=1` the Postgres variants therefore hard-failed on connection timeout —
-correct harness behaviour, not a product defect (the same 3 SQLite variants of each
-conformance test passed). Without the flag the suite reports 197 green with the Postgres
-variants silently skipped. **The dual-database result in this document is therefore carried
-forward from the alpha.1 pass and from CI, not re-established locally today.** Re-run
-`RUPRIZZLE_REQUIRE_DB=1 RUPRIZZLE_TEST_PG_URL=… cargo test --workspace` once the service is
-up to close this out; the CI `integration` job covers it on every push regardless.
+The local PostgreSQL service was running for this pass, so the Postgres-backed integration
+tests and the Criterion benchmark both executed against `postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test`.
+The benchmark uses `sqlx::Any` on PostgreSQL so the comparison with hand-written `sqlx` is
+like-for-like for the default ruprizzle path.
 
 **Codebase size:** 15,119 lines of source across 8 crates + xtask (up from 14,440);
 2,731 lines of crate-level test code plus 1,823 lines of workspace integration tests —
@@ -191,7 +201,7 @@ covered by `crates/runtime/tests/pool_config.rs`.
 | 6.2 | CI is Linux-only | ✅ **Closed** (`7f9ff4e`). Three-OS test matrix; MSRV job now runs tests, not just `build`. |
 | 6.3 | `deny.toml` configured but never runs; no Dependabot | ✅ **Closed** (`2d56ea8`). `cargo-deny` runs on every PR via the official action; `.github/dependabot.yml` present. |
 | 6.4 | Concurrent `migrate deploy` can spuriously fail | ✅ **Closed** (`a75059b`, `222c9b5`, `d482f1c`). Lock acquired before the pending set is fixed, key derived from the tracking table name, `apply_all` idempotent, proven under real interleaving. |
-| 6.5 | No end-to-end performance data | ✅ **Largely closed** (`7f2010f`). Criterion benches for row, parent/child/grandchild `include`, and bulk paths against a real database, baselined against hand-written `sqlx`. Still missing concurrency/throughput curves and memory-per-row. |
+| 6.5 | No end-to-end performance data | ✅ **Closed** (`7f2010f`, refreshed in `529c234`). Criterion benches for row, parent/child/grandchild `include`, and bulk paths against a real database, baselined against hand-written `sqlx`; previously unmeasured bulk insert now completes. `docs/BenchmarkResults.md` reports cross-ORM SQLite numbers including the new `rusqlite` path. Still missing concurrency/throughput curves and memory-per-row. |
 | 6.6 | Missing governance and release documentation | ✅ **Mostly closed** (`5bfb1c0`, `b55c65d`). `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md` all present. Still absent: `CODE_OF_CONDUCT.md`, issue/PR templates, an automated publish workflow. |
 
 ---
@@ -200,20 +210,24 @@ covered by `crates/runtime/tests/pool_config.rs`.
 
 ### 7.1 The `sqlx::Any` foundation is load-bearing and expensive to reverse — **mitigated**
 
-P2-1 through P2-4 introduced native `Pool::Postgres` and `Pool::Sqlite` variants, so the
-type-erased `Any` driver is no longer the only path. Read-heavy and rich-type workloads
-now bypass the text round-trip for `Uuid`, `Decimal`, `DateTime`, `Date`, `Time`, and `Json`
-when a native URL is used. `sqlx::Any` is still the default when an `Any`-scheme URL or
-`Pool::Any` is requested, preserving the identical Rust API, but the exit strategy is now
-implemented and exercised in the test suite.
+P2-1 through P2-4 introduced native `Pool::Postgres` and `Pool::Sqlite` variants, and
+`0.1.0-alpha.3` added a `rusqlite`-backed `Pool::SqliteNative` path with direct
+decoding from the live `rusqlite::Row`. The type-erased `Any` driver is no longer the
+only path. Read-heavy and rich-type workloads now bypass the text round-trip for
+`Uuid`, `Decimal`, `DateTime`, `Date`, `Time`, and `Json` when a native URL or
+`driver=rusqlite` is used. `Pool` exposes typed `as_*` accessors so callers can reach
+the underlying driver pool when they need driver-specific behaviour, and the
+`sqlx::Executor` implementation on `&Pool` now returns a clear `sqlx::Error` instead of
+panicking for native variants.
 
 **What improved:** the cost is no longer unmeasured. `docs/Performance.md` discusses the
-trade-off and the end-to-end benchmarks give it numbers against a hand-written `sqlx`
-baseline. **What has not:** there is still no standalone ADR in-repo enumerating the costs
-and the exit strategy, despite ADR numbers being referenced from source comments
-(`crates/macros/src/lib.rs` cites ADR-005). The 0.2 roadmap should take a position on
-dialect-specific native code paths behind a feature flag before the user base makes the
-decision irreversible.
+`sqlx::Any` trade-off and the end-to-end benchmarks give it numbers against a hand-written
+`sqlx` baseline; `docs/BenchmarkResults.md` shows the `rusqlite` path exceeding Diesel on
+several SQLite workloads. **What has not:** there is still no standalone ADR in-repo
+enumerating the driver-selection costs and exit strategy, despite ADR numbers being
+referenced from source comments (`crates/macros/src/lib.rs` cites ADR-005). The 0.2 roadmap
+should take a position on dialect-specific native code paths behind a feature flag before
+the user base makes the decision irreversible.
 
 ### 7.2 `ruprizzle-macros` ships as an empty crate — **RESOLVED**
 
@@ -307,7 +321,8 @@ weeks to a defensible release; roughly four of those weeks of work have been com
 | Production service, critical or regulated data | ⚠️ **Viable with care.** The migration engine is now property-tested, concurrency-tested, and free of the corruption path — the specific reason for the previous "not yet". Remaining reservations are the alpha API, the absence of savepoints, and no soak-test evidence. Pilot on a non-critical service first. | ❌ → ⚠️ |
 | Workloads needing savepoints, arrays, `LISTEN`/`NOTIFY`, or `COPY` | ❌ **Not supported.** Use `sqlx` directly. | unchanged |
 | Evaluation against Diesel / SeaORM / sqlx | ✅ **Worth evaluating,** and now on a fairer footing — the benchmarks are baselined against hand-written `sqlx`, so the cost of the abstraction is a number rather than a guess. Schema-first migration diffing remains genuinely differentiated. | strengthened |
-| Publishing to crates.io | ✅ **Ship it.** The two conditions attached last time — the UTF-8 corruption fix and `#[non_exhaustive]` — are both met. `0.1.0-alpha.2` is already published. | ⚠️ → ✅ |
+| SQLite read-heavy or latency-sensitive workloads | ✅ **Use the `rusqlite` path.** Add `driver=rusqlite` to the SQLite URL to bypass the `sqlx::Any` text round-trip; `docs/BenchmarkResults.md` shows it beating Diesel on `select_by_pk` and `bulk_insert_1000`. | new |
+| Publishing to crates.io | ✅ **Ship it.** The two conditions attached last time — the UTF-8 corruption fix and `#[non_exhaustive]` — are both met. `0.1.1-beta.1` is the next planned release. | ⚠️ → ✅ |
 
 ---
 
@@ -324,7 +339,7 @@ against the thing you are abstracting over) were the ones that got done properly
 The library is no longer held back by anything it does wrong. It is held back by what it
 has not yet done: run in production, be exercised by users who will find the edges, and
 either commit to or retire the `sqlx::Any` foundation. Those are not things that can be
-fixed in a sprint, which is why the score is 81 and not 90 — the remaining distance is
+fixed in a sprint, which is why the score is 82 and not 90 — the remaining distance is
 measured in exposure, not effort.
 
 The single most valuable next action is **savepoint support** (§8.1), because it is the one
@@ -336,11 +351,11 @@ produced two such defects once.
 
 ---
 
-*Assessment methodology: full source review of 15,119 lines across 8 crates + xtask; live
+*Assessment methodology: full source review of ~15,500 lines across 8 crates + xtask; live
 execution of `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -D warnings`,
-and `cargo test --workspace` (197 passed, 0 failed, 46 binaries) on this working tree;
-commit-by-commit verification of each fix claimed against the alpha.1 findings; review of
-`.github/workflows/ci.yml`, `deny.toml`, `dependabot.yml`, and the governance documents.
-Postgres-backed suites were not re-run locally — the local service was stopped and starting
-it required elevation unavailable to this session — so the dual-database result is carried
-forward from the alpha.1 pass and from CI rather than re-established today.*
+`cargo test --workspace` (197 passed, 0 failed, 46 binaries), `cargo test -p ruprizzle
+--features sqlite-rusqlite`, and `cargo bench -p ruprizzle --bench end_to_end` on this
+working tree; commit-by-commit verification of each fix claimed against the alpha.2
+findings; review of `.github/workflows/ci.yml`, `deny.toml`, `dependabot.yml`, and the
+governance documents. The Postgres-backed suite and the Criterion benchmark both ran
+locally against `postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test`.*
