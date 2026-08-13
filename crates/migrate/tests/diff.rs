@@ -77,7 +77,7 @@ fn plan_sqlite_emits_alter_table_for_added_column() {
     let changes = diff(&v1, &v2);
 
     let dialect = dialect_for(v2.datasource.provider);
-    let stmts = plan(&v1, &v2, dialect.as_ref(), &changes);
+    let stmts = plan(&v1, &v2, dialect, &changes);
 
     let sql: Vec<String> = stmts.into_iter().map(|s| s.sql).collect();
     assert!(
@@ -94,7 +94,7 @@ fn diff_and_plan_is_idempotent_for_unchanged_schema() {
     assert!(changes.is_empty());
 
     let dialect = dialect_for(v1.datasource.provider);
-    let stmts = plan(&v1, &v1, dialect.as_ref(), &changes);
+    let stmts = plan(&v1, &v1, dialect, &changes);
     assert!(stmts.is_empty());
 }
 
@@ -103,7 +103,7 @@ fn down_sql_reverses_added_column() {
     let v1 = schema_v1();
     let v2 = schema_v2();
     let dialect = dialect_for(v2.datasource.provider);
-    let sql = down_sql(&v1, &v2, dialect.as_ref());
+    let sql = down_sql(&v1, &v2, dialect);
 
     assert!(
         sql.contains("DROP COLUMN") && sql.contains("age"),
@@ -120,7 +120,7 @@ fn up_sql_emits_backfill_hook_for_not_null_column_without_default() {
     let v1 = schema_v1();
     let v2 = schema_v2();
     let dialect = dialect_for(v2.datasource.provider);
-    let sql = up_sql(&v1, &v2, dialect.as_ref());
+    let sql = up_sql(&v1, &v2, dialect);
 
     assert!(
         sql.contains("RUPRIZZLE:BACKFILL"),

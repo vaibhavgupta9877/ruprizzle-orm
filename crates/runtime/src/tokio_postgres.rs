@@ -141,7 +141,7 @@ impl TokioPostgresPool {
 }
 
 impl Executor for TokioPostgresPool {
-    fn dialect(&self) -> Box<dyn ruprizzle_dialect::DbDialect> {
+    fn dialect(&self) -> &dyn ruprizzle_dialect::DbDialect {
         dialect_for(Provider::Postgres)
     }
 

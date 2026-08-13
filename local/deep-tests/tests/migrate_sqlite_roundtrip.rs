@@ -123,8 +123,8 @@ async fn round_trip(from: &Schema, to: &Schema) -> Result<Vec<String>, String> {
 
     let empty = empty_schema();
     for sql in [
-        up_sql(&empty, from, dialect.as_ref()),
-        up_sql(from, to, dialect.as_ref()),
+        up_sql(&empty, from, dialect),
+        up_sql(from, to, dialect),
     ] {
         apply_sql(&pool, &sql).await?;
     }
@@ -154,7 +154,7 @@ proptest! {
         let changes = diff(&sa, &sb);
         if !changes.is_empty() {
             let dialect = dialect_for(sa.datasource.provider);
-            let sql = up_sql(&sa, &sb, dialect.as_ref());
+            let sql = up_sql(&sa, &sb, dialect);
             prop_assert!(
                 !sql.trim().is_empty(),
                 "diff reported {} changes but produced no SQL",

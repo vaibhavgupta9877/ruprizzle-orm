@@ -69,7 +69,7 @@ impl<'e> CountingExecutor<'e> {
 }
 
 impl Executor for CountingExecutor<'_> {
-    fn dialect(&self) -> Box<dyn DbDialect> {
+    fn dialect(&self) -> &dyn DbDialect {
         self.inner.dialect()
     }
 

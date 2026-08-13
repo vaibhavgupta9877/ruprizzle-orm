@@ -436,8 +436,8 @@ pub fn delete<M: Model>(
     c.finish()
 }
 
-/// Build a `Box<dyn DbDialect>` from a `Pool`.
-pub fn dialect_for_pool(pool: &crate::Pool) -> Box<dyn DbDialect> {
+/// Build a `&'static dyn DbDialect` from a `Pool`.
+pub fn dialect_for_pool(pool: &crate::Pool) -> &'static dyn DbDialect {
     dialect_for(pool.provider())
 }
 
@@ -725,18 +725,18 @@ mod tests {
     const EMAIL: Column<User, Option<String>> = Column::new("users", "email");
     const AGE: Column<User, i32> = Column::new("users", "age");
 
-    fn pg() -> Box<dyn DbDialect> {
+    fn pg() -> &'static dyn DbDialect {
         dialect_for(Provider::Postgres)
     }
 
-    fn sqlite() -> Box<dyn DbDialect> {
+    fn sqlite() -> &'static dyn DbDialect {
         dialect_for(Provider::Sqlite)
     }
 
     #[test]
     fn select_no_filter() {
         let c = select::<User>(
-            pg().as_ref(),
+            pg(),
             "users",
             &[],
             &FilterNode::And(vec![]),
@@ -752,7 +752,7 @@ mod tests {
     #[test]
     fn select_projection() {
         let c = select::<User>(
-            pg().as_ref(),
+            pg(),
             "users",
             &["id", "email"],
             &FilterNode::And(vec![]),
@@ -771,7 +771,7 @@ mod tests {
     #[test]
     fn select_with_filter() {
         let f = ID.eq(1);
-        let c = select::<User>(pg().as_ref(), "users", &[], &f.node, &[], None, None, false);
+        let c = select::<User>(pg(), "users", &[], &f.node, &[], None, None, false);
         assert_eq!(c.sql, r#"SELECT * FROM "users" WHERE "users"."id" = $1"#);
         assert_eq!(c.binds, vec![Value::I64(1)]);
     }
@@ -780,7 +780,7 @@ mod tests {
     fn placeholders_are_sqlite_q() {
         let f = ID.eq(1).and(EMAIL.eq("a".to_string()));
         let c = select::<User>(
-            sqlite().as_ref(),
+            sqlite(),
             "users",
             &[],
             &f.node,
@@ -799,7 +799,7 @@ mod tests {
     #[test]
     fn ordering_and_pagination() {
         let c = select::<User>(
-            pg().as_ref(),
+            pg(),
             "users",
             &[],
             &FilterNode::And(vec![]),
@@ -817,32 +817,32 @@ mod tests {
     #[test]
     fn all_empty_is_true_any_empty_is_false() {
         let a: Filter<User> = all(Vec::<Filter<User>>::new());
-        let c = select::<User>(pg().as_ref(), "users", &[], &a.node, &[], None, None, false);
+        let c = select::<User>(pg(), "users", &[], &a.node, &[], None, None, false);
         assert_eq!(c.sql, r#"SELECT * FROM "users""#);
 
         let a: Filter<User> = any(Vec::<Filter<User>>::new());
-        let c = select::<User>(pg().as_ref(), "users", &[], &a.node, &[], None, None, false);
+        let c = select::<User>(pg(), "users", &[], &a.node, &[], None, None, false);
         assert_eq!(c.sql, r#"SELECT * FROM "users" WHERE FALSE"#);
     }
 
     #[test]
     fn filter_flattening_and_combinators() {
         let f = ID.eq(1).and(AGE.gt(0)).and(EMAIL.eq("a".to_string()));
-        let c = select::<User>(pg().as_ref(), "users", &[], &f.node, &[], None, None, false);
+        let c = select::<User>(pg(), "users", &[], &f.node, &[], None, None, false);
         assert_eq!(
             c.sql,
             r#"SELECT * FROM "users" WHERE ("users"."id" = $1 AND "users"."age" > $2 AND "users"."email" = $3)"#
         );
 
         let f = ID.eq(1).or(AGE.gt(0)).or(EMAIL.eq("a".to_string()));
-        let c = select::<User>(pg().as_ref(), "users", &[], &f.node, &[], None, None, false);
+        let c = select::<User>(pg(), "users", &[], &f.node, &[], None, None, false);
         assert_eq!(
             c.sql,
             r#"SELECT * FROM "users" WHERE ("users"."id" = $1 OR "users"."age" > $2 OR "users"."email" = $3)"#
         );
 
         let f = (!ID.eq(1)).and(AGE.in_(vec![1, 2, 3]));
-        let c = select::<User>(pg().as_ref(), "users", &[], &f.node, &[], None, None, false);
+        let c = select::<User>(pg(), "users", &[], &f.node, &[], None, None, false);
         assert_eq!(
             c.sql,
             r#"SELECT * FROM "users" WHERE (NOT ("users"."id" = $1) AND "users"."age" IN ($2, $3, $4))"#
@@ -877,7 +877,7 @@ mod tests {
             filter: Box::new(child.node.clone()),
             negated: false,
         });
-        let c = select::<User>(pg().as_ref(), "users", &[], &f.node, &[], None, None, false);
+        let c = select::<User>(pg(), "users", &[], &f.node, &[], None, None, false);
         assert_eq!(
             c.sql,
             r#"SELECT * FROM "users" WHERE EXISTS (SELECT 1 FROM "posts" WHERE "posts"."author_id" = "users"."id" AND "posts"."published" = $1)"#
@@ -892,7 +892,7 @@ mod tests {
             filter: Box::new(child.node.clone()),
             negated: true,
         });
-        let c = select::<User>(pg().as_ref(), "users", &[], &f.node, &[], None, None, false);
+        let c = select::<User>(pg(), "users", &[], &f.node, &[], None, None, false);
         assert_eq!(
             c.sql,
             r#"SELECT * FROM "users" WHERE NOT EXISTS (SELECT 1 FROM "posts" WHERE "posts"."author_id" = "users"."id" AND "posts"."published" = $1)"#
@@ -902,7 +902,7 @@ mod tests {
     #[test]
     fn null_and_between_and_like() {
         let f = EMAIL.is_null().and(AGE.between(0, 120));
-        let c = select::<User>(pg().as_ref(), "users", &[], &f.node, &[], None, None, false);
+        let c = select::<User>(pg(), "users", &[], &f.node, &[], None, None, false);
         assert_eq!(
             c.sql,
             r#"SELECT * FROM "users" WHERE ("users"."email" IS NULL AND "users"."age" BETWEEN $1 AND $2)"#
@@ -912,7 +912,7 @@ mod tests {
     #[test]
     fn insert_sql() {
         let c = insert::<User>(
-            pg().as_ref(),
+            pg(),
             "users",
             &[
                 ("email", Value::Str("a@b.c".into())),
@@ -929,7 +929,7 @@ mod tests {
     #[test]
     fn update_and_delete_guards() {
         let u = update::<User>(
-            pg().as_ref(),
+            pg(),
             "users",
             &[("age", Value::I32(30))],
             &FilterNode::And(vec![]),
@@ -937,14 +937,14 @@ mod tests {
         );
         assert!(u.sql.starts_with(r#"UPDATE "users" SET "age" = $1"#));
 
-        let d = delete::<User>(pg().as_ref(), "users", &FilterNode::And(vec![]), &[]);
+        let d = delete::<User>(pg(), "users", &FilterNode::And(vec![]), &[]);
         assert!(d.sql.starts_with(r#"DELETE FROM "users""#));
     }
 
     #[test]
     fn upsert_sql() {
         let c = upsert::<User>(
-            pg().as_ref(),
+            pg(),
             "users",
             &[
                 ("email", Value::Str("a@b.c".into())),
@@ -968,7 +968,7 @@ mod tests {
             vec![Value::Str("a@b.c".into())],
         );
         let f: Filter<User> = Filter::raw(fragment);
-        let c = select::<User>(pg().as_ref(), "users", &[], &f.node, &[], None, None, false);
+        let c = select::<User>(pg(), "users", &[], &f.node, &[], None, None, false);
         assert_eq!(c.sql, r#"SELECT * FROM "users" WHERE email = $1"#);
         assert_eq!(c.binds, vec![Value::Str("a@b.c".into())]);
     }
@@ -981,7 +981,7 @@ mod tests {
         );
         let f: Filter<User> = Filter::raw(fragment);
         let c = select::<User>(
-            sqlite().as_ref(),
+            sqlite(),
             "users",
             &[],
             &f.node,
@@ -1007,7 +1007,7 @@ mod tests {
     #[test]
     fn count_ignores_order_limit() {
         let f = AGE.gt(0);
-        let c = count::<User>(pg().as_ref(), "users", &f.node);
+        let c = count::<User>(pg(), "users", &f.node);
         assert_eq!(
             c.sql,
             r#"SELECT COUNT(*) FROM "users" WHERE "users"."age" > $1"#
@@ -1018,7 +1018,7 @@ mod tests {
     #[test]
     fn exists_adds_limit_1() {
         let f = AGE.gt(0);
-        let c = exists::<User>(pg().as_ref(), "users", &f.node);
+        let c = exists::<User>(pg(), "users", &f.node);
         assert_eq!(
             c.sql,
             r#"SELECT 1 FROM "users" WHERE "users"."age" > $1 LIMIT 1"#

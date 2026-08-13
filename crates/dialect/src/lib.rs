@@ -198,8 +198,9 @@ pub enum DialectError {
 
 /// The SQL dialect abstraction.
 ///
-/// The trait is object-safe: `Box<dyn DbDialect>` can be stored and passed around.
-/// Implementations live in [`PostgresDialect`] and [`SqliteDialect`].
+/// The trait is object-safe: `&dyn DbDialect` can be passed around, and
+/// `dialect_for` returns a cheap `'static` reference. Implementations live in
+/// [`PostgresDialect`] and [`SqliteDialect`].
 pub trait DbDialect: Send + Sync {
     /// The canonical name of the dialect, e.g. `"postgres"`.
     fn name(&self) -> &'static str;

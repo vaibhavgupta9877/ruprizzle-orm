@@ -56,9 +56,9 @@ async fn assert_migration(
         .expect("next parses");
 
     let dialect = ruprizzle_dialect::dialect_for(next.datasource.provider);
-    let init_sql = ruprizzle_migrate::up_sql(&empty_like(&prev), &prev, dialect.as_ref());
+    let init_sql = ruprizzle_migrate::up_sql(&empty_like(&prev), &prev, dialect);
 
-    let mut change_sql = ruprizzle_migrate::up_sql(&prev, &next, dialect.as_ref());
+    let mut change_sql = ruprizzle_migrate::up_sql(&prev, &next, dialect);
     if !backfill.is_empty() {
         // Replace the placeholder backfill expression and uncomment the UPDATE.
         change_sql = change_sql
@@ -114,9 +114,9 @@ model User {
             .expect("next parses");
 
         let dialect = ruprizzle_dialect::dialect_for(next.datasource.provider);
-        let init_sql = ruprizzle_migrate::up_sql(&empty_like(&prev), &prev, dialect.as_ref());
-        let change_up = ruprizzle_migrate::up_sql(&prev, &next, dialect.as_ref());
-        let change_down = ruprizzle_migrate::down_sql(&prev, &next, dialect.as_ref());
+        let init_sql = ruprizzle_migrate::up_sql(&empty_like(&prev), &prev, dialect);
+        let change_up = ruprizzle_migrate::up_sql(&prev, &next, dialect);
+        let change_down = ruprizzle_migrate::down_sql(&prev, &next, dialect);
 
         let dir = tempfile::tempdir().unwrap();
         write_migration(dir.path(), "000_init", &init_sql, "")
@@ -402,7 +402,7 @@ model User {
         let prev_s = ruprizzle_parser::parse("prev", &schema_template(provider, prev)).unwrap();
         let next_s = ruprizzle_parser::parse("next", &schema_template(provider, next)).unwrap();
         let dialect = ruprizzle_dialect::dialect_for(next_s.datasource.provider);
-        let init_sql = ruprizzle_migrate::up_sql(&empty_like(&prev_s), &prev_s, dialect.as_ref());
+        let init_sql = ruprizzle_migrate::up_sql(&empty_like(&prev_s), &prev_s, dialect);
 
         let dir = tempfile::tempdir().unwrap();
         write_migration(dir.path(), "000_init", &init_sql, "").unwrap();
@@ -415,7 +415,7 @@ model User {
             .await
             .unwrap();
 
-        let change_sql = ruprizzle_migrate::up_sql(&prev_s, &next_s, dialect.as_ref());
+        let change_sql = ruprizzle_migrate::up_sql(&prev_s, &next_s, dialect);
         write_migration(dir.path(), "001_change", &change_sql, "").unwrap();
 
         migrator.apply_all(db.pool(), false).await.unwrap();
@@ -493,7 +493,7 @@ model Post {
             let next_s = ruprizzle_parser::parse("next", &schema_template(provider, next)).unwrap();
             let dialect = ruprizzle_dialect::dialect_for(next_s.datasource.provider);
             let init_sql =
-                ruprizzle_migrate::up_sql(&empty_like(&prev_s), &prev_s, dialect.as_ref());
+                ruprizzle_migrate::up_sql(&empty_like(&prev_s), &prev_s, dialect);
 
             let dir = tempfile::tempdir().unwrap();
             write_migration(dir.path(), "000_init", &init_sql, "").unwrap();
@@ -508,7 +508,7 @@ model Post {
                 .await
                 .unwrap();
 
-            let change_sql = ruprizzle_migrate::up_sql(&prev_s, &next_s, dialect.as_ref());
+            let change_sql = ruprizzle_migrate::up_sql(&prev_s, &next_s, dialect);
             write_migration(dir.path(), "001_change", &change_sql, "").unwrap();
 
             migrator.apply_all(db.pool(), false).await.unwrap();
@@ -563,7 +563,7 @@ model User {
             let next_s = ruprizzle_parser::parse("next", &schema_template(provider, next)).unwrap();
             let dialect = ruprizzle_dialect::dialect_for(next_s.datasource.provider);
             let init_sql =
-                ruprizzle_migrate::up_sql(&empty_like(&prev_s), &prev_s, dialect.as_ref());
+                ruprizzle_migrate::up_sql(&empty_like(&prev_s), &prev_s, dialect);
 
             let dir = tempfile::tempdir().unwrap();
             write_migration(dir.path(), "000_init", &init_sql, "").unwrap();
@@ -577,7 +577,7 @@ model User {
             .await
             .unwrap();
 
-            let change_sql = ruprizzle_migrate::up_sql(&prev_s, &next_s, dialect.as_ref());
+            let change_sql = ruprizzle_migrate::up_sql(&prev_s, &next_s, dialect);
             write_migration(dir.path(), "001_change", &change_sql, "").unwrap();
 
             migrator.apply_all(db.pool(), false).await.unwrap();

@@ -8,12 +8,19 @@ use ruprizzle_core::ir::{
 
 use crate::{DbDialect, DialectError, RustType, Stmt};
 
+static POSTGRES_DIALECT: crate::PostgresDialect = crate::PostgresDialect;
+static SQLITE_DIALECT: crate::SqliteDialect = crate::SqliteDialect;
+
 /// Returns the dialect implementation for a provider.
+///
+/// The returned reference is `'static'`; the dialect implementations are
+/// zero-sized and live for the life of the process, so callers do not need to
+/// box or clone them.
 #[must_use]
-pub fn dialect_for(provider: Provider) -> Box<dyn DbDialect> {
+pub fn dialect_for(provider: Provider) -> &'static dyn DbDialect {
     match provider {
-        Provider::Postgres => Box::new(crate::PostgresDialect),
-        Provider::Sqlite => Box::new(crate::SqliteDialect),
+        Provider::Postgres => &POSTGRES_DIALECT,
+        Provider::Sqlite => &SQLITE_DIALECT,
     }
 }
 

@@ -97,7 +97,7 @@ both_dbs! {
 
         let changes = ruprizzle_migrate::diff(&v1, &v2);
         let dialect = ruprizzle_dialect::dialect_for(v2.datasource.provider);
-        let stmts = ruprizzle_migrate::plan(&v1, &v2, dialect.as_ref(), &changes);
+        let stmts = ruprizzle_migrate::plan(&v1, &v2, dialect, &changes);
 
         let dir = tempfile::tempdir()?;
 

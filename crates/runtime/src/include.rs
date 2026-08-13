@@ -78,7 +78,7 @@ where
                     .clone()
                     .and(child_key.in_set(chunk.iter().copied().cloned().collect::<Vec<_>>()));
             let compiled = select_partitioned::<C>(
-                dialect.as_ref(),
+                dialect,
                 C::TABLE,
                 child_key.column,
                 &combined.node,

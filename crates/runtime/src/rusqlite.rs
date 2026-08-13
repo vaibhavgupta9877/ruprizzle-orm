@@ -465,7 +465,7 @@ impl fmt::Debug for Inner {
 }
 
 impl Executor for RusqlitePool {
-    fn dialect(&self) -> Box<dyn ruprizzle_dialect::DbDialect> {
+    fn dialect(&self) -> &dyn ruprizzle_dialect::DbDialect {
         dialect_for(Provider::Sqlite)
     }
 

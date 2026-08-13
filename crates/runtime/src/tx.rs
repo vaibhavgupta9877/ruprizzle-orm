@@ -1,6 +1,7 @@
 //! Transaction handle.
 
 use std::borrow::Cow;
+use std::fmt;
 
 use tokio::sync::Mutex;
 
@@ -54,10 +55,19 @@ enum TxInner {
 }
 
 /// A transaction in progress.
-#[derive(Debug)]
 pub struct Tx {
     inner: Mutex<Option<TxInner>>,
     provider: Provider,
+    dialect: &'static dyn DbDialect,
+}
+
+impl fmt::Debug for Tx {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Tx")
+            .field("provider", &self.provider)
+            .field("dialect", &self.dialect.name())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Tx {
@@ -76,9 +86,11 @@ impl Tx {
             #[cfg(feature = "postgres-tokio-postgres")]
             Pool::PostgresNative(p) => TxInner::PostgresNative(p.begin().await?),
         };
+        let provider = pool.provider();
         Ok(Self {
             inner: Mutex::new(Some(tx)),
-            provider: pool.provider(),
+            provider,
+            dialect: dialect_for(provider),
         })
     }
 
@@ -102,8 +114,8 @@ impl Tx {
 
     /// The dialect for the backend this transaction runs on.
     #[must_use]
-    pub fn dialect(&self) -> Box<dyn DbDialect> {
-        dialect_for(self.provider)
+    pub fn dialect(&self) -> &dyn DbDialect {
+        self.dialect
     }
 
     /// Commits the transaction.
@@ -422,7 +434,7 @@ impl Tx {
 }
 
 impl crate::executor::Executor for Tx {
-    fn dialect(&self) -> Box<dyn DbDialect> {
+    fn dialect(&self) -> &dyn DbDialect {
         Self::dialect(self)
     }
 

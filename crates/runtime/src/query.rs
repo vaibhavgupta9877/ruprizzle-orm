@@ -167,7 +167,7 @@ where
     pub fn to_sql(&self) -> CompiledSql {
         let dialect = self.exec.dialect();
         select::<M>(
-            dialect.as_ref(),
+            dialect,
             M::TABLE,
             &self.projection,
             &self.filter.node,
@@ -188,7 +188,7 @@ where
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn count(self) -> Result<i64, Error> {
         let dialect = self.exec.dialect();
-        let compiled = crate::compile::count::<M>(dialect.as_ref(), M::TABLE, &self.filter.node);
+        let compiled = crate::compile::count::<M>(dialect, M::TABLE, &self.filter.node);
 
         #[cfg(feature = "sqlite-rusqlite")]
         let mut counts: Vec<(i64,)> = if let Some(pool) = self.exec.as_rusqlite() {
@@ -228,7 +228,7 @@ where
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exists(self) -> Result<bool, Error> {
         let dialect = self.exec.dialect();
-        let compiled = crate::compile::exists::<M>(dialect.as_ref(), M::TABLE, &self.filter.node);
+        let compiled = crate::compile::exists::<M>(dialect, M::TABLE, &self.filter.node);
 
         #[cfg(feature = "sqlite-rusqlite")]
         {
@@ -612,7 +612,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         if let Some(ref conflict) = self.on_conflict {
             let do_update = self.do_update.as_deref().unwrap_or(&[]);
             upsert::<M>(
-                dialect.as_ref(),
+                dialect,
                 M::TABLE,
                 &self.values,
                 conflict,
@@ -620,7 +620,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
                 &[],
             )
         } else {
-            insert::<M>(dialect.as_ref(), M::TABLE, &self.values, &[])
+            insert::<M>(dialect, M::TABLE, &self.values, &[])
         }
     }
 
@@ -647,7 +647,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         let compiled = if let Some(ref conflict) = self.on_conflict {
             let do_update = self.do_update.as_deref().unwrap_or(&[]);
             upsert::<M>(
-                dialect.as_ref(),
+                dialect,
                 M::TABLE,
                 &self.values,
                 conflict,
@@ -655,7 +655,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
                 returning,
             )
         } else {
-            insert::<M>(dialect.as_ref(), M::TABLE, &self.values, returning)
+            insert::<M>(dialect, M::TABLE, &self.values, returning)
         };
         let batch = self
             .pool
@@ -677,7 +677,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         } else {
             M::COLUMNS
         };
-        let compiled = insert::<M>(dialect.as_ref(), M::TABLE, &self.values, returning);
+        let compiled = insert::<M>(dialect, M::TABLE, &self.values, returning);
         let batch = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
         let mut parent_rows = crate::executor::decode_rows::<M>(batch)?;
         let mut parent = parent_rows
@@ -710,7 +710,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
                     M::COLUMNS
                 };
                 let compiled =
-                    insert_many::<M>(dialect.as_ref(), nested.child_table, chunk, returning);
+                    insert_many::<M>(dialect, nested.child_table, chunk, returning);
                 let chunk = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
                 match child_rows.as_mut() {
                     Some(acc) => acc.merge(chunk)?,
@@ -827,7 +827,7 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
             } else {
                 M::COLUMNS
             };
-            let compiled = insert_many::<M>(dialect.as_ref(), M::TABLE, chunk, returning);
+            let compiled = insert_many::<M>(dialect, M::TABLE, chunk, returning);
             let batch = self
                 .pool
                 .fetch_all_raw(compiled.sql, compiled.binds)
@@ -929,7 +929,7 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
         }
         let dialect = dialect_for_pool(self.pool);
         Ok(update::<M>(
-            dialect.as_ref(),
+            dialect,
             M::TABLE,
             &self.sets,
             &self.filter.node,
@@ -1023,7 +1023,7 @@ impl<'db, M: Model> DeleteQuery<'db, M, FilteredDelete> {
         }
         let dialect = dialect_for_pool(self.pool);
         Ok(delete::<M>(
-            dialect.as_ref(),
+            dialect,
             M::TABLE,
             &self.filter.node,
             &[],

@@ -118,8 +118,10 @@ pub trait Executor: Send + Sync {
     /// The dialect for the backend behind this executor.
     ///
     /// Query compilation needs this to pick identifier quoting and placeholder
-    /// syntax, so it must be answerable without touching the database.
-    fn dialect(&self) -> Box<dyn DbDialect>;
+    /// syntax, so it must be answerable without touching the database. The
+    /// reference is tied to the executor, which typically caches a `'static`
+    /// dialect internally.
+    fn dialect(&self) -> &dyn DbDialect;
 
     /// Runs a query and returns the raw rows.
     ///
@@ -259,7 +261,7 @@ impl futures_core::Stream for DeferredRowStream<'_> {
 }
 
 impl Executor for Pool {
-    fn dialect(&self) -> Box<dyn DbDialect> {
+    fn dialect(&self) -> &dyn DbDialect {
         crate::compile::dialect_for_pool(self)
     }
 

@@ -93,7 +93,7 @@ proptest! {
         let changes = diff(&sa, &sb);
         if !changes.is_empty() {
             let dialect = dialect_for(sa.datasource.provider);
-            let sql = up_sql(&sa, &sb, dialect.as_ref());
+            let sql = up_sql(&sa, &sb, dialect);
             prop_assert!(
                 !sql.trim().is_empty(),
                 "diff reported {} changes but produced no SQL",
@@ -170,8 +170,8 @@ async fn round_trip(
 
     let empty = parse("empty", &empty_schema()).map_err(|_| "parse empty".to_owned())?;
     for sql in [
-        up_sql(&empty, from, dialect.as_ref()),
-        up_sql(from, to, dialect.as_ref()),
+        up_sql(&empty, from, dialect),
+        up_sql(from, to, dialect),
     ] {
         for stmt in ruprizzle_migrate::runner::split_statements(&sql) {
             pool.execute_raw(Cow::Owned(stmt.clone()), Vec::new())

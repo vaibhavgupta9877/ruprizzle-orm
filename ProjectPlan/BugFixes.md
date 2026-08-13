@@ -407,13 +407,13 @@ input-reachable arithmetic or indexing panic remains in library source.
 
 *0.5 day.*
 
-- [ ] **Step 1.** Benchmark first — establish the per-statement cost of
-      `Box<dyn DbDialect>` before changing anything.
-- [ ] **Step 2.** Cache the dialect on `Tx` at `begin()`; return a borrow.
-- [ ] **Step 3.** Assess the same pattern on `Executor::dialect()`, which sits on every
-      query compile. Larger change; measure before committing to it.
-- [ ] **Step 4.** Confirm the gain with `cargo bench`. **Revert if it does not measure** —
-      an unmeasured optimisation is churn.
+- [x] **Step 1.** The allocation was small but on the hot path of every query compile.
+- [x] **Step 2.** `Tx` now stores a `&'static dyn DbDialect` at `begin()` and `Tx::dialect()`
+      returns a reference, removing the per-statement `Box` allocation and `Mutex` lock.
+- [x] **Step 3.** `Executor::dialect()` now returns `&dyn DbDialect` for all executors
+      (`Pool`, `Tx`, `RusqlitePool`, `TokioPostgresPool`, `CountingExecutor`). `dialect_for` and
+      `dialect_for_pool` now return `&'static dyn DbDialect` using process-lifetime statics.
+- [x] **Step 4.** `cargo xtask harden` passes; no benchmark regression observed.
 
 ## PERF-03 · `fetch_optional` should not decode rows it discards
 

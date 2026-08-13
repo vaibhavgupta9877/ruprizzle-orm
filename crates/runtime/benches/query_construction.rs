@@ -11,7 +11,8 @@ use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use futures_core::Stream;
 use ruprizzle::executor::BoxRowStream;
 use ruprizzle::{Column, Executor, Model, SelectQuery, Value};
-use ruprizzle_dialect::{DbDialect, SqliteDialect};
+use ruprizzle_core::ir::Provider;
+use ruprizzle_dialect::{DbDialect, dialect_for};
 
 #[derive(Default, sqlx::FromRow)]
 #[allow(dead_code)]
@@ -63,8 +64,8 @@ const AGE: Column<User, i64> = Column::new("users", "age");
 struct NoopExecutor;
 
 impl Executor for NoopExecutor {
-    fn dialect(&self) -> Box<dyn DbDialect> {
-        Box::new(SqliteDialect)
+    fn dialect(&self) -> &dyn DbDialect {
+        dialect_for(Provider::Sqlite)
     }
 
     fn fetch_all_raw(

@@ -137,7 +137,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::hint::black_box(ruprizzle::compile::dialect_for_pool(&any));
     }
     println!(
-        "  Executor::dialect() -> Box<dyn DbDialect>  {:>7.3} us/call",
+        "  Executor::dialect() -> &dyn DbDialect     {:>7.3} us/call",
         us(start, iters)
     );
 

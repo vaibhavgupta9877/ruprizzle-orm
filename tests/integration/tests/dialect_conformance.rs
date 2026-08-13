@@ -4,9 +4,7 @@
 //! executed against both PostgreSQL and SQLite.
 
 use ruprizzle_core::ir::Schema;
-use ruprizzle_dialect::{
-    DbDialect, PostgresDialect, SqliteDialect, full_alter_column, full_create_table,
-};
+use ruprizzle_dialect::{DbDialect, dialect_for, full_alter_column, full_create_table};
 use ruprizzle_parser::parse;
 use ruprizzle_testkit::{TestDb, both_dbs};
 
@@ -59,10 +57,10 @@ fn setup_sql(dialect: &dyn DbDialect, schema: &Schema) -> String {
     stmts.join("\n")
 }
 
-fn dialect_for_backend(db: &TestDb) -> Box<dyn DbDialect> {
+fn dialect_for_backend(db: &TestDb) -> &'static dyn DbDialect {
     match db.backend().as_str() {
-        "postgres" => Box::new(PostgresDialect),
-        "sqlite" => Box::new(SqliteDialect),
+        "postgres" => dialect_for(ruprizzle_core::ir::Provider::Postgres),
+        "sqlite" => dialect_for(ruprizzle_core::ir::Provider::Sqlite),
         _ => unreachable!(),
     }
 }
@@ -76,7 +74,7 @@ both_dbs! {
     async fn create_tables_and_insert(db: TestDb) {
         let schema = schema_for_backend(&db);
         let dialect = dialect_for_backend(&db);
-        db.execute(&setup_sql(&*dialect, &schema)).await?;
+        db.execute(&setup_sql(dialect, &schema)).await?;
 
         let user_id = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
         let post_id = "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
@@ -105,7 +103,7 @@ both_dbs! {
     async fn unique_and_foreign_key_constraints(db: TestDb) {
         let schema = schema_for_backend(&db);
         let dialect = dialect_for_backend(&db);
-        db.execute(&setup_sql(&*dialect, &schema)).await?;
+        db.execute(&setup_sql(dialect, &schema)).await?;
 
         let user_id = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
 
@@ -133,7 +131,7 @@ both_dbs! {
     async fn alter_column_rename_preserves_data(db: TestDb) {
         let schema = schema_for_backend(&db);
         let dialect = dialect_for_backend(&db);
-        db.execute(&setup_sql(&*dialect, &schema)).await?;
+        db.execute(&setup_sql(dialect, &schema)).await?;
 
         let user_id = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
 
@@ -146,7 +144,7 @@ both_dbs! {
         let mut renamed = email.clone();
         renamed.column = "mail".to_owned();
 
-        let stmts = full_alter_column(&*dialect, &schema, user, email, &renamed);
+        let stmts = full_alter_column(dialect, &schema, user, email, &renamed);
         let sql = stmts.iter().map(|s| s.sql.as_str()).collect::<Vec<_>>().join("\n");
         db.execute(&sql).await?;
 

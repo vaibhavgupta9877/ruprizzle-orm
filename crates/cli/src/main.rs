@@ -491,7 +491,7 @@ fn try_generate(
 fn validate(schema_path: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (schema, source, mut warnings) = parse_schema(schema_path)?;
     let dialect = dialect_for(schema.datasource.provider);
-    let caps = check_schema_capabilities(dialect.as_ref(), &schema);
+    let caps = check_schema_capabilities(dialect, &schema);
     warnings.extend(caps);
 
     print_warnings(&source, warnings);
@@ -623,7 +623,7 @@ async fn migrate_dev(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (schema, source, mut warnings) = parse_schema(schema_path)?;
     let dialect = dialect_for(schema.datasource.provider);
-    warnings.extend(check_schema_capabilities(dialect.as_ref(), &schema));
+    warnings.extend(check_schema_capabilities(dialect, &schema));
     print_warnings(&source, warnings);
 
     let url = resolve_database_url(schema_path, verbose)?;
@@ -644,8 +644,8 @@ async fn migrate_dev(
         .into());
     }
 
-    let up = up_sql(&prev, &schema, dialect.as_ref());
-    let down = down_sql(&prev, &schema, dialect.as_ref());
+    let up = up_sql(&prev, &schema, dialect);
+    let down = down_sql(&prev, &schema, dialect);
     let id = migration_id(name);
 
     let is_destructive = changes.iter().any(Change::is_destructive);
@@ -700,14 +700,14 @@ async fn migrate_reset(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (schema, source, mut warnings) = parse_schema(schema_path)?;
     let dialect = dialect_for(schema.datasource.provider);
-    warnings.extend(check_schema_capabilities(dialect.as_ref(), &schema));
+    warnings.extend(check_schema_capabilities(dialect, &schema));
     print_warnings(&source, warnings);
 
     let url = resolve_database_url(schema_path, verbose)?;
     let pool = connect(&url).await?;
 
     let migrator = Migrator::new(migrations_dir);
-    migrator.reset(&pool, dialect.as_ref()).await?;
+    migrator.reset(&pool, dialect).await?;
 
     let report = migrator.apply_all(&pool, true).await?;
     if report.applied.is_empty() {
@@ -801,7 +801,7 @@ async fn db_push(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (schema, source, mut warnings) = parse_schema(schema_path)?;
     let dialect = dialect_for(schema.datasource.provider);
-    warnings.extend(check_schema_capabilities(dialect.as_ref(), &schema));
+    warnings.extend(check_schema_capabilities(dialect, &schema));
     print_warnings(&source, warnings);
 
     eprintln!(
@@ -824,7 +824,7 @@ async fn db_push(
         .into());
     }
 
-    let up = up_sql(&prev, &schema, dialect.as_ref());
+    let up = up_sql(&prev, &schema, dialect);
     execute_statements(&pool, &up).await?;
 
     save_snapshot(&snapshot, &schema)?;

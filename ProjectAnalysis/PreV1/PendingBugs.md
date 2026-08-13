@@ -433,6 +433,11 @@ a value that is provably single-owner for the transaction's lifetime.
 `Box<dyn DbDialect>`-per-call pattern appears on `Executor::dialect()` and is worth
 measuring there too — it sits on the hot path of every query compile.
 
+**Status:** Fixed. `Tx` now caches a `&'static dyn DbDialect` at construction. The entire
+`Executor` trait was changed to return `&dyn DbDialect`; `dialect_for` and `dialect_for_pool`
+now return `&'static dyn DbDialect` backed by process-lifetime statics, so compiling a query
+no longer allocates a `Box<dyn DbDialect>`.
+
 ### PERF-03
 
 **`fetch_optional` decodes the full result set, then `remove(0)`.**
