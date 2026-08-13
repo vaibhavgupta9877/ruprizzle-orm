@@ -471,6 +471,9 @@ Carried forward from the readiness assessment (finding #11), unchanged. One pool
 per `apply_all` purely to read `backend_name()`, which `Pool::provider()` already knows
 without touching the database.
 
+**Status:** Fixed. `Runner::apply_all` uses `pool.provider() == Provider::Postgres`, which
+reads the scheme/variant and does not acquire a connection.
+
 ---
 
 ## Cross-cutting observations

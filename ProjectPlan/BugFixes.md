@@ -440,6 +440,9 @@ unconditionally rather than only when unset.
 *0.25 day.* Use `Pool::provider()`, which already knows the backend without touching the
 database. Carried from the readiness assessment's finding #11.
 
+- [x] `crates/migrate/src/runner.rs` already uses `pool.provider() == Provider::Postgres`
+  instead of acquiring a connection for `backend_name()`.
+
 ---
 
 ## Exit criteria
