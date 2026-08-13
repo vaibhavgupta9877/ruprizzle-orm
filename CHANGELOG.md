@@ -26,6 +26,7 @@ A beta milestone that closes the remaining alpha.3 beta blockers: clippy warning
 - Broken intra-doc links in `crates/runtime/src/executor.rs` and `crates/testkit/src/lib.rs`.
 - `rusqlite` mutex `unwrap()` calls replaced with error paths, satisfying the `crates/runtime` panic budget.
 - Examples and benchmarks that passed `&Pool` to `sqlx::query` now use an explicit `Pool::Any` wrapper where appropriate.
+- Updated crate-level rustdocs and user-facing docs (`README.md`, `docs/QueryGuide.md`, `docs/RelationsGuide.md`, `docs/Quickstart.md`, `docs/MigratingFrom.md`, `docs/KnownLimitations.md`) to the `0.1.1-beta.1` API and backend features.
 
 ## [Unreleased]
 
