@@ -6,6 +6,12 @@
 use std::path::Path;
 use std::process::{Command, ExitCode};
 
+use syn::spanned::Spanned;
+use syn::visit::Visit;
+use syn::{
+    BinOp, Expr, ExprBinary, ExprIndex, ExprUnary, ItemFn, ItemMod, UnOp,
+};
+
 const TASKS: &[(&str, &str)] = &[
     ("ci", "everything CI runs, in CI order"),
     ("fmt", "check formatting"),
@@ -38,6 +44,23 @@ const PANIC_BUDGET: &[(&str, usize)] = &[
     ("crates/codegen", 1),
     ("crates/migrate", 2),
     ("crates/cli", 2),
+];
+
+/// Per-crate ceilings for arithmetic (`/`, `%`) and direct indexing (`x[i]`)
+/// panics in `src/`.
+///
+/// These patterns are the blind spot of the `unwrap`/`expect` audit and have
+/// produced divide-by-zero and out-of-bounds panics in the past. Each entry is
+/// `(crate, arithmetic_budget, indexing_budget)`. The numbers may only go down.
+const BUDGETS: &[(&str, usize, usize)] = &[
+    ("crates/core", 0, 6),
+    ("crates/dialect", 0, 8),
+    ("crates/macros", 0, 0),
+    ("crates/runtime", 4, 14),
+    ("crates/parser", 0, 17),
+    ("crates/codegen", 0, 0),
+    ("crates/migrate", 0, 13),
+    ("crates/cli", 0, 0),
 ];
 
 fn main() -> ExitCode {
@@ -290,6 +313,25 @@ fn run_harden() -> ExitCode {
         }
     }
 
+    // Arithmetic/indexing audit: catch `/`, `%`, and `x[i]` on non-constant
+    // values, the blind spot that hid BUG-02 and BUG-05.
+    eprintln!("--- xtask: arithmetic/indexing audit ---");
+    for (crate_dir, arith_budget, idx_budget) in BUDGETS.iter() {
+        match code_audit(crate_dir) {
+            Ok((arith, idx)) if arith <= *arith_budget && idx <= *idx_budget => {
+                eprintln!("  {crate_dir}: {arith} arithmetic, {idx} indexing (budget {arith_budget}, {idx_budget})");
+            }
+            Ok((arith, idx)) => {
+                eprintln!("xtask: arithmetic/indexing budget exceeded for {crate_dir}: arithmetic {arith} (budget {arith_budget}), indexing {idx} (budget {idx_budget})");
+                return ExitCode::FAILURE;
+            }
+            Err(e) => {
+                eprintln!("xtask: code audit failed for {crate_dir}: {e}");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+
     // SQL-injection audit: look for Value interpolation into SQL strings.
     eprintln!("--- xtask: injection audit ---");
     if let Err(e) = injection_audit() {
@@ -336,6 +378,145 @@ fn panic_audit(crate_dir: &str) -> Result<usize, std::io::Error> {
         }
     }
     Ok(count)
+}
+
+fn code_audit(crate_dir: &str) -> Result<(usize, usize), std::io::Error> {
+    let src = Path::new(crate_dir).join("src");
+    if !src.exists() {
+        return Ok((0, 0));
+    }
+
+    let mut arithmetic = 0;
+    let mut indexing = 0;
+    for entry in walkdir::WalkDir::new(&src)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        if !path.is_file() || path.extension().and_then(|s| s.to_str()) != Some("rs") {
+            continue;
+        }
+
+        // Only audit library source; generated and benchmark code is out of scope.
+        let rel = path.strip_prefix(&src).unwrap_or(path);
+        if rel.components().any(|c| {
+            let s = c.as_os_str();
+            s == "tests" || s == "benches" || s == "examples" || s == "bin"
+        }) {
+            continue;
+        }
+
+        let content = std::fs::read_to_string(path)?;
+        let file = match syn::parse_file(&content) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("  xtask: failed to parse {path:?}: {e}");
+                continue;
+            }
+        };
+
+        let mut visitor = CodeAuditVisitor {
+            path,
+            arithmetic: 0,
+            indexing: 0,
+        };
+        visitor.visit_file(&file);
+        arithmetic += visitor.arithmetic;
+        indexing += visitor.indexing;
+    }
+    Ok((arithmetic, indexing))
+}
+
+struct CodeAuditVisitor<'a> {
+    path: &'a Path,
+    arithmetic: usize,
+    indexing: usize,
+}
+
+impl<'a> Visit<'a> for CodeAuditVisitor<'a> {
+    fn visit_expr_binary(&mut self, node: &'a ExprBinary) {
+        if matches!(node.op, BinOp::Div(_) | BinOp::Rem(_)) && !is_literal(&node.right) {
+            self.arithmetic += 1;
+            let line = node.span().start().line;
+            eprintln!("  {:?}:{}: arithmetic / or % on non-literal", self.path, line);
+        }
+        syn::visit::visit_expr_binary(self, node);
+    }
+
+    fn visit_expr_index(&mut self, node: &'a ExprIndex) {
+        self.indexing += 1;
+        let line = node.span().start().line;
+        eprintln!("  {:?}:{}: direct slice indexing", self.path, line);
+        syn::visit::visit_expr_index(self, node);
+    }
+
+    fn visit_item_mod(&mut self, node: &'a ItemMod) {
+        if is_test_mod(node) {
+            return;
+        }
+        syn::visit::visit_item_mod(self, node);
+    }
+
+    fn visit_item_fn(&mut self, node: &'a ItemFn) {
+        if has_test_attr(&node.attrs) {
+            return;
+        }
+        syn::visit::visit_item_fn(self, node);
+    }
+}
+
+fn is_literal(expr: &Expr) -> bool {
+    match expr {
+        Expr::Lit(_) => true,
+        Expr::Unary(ExprUnary {
+            op: UnOp::Neg(_), expr, ..
+        }) => is_literal(expr),
+        _ => false,
+    }
+}
+
+fn has_test_attr(attrs: &[syn::Attribute]) -> bool {
+    attrs.iter().any(|attr| {
+        if attr.path().is_ident("test") {
+            return true;
+        }
+        if let Some(seg) = attr.path().segments.last() {
+            if seg.ident == "test" {
+                return true;
+            }
+        }
+        is_cfg_test(attr)
+    })
+}
+
+fn is_test_mod(node: &ItemMod) -> bool {
+    node.ident == "tests" || has_cfg_test_attr(&node.attrs)
+}
+
+fn has_cfg_test_attr(attrs: &[syn::Attribute]) -> bool {
+    attrs.iter().any(is_cfg_test)
+}
+
+fn is_cfg_test(attr: &syn::Attribute) -> bool {
+    if !attr.path().is_ident("cfg") {
+        return false;
+    }
+    let Some(list) = attr.meta.require_list().ok() else {
+        return false;
+    };
+    // cfg(test) or cfg(all(test, ...)) etc.
+    cfg_contains_test(&list.tokens)
+}
+
+fn cfg_contains_test(tokens: &proc_macro2::TokenStream) -> bool {
+    for tt in tokens.clone() {
+        match tt {
+            proc_macro2::TokenTree::Ident(ident) if ident == "test" => return true,
+            proc_macro2::TokenTree::Group(g) if cfg_contains_test(&g.stream()) => return true,
+            _ => {}
+        }
+    }
+    false
 }
 
 fn injection_audit() -> Result<(), std::io::Error> {

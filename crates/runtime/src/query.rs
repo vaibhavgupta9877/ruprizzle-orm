@@ -643,7 +643,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
             }
 
             let max = dialect.capabilities().max_query_params;
-            let cols_per_row = rows[0].len() as u32;
+            let cols_per_row = rows.first().map(|r| r.len()).unwrap_or(0) as u32;
             let chunk_size = (max / cols_per_row.max(1)).max(1) as usize;
 
             let mut child_rows: Option<crate::executor::RowBatch> = None;
@@ -760,7 +760,7 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
 
         let dialect = dialect_for_pool(self.pool);
         let max = dialect.capabilities().max_query_params;
-        let cols_per_row = self.rows[0].len() as u32;
+        let cols_per_row = self.rows.first().map(|r| r.len()).unwrap_or(0) as u32;
         let chunk_size = (max / cols_per_row.max(1)).max(1) as usize;
 
         let mut out = Vec::new();

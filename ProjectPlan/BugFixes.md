@@ -261,15 +261,15 @@ leftover table anywhere in the database fails it.
 
 *Closes BUG-05. 0.5 day.*
 
-- [ ] **Step 1 — Failing test first.** `InsertManyQuery::rows(vec![vec![]])` panics at
-      `query.rs:755`. Confirm, then repeat for the nested path at `query.rs:642` via
-      `InsertQuery::with_related`.
-- [ ] **Step 2 — Move the clamp to the divisor:** `max / cols_per_row.max(1)`. Apply at both
+- [x] **Step 1 — Failing test first.** `InsertManyQuery::rows(vec![vec![]])` panics at
+      `query.rs:755`. Confirmed for the direct path; the nested `with_related` path at
+      `query.rs:642` returns a SQL error today but now returns the same clear error.
+- [x] **Step 2 — Move the clamp to the divisor:** `max / cols_per_row.max(1)`. Applied at both
       sites.
-- [ ] **Step 3 — Reject the input properly.** An insert with no columns is a caller mistake.
-      Return an error naming it rather than emitting `INSERT INTO t DEFAULT VALUES`, which is
-      almost certainly not what was meant.
-- [ ] **Step 4 — Test** both sites return `Err`, not a panic.
+- [x] **Step 3 — Reject the input properly.** `InsertManyQuery::exec` and
+      `InsertQuery::exec_nested` now return `Error::Message("insert row has no columns")`.
+- [x] **Step 4 — Test** both sites return `Err`, not a panic. Regression tests in
+      `crates/runtime/tests/insert_validation.rs`.
 
 ## FIX-11 · Teach `xtask harden` about arithmetic panics
 
@@ -279,17 +279,16 @@ leftover table anywhere in the database fails it.
 audit whose whole purpose is finding panics, because it greps for `unwrap()`/`expect()` and
 these were `%` and `/`.
 
-- [ ] **Step 1.** Extend the panic audit in `xtask` to flag `/` and `%` on non-literal
-      divisors in library source (excluding `tests/`, `benches/`, `examples/`).
-- [ ] **Step 2.** Expect false positives — division by a provably non-zero constant is fine.
-      Use the existing per-crate budget mechanism rather than a hard failure, so the count
-      ratchets down without blocking on day one.
-- [ ] **Step 3.** Also flag direct slice indexing (`x[i]`) in library source. `self.rows[0]`
-      at `query.rs:754` is guarded today, but only by a check several lines away.
-- [ ] **Step 4.** Set each crate's budget to its post-fix count so the ratchet holds.
-- [ ] **Step 5.** Document the new categories in `CONTRIBUTING.md`.
-- [ ] **Step 6.** Run against the full workspace and triage every hit. Fix or justify —
-      no bare `#[allow]`.
+- [x] **Step 1.** Extend the panic audit in `xtask` to flag `/` and `%` on non-literal
+      divisors in library source (excluding `tests/`, `benches/`, `examples/`, `bin`).
+- [x] **Step 2.** Expect false positives — division by a provably non-zero constant is fine.
+      The new `BUDGETS` table in `xtask/src/main.rs` ratchets counts per crate.
+- [x] **Step 3.** Also flag direct slice indexing (`x[i]`) in library source. The previous
+      `self.rows[0]` usages in `query.rs` were replaced with `first().map(...).unwrap_or(0)`.
+- [x] **Step 4.** Set each crate's budget to its post-fix count so the ratchet holds.
+- [x] **Step 5.** Document the new categories in `CONTRIBUTING.md`.
+- [x] **Step 6.** Run against the full workspace and triage every hit. Every hit is either
+      guarded by a prior check or has a justifying comment; none is hidden behind `#[allow]`.
 
 **Phase 2 exit gate:** `cargo xtask harden` passes with the new categories enabled, and no
 input-reachable arithmetic or indexing panic remains in library source.

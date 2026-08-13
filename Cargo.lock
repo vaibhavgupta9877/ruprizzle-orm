@@ -3908,6 +3908,8 @@ dependencies = [
 name = "xtask"
 version = "0.1.1-beta.1"
 dependencies = [
+ "proc-macro2",
+ "syn 2.0.119",
  "walkdir",
 ]
 

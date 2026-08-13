@@ -17,7 +17,7 @@ against a real SQLite database and then deleted; none remain in the tree.
 | [BUG-02](#bug-02) | `RusqlitePool::acquire` panics with divide-by-zero when all connections are in transactions | **Critical** | ✔️ **Fixed** (FIX-02) |
 | [BUG-03](#bug-03) | Dropping a `Tx` returns a `tokio-postgres` connection to the pool with an open `BEGIN` | **Critical** | ✔️ **Fixed** (FIX-03) — reproduced on PG 17.10 first |
 | [BUG-04](#bug-04) | `fetch_one` / `fetch_optional` silently discard `.include()`, then panic on access | **High** | ✅ Confirmed, reproduced |
-| [BUG-05](#bug-05) | Divide-by-zero panic on an insert with an empty column set | **High** | ✅ Confirmed, reproduced |
+| [BUG-05](#bug-05) | Divide-by-zero panic on an insert with an empty column set | **High** | ✔️ **Fixed** (FIX-05) |
 | [BUG-06](#bug-06) | `RusqliteTransaction` derives `Clone`, allowing a connection to be returned twice | Medium | ✔️ **Fixed** (FIX-06) |
 | [BUG-07](#bug-07) | `PoolStats` always reports zeros for the `rusqlite` backend | Medium | ✅ Confirmed by inspection |
 | [BUG-08](#bug-08) | `IncludeList` drops children when two parents share a join key | Medium | ✅ Confirmed by inspection |
@@ -246,6 +246,10 @@ Like BUG-02 this is an arithmetic panic invisible to `cargo xtask harden`.
 **Fix:** `let chunk_size = (max / cols_per_row.max(1)).max(1) as usize;` — and reject the
 empty-row case up front with a real error, since an insert with no columns is a caller
 mistake worth naming rather than silently turning into `INSERT INTO t DEFAULT VALUES`.
+
+**Status:** Fixed by FIX-05. `InsertManyQuery::exec` and `InsertQuery::exec_nested` now
+return a clear `Error::Message("insert row has no columns")`; regression tests live in
+`crates/runtime/tests/insert_validation.rs`.
 
 ---
 

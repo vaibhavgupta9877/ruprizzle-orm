@@ -43,8 +43,9 @@ breakage. Set it whenever a database is reachable.
   PR must pass.
 - `cargo xtask harden` runs the same checks plus `cargo-deny`, MSRV `cargo check`,
   a dry-run `cargo publish` for every crate, a panic/unwrap audit against the
-  checked-in `PANIC_BUDGET`, and an audit that no `Value` or user-supplied
-  identifier is interpolated into SQL. Use it before a release.
+  checked-in `PANIC_BUDGET`, an arithmetic/indexing audit against the checked-in
+  `BUDGETS`, and an audit that no `Value` or user-supplied identifier is
+  interpolated into SQL. Use it before a release.
 - `cargo xtask examples` compiles generated code for all example schemas under
   both Postgres and SQLite, then asserts the output is `clippy::pedantic`-clean.
   Generated code must stay `clippy::pedantic`-clean; if your change makes the
@@ -59,8 +60,11 @@ breakage. Set it whenever a database is reachable.
 - MSRV is **1.85**.
 - Every published crate contains `#![forbid(unsafe_code)]`.
 - `cargo clippy --workspace --all-targets -- -D warnings` must be clean.
-- New library source (`src/`) must not add `unwrap()`, `expect()`, or new panics
-  on paths reachable from user input. Tests may use them freely.
+- New library source (`src/`) must not add `unwrap()`, `expect()`, new panics,
+  or new `/`, `%`, and `x[i]` operations on non-constant values on paths
+  reachable from user input. The checked-in `BUDGETS` in `xtask` ratchet the
+  arithmetic and indexing counts down; if you add a new one, the budget must go
+  down elsewhere or the operation must be provably safe. Tests may use them freely.
 - Every value that reaches SQL must be a bind parameter. Do not use `format!` to
   interpolate `Value`s, column names, table names, or other user-supplied
   identifiers into SQL strings.
