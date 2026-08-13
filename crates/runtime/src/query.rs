@@ -151,6 +151,18 @@ where
         }
     }
 
+    /// Returns `true` when this query is known to load every row of the model's
+    /// table with no filter, limit, offset or distinct.
+    pub(crate) fn is_full_table(&self) -> bool {
+        self.limit.is_none()
+            && self.offset.is_none()
+            && !self.distinct
+            && matches!(
+                self.filter.node,
+                crate::filter::FilterNode::And(ref v) if v.is_empty()
+            )
+    }
+
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> CompiledSql {
         let dialect = self.exec.dialect();
@@ -427,7 +439,9 @@ where
             crate::executor::decode_rows(batch)?
         };
 
-        self.includes.load(self.exec, &mut rows).await?;
+        self.includes
+            .load(self.exec, &mut rows, self.is_full_table())
+            .await?;
         Ok(rows)
     }
 }

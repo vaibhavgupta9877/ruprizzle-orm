@@ -32,11 +32,25 @@ async fn fetch_children<C, Key>(
     order: &[OrderBy<C>],
     limit: Option<u64>,
     keys: Vec<Key>,
+    full_table: bool,
 ) -> Result<Vec<C>, Error>
 where
     C: Model + Send + Unpin,
     Key: Encodable + Eq + Hash + Clone + Send + Sync + 'static,
 {
+    // Fast path: if the parent set is the whole parent table and the child
+    // include has no extra filter, order or per-parent limit, just load the
+    // whole child table. This avoids parsing and binding a large `IN` list and
+    // lets the database do a simple full scan. Rows with no matching parent are
+    // dropped during grouping, so the result is still correct.
+    if full_table
+        && filter.node == crate::filter::FilterNode::And(Vec::new())
+        && order.is_empty()
+        && limit.is_none()
+    {
+        return SelectQuery::<C>::new(exec).fetch_all().await;
+    }
+
     // The parent set repeats keys whenever several parents point at the same
     // child (every many-to-one relation does). Sending the duplicates would
     // inflate the `IN` list and burn the parameter budget for nothing.
@@ -130,10 +144,16 @@ fn dedup<Key: Eq + Hash + Clone>(keys: Vec<Key>) -> Vec<Key> {
 /// relations are chained through the relation builder's own `.include()` method.
 pub trait IncludeSet<M: Model> {
     /// Loads the related data and attaches it to `parents` in place.
+    ///
+    /// `full_table` is `true` when the parent query is known to load every row
+    /// of the parent table with no filter, limit, offset or distinct. Loaders
+    /// can use this to fetch the whole child table instead of building an `IN`
+    /// list of parent keys.
     fn load<'a>(
         &'a self,
         exec: &'a dyn Executor,
         parents: &'a mut [M],
+        full_table: bool,
     ) -> BoxFuture<'a, Result<(), Error>>;
 }
 
@@ -142,6 +162,7 @@ impl<M: Model> IncludeSet<M> for () {
         &'a self,
         _exec: &'a dyn Executor,
         _parents: &'a mut [M],
+        _full_table: bool,
     ) -> BoxFuture<'a, Result<(), Error>> {
         Box::pin(async { Ok(()) })
     }
@@ -278,6 +299,7 @@ where
         &'a self,
         exec: &'a dyn Executor,
         parents: &'a mut [M],
+        full_table: bool,
     ) -> BoxFuture<'a, Result<(), Error>> {
         Box::pin(async move {
             if parents.is_empty() {
@@ -292,9 +314,17 @@ where
                 &self.order,
                 self.limit,
                 keys,
+                full_table,
             )
             .await?;
-            self.nested.load(exec, &mut children).await?;
+
+            // Propagate the full-table hint to nested includes if this child
+            // query was itself an unconstrained full-table fetch.
+            let child_full_table = full_table
+                && self.filter.node == crate::filter::FilterNode::And(Vec::new())
+                && self.order.is_empty()
+                && self.limit.is_none();
+            self.nested.load(exec, &mut children, child_full_table).await?;
 
             // Group children into pre-sized buckets indexed by parent position.
             // This avoids a `HashMap` entry per child and a `remove` per parent;
@@ -458,6 +488,7 @@ where
         &'a self,
         exec: &'a dyn Executor,
         parents: &'a mut [M],
+        full_table: bool,
     ) -> BoxFuture<'a, Result<(), Error>> {
         Box::pin(async move {
             if parents.is_empty() {
@@ -472,9 +503,15 @@ where
                 &self.order,
                 self.limit,
                 keys,
+                full_table,
             )
             .await?;
-            self.nested.load(exec, &mut children).await?;
+
+            let child_full_table = full_table
+                && self.filter.node == crate::filter::FilterNode::And(Vec::new())
+                && self.order.is_empty()
+                && self.limit.is_none();
+            self.nested.load(exec, &mut children, child_full_table).await?;
 
             // Only the first child per key can be attached, so keep just that
             // one rather than a `Vec` that is always length 1 in practice.
