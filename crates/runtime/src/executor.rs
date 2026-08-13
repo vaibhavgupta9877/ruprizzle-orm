@@ -144,6 +144,23 @@ pub trait Executor: Send + Sync {
     /// This deliberately fetches all rows first and then streams them. A true
     /// cursor is slower on `sqlx-sqlite` (see `docs/BenchmarkResults.md`).
     fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_>;
+
+    /// Optional hook called right before a query is executed.
+    ///
+    /// The default is a no-op; wrappers such as [`CountingExecutor`] override it
+    /// to record the statement when the caller takes a backend-specific fast
+    /// path.
+    fn on_query(&self) {}
+
+    /// Returns the underlying [`rusqlite::RusqlitePool`] if this executor is
+    /// backed by the native `rusqlite` backend.
+    ///
+    /// Used by query builders to take a direct, single-pass decode path on
+    /// SQLite. Returns `None` by default.
+    #[cfg(feature = "sqlite-rusqlite")]
+    fn as_rusqlite(&self) -> Option<&crate::rusqlite::RusqlitePool> {
+        None
+    }
 }
 
 /// A single raw row from any backend.
@@ -244,6 +261,14 @@ impl futures_core::Stream for DeferredRowStream<'_> {
 impl Executor for Pool {
     fn dialect(&self) -> Box<dyn DbDialect> {
         crate::compile::dialect_for_pool(self)
+    }
+
+    #[cfg(feature = "sqlite-rusqlite")]
+    fn as_rusqlite(&self) -> Option<&crate::rusqlite::RusqlitePool> {
+        match self {
+            Pool::SqliteNative(p) => Some(p),
+            _ => None,
+        }
     }
 
     fn fetch_all_raw(

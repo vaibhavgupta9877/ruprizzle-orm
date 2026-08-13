@@ -73,6 +73,15 @@ impl Executor for CountingExecutor<'_> {
         self.inner.dialect()
     }
 
+    #[cfg(feature = "sqlite-rusqlite")]
+    fn as_rusqlite(&self) -> Option<&crate::rusqlite::RusqlitePool> {
+        self.inner.as_rusqlite()
+    }
+
+    fn on_query(&self) {
+        self.tick();
+    }
+
     fn fetch_all_raw(
         &self,
         sql: Cow<'static, str>,

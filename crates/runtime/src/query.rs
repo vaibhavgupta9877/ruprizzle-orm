@@ -180,14 +180,23 @@ where
             q.limit = Some(1);
         }
         let compiled = q.to_sql();
-        let batch = q.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
-        crate::executor::decode_rows(batch).map(|mut v: Vec<Out>| {
-            if v.is_empty() {
-                None
-            } else {
-                Some(v.remove(0))
-            }
-        })
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        let mut v: Vec<Out> = if let Some(pool) = q.exec.as_rusqlite() {
+            q.exec.on_query();
+            pool.fetch_all_sync_decoded::<Out>(compiled.sql, compiled.binds)?
+        } else {
+            let batch = q.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            crate::executor::decode_rows(batch)?
+        };
+
+        #[cfg(not(feature = "sqlite-rusqlite"))]
+        let mut v: Vec<Out> = {
+            let batch = q.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            crate::executor::decode_rows(batch)?
+        };
+
+        Ok(if v.is_empty() { None } else { Some(v.remove(0)) })
     }
 
     /// Executes the query and returns exactly one row.
@@ -217,11 +226,21 @@ where
         let dialect = self.exec.dialect();
         let compiled = crate::compile::count::<M>(dialect.as_ref(), M::TABLE, &self.filter.node);
 
-        let batch = self
-            .exec
-            .fetch_all_raw(compiled.sql, compiled.binds)
-            .await?;
-        let mut counts = crate::executor::decode_rows::<(i64,)>(batch)?;
+        #[cfg(feature = "sqlite-rusqlite")]
+        let mut counts: Vec<(i64,)> = if let Some(pool) = self.exec.as_rusqlite() {
+            self.exec.on_query();
+            pool.fetch_all_sync_decoded::<(i64,)>(compiled.sql, compiled.binds)?
+        } else {
+            let batch = self.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            crate::executor::decode_rows(batch)?
+        };
+
+        #[cfg(not(feature = "sqlite-rusqlite"))]
+        let mut counts: Vec<(i64,)> = {
+            let batch = self.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            crate::executor::decode_rows(batch)?
+        };
+
         let (count,) = counts
             .pop()
             .ok_or_else(|| Error::Message("COUNT(*) returned no row".into()))?;
@@ -240,6 +259,15 @@ where
     pub async fn exists(self) -> Result<bool, Error> {
         let dialect = self.exec.dialect();
         let compiled = crate::compile::exists::<M>(dialect.as_ref(), M::TABLE, &self.filter.node);
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        {
+            if let Some(pool) = self.exec.as_rusqlite() {
+                self.exec.on_query();
+                let rows = pool.fetch_all_sync_decoded::<(i64,)>(compiled.sql, compiled.binds)?;
+                return Ok(!rows.is_empty());
+            }
+        }
 
         let batch = self
             .exec
@@ -301,6 +329,13 @@ where
         Out: Send + Unpin + RowDecode,
     {
         let compiled = self.to_sql();
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        if let Some(pool) = self.exec.as_rusqlite() {
+            self.exec.on_query();
+            return pool.fetch_all_sync_decoded::<Out>(compiled.sql, compiled.binds);
+        }
+
         let batch = self
             .exec
             .fetch_all_raw(compiled.sql, compiled.binds)
@@ -370,11 +405,28 @@ where
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exec(self) -> Result<Vec<M>, Error> {
         let compiled = self.to_sql();
-        let batch = self
-            .exec
-            .fetch_all_raw(compiled.sql, compiled.binds)
-            .await?;
-        let mut rows: Vec<M> = crate::executor::decode_rows(batch)?;
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        let mut rows: Vec<M> = if let Some(pool) = self.exec.as_rusqlite() {
+            self.exec.on_query();
+            pool.fetch_all_sync_decoded::<M>(compiled.sql, compiled.binds)?
+        } else {
+            let batch = self
+                .exec
+                .fetch_all_raw(compiled.sql, compiled.binds)
+                .await?;
+            crate::executor::decode_rows(batch)?
+        };
+
+        #[cfg(not(feature = "sqlite-rusqlite"))]
+        let mut rows: Vec<M> = {
+            let batch = self
+                .exec
+                .fetch_all_raw(compiled.sql, compiled.binds)
+                .await?;
+            crate::executor::decode_rows(batch)?
+        };
+
         self.includes.load(self.exec, &mut rows).await?;
         Ok(rows)
     }

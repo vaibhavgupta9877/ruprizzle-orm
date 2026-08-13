@@ -426,6 +426,11 @@ impl crate::executor::Executor for Tx {
         Self::dialect(self)
     }
 
+    #[cfg(feature = "sqlite-rusqlite")]
+    fn as_rusqlite(&self) -> Option<&crate::rusqlite::RusqlitePool> {
+        None
+    }
+
     fn fetch_all_raw(
         &self,
         sql: Cow<'static, str>,

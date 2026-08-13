@@ -169,6 +169,56 @@ impl RusqlitePool {
     fn return_conn(&self, conn: Arc<std::sync::Mutex<rusqlite::Connection>>) {
         self.inner.conns.lock().unwrap().push(conn);
     }
+
+    /// Synchronously fetch and decode rows directly into `Vec<T>`.
+    ///
+    /// This is the fast path used by `SelectQuery` when running against the
+    /// native `rusqlite` backend: it avoids the `RowBatch`/`Vec<Row>`
+    /// materialisation and decodes each row in the same pass.
+    pub(crate) fn fetch_all_sync_decoded<T: FromRusqliteRow>(
+        &self,
+        sql: Cow<'static, str>,
+        binds: Vec<Value>,
+    ) -> Result<Vec<T>, Error> {
+        let conn = self.acquire();
+
+        let guard = conn
+            .lock()
+            .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
+        if is_ddl(sql.as_ref()) {
+            force_schema_reload(&guard);
+        }
+        let mut stmt = guard
+            .prepare_cached(sql.as_ref())
+            .map_err(|e| Error::Message(e.to_string()))?;
+
+        let column_count = stmt.column_count();
+        let mut out = Vec::new();
+
+        {
+            let mut rows = stmt
+                .query(rusqlite::params_from_iter(&binds))
+                .map_err(|e| Error::Message(e.to_string()))?;
+            while let Some(row) = rows.next().map_err(|e| Error::Message(e.to_string()))? {
+                let mut values = SmallVec::with_capacity(column_count);
+                for i in 0..column_count {
+                    let v = row
+                        .get::<_, RusqliteValue>(i)
+                        .map_err(|e| Error::Message(e.to_string()))?;
+                    values.push(v);
+                }
+                let mut row = Row(values);
+                out.push(T::from_rusqlite_row(&mut row)?);
+            }
+        }
+
+        if is_ddl(sql.as_ref()) {
+            stmt.discard();
+            guard.flush_prepared_statement_cache();
+        }
+
+        Ok(out)
+    }
 }
 
 /// A `rusqlite` transaction that owns its connection.
@@ -303,6 +353,10 @@ impl fmt::Debug for Inner {
 impl Executor for RusqlitePool {
     fn dialect(&self) -> Box<dyn ruprizzle_dialect::DbDialect> {
         dialect_for(Provider::Sqlite)
+    }
+
+    fn as_rusqlite(&self) -> Option<&Self> {
+        Some(self)
     }
 
     fn fetch_all_raw(
