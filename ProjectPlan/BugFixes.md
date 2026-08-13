@@ -178,12 +178,18 @@ which hid the hazard.
 
 *Closes BUG-06. 0.5 day.*
 
-- [ ] **Step 1.** Delete the `Clone` derive at `rusqlite.rs:229`.
-- [ ] **Step 2.** Fix whatever fails to compile. If an internal caller genuinely needs two
+- [x] **Step 1.** Delete the `Clone` derive at `rusqlite.rs:229`.
+      *Landed with FIX-01, which had to restructure the same derive.*
+- [x] **Step 2.** Fix whatever fails to compile. If an internal caller genuinely needs two
       handles, that caller is the defect — resolve it there, do not restore the derive.
-- [ ] **Step 3.** Audit `TokioPostgresTransaction` and `Tx` for the same hazard.
-- [ ] **Step 4.** Add a comment stating that a transaction owns its connection uniquely and
+      *Nothing failed: no caller cloned it, as the finding predicted.*
+- [x] **Step 3.** Audit `TokioPostgresTransaction` and `Tx` for the same hazard.
+      *Clean. Neither `Tx`, `TxInner`, nor `TokioPostgresTransaction` derives `Clone`; the
+      remaining `Clone` derives in these modules are on the pools and on `Row`, all of
+      which are meant to be shared.*
+- [x] **Step 4.** Add a comment stating that a transaction owns its connection uniquely and
       must not be `Clone`, so the derive is not reintroduced.
+      *On both native transaction types, not just the one that had the bug.*
 
 **Phase 1 exit gate:** `tx_lifecycle.rs` passes on all backends — `Any`, native `sqlx`
 Postgres/SQLite, `rusqlite`, and `tokio-postgres`. Abandoning a transaction on any backend

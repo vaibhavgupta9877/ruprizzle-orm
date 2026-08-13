@@ -18,7 +18,7 @@ against a real SQLite database and then deleted; none remain in the tree.
 | [BUG-03](#bug-03) | Dropping a `Tx` returns a `tokio-postgres` connection to the pool with an open `BEGIN` | **Critical** | ⚠️ Confirmed by inspection |
 | [BUG-04](#bug-04) | `fetch_one` / `fetch_optional` silently discard `.include()`, then panic on access | **High** | ✅ Confirmed, reproduced |
 | [BUG-05](#bug-05) | Divide-by-zero panic on an insert with an empty column set | **High** | ✅ Confirmed, reproduced |
-| [BUG-06](#bug-06) | `RusqliteTransaction` derives `Clone`, allowing a connection to be returned twice | Medium | ✅ Confirmed by inspection |
+| [BUG-06](#bug-06) | `RusqliteTransaction` derives `Clone`, allowing a connection to be returned twice | Medium | ✔️ **Fixed** (FIX-06) |
 | [BUG-07](#bug-07) | `PoolStats` always reports zeros for the `rusqlite` backend | Medium | ✅ Confirmed by inspection |
 | [BUG-08](#bug-08) | `IncludeList` drops children when two parents share a join key | Medium | ✅ Confirmed by inspection |
 | [BUG-09](#bug-09) | `InsertManyQuery` accepts heterogeneous rows and derives the column set from row 0 | Medium | ✅ Confirmed by inspection |

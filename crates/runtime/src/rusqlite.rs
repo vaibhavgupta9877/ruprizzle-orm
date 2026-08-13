@@ -255,6 +255,12 @@ impl RusqlitePool {
 /// was finished explicitly (`None`) from one that was abandoned (`Some`);
 /// `commit`/`rollback` consume `self`, so without it `Drop` would run on a
 /// finished transaction and return the same connection twice.
+///
+/// **This type must never be `Clone`.** A transaction owns its connection
+/// exclusively, and two handles to one connection would each return it to the
+/// pool, after which `begin_transaction` could hand the same physical
+/// connection — with one `BEGIN` on it — to two callers who both believe they
+/// hold it alone. It carried a `Clone` derive until BUG-06; nothing needed it.
 #[derive(Debug)]
 pub(crate) struct RusqliteTransaction {
     pool: RusqlitePool,

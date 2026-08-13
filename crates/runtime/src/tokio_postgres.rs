@@ -157,6 +157,11 @@ impl Executor for TokioPostgresPool {
 }
 
 /// A `tokio-postgres` transaction that owns its pooled connection.
+///
+/// **This type must never be `Clone`.** It owns its `Object` exclusively; two
+/// handles to one pooled connection would let two callers issue statements
+/// inside the same `BEGIN` while each believed it held the connection alone.
+/// See BUG-06, which is that hazard on the `rusqlite` side.
 pub(crate) struct TokioPostgresTransaction {
     client: Object,
 }
