@@ -1,38 +1,38 @@
 Cross-ORM benchmark log
 =======================
-Timestamp: 2026-08-12T18:28:42.104804+00:00
+Timestamp: 2026-08-13T07:25:03.998134+00:00
 Warm-up trials: 1
-Measured trials: 10
+Measured trials: 2
 Units: us/op (microseconds per operation)
 
 End-to-end results
 ------------------
 Operation                    ruprizzle (sqlx) ruprizzle (rusqlite)           prax        sea-orm         diesel         prisma        drizzle
 ---------------------------------------------------------------------------------------------------------------------------------------------
-select_by_pk                           25.2            3.4           19.5           68.6           10.2          186.8           38.9
-find_many_1000                      1,618.2          514.5          782.3        1,636.1          303.4        2,884.1          425.2
-find_filtered_ordered               1,763.2          655.1          945.1        1,661.4          422.0        3,276.3          535.2
-find_filtered_paginated               377.7          299.4          373.2          420.6          301.0          650.8          363.1
-find_in_list                          100.8           37.9           98.4          127.0           40.5          408.0          121.4
-find_complex_filter                   304.6          175.4          250.8          348.3          163.0          796.9          249.0
-count_filtered                         40.3           20.2           40.0           80.0           25.4          188.3           52.3
-exists_filtered                        16.8            2.8           17.5           57.1            9.4          150.8           46.6
-include_posts                      22,644.6       10,839.1       11,218.6       20,282.9        3,705.6       42,644.6      187,433.5
-include_author                     20,932.7        9,277.0        9,209.0       20,215.4        3,451.3       82,831.2       16,354.5
-include_posts_and_comments        143,276.3       82,912.5       43,477.4      112,618.8       21,091.7      263,108.5    9,141,225.9
-include_posts_with_tags            57,020.1       36,122.3       26,001.2       53,798.5        8,288.7      267,395.4       36,562.8
-find_popular_posts                  1,467.8        1,285.7        2,164.5        1,604.4        1,293.6        2,533.2        5,537.0
-bulk_insert_1000                    1,768.7        1,055.6        1,190.5        6,096.3        7,785.9       12,336.9        8,959.0
+select_by_pk                           24.0            3.1           24.7           83.7           11.2          196.7           50.8
+find_many_1000                      1,725.2          367.5          731.3        1,641.7          306.9        2,844.8          461.6
+find_filtered_ordered               1,767.5          566.3          880.5        1,648.0          413.1        3,351.1          585.5
+find_filtered_paginated               404.1          298.5          350.0          421.9          307.8          717.8          375.7
+find_in_list                          114.2           28.4          125.3          131.4           37.7          434.4          143.5
+find_complex_filter                   331.9          157.9          302.0          337.4          158.1          905.1          258.0
+count_filtered                         46.1           20.5           51.6           85.1           26.8          203.8           62.9
+exists_filtered                        31.4            2.6           44.4           57.1            9.6          152.0           59.2
+include_posts                      22,034.9        7,133.6       11,112.6       20,362.4        3,845.7       43,635.5      202,045.1
+include_author                     21,274.4        7,341.2        8,882.5       20,066.1        3,305.2       85,683.7       19,261.1
+include_posts_and_comments        134,962.3       55,612.4       43,914.9      110,351.2       20,711.9      260,752.6   10,445,301.8
+include_posts_with_tags            54,808.5       25,538.1       26,189.5       54,337.6        8,326.9      265,723.7       46,585.6
+find_popular_posts                  1,471.4        1,253.0        1,980.7        1,616.6        1,295.7        2,590.9        6,567.2
+bulk_insert_1000                    1,907.8        1,238.3        1,139.9        6,456.8        6,765.0       14,355.7        9,612.8
 
 Query construction (no I/O)
 ---------------------------
 Operation                    ruprizzle (sqlx) ruprizzle (rusqlite)           prax        sea-orm         diesel         prisma        drizzle
 ---------------------------------------------------------------------------------------------------------------------------------------------
-to_sql_select_by_pk                     0.6            0.6            0.4            7.4            0.7              —           11.7
-to_sql_select_filter_order              1.5            1.5            1.1           12.1            1.0              —           16.8
-to_sql_select_in_list                   2.3            2.4            4.4           25.3            2.7              —           39.2
-to_sql_select_complex_filter            1.8            1.8            1.5           14.3            1.1              —           19.0
-to_sql_select_paginated                 1.5            1.5            1.1           11.8            1.0              —           17.3
+to_sql_select_by_pk                     0.5            0.6            0.4            7.8            0.7              —           11.4
+to_sql_select_filter_order              1.5            1.5            1.1           12.4            1.0              —           16.4
+to_sql_select_in_list                   2.3            2.3            4.3           28.4            2.7              —           38.3
+to_sql_select_complex_filter            1.8            1.8            1.5           14.6            1.1              —           19.0
+to_sql_select_paginated                 1.5            1.5            1.1           11.9            1.0              —           19.2
 
 Per-driver, per-operation statistics
 ------------------------------------
@@ -40,155 +40,155 @@ Per-driver, per-operation statistics
 ruprizzle (sqlx)
 Operation                            mean       median          min          max        stdev      CV%
 ----------------------------------------------------------------------------------------------------
-select_by_pk                         25.3         25.2         18.7         34.6          4.5     17.7
-find_many_1000                     1634.1       1618.2       1548.4       1780.1         67.9      4.2
-find_filtered_ordered              1794.9       1763.2       1708.1       1949.6         79.6      4.4
-find_filtered_paginated             384.0        377.7        365.2        428.9         20.4      5.3
-find_in_list                        103.8        100.8         96.2        126.6          8.7      8.4
-find_complex_filter                 310.0        304.6        278.4        356.7         21.6      7.0
-count_filtered                       39.6         40.3         34.6         42.7          3.1      7.8
-exists_filtered                      17.7         16.8         16.0         22.3          2.3     13.2
-include_posts                     22658.7      22644.6      22059.9      23452.0        413.4      1.8
-include_author                    20920.2      20932.7      20477.7      21428.2        298.2      1.4
-include_posts_and_comments       142645.4     143276.3     139454.2     146154.5       2297.9      1.6
-include_posts_with_tags           56913.3      57020.1      55557.8      58425.6        933.3      1.6
-find_popular_posts                 1471.1       1467.8       1407.4       1509.4         29.6      2.0
-bulk_insert_1000                   1964.1       1768.7       1660.8       3721.4        625.1     31.8
-to_sql_select_by_pk                   0.6          0.6          0.5          0.6          0.0      2.0
-to_sql_select_filter_order            1.5          1.5          1.5          1.5          0.0      1.2
-to_sql_select_in_list                 2.4          2.3          2.3          2.5          0.0      1.6
-to_sql_select_complex_filter          1.8          1.8          1.8          1.9          0.0      1.6
-to_sql_select_paginated               1.5          1.5          1.5          1.6          0.0      1.6
+select_by_pk                         24.0         24.0         21.7         26.3          3.3     13.6
+find_many_1000                     1725.2       1725.2       1698.4       1751.9         37.8      2.2
+find_filtered_ordered              1767.5       1767.5       1751.8       1783.2         22.2      1.3
+find_filtered_paginated             404.1        404.1        402.6        405.7          2.2      0.6
+find_in_list                        114.2        114.2        110.8        117.5          4.8      4.2
+find_complex_filter                 331.9        331.9        321.5        342.2         14.6      4.4
+count_filtered                       46.1         46.1         45.9         46.3          0.3      0.7
+exists_filtered                      31.4         31.4         26.0         36.8          7.7     24.4
+include_posts                     22034.9      22034.9      21684.3      22385.4        495.8      2.3
+include_author                    21274.4      21274.4      20743.6      21805.1        750.6      3.5
+include_posts_and_comments       134962.3     134962.3     131672.8     138251.8       4652.0      3.4
+include_posts_with_tags           54808.5      54808.5      53014.1      56603.0       2537.8      4.6
+find_popular_posts                 1471.4       1471.4       1466.9       1475.9          6.4      0.4
+bulk_insert_1000                   1907.8       1907.8       1858.3       1957.4         70.1      3.7
+to_sql_select_by_pk                   0.5          0.5          0.5          0.6          0.0      0.9
+to_sql_select_filter_order            1.5          1.5          1.5          1.5          0.0      1.1
+to_sql_select_in_list                 2.3          2.3          2.3          2.4          0.0      1.2
+to_sql_select_complex_filter          1.8          1.8          1.8          1.8          0.0      0.1
+to_sql_select_paginated               1.5          1.5          1.5          1.5          0.0      0.9
 
 ruprizzle (rusqlite)
 Operation                            mean       median          min          max        stdev      CV%
 ----------------------------------------------------------------------------------------------------
-select_by_pk                          3.6          3.4          3.2          5.0          0.5     15.3
-find_many_1000                      517.8        514.5        490.1        538.7         16.1      3.1
-find_filtered_ordered               659.7        655.1        639.1        684.8         14.6      2.2
-find_filtered_paginated             300.6        299.4        290.7        314.7          8.9      3.0
-find_in_list                         36.3         37.9         29.9         40.1          3.3      9.1
-find_complex_filter                 175.9        175.4        164.7        194.5          8.8      5.0
-count_filtered                       20.7         20.2         20.1         24.4          1.3      6.3
-exists_filtered                       3.0          2.8          2.8          4.7          0.6     19.7
-include_posts                     11062.3      10839.1      10643.0      12041.5        520.6      4.7
-include_author                     9423.3       9277.0       9060.4      10112.0        350.5      3.7
-include_posts_and_comments        85140.6      82912.5      80462.2      93379.6       5029.1      5.9
-include_posts_with_tags           36781.3      36122.3      34574.9      39686.9       2119.1      5.8
-find_popular_posts                 1299.1       1285.7       1267.9       1357.5         29.7      2.3
-bulk_insert_1000                   1047.4       1055.6        966.2       1119.8         48.4      4.6
-to_sql_select_by_pk                   0.6          0.6          0.5          0.7          0.0      6.0
-to_sql_select_filter_order            1.6          1.5          1.5          1.7          0.1      4.2
-to_sql_select_in_list                 2.4          2.4          2.3          2.6          0.1      4.2
-to_sql_select_complex_filter          1.9          1.8          1.8          2.0          0.1      3.7
-to_sql_select_paginated               1.5          1.5          1.5          1.6          0.0      2.6
+select_by_pk                          3.1          3.1          3.1          3.1          0.0      0.1
+find_many_1000                      367.5        367.5        364.3        370.7          4.6      1.2
+find_filtered_ordered               566.3        566.3        539.9        592.7         37.3      6.6
+find_filtered_paginated             298.5        298.5        290.6        306.5         11.3      3.8
+find_in_list                         28.4         28.4         26.5         30.4          2.8      9.7
+find_complex_filter                 157.9        157.9        154.0        161.7          5.5      3.5
+count_filtered                       20.5         20.5         19.9         21.1          0.9      4.2
+exists_filtered                       2.6          2.6          2.6          2.7          0.1      3.0
+include_posts                      7133.6       7133.6       7005.4       7261.9        181.4      2.5
+include_author                     7341.2       7341.2       7238.8       7443.7        144.9      2.0
+include_posts_and_comments        55612.4      55612.4      55255.0      55969.8        505.4      0.9
+include_posts_with_tags           25538.1      25538.1      25463.4      25612.7        105.5      0.4
+find_popular_posts                 1253.0       1253.0       1250.4       1255.7          3.8      0.3
+bulk_insert_1000                   1238.3       1238.3       1166.6       1310.0        101.4      8.2
+to_sql_select_by_pk                   0.6          0.6          0.6          0.6          0.0      1.0
+to_sql_select_filter_order            1.5          1.5          1.5          1.5          0.0      0.4
+to_sql_select_in_list                 2.3          2.3          2.3          2.3          0.0      1.7
+to_sql_select_complex_filter          1.8          1.8          1.8          1.8          0.0      0.2
+to_sql_select_paginated               1.5          1.5          1.5          1.5          0.0      0.7
 
 prax
 Operation                            mean       median          min          max        stdev      CV%
 ----------------------------------------------------------------------------------------------------
-select_by_pk                         21.8         19.5         15.4         37.3          6.6     30.2
-find_many_1000                      783.0        782.3        723.3        859.2         40.2      5.1
-find_filtered_ordered               948.5        945.1        914.6       1002.0         28.3      3.0
-find_filtered_paginated             374.0        373.2        332.8        402.0         22.4      6.0
-find_in_list                         94.9         98.4         75.1        111.5         12.2     12.8
-find_complex_filter                 244.3        250.8        208.5        297.1         26.8     11.0
-count_filtered                       39.7         40.0         31.7         52.9          7.0     17.6
-exists_filtered                      20.6         17.5         14.4         32.1          6.4     30.9
-include_posts                     11144.2      11218.6      10580.6      11389.4        232.1      2.1
-include_author                     9236.4       9209.0       8880.4       9722.8        276.0      3.0
-include_posts_and_comments        43466.1      43477.4      41659.5      45000.4        926.3      2.1
-include_posts_with_tags           26203.8      26001.2      25066.8      28079.5        786.8      3.0
-find_popular_posts                 2160.7       2164.5       1976.3       2319.2        101.9      4.7
-bulk_insert_1000                   1215.1       1190.5       1020.5       1412.2        143.3     11.8
-to_sql_select_by_pk                   0.5          0.4          0.4          0.5          0.0      4.8
-to_sql_select_filter_order            1.1          1.1          1.1          1.2          0.1      4.9
-to_sql_select_in_list                 4.4          4.4          4.3          4.5          0.1      2.3
-to_sql_select_complex_filter          1.5          1.5          1.5          1.6          0.0      1.7
-to_sql_select_paginated               1.1          1.1          1.1          1.1          0.0      2.2
+select_by_pk                         24.7         24.7         19.6         29.9          7.3     29.3
+find_many_1000                      731.3        731.3        714.1        748.6         24.4      3.3
+find_filtered_ordered               880.5        880.5        838.5        922.6         59.5      6.8
+find_filtered_paginated             350.0        350.0        348.8        351.1          1.6      0.5
+find_in_list                        125.3        125.3        110.4        140.2         21.1     16.8
+find_complex_filter                 302.0        302.0        282.8        321.2         27.2      9.0
+count_filtered                       51.6         51.6         40.8         62.5         15.3     29.7
+exists_filtered                      44.4         44.4         34.9         53.9         13.4     30.2
+include_posts                     11112.6      11112.6      11053.9      11171.2         83.0      0.7
+include_author                     8882.5       8882.5       8780.9       8984.0        143.6      1.6
+include_posts_and_comments        43914.9      43914.9      43393.8      44436.0        737.0      1.7
+include_posts_with_tags           26189.5      26189.5      25802.9      26576.1        546.7      2.1
+find_popular_posts                 1980.7       1980.7       1935.2       2026.3         64.5      3.3
+bulk_insert_1000                   1139.9       1139.9       1132.0       1147.8         11.2      1.0
+to_sql_select_by_pk                   0.4          0.4          0.4          0.4          0.0      1.2
+to_sql_select_filter_order            1.1          1.1          1.1          1.1          0.0      1.3
+to_sql_select_in_list                 4.3          4.3          4.2          4.3          0.1      1.5
+to_sql_select_complex_filter          1.5          1.5          1.5          1.5          0.0      0.7
+to_sql_select_paginated               1.1          1.1          1.1          1.1          0.0      1.0
 
 sea-orm
 Operation                            mean       median          min          max        stdev      CV%
 ----------------------------------------------------------------------------------------------------
-select_by_pk                         68.1         68.6         54.8         85.2         11.6     17.0
-find_many_1000                     1638.0       1636.1       1560.9       1764.0         59.9      3.7
-find_filtered_ordered              1668.8       1661.4       1580.4       1795.2         59.6      3.6
-find_filtered_paginated             430.8        420.6        403.7        473.3         23.6      5.5
-find_in_list                        131.3        127.0        116.1        158.5         14.1     10.7
-find_complex_filter                 348.2        348.3        328.8        388.5         18.6      5.3
-count_filtered                       87.8         80.0         76.0        114.6         15.0     17.1
-exists_filtered                      62.0         57.1         52.5         92.1         13.5     21.8
-include_posts                     20073.9      20282.9      19073.0      21013.6        665.9      3.3
-include_author                    19983.6      20215.4      18878.4      20940.0        752.0      3.8
-include_posts_and_comments       111474.2     112618.8     104269.1     113688.3       2807.2      2.5
-include_posts_with_tags           53447.4      53798.5      51272.3      56836.0       1753.5      3.3
-find_popular_posts                 1602.5       1604.4       1521.9       1708.0         53.5      3.3
-bulk_insert_1000                   6088.4       6096.3       5576.9       6723.2        350.6      5.8
-to_sql_select_by_pk                   7.5          7.4          7.3          7.9          0.2      2.3
-to_sql_select_filter_order           12.1         12.1         11.7         12.6          0.3      2.5
-to_sql_select_in_list                25.8         25.3         24.5         28.9          1.4      5.5
-to_sql_select_complex_filter         14.2         14.3         14.0         14.6          0.2      1.3
-to_sql_select_paginated              11.8         11.8         11.5         12.1          0.2      1.6
+select_by_pk                         83.7         83.7         76.0         91.5         11.0     13.1
+find_many_1000                     1641.7       1641.7       1581.1       1702.2         85.6      5.2
+find_filtered_ordered              1648.0       1648.0       1643.3       1652.8          6.7      0.4
+find_filtered_paginated             421.9        421.9        407.0        436.7         21.0      5.0
+find_in_list                        131.4        131.4        130.1        132.7          1.8      1.4
+find_complex_filter                 337.4        337.4        331.8        343.0          7.9      2.3
+count_filtered                       85.1         85.1         82.7         87.6          3.4      4.0
+exists_filtered                      57.1         57.1         54.7         59.5          3.4      5.9
+include_posts                     20362.4      20362.4      20135.3      20589.5        321.2      1.6
+include_author                    20066.1      20066.1      19963.1      20169.1        145.7      0.7
+include_posts_and_comments       110351.2     110351.2     107752.6     112949.8       3675.0      3.3
+include_posts_with_tags           54337.6      54337.6      52704.5      55970.8       2309.7      4.3
+find_popular_posts                 1616.6       1616.6       1610.4       1622.8          8.8      0.5
+bulk_insert_1000                   6456.8       6456.8       5625.8       7287.9       1175.3     18.2
+to_sql_select_by_pk                   7.8          7.8          7.7          7.9          0.2      2.1
+to_sql_select_filter_order           12.4         12.4         12.3         12.4          0.1      0.6
+to_sql_select_in_list                28.4         28.4         25.4         31.4          4.3     15.1
+to_sql_select_complex_filter         14.6         14.6         14.6         14.6          0.0      0.1
+to_sql_select_paginated              11.9         11.9         11.8         12.0          0.1      1.2
 
 diesel
 Operation                            mean       median          min          max        stdev      CV%
 ----------------------------------------------------------------------------------------------------
-select_by_pk                         10.3         10.2          9.8         10.9          0.3      3.1
-find_many_1000                      303.6        303.4        295.9        311.3          5.2      1.7
-find_filtered_ordered               422.1        422.0        388.7        443.5         16.0      3.8
-find_filtered_paginated             300.9        301.0        286.7        312.8          7.9      2.6
-find_in_list                         40.9         40.5         37.6         44.6          2.4      5.8
-find_complex_filter                 165.1        163.0        158.7        178.3          6.3      3.8
-count_filtered                       26.0         25.4         24.9         31.2          1.9      7.4
-exists_filtered                       9.4          9.4          9.3          9.7          0.1      1.3
-include_posts                      3717.8       3705.6       3583.5       3864.7         82.8      2.2
-include_author                     3466.4       3451.3       3309.8       3817.9        140.1      4.0
-include_posts_and_comments        21086.5      21091.7      19917.8      21685.5        521.7      2.5
-include_posts_with_tags            8249.0       8288.7       7907.1       8526.2        198.6      2.4
-find_popular_posts                 1301.6       1293.6       1270.2       1355.2         27.4      2.1
-bulk_insert_1000                   7986.6       7785.9       7069.2       9526.6        893.0     11.2
-to_sql_select_by_pk                   0.7          0.7          0.7          0.7          0.0      1.9
-to_sql_select_filter_order            1.0          1.0          1.0          1.0          0.0      1.0
-to_sql_select_in_list                 2.7          2.7          2.7          2.8          0.0      1.2
-to_sql_select_complex_filter          1.1          1.1          1.1          1.2          0.0      1.5
-to_sql_select_paginated               1.0          1.0          1.0          1.0          0.0      1.7
+select_by_pk                         11.2         11.2         10.8         11.5          0.5      4.7
+find_many_1000                      306.9        306.9        305.0        308.8          2.7      0.9
+find_filtered_ordered               413.1        413.1        413.0        413.2          0.1      0.0
+find_filtered_paginated             307.8        307.8        307.3        308.4          0.8      0.3
+find_in_list                         37.7         37.7         36.8         38.6          1.3      3.4
+find_complex_filter                 158.1        158.1        156.8        159.4          1.8      1.2
+count_filtered                       26.8         26.8         25.7         28.0          1.6      5.9
+exists_filtered                       9.6          9.6          9.6          9.6          0.0      0.4
+include_posts                      3845.7       3845.7       3656.4       4035.1        267.8      7.0
+include_author                     3305.2       3305.2       3238.6       3371.9         94.3      2.9
+include_posts_and_comments        20711.9      20711.9      20620.3      20803.5        129.5      0.6
+include_posts_with_tags            8326.9       8326.9       8258.7       8395.2         96.5      1.2
+find_popular_posts                 1295.7       1295.7       1282.0       1309.3         19.3      1.5
+bulk_insert_1000                   6765.0       6765.0       6691.9       6838.0        103.3      1.5
+to_sql_select_by_pk                   0.7          0.7          0.7          0.7          0.0      1.8
+to_sql_select_filter_order            1.0          1.0          1.0          1.0          0.0      0.4
+to_sql_select_in_list                 2.7          2.7          2.7          2.7          0.1      1.9
+to_sql_select_complex_filter          1.1          1.1          1.1          1.2          0.0      3.1
+to_sql_select_paginated               1.0          1.0          1.0          1.0          0.0      2.4
 
 prisma
 Operation                            mean       median          min          max        stdev      CV%
 ----------------------------------------------------------------------------------------------------
-select_by_pk                        186.5        186.8        166.1        203.1         11.7      6.3
-find_many_1000                     2888.1       2884.1       2810.0       2971.7         54.4      1.9
-find_filtered_ordered              3290.9       3276.3       3235.4       3362.0         49.8      1.5
-find_filtered_paginated             647.0        650.8        618.7        695.9         23.8      3.7
-find_in_list                        426.2        408.0        380.9        477.1         36.3      8.5
-find_complex_filter                 800.6        796.9        749.7        873.8         42.5      5.3
-count_filtered                      186.1        188.3        162.0        201.0         12.6      6.8
-exists_filtered                     150.8        150.8        135.7        173.4         11.5      7.6
-include_posts                     42733.9      42644.6      41312.8      44541.6        851.0      2.0
-include_author                    83305.3      82831.2      81176.2      86707.7       1674.0      2.0
-include_posts_and_comments       262708.5     263108.5     258641.0     266903.9       2765.4      1.1
-include_posts_with_tags          266502.0     267395.4     259441.4     270294.6       3681.2      1.4
-find_popular_posts                 2542.0       2533.2       2462.1       2644.1         60.6      2.4
-bulk_insert_1000                  12505.1      12336.9      11868.8      14081.9        598.7      4.8
+select_by_pk                        196.7        196.7        192.0        201.5          6.7      3.4
+find_many_1000                     2844.8       2844.8       2830.6       2859.1         20.1      0.7
+find_filtered_ordered              3351.1       3351.1       3332.1       3370.0         26.8      0.8
+find_filtered_paginated             717.8        717.8        670.5        765.1         66.9      9.3
+find_in_list                        434.4        434.4        424.0        444.8         14.7      3.4
+find_complex_filter                 905.1        905.1        806.8       1003.4        139.1     15.4
+count_filtered                      203.8        203.8        199.1        208.6          6.7      3.3
+exists_filtered                     152.0        152.0        148.7        155.3          4.7      3.1
+include_posts                     43635.5      43635.5      42693.6      44577.4       1332.0      3.1
+include_author                    85683.7      85683.7      83426.4      87941.0       3192.3      3.7
+include_posts_and_comments       260752.6     260752.6     260749.3     260755.8          4.6      0.0
+include_posts_with_tags          265723.7     265723.7     262956.2     268491.2       3913.8      1.5
+find_popular_posts                 2590.9       2590.9       2546.3       2635.6         63.2      2.4
+bulk_insert_1000                  14355.7      14355.7      14000.5      14710.9        502.3      3.5
 
 drizzle
 Operation                            mean       median          min          max        stdev      CV%
 ----------------------------------------------------------------------------------------------------
-select_by_pk                         38.5         38.9         37.0         40.2          1.1      2.7
-find_many_1000                      422.7        425.2        395.7        445.5         14.7      3.5
-find_filtered_ordered               544.4        535.2        489.5        622.6         39.4      7.2
-find_filtered_paginated             362.6        363.1        328.1        403.1         20.7      5.7
-find_in_list                        123.5        121.4        104.2        139.9         10.5      8.5
-find_complex_filter                 245.7        249.0        207.1        286.9         23.1      9.4
-count_filtered                       52.0         52.3         46.4         58.9          3.8      7.4
-exists_filtered                      46.2         46.6         39.8         51.8          4.5      9.8
-include_posts                    187999.6     187433.5     184490.1     195075.9       2904.2      1.5
-include_author                    16536.2      16354.5      16074.0      17401.8        428.1      2.6
-include_posts_and_comments      9254824.0    9141225.9    9058375.2   10079245.5     303530.6      3.3
-include_posts_with_tags           36675.3      36562.8      35738.6      37713.1        612.7      1.7
-find_popular_posts                 5561.2       5537.0       5469.2       5772.4         88.4      1.6
-bulk_insert_1000                   9371.0       8959.0       8307.3      11403.7       1067.3     11.4
-to_sql_select_by_pk                  11.7         11.7         11.3         12.0          0.2      2.0
-to_sql_select_filter_order           16.9         16.8         16.7         17.7          0.3      1.9
-to_sql_select_in_list                39.3         39.2         38.9         39.8          0.3      0.8
-to_sql_select_complex_filter         19.0         19.0         18.5         19.3          0.3      1.5
-to_sql_select_paginated              17.3         17.3         17.0         17.7          0.3      1.5
+select_by_pk                         50.8         50.8         38.3         63.4         17.8     35.0
+find_many_1000                      461.6        461.6        408.7        514.4         74.7     16.2
+find_filtered_ordered               585.5        585.5        519.0        652.1         94.1     16.1
+find_filtered_paginated             375.7        375.7        336.0        415.3         56.1     14.9
+find_in_list                        143.5        143.5        125.9        161.1         24.9     17.3
+find_complex_filter                 258.0        258.0        243.0        272.9         21.1      8.2
+count_filtered                       62.9         62.9         51.6         74.1         15.9     25.2
+exists_filtered                      59.2         59.2         49.6         68.8         13.6     23.0
+include_posts                    202045.1     202045.1     187185.4     216904.9      21014.8     10.4
+include_author                    19261.1      19261.1      16662.2      21860.0       3675.4     19.1
+include_posts_and_comments     10445301.8   10445301.8   10264156.0   10626447.5     256178.8      2.5
+include_posts_with_tags           46585.6      46585.6      46174.5      46996.8        581.4      1.2
+find_popular_posts                 6567.2       6567.2       6547.8       6586.7         27.5      0.4
+bulk_insert_1000                   9612.8       9612.8       9325.7       9900.0        406.1      4.2
+to_sql_select_by_pk                  11.4         11.4         11.2         11.6          0.3      2.4
+to_sql_select_filter_order           16.4         16.4         16.0         16.9          0.6      3.9
+to_sql_select_in_list                38.3         38.3         37.8         38.9          0.8      2.2
+to_sql_select_complex_filter         19.0         19.0         18.7         19.4          0.4      2.3
+to_sql_select_paginated              19.2         19.2         17.2         21.2          2.8     14.6
