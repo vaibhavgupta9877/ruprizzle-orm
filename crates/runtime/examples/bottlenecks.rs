@@ -354,7 +354,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 email: r.get::<String, _>(1),
                 age: r.get::<i64, _>(2),
             })
-            .count()
+            .fold(0, |acc, _| acc + 1)
     })
     .await;
     let via_exec = bench("via ruprizzle Executor::fetch_all_raw", 300, || async {
@@ -372,7 +372,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 email: r.get::<String, _>(1),
                 age: r.get::<i64, _>(2),
             })
-            .count()
+            .fold(0, |acc, _| acc + 1)
     })
     .await;
     delta(

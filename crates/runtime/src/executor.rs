@@ -147,7 +147,7 @@ pub trait Executor: Send + Sync {
 
     /// Optional hook called right before a query is executed.
     ///
-    /// The default is a no-op; wrappers such as [`CountingExecutor`] override it
+    /// The default is a no-op; wrappers such as [`CountingExecutor`](crate::CountingExecutor) override it
     /// to record the statement when the caller takes a backend-specific fast
     /// path.
     fn on_query(&self) {}

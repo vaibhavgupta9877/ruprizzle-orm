@@ -29,7 +29,7 @@ async fn configured_pool_connects() {
     let pool = connect_with("sqlite::memory:", &config)
         .await
         .expect("connect");
-    let options = pool.sqlite_options();
+    let options = pool.sqlite_options().expect("sqlite pool options");
     assert_eq!(options.get_max_connections(), 3);
     assert_eq!(options.get_min_connections(), 1);
     assert_eq!(options.get_acquire_timeout(), Duration::from_secs(1));

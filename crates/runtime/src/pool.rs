@@ -86,60 +86,95 @@ impl Pool {
         }
     }
 
-    /// Returns the pool's connection options.
+    /// Returns the pool's connection options, if this is the `Any` backend.
     ///
     /// This is exposed for tests that verify `PoolConfig` propagation.
     #[must_use]
-    pub fn options(&self) -> &sqlx::pool::PoolOptions<sqlx::Any> {
+    pub fn options(&self) -> Option<&sqlx::pool::PoolOptions<sqlx::Any>> {
         match self {
-            Pool::Any(any) => any.options(),
-            _ => unimplemented!("options() only implemented for the Any backend"),
+            Pool::Any(any) => Some(any.options()),
+            _ => None,
         }
     }
 
-    /// Returns the connection options for a native Postgres pool.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this is not a [`Pool::Postgres`].
+    /// Returns the connection options for a native `sqlx::Postgres` pool, if any.
     #[must_use]
-    pub fn postgres_options(&self) -> &sqlx::pool::PoolOptions<sqlx::Postgres> {
+    pub fn postgres_options(&self) -> Option<&sqlx::pool::PoolOptions<sqlx::Postgres>> {
         match self {
-            Pool::Postgres(p) => p.options(),
-            _ => unimplemented!("postgres_options() only implemented for Postgres"),
+            Pool::Postgres(p) => Some(p.options()),
+            _ => None,
         }
     }
 
-    /// Returns the connection options for a native SQLite pool.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this is not a [`Pool::Sqlite`].
+    /// Returns the connection options for a native `sqlx::Sqlite` pool, if any.
     #[must_use]
-    pub fn sqlite_options(&self) -> &sqlx::pool::PoolOptions<sqlx::Sqlite> {
+    pub fn sqlite_options(&self) -> Option<&sqlx::pool::PoolOptions<sqlx::Sqlite>> {
         match self {
-            Pool::Sqlite(p) => p.options(),
-            _ => unimplemented!("sqlite_options() only implemented for SQLite"),
+            Pool::Sqlite(p) => Some(p.options()),
+            _ => None,
         }
     }
 
-    /// Acquires a connection from the pool.
+    /// Acquires a connection from the `Any` pool.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NotImplemented`] for native driver-specific pools.
+    /// Use the typed `as_*` accessors to reach those drivers.
     pub async fn acquire(&self) -> Result<sqlx::pool::PoolConnection<sqlx::Any>, crate::Error> {
         match self {
             Pool::Any(any) => any.acquire().await.map_err(crate::Error::Sqlx),
-            _ => unimplemented!("acquire() only implemented for the Any backend"),
+            _ => Err(crate::Error::NotImplemented),
         }
     }
 
-    /// Borrows the wrapped `Any` pool.
+    /// Borrows the wrapped `sqlx::Any` pool, if this is the `Any` backend.
     ///
     /// This is a compatibility helper for tests and benchmarks that still want
     /// to use raw `sqlx` against the `Any` backend.
     #[must_use]
-    pub fn as_any(&self) -> &sqlx::Pool<sqlx::Any> {
+    pub fn as_any(&self) -> Option<&sqlx::Pool<sqlx::Any>> {
         match self {
-            Pool::Any(any) => any,
-            _ => unimplemented!("as_any() is only valid for the Any backend"),
+            Pool::Any(any) => Some(any),
+            _ => None,
+        }
+    }
+
+    /// Borrows the wrapped `sqlx::Postgres` pool, if any.
+    #[must_use]
+    pub fn as_postgres(&self) -> Option<&sqlx::Pool<sqlx::Postgres>> {
+        match self {
+            Pool::Postgres(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// Borrows the wrapped `sqlx::Sqlite` pool, if any.
+    #[must_use]
+    pub fn as_sqlite(&self) -> Option<&sqlx::Pool<sqlx::Sqlite>> {
+        match self {
+            Pool::Sqlite(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// Borrows the wrapped native `rusqlite` pool, if any.
+    #[cfg(feature = "sqlite-rusqlite")]
+    #[must_use]
+    pub fn as_rusqlite(&self) -> Option<&crate::rusqlite::RusqlitePool> {
+        match self {
+            Pool::SqliteNative(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// Borrows the wrapped native `tokio-postgres` pool, if any.
+    #[cfg(feature = "postgres-tokio-postgres")]
+    #[must_use]
+    pub fn as_tokio_postgres(&self) -> Option<&crate::tokio_postgres::TokioPostgresPool> {
+        match self {
+            Pool::PostgresNative(p) => Some(p),
+            _ => None,
         }
     }
 
@@ -179,7 +214,9 @@ impl<'c> sqlx::Executor<'c> for &'c Pool {
     {
         match self {
             Pool::Any(any) => sqlx::Executor::fetch_many(any, query),
-            _ => unimplemented!("native backend queries need per-backend FromRow (P2-2)"),
+            _ => Box::pin(futures_util::stream::iter(std::iter::once(Err(
+                sqlx::Error::Protocol(not_any_message().into()),
+            )))),
         }
     }
 
@@ -193,7 +230,9 @@ impl<'c> sqlx::Executor<'c> for &'c Pool {
     {
         match self {
             Pool::Any(any) => sqlx::Executor::fetch_optional(any, query),
-            _ => unimplemented!("native backend queries need per-backend FromRow (P2-2)"),
+            _ => Box::pin(futures_util::future::ready(Err(sqlx::Error::Protocol(
+                not_any_message().into(),
+            )))),
         }
     }
 
@@ -207,7 +246,9 @@ impl<'c> sqlx::Executor<'c> for &'c Pool {
     {
         match self {
             Pool::Any(any) => sqlx::Executor::prepare_with(any, sql, parameters),
-            _ => unimplemented!("native backend queries need per-backend FromRow (P2-2)"),
+            _ => Box::pin(futures_util::future::ready(Err(sqlx::Error::Protocol(
+                not_any_message().into(),
+            )))),
         }
     }
 
@@ -220,9 +261,15 @@ impl<'c> sqlx::Executor<'c> for &'c Pool {
     {
         match self {
             Pool::Any(any) => sqlx::Executor::describe(any, sql),
-            _ => unimplemented!("native backend queries need per-backend FromRow (P2-2)"),
+            _ => Box::pin(futures_util::future::ready(Err(sqlx::Error::Protocol(
+                not_any_message().into(),
+            )))),
         }
     }
+}
+
+fn not_any_message() -> &'static str {
+    "this Pool variant does not support generic sqlx::Any queries; use the typed as_* accessors"
 }
 
 /// Configuration used to build a [`Pool`].

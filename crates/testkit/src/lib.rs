@@ -373,7 +373,7 @@ impl TestDb {
         self.backend
     }
 
-    /// A `ruprizzle` [`Pool`] backed by this database.
+    /// A `ruprizzle` [`Pool`](ruprizzle::Pool) backed by this database.
     ///
     /// Use this when exercising the runtime's query builders and executor.
     #[must_use]

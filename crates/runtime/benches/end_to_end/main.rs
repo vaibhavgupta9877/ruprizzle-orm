@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use ruprizzle::{PoolConfig, connect_with};
+use ruprizzle::PoolConfig;
 use tokio::runtime::Runtime;
 
 const PARENTS: i64 = 100;
@@ -192,13 +192,25 @@ fn bench_end_to_end(c: &mut Criterion) {
     let mut config = PoolConfig::default();
     config.min_connections = 4;
     config.max_connections = 4;
-    let pool = match rt.block_on(connect_with(&url, &config)) {
+    let any = match rt.block_on(async {
+        sqlx::any::install_default_drivers();
+        sqlx::any::AnyPoolOptions::new()
+            .max_connections(config.max_connections)
+            .min_connections(config.min_connections)
+            .acquire_timeout(config.acquire_timeout)
+            .idle_timeout(config.idle_timeout)
+            .max_lifetime(config.max_lifetime)
+            .test_before_acquire(config.test_before_acquire)
+            .connect(&url)
+            .await
+    }) {
         Ok(p) => p,
         Err(e) => {
             eprintln!("skipping end_to_end benches: could not connect to `{url}`: {e}");
             return;
         }
     };
+    let pool = ruprizzle::Pool::Any(any);
 
     rt.block_on(setup(&pool));
 

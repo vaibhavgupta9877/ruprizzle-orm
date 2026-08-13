@@ -10,7 +10,7 @@
 //! Layers, cheapest first:
 //!
 //! 1. `rusqlite`         — synchronous, in-process, the Rust analogue of
-//!                         better-sqlite3. This is the floor.
+//!    better-sqlite3. This is the floor.
 //! 2. `sqlx native`      — `SqlitePool`, default `row_buffer_size` (50)
 //! 3. `sqlx native +buf` — `SqlitePool`, `row_buffer_size(16384)`
 //! 4. `sqlx Any`         — `AnyPool`, what ruprizzle builds today
@@ -224,7 +224,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let native = sqlx::SqlitePool::connect_with(opts.clone().read_only(true)).await?;
     let buffered =
         sqlx::SqlitePool::connect_with(opts.clone().read_only(true).row_buffer_size(16384)).await?;
-    let any = ruprizzle::connect(&url).await?;
+    let any = ruprizzle::Pool::Any(
+        sqlx::any::AnyPoolOptions::new()
+            .max_connections(1)
+            .connect(&url)
+            .await?,
+    );
 
     // ---------------- users: 1000 rows, 3 columns -------------------
     const USERS_SQL: &str = "SELECT id, email, age FROM users";

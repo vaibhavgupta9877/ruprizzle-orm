@@ -125,10 +125,14 @@ impl RusqlitePool {
     }
 
     /// Pick a connection using round-robin load distribution.
-    fn acquire(&self) -> Arc<std::sync::Mutex<rusqlite::Connection>> {
-        let conns = self.inner.conns.lock().unwrap();
+    fn acquire(&self) -> Result<Arc<std::sync::Mutex<rusqlite::Connection>>, Error> {
+        let conns = self
+            .inner
+            .conns
+            .lock()
+            .map_err(|_| Error::Message("rusqlite connection pool mutex poisoned".into()))?;
         let idx = self.inner.next.fetch_add(1, Ordering::Relaxed) % conns.len();
-        conns[idx].clone()
+        Ok(conns[idx].clone())
     }
 
     /// Take a connection from the pool and start a transaction on it.
@@ -140,7 +144,11 @@ impl RusqlitePool {
         let pool = self.clone();
         tokio::task::spawn_blocking(move || -> Result<RusqliteTransaction, Error> {
             let conn = {
-                let mut conns = pool.inner.conns.lock().unwrap();
+                let mut conns = pool
+                    .inner
+                    .conns
+                    .lock()
+                    .map_err(|_| Error::Message("rusqlite connection pool mutex poisoned".into()))?;
                 conns
                     .pop()
                     .ok_or_else(|| Error::Message("rusqlite connection pool exhausted".into()))?
@@ -167,7 +175,9 @@ impl RusqlitePool {
 
     /// Return an owned connection to the pool.
     fn return_conn(&self, conn: Arc<std::sync::Mutex<rusqlite::Connection>>) {
-        self.inner.conns.lock().unwrap().push(conn);
+        if let Ok(mut conns) = self.inner.conns.lock() {
+            conns.push(conn);
+        }
     }
 
     /// Synchronously fetch and decode rows directly into `Vec<T>`.
@@ -180,7 +190,7 @@ impl RusqlitePool {
         sql: Cow<'static, str>,
         binds: Vec<Value>,
     ) -> Result<Vec<T>, Error> {
-        let conn = self.acquire();
+        let conn = self.acquire()?;
 
         let guard = conn
             .lock()
@@ -380,7 +390,7 @@ fn fetch_all(
     sql: Cow<'static, str>,
     binds: Vec<Value>,
 ) -> Result<RowBatch, Error> {
-    let conn = pool.acquire();
+    let conn = pool.acquire()?;
 
     let guard = conn
         .lock()
@@ -415,7 +425,7 @@ fn fetch_all(
 }
 
 fn execute(pool: RusqlitePool, sql: Cow<'static, str>, binds: Vec<Value>) -> Result<u64, Error> {
-    let conn = pool.acquire();
+    let conn = pool.acquire()?;
 
     let guard = conn
         .lock()
@@ -499,10 +509,10 @@ pub trait FromValue: Sized + Send + Sync + 'static {
 
 impl FromValue for i64 {
     fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
-        match value {
-            &RusqliteValue::Integer(i) => Ok(i),
-            &RusqliteValue::Real(f) => Ok(f as i64),
-            &RusqliteValue::Text(ref s) => s
+        match *value {
+            RusqliteValue::Integer(i) => Ok(i),
+            RusqliteValue::Real(f) => Ok(f as i64),
+            RusqliteValue::Text(ref s) => s
                 .parse()
                 .map_err(|e| Error::Message(format!("cannot decode i64 from {s:?}: {e}"))),
             _ => Err(Error::Message(format!("cannot decode i64 from {value:?}"))),
@@ -523,7 +533,7 @@ impl FromValue for f64 {
         match value {
             &RusqliteValue::Real(f) => Ok(f),
             &RusqliteValue::Integer(i) => Ok(i as f64),
-            &RusqliteValue::Text(ref s) => s
+            RusqliteValue::Text(s) => s
                 .parse()
                 .map_err(|e| Error::Message(format!("cannot decode f64 from {s:?}: {e}"))),
             _ => Err(Error::Message(format!("cannot decode f64 from {value:?}"))),
@@ -536,8 +546,8 @@ impl FromValue for bool {
         match value {
             &RusqliteValue::Integer(0) => Ok(false),
             &RusqliteValue::Integer(1) => Ok(true),
-            &RusqliteValue::Text(ref s) if s == "0" || s.eq_ignore_ascii_case("false") => Ok(false),
-            &RusqliteValue::Text(ref s) if s == "1" || s.eq_ignore_ascii_case("true") => Ok(true),
+            RusqliteValue::Text(s) if s == "0" || s.eq_ignore_ascii_case("false") => Ok(false),
+            RusqliteValue::Text(s) if s == "1" || s.eq_ignore_ascii_case("true") => Ok(true),
             _ => Err(Error::Message(format!("cannot decode bool from {value:?}"))),
         }
     }
@@ -546,7 +556,7 @@ impl FromValue for bool {
 impl FromValue for String {
     fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
         match value {
-            &RusqliteValue::Text(ref s) => Ok(s.clone()),
+            RusqliteValue::Text(s) => Ok(s.clone()),
             &RusqliteValue::Integer(i) => Ok(i.to_string()),
             &RusqliteValue::Real(f) => Ok(f.to_string()),
             &RusqliteValue::Blob(_) => Err(Error::Message("cannot decode String from blob".into())),
@@ -558,7 +568,7 @@ impl FromValue for String {
 impl FromValue for Vec<u8> {
     fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
         match value {
-            &RusqliteValue::Blob(ref b) => Ok(b.clone()),
+            RusqliteValue::Blob(b) => Ok(b.clone()),
             _ => Err(Error::Message(format!(
                 "cannot decode Vec<u8> from {value:?}"
             ))),

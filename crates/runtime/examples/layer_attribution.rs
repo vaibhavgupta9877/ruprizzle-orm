@@ -112,7 +112,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .read_only(true),
     )
     .await?;
-    let any = ruprizzle::connect(&url).await?;
+    let any = ruprizzle::Pool::Any(
+        sqlx::any::AnyPoolOptions::new()
+            .max_connections(1)
+            .connect(&url)
+            .await?,
+    );
 
     println!("\n=== select_by_pk (1 row) ===");
     let a = bench("1 sqlite-native  query_as", 2000, || async {
@@ -176,7 +181,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .fetch_all(&any)
             .await
             .unwrap();
-        rows.iter().map(|r| decode_user(r).unwrap()).count()
+        rows.iter().map(|r| decode_user(r).unwrap()).fold(0, |acc, _| acc + 1)
     })
     .await;
     let d = bench("4 ruprizzle      SelectQuery", 200, || async {
@@ -217,7 +222,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .fetch_all(&any)
             .await
             .unwrap();
-        rows.iter().map(|r| decode_user(r).unwrap()).count()
+        rows.iter().map(|r| decode_user(r).unwrap()).fold(0, |acc, _| acc + 1)
     })
     .await;
     let d = bench("4 ruprizzle      SelectQuery", 200, || async {
@@ -239,7 +244,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     let mut n = 0usize;
     for _ in 0..200 {
-        n += rows.iter().map(|r| decode_user(r).unwrap()).count();
+        n += rows.iter().map(|r| decode_user(r).unwrap()).fold(0, |acc, _| acc + 1);
     }
     let by_name = start.elapsed().as_secs_f64() * 1e6 / 200.0;
     let start = Instant::now();
@@ -252,7 +257,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 email: r.get::<String, _>(1),
                 age: r.get::<i64, _>(2),
             })
-            .count();
+            .fold(0, |acc, _| acc + 1);
     }
     let by_ordinal = start.elapsed().as_secs_f64() * 1e6 / 200.0;
     println!("decode 1000 rows by column NAME          {by_name:>10.1} us  ({n})");

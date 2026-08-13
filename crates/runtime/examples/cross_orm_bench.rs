@@ -508,7 +508,7 @@ struct BenchResult {
 }
 
 fn sample_stats() -> ProcessStats {
-    ProcessStats::get().unwrap_or_else(|_| ProcessStats {
+    ProcessStats::get().unwrap_or(ProcessStats {
         cpu_time_user: std::time::Duration::ZERO,
         cpu_time_kernel: std::time::Duration::ZERO,
         memory_usage_bytes: 0,

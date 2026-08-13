@@ -150,7 +150,7 @@ async fn transaction_raw_round_trip() {
     let rows_affected = tx
         .execute(
             "INSERT INTO tasks (name) VALUES (?)",
-            &vec![ruprizzle::Value::Str("in-tx".into())],
+            &[ruprizzle::Value::Str("in-tx".into())],
         )
         .await
         .unwrap();

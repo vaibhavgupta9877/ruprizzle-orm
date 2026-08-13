@@ -19,6 +19,7 @@ ruprizzle-dialect = { workspace = true }
 ruprizzle-macros  = { workspace = true }
 chrono            = { workspace = true }
 futures-core      = "0.3"
+futures-util      = { version = "0.3", default-features = false, features = ["std", "alloc"] }
 rust_decimal      = { workspace = true }
 serde             = { workspace = true }
 serde_json        = { workspace = true }
