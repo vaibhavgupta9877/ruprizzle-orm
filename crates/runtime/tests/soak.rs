@@ -1,8 +1,9 @@
 //! Soak/smoke test: sustained mixed load with connection churn.
 //!
-//! The default run is short (30 s) so it can act as a smoke test in CI.
-//! Set `RUPRIZZLE_SOAK_DURATION_SECONDS` to run for longer; the W4 exit-gate
-//! target is 48 hours.
+//! The default run is short (30 s) with a small worker pool so it can act as a
+//! smoke test in CI without overwhelming the default four-connection SQLite pool.
+//! Set `RUPRIZZLE_SOAK_DURATION_SECONDS` and `RUPRIZZLE_SOAK_WORKERS` for longer
+//! or more aggressive runs; the W4 exit-gate target is 48 hours.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -24,7 +25,7 @@ fn workers() -> usize {
     std::env::var("RUPRIZZLE_SOAK_WORKERS")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(8)
+        .unwrap_or(2)
 }
 
 fn report_pool_health(db: &TestDb, elapsed: Duration, ops: u64, errors: u64) {

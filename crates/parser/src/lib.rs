@@ -7,6 +7,7 @@
 //! fallback note in `ImplPlan02SchemaDslParser.md`).
 //!
 //! ```
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let schema = ruprizzle_parser::parse(
 //!     "schema.ruprizzle",
 //!     r#"
@@ -20,10 +21,12 @@
 //!       email String @unique
 //!     }
 //!     "#,
-//! )
-//! .expect("valid schema");
+//! )?;
 //!
-//! assert_eq!(schema.model("User").unwrap().table, "users");
+//! let user = schema.model("User").ok_or("User not found")?;
+//! assert_eq!(user.table, "users");
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! Errors accumulate: one call reports every problem it can find, each with a
@@ -98,8 +101,10 @@ pub fn parse_ast(file_name: &str, source: &str) -> Result<Ast, Box<SchemaErrors>
     grammar::parse_ast(source).map_err(|err| {
         let mut diags = Diagnostics::new();
         diags.push(errors::from_pest(&err, source));
-        diags
-            .into_result(file_name, source)
-            .expect_err("a syntax error is fatal")
+        // We just pushed a fatal diagnostic, so `into_result` must return `Err`.
+        match diags.into_result(file_name, source) {
+            Err(errors) => errors,
+            Ok(()) => unreachable!("a syntax error is always fatal"),
+        }
     })
 }

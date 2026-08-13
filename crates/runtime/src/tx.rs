@@ -159,7 +159,7 @@ impl Tx {
     ///
     /// The closure receives a [`Savepoint`] handle that can be used to create
     /// further nested savepoints or to execute queries (it implements
-    /// [`Executor`]).
+    /// [`crate::Executor`]).
     ///
     /// # Errors
     ///
