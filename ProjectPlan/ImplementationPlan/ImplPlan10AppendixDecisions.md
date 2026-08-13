@@ -8,7 +8,7 @@ Reference document. Not a phase. Update the ADR log as decisions change.
 
 ---
 
-## Architecture decision records
+## Architecture decision records (moved)
 
 ### ADR-001 · Build on sqlx rather than a custom driver
 **Decision:** sqlx provides connection pooling, the wire protocols, TLS, and type
