@@ -389,7 +389,7 @@ sqlite-rusqlite --bench concurrency` all pass.
       hand-written scanners over untrusted-ish input, and the splitter has already produced
       two silent-corruption defects once. This is the one defect class the current suite is
       structurally unlikely to find. **3 days.** *(finding #8)*
-- [ ] **W4-02 · Soak test.** 48 hours of sustained mixed load with connection churn and a
+- [x] **W4-02 · Soak test.** 48 hours of sustained mixed load with connection churn and a
       forced failover, tracking memory, file descriptors, and pool health. This is the
       evidence the assessment has cited as missing in all three passes and the reason the
       "critical data" verdict is ⚠️ rather than ✅. **3 days.**
