@@ -839,10 +839,12 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
 }
 
 fn validate_row_shape(rows: &[Vec<(&'static str, Value)>]) -> Result<(), Error> {
+    let Some(first) = rows.first() else {
+        return Ok(());
+    };
     if rows.len() < 2 {
         return Ok(());
     }
-    let first = &rows[0];
     for (idx, row) in rows.iter().enumerate().skip(1) {
         if row.len() != first.len() {
             return Err(Error::Message(format!(

@@ -357,9 +357,13 @@ where
                         // Clone only for additional parents; the first gets the
                         // original child.
                         for &idx in iter {
-                            buckets[idx].push(child.clone());
+                            if let Some(bucket) = buckets.get_mut(idx) {
+                                bucket.push(child.clone());
+                            }
                         }
-                        buckets[first].push(child);
+                        if let Some(bucket) = buckets.get_mut(first) {
+                            bucket.push(child);
+                        }
                     }
                 }
             }
