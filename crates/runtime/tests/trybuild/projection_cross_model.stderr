@@ -1,7 +1,7 @@
 error[E0277]: the trait bound `ruprizzle::Column<Post, i64>: Projection<User>` is not satisfied
-  --> tests/trybuild/projection_cross_model.rs:48:50
+  --> tests/trybuild/projection_cross_model.rs:62:50
    |
-48 |     let _ = SelectQuery::<User>::new(db).columns(POST_ID).fetch_one();
+62 |     let _ = SelectQuery::<User>::new(db).columns(POST_ID).fetch_one();
    |                                          ------- ^^^^^^^ the trait `Projection<User>` is not implemented for `ruprizzle::Column<Post, i64>`
    |                                          |
    |                                          required by a bound introduced by this call

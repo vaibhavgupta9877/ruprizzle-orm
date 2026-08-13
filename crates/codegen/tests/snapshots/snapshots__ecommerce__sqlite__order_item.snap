@@ -69,15 +69,36 @@ for OrderItem {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for OrderItem {
     fn from_rusqlite_row(
-        row: &mut ::ruprizzle::rusqlite::Row,
+        row: &::ruprizzle::rusqlite::RusqliteRow,
     ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            order_id: row.take::<Uuid>(0)?,
+            order_id: ::ruprizzle::rusqlite::parse::<Uuid>(row, 0)?,
             order: ::ruprizzle::Related::default(),
-            product_id: row.take::<Uuid>(1)?,
+            product_id: ::ruprizzle::rusqlite::parse::<Uuid>(row, 1)?,
             product: ::ruprizzle::Related::default(),
-            quantity: row.take::<i32>(2)?,
-            unit_price: row.take::<Decimal>(3)?,
+            quantity: ::ruprizzle::rusqlite::get_i64(row, 2)?
+                .try_into()
+                .map_err(|e: std::num::TryFromIntError| {
+                    ::ruprizzle::Error::Message(
+                        format!("cannot decode i32 from column {}: {}", 2, e),
+                    )
+                })?,
+            unit_price: ::ruprizzle::rusqlite::parse::<Decimal>(row, 3)?,
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for OrderItem {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            order_id: ::ruprizzle::rusqlite::Row::get::<Uuid>(row, 0)?,
+            order: ::ruprizzle::Related::default(),
+            product_id: ::ruprizzle::rusqlite::Row::get::<Uuid>(row, 1)?,
+            product: ::ruprizzle::Related::default(),
+            quantity: ::ruprizzle::rusqlite::Row::get::<i32>(row, 2)?,
+            unit_price: ::ruprizzle::rusqlite::Row::get::<Decimal>(row, 3)?,
         })
     }
 }

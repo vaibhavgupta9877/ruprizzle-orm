@@ -68,15 +68,30 @@ for Organisation {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for Organisation {
     fn from_rusqlite_row(
-        row: &mut ::ruprizzle::rusqlite::Row,
+        row: &::ruprizzle::rusqlite::RusqliteRow,
     ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<Uuid>(0)?,
-            slug: row.take::<String>(1)?,
-            plan: row.take::<super::enums::Plan>(2)?,
-            settings: row.take::<Option<JsonValue>>(3)?,
+            id: ::ruprizzle::rusqlite::parse::<Uuid>(row, 0)?,
+            slug: ::ruprizzle::rusqlite::get_text(row, 1)?,
+            plan: ::ruprizzle::rusqlite::parse::<super::enums::Plan>(row, 2)?,
+            settings: ::ruprizzle::rusqlite::get_json_opt(row, 3)?,
             members: ::ruprizzle::Related::default(),
-            created_at: row.take::<DateTime<Utc>>(4)?,
+            created_at: ::ruprizzle::rusqlite::parse::<DateTime<Utc>>(row, 4)?,
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for Organisation {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::Row::get::<Uuid>(row, 0)?,
+            slug: ::ruprizzle::rusqlite::Row::get::<String>(row, 1)?,
+            plan: ::ruprizzle::rusqlite::Row::get::<super::enums::Plan>(row, 2)?,
+            settings: ::ruprizzle::rusqlite::Row::get::<Option<JsonValue>>(row, 3)?,
+            members: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::rusqlite::Row::get::<DateTime<Utc>>(row, 4)?,
         })
     }
 }

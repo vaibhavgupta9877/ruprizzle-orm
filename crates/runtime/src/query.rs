@@ -208,7 +208,11 @@ where
             crate::executor::decode_rows(batch)?
         };
 
-        Ok(if v.is_empty() { None } else { Some(v.remove(0)) })
+        Ok(if v.is_empty() {
+            None
+        } else {
+            Some(v.remove(0))
+        })
     }
 
     /// Executes the query and returns exactly one row.
@@ -243,13 +247,19 @@ where
             self.exec.on_query();
             pool.fetch_all_sync_decoded::<(i64,)>(compiled.sql, compiled.binds)?
         } else {
-            let batch = self.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            let batch = self
+                .exec
+                .fetch_all_raw(compiled.sql, compiled.binds)
+                .await?;
             crate::executor::decode_rows(batch)?
         };
 
         #[cfg(not(feature = "sqlite-rusqlite"))]
         let mut counts: Vec<(i64,)> = {
-            let batch = self.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            let batch = self
+                .exec
+                .fetch_all_raw(compiled.sql, compiled.binds)
+                .await?;
             crate::executor::decode_rows(batch)?
         };
 
@@ -314,7 +324,7 @@ where
                     crate::executor::RawRow::Postgres(r) => Out::from_row(&r).map_err(Error::Sqlx),
                     crate::executor::RawRow::Sqlite(r) => Out::from_row(&r).map_err(Error::Sqlx),
                     #[cfg(feature = "sqlite-rusqlite")]
-                    crate::executor::RawRow::Rusqlite(mut r) => Out::from_rusqlite_row(&mut r),
+                    crate::executor::RawRow::Rusqlite(r) => Out::from_owned_row(&r),
                     #[cfg(feature = "postgres-tokio-postgres")]
                     crate::executor::RawRow::PostgresNative(r) => Out::from_tokio_postgres_row(&r),
                 })

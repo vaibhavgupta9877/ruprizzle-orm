@@ -61,16 +61,16 @@ note: required by a bound in `Model`
    |                  ^^^^^^^^^ required by this bound in `Model`
 
 error[E0599]: no method named `contains` found for struct `ruprizzle::Column<User, uuid::Uuid>` in the current scope
-  --> tests/trybuild/contains_on_uuid.rs:29:21
+  --> tests/trybuild/contains_on_uuid.rs:36:21
    |
-29 |     let _ = USER_ID.contains("x");
+36 |     let _ = USER_ID.contains("x");
    |                     ^^^^^^^^ method not found in `ruprizzle::Column<User, uuid::Uuid>`
    |
    = note: the method was found for
            - `ruprizzle::Column<M, std::string::String>`
 help: some of the expressions' fields have a method of the same name
    |
-29 |     let _ = USER_ID.column.contains("x");
+36 |     let _ = USER_ID.column.contains("x");
    |                     +++++++
-29 |     let _ = USER_ID.table.contains("x");
+36 |     let _ = USER_ID.table.contains("x");
    |                     ++++++

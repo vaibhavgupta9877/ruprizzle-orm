@@ -13,11 +13,18 @@ impl Model for User {
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: ruprizzle::rusqlite::FromValue::from_value(row.0.remove(0))?,
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for User {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
         })
     }
 }
@@ -33,11 +40,18 @@ impl Model for Post {
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Post {
-    fn from_rusqlite_row(
-        row: &mut ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: ruprizzle::rusqlite::FromValue::from_value(row.0.remove(0))?,
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Post {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
         })
     }
 }

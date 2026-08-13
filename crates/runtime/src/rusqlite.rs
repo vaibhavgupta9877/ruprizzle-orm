@@ -9,14 +9,13 @@
 
 use std::borrow::Cow;
 use std::fmt;
-use std::str::FromStr as _;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use ::rusqlite::{self, OpenFlags, types::Value as RusqliteValue};
+use ::rusqlite::{self, OpenFlags, types::ValueRef};
 use ruprizzle_core::ir::Provider;
-use smallvec::SmallVec;
 use ruprizzle_dialect::dialect_for;
 
 use crate::BoxFuture;
@@ -25,14 +24,15 @@ use crate::executor::{BoxRowStream, Executor, RowBatch};
 use crate::pool::PoolConfig;
 use crate::value::Value;
 
+pub use ::rusqlite::{Row as RusqliteRow, types, types::Value as RusqliteValue};
+
 /// A single row from the `rusqlite` backend.
 ///
 /// Columns are stored in result-set order as `rusqlite::types::Value` so that
-/// decoding can be implemented without a `rusqlite::Row` borrow. The inline
-/// buffer avoids a heap allocation for the common case of eight or fewer
-/// columns.
+/// decoding can be implemented without holding a borrow of the live
+/// `rusqlite::Row`.
 #[derive(Debug, Clone)]
-pub struct Row(pub SmallVec<[RusqliteValue; 8]>);
+pub struct Row(pub Vec<RusqliteValue>);
 
 /// A pool of synchronous `rusqlite` connections.
 ///
@@ -173,8 +173,8 @@ impl RusqlitePool {
     /// Synchronously fetch and decode rows directly into `Vec<T>`.
     ///
     /// This is the fast path used by `SelectQuery` when running against the
-    /// native `rusqlite` backend: it avoids the `RowBatch`/`Vec<Row>`
-    /// materialisation and decodes each row in the same pass.
+    /// native `rusqlite` backend: it decodes each live row in the same pass
+    /// without materialising an owned `Vec<Row>`.
     pub(crate) fn fetch_all_sync_decoded<T: FromRusqliteRow>(
         &self,
         sql: Cow<'static, str>,
@@ -192,7 +192,6 @@ impl RusqlitePool {
             .prepare_cached(sql.as_ref())
             .map_err(|e| Error::Message(e.to_string()))?;
 
-        let column_count = stmt.column_count();
         let mut out = Vec::new();
 
         {
@@ -200,15 +199,7 @@ impl RusqlitePool {
                 .query(rusqlite::params_from_iter(&binds))
                 .map_err(|e| Error::Message(e.to_string()))?;
             while let Some(row) = rows.next().map_err(|e| Error::Message(e.to_string()))? {
-                let mut values = SmallVec::with_capacity(column_count);
-                for i in 0..column_count {
-                    let v = row
-                        .get::<_, RusqliteValue>(i)
-                        .map_err(|e| Error::Message(e.to_string()))?;
-                    values.push(v);
-                }
-                let mut row = Row(values);
-                out.push(T::from_rusqlite_row(&mut row)?);
+                out.push(T::from_rusqlite_row(row)?);
             }
         }
 
@@ -274,7 +265,7 @@ impl RusqliteTransaction {
 
         let rows = stmt
             .query_map(rusqlite::params_from_iter(binds), |row| {
-                let mut values = SmallVec::with_capacity(column_count);
+                let mut values = Vec::with_capacity(column_count);
                 for i in 0..column_count {
                     values.push(row.get::<_, RusqliteValue>(i)?);
                 }
@@ -405,7 +396,7 @@ fn fetch_all(
 
     let rows = stmt
         .query_map(rusqlite::params_from_iter(&binds), |row| {
-            let mut values = SmallVec::with_capacity(column_count);
+            let mut values = Vec::with_capacity(column_count);
             for i in 0..column_count {
                 values.push(row.get::<_, RusqliteValue>(i)?);
             }
@@ -461,7 +452,7 @@ impl Row {
         self.0.is_empty()
     }
 
-    /// Decode the column at `idx` into `T`, cloning the underlying value.
+    /// Decode the column at `idx` into `T`.
     ///
     /// # Errors
     ///
@@ -471,36 +462,29 @@ impl Row {
         let value = self
             .0
             .get(idx)
-            .ok_or_else(|| Error::Message(format!("column index {idx} out of bounds")))?
-            .clone();
-        T::from_value(value)
-    }
-
-    /// Take the column at `idx` and decode it into `T` without cloning.
-    ///
-    /// The slot is replaced with `Null`, so this consumes the value.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::Message`] if the index is out of bounds or the value
-    /// cannot be decoded into `T`.
-    pub fn take<T: FromValue>(&mut self, idx: usize) -> Result<T, Error> {
-        if idx >= self.0.len() {
-            return Err(Error::Message(format!("column index {idx} out of bounds")));
-        }
-        let value = std::mem::replace(&mut self.0[idx], RusqliteValue::Null);
+            .ok_or_else(|| Error::Message(format!("column index {idx} out of bounds")))?;
         T::from_value(value)
     }
 }
 
-/// A type that can be decoded from a `crate::rusqlite::Row`.
+/// A type that can be decoded from a live `rusqlite::Row`.
 pub trait FromRusqliteRow: Sized + Send + Sync + 'static {
     /// Decode `self` from an ordered row of `rusqlite` values.
     ///
     /// # Errors
     ///
     /// Returns [`Error::Message`] if the row cannot be decoded.
-    fn from_rusqlite_row(row: &mut Row) -> Result<Self, Error>;
+    fn from_rusqlite_row(row: &RusqliteRow) -> Result<Self, Error>;
+}
+
+/// A type that can be decoded from a stored [`Row`].
+pub trait FromOwnedRow: Sized + Send + Sync + 'static {
+    /// Decode `self` from a stored [`Row`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Message`] if the row cannot be decoded.
+    fn from_owned_row(row: &Row) -> Result<Self, Error>;
 }
 
 /// A type that can be decoded from a single `rusqlite::types::Value`.
@@ -510,15 +494,15 @@ pub trait FromValue: Sized + Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`Error::Message`] if the value cannot be decoded into `T`.
-    fn from_value(value: RusqliteValue) -> Result<Self, Error>;
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error>;
 }
 
 impl FromValue for i64 {
-    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
         match value {
-            RusqliteValue::Integer(i) => Ok(i),
-            RusqliteValue::Real(f) => Ok(f as i64),
-            RusqliteValue::Text(s) => s
+            &RusqliteValue::Integer(i) => Ok(i),
+            &RusqliteValue::Real(f) => Ok(f as i64),
+            &RusqliteValue::Text(ref s) => s
                 .parse()
                 .map_err(|e| Error::Message(format!("cannot decode i64 from {s:?}: {e}"))),
             _ => Err(Error::Message(format!("cannot decode i64 from {value:?}"))),
@@ -527,7 +511,7 @@ impl FromValue for i64 {
 }
 
 impl FromValue for i32 {
-    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
         i64::from_value(value)?
             .try_into()
             .map_err(|e| Error::Message(format!("cannot decode i32 from integer: {e}")))
@@ -535,11 +519,11 @@ impl FromValue for i32 {
 }
 
 impl FromValue for f64 {
-    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
         match value {
-            RusqliteValue::Real(f) => Ok(f),
-            RusqliteValue::Integer(i) => Ok(i as f64),
-            RusqliteValue::Text(s) => s
+            &RusqliteValue::Real(f) => Ok(f),
+            &RusqliteValue::Integer(i) => Ok(i as f64),
+            &RusqliteValue::Text(ref s) => s
                 .parse()
                 .map_err(|e| Error::Message(format!("cannot decode f64 from {s:?}: {e}"))),
             _ => Err(Error::Message(format!("cannot decode f64 from {value:?}"))),
@@ -548,81 +532,33 @@ impl FromValue for f64 {
 }
 
 impl FromValue for bool {
-    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
         match value {
-            RusqliteValue::Integer(0) => Ok(false),
-            RusqliteValue::Integer(1) => Ok(true),
-            RusqliteValue::Text(s) if s == "0" || s.eq_ignore_ascii_case("false") => Ok(false),
-            RusqliteValue::Text(s) if s == "1" || s.eq_ignore_ascii_case("true") => Ok(true),
+            &RusqliteValue::Integer(0) => Ok(false),
+            &RusqliteValue::Integer(1) => Ok(true),
+            &RusqliteValue::Text(ref s) if s == "0" || s.eq_ignore_ascii_case("false") => Ok(false),
+            &RusqliteValue::Text(ref s) if s == "1" || s.eq_ignore_ascii_case("true") => Ok(true),
             _ => Err(Error::Message(format!("cannot decode bool from {value:?}"))),
         }
     }
 }
 
 impl FromValue for String {
-    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
         match value {
-            RusqliteValue::Text(s) => Ok(s),
-            RusqliteValue::Integer(i) => Ok(i.to_string()),
-            RusqliteValue::Real(f) => Ok(f.to_string()),
-            RusqliteValue::Blob(_) => Err(Error::Message("cannot decode String from blob".into())),
-            RusqliteValue::Null => Err(Error::Message("cannot decode String from NULL".into())),
+            &RusqliteValue::Text(ref s) => Ok(s.clone()),
+            &RusqliteValue::Integer(i) => Ok(i.to_string()),
+            &RusqliteValue::Real(f) => Ok(f.to_string()),
+            &RusqliteValue::Blob(_) => Err(Error::Message("cannot decode String from blob".into())),
+            &RusqliteValue::Null => Err(Error::Message("cannot decode String from NULL".into())),
         }
     }
 }
 
-impl FromValue for crate::types::Decimal {
-    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
-        let s = String::from_value(value)?;
-        s.parse()
-            .map_err(|e| Error::Message(format!("cannot decode Decimal from {s:?}: {e}")))
-    }
-}
-
-impl FromValue for crate::types::Uuid {
-    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
-        let s = String::from_value(value)?;
-        s.parse()
-            .map_err(|e| Error::Message(format!("cannot decode Uuid from {s:?}: {e}")))
-    }
-}
-
-impl FromValue for crate::types::chrono::DateTime<crate::types::chrono::Utc> {
-    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
-        let s = String::from_value(value)?;
-        s.parse()
-            .map_err(|e| Error::Message(format!("cannot decode DateTime from {s:?}: {e}")))
-    }
-}
-
-impl FromValue for crate::types::chrono::NaiveDate {
-    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
-        let s = String::from_value(value)?;
-        s.parse()
-            .map_err(|e| Error::Message(format!("cannot decode NaiveDate from {s:?}: {e}")))
-    }
-}
-
-impl FromValue for crate::types::chrono::NaiveTime {
-    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
-        let s = String::from_value(value)?;
-        s.parse()
-            .map_err(|e| Error::Message(format!("cannot decode NaiveTime from {s:?}: {e}")))
-    }
-}
-
-impl FromValue for serde_json::Value {
-    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
-        let s = String::from_value(value)?;
-        serde_json::from_str(&s)
-            .map_err(|e| Error::Message(format!("cannot decode JSON from {s:?}: {e}")))
-    }
-}
-
 impl FromValue for Vec<u8> {
-    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
         match value {
-            RusqliteValue::Blob(b) => Ok(b),
+            &RusqliteValue::Blob(ref b) => Ok(b.clone()),
             _ => Err(Error::Message(format!(
                 "cannot decode Vec<u8> from {value:?}"
             ))),
@@ -630,22 +566,245 @@ impl FromValue for Vec<u8> {
     }
 }
 
+impl FromValue for crate::types::Decimal {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        let s = String::from_value(value)?;
+        s.parse()
+            .map_err(|e| Error::Message(format!("cannot decode Decimal from {s:?}: {e}")))
+    }
+}
+
+impl FromValue for crate::types::Uuid {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        let s = String::from_value(value)?;
+        s.parse()
+            .map_err(|e| Error::Message(format!("cannot decode Uuid from {s:?}: {e}")))
+    }
+}
+
+impl FromValue for crate::types::chrono::DateTime<crate::types::chrono::Utc> {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        let s = String::from_value(value)?;
+        s.parse()
+            .map_err(|e| Error::Message(format!("cannot decode DateTime from {s:?}: {e}")))
+    }
+}
+
+impl FromValue for crate::types::chrono::NaiveDate {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        let s = String::from_value(value)?;
+        s.parse()
+            .map_err(|e| Error::Message(format!("cannot decode NaiveDate from {s:?}: {e}")))
+    }
+}
+
+impl FromValue for crate::types::chrono::NaiveTime {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        let s = String::from_value(value)?;
+        s.parse()
+            .map_err(|e| Error::Message(format!("cannot decode NaiveTime from {s:?}: {e}")))
+    }
+}
+
+impl FromValue for serde_json::Value {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        let s = String::from_value(value)?;
+        serde_json::from_str(&s)
+            .map_err(|e| Error::Message(format!("cannot decode JSON from {s:?}: {e}")))
+    }
+}
+
 impl<T: FromValue> FromValue for Option<T> {
-    fn from_value(value: RusqliteValue) -> Result<Self, Error> {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
         match value {
-            RusqliteValue::Null => Ok(None),
+            &RusqliteValue::Null => Ok(None),
             _ => T::from_value(value).map(Some),
         }
+    }
+}
+
+/// Decode a column into `T` by copying it into an owned `rusqlite::types::Value`.
+pub fn get<T: FromValue>(row: &RusqliteRow, idx: usize) -> Result<T, Error> {
+    let value = row
+        .get::<_, RusqliteValue>(idx)
+        .map_err(|e| Error::Message(e.to_string()))?;
+    T::from_value(&value)
+}
+
+/// Decode an `INTEGER` column.
+pub fn get_i64(row: &RusqliteRow, idx: usize) -> Result<i64, Error> {
+    row.get::<_, i64>(idx)
+        .map_err(|e| Error::Message(e.to_string()))
+}
+
+/// Decode an optional `INTEGER` column.
+pub fn get_i64_opt(row: &RusqliteRow, idx: usize) -> Result<Option<i64>, Error> {
+    row.get::<_, Option<i64>>(idx)
+        .map_err(|e| Error::Message(e.to_string()))
+}
+
+/// Decode a `REAL` or `INTEGER` column as `f64`.
+pub fn get_f64(row: &RusqliteRow, idx: usize) -> Result<f64, Error> {
+    row.get::<_, f64>(idx)
+        .map_err(|e| Error::Message(e.to_string()))
+}
+
+/// Decode an optional `REAL` or `INTEGER` column as `f64`.
+pub fn get_f64_opt(row: &RusqliteRow, idx: usize) -> Result<Option<f64>, Error> {
+    row.get::<_, Option<f64>>(idx)
+        .map_err(|e| Error::Message(e.to_string()))
+}
+
+/// Decode a boolean column.
+pub fn get_bool(row: &RusqliteRow, idx: usize) -> Result<bool, Error> {
+    match row
+        .get_ref(idx)
+        .map_err(|e| Error::Message(e.to_string()))?
+    {
+        ValueRef::Null => Err(Error::Message("cannot decode bool from NULL".into())),
+        ValueRef::Integer(0) => Ok(false),
+        ValueRef::Integer(1) => Ok(true),
+        ValueRef::Text(s) => {
+            let s = std::str::from_utf8(s).map_err(|e| Error::Message(e.to_string()))?;
+            if s == "0" || s.eq_ignore_ascii_case("false") {
+                Ok(false)
+            } else if s == "1" || s.eq_ignore_ascii_case("true") {
+                Ok(true)
+            } else {
+                Err(Error::Message(format!("cannot decode bool from {s:?}")))
+            }
+        }
+        v => Err(Error::Message(format!("cannot decode bool from {v:?}"))),
+    }
+}
+
+/// Decode an optional boolean column.
+pub fn get_bool_opt(row: &RusqliteRow, idx: usize) -> Result<Option<bool>, Error> {
+    match row
+        .get_ref(idx)
+        .map_err(|e| Error::Message(e.to_string()))?
+    {
+        ValueRef::Null => Ok(None),
+        ValueRef::Integer(0) => Ok(Some(false)),
+        ValueRef::Integer(1) => Ok(Some(true)),
+        ValueRef::Text(s) => {
+            let s = std::str::from_utf8(s).map_err(|e| Error::Message(e.to_string()))?;
+            if s == "0" || s.eq_ignore_ascii_case("false") {
+                Ok(Some(false))
+            } else if s == "1" || s.eq_ignore_ascii_case("true") {
+                Ok(Some(true))
+            } else {
+                Err(Error::Message(format!("cannot decode bool from {s:?}")))
+            }
+        }
+        v => Err(Error::Message(format!("cannot decode bool from {v:?}"))),
+    }
+}
+
+/// Decode a `TEXT` column into a `String`.
+pub fn get_text(row: &RusqliteRow, idx: usize) -> Result<String, Error> {
+    row.get::<_, String>(idx)
+        .map_err(|e| Error::Message(e.to_string()))
+}
+
+/// Decode an optional `TEXT` column.
+pub fn get_text_opt(row: &RusqliteRow, idx: usize) -> Result<Option<String>, Error> {
+    row.get::<_, Option<String>>(idx)
+        .map_err(|e| Error::Message(e.to_string()))
+}
+
+/// Decode a `BLOB` column into `Vec<u8>`.
+pub fn get_bytes(row: &RusqliteRow, idx: usize) -> Result<Vec<u8>, Error> {
+    row.get::<_, Vec<u8>>(idx)
+        .map_err(|e| Error::Message(e.to_string()))
+}
+
+/// Decode an optional `BLOB` column.
+pub fn get_bytes_opt(row: &RusqliteRow, idx: usize) -> Result<Option<Vec<u8>>, Error> {
+    row.get::<_, Option<Vec<u8>>>(idx)
+        .map_err(|e| Error::Message(e.to_string()))
+}
+
+/// Parse a `TEXT` column into `T` using `FromStr`.
+pub fn parse<T>(row: &RusqliteRow, idx: usize) -> Result<T, Error>
+where
+    T: FromStr,
+    T::Err: fmt::Display,
+{
+    let s = row
+        .get_ref(idx)
+        .map_err(|e| Error::Message(e.to_string()))?
+        .as_str()
+        .map_err(|e| Error::Message(e.to_string()))?;
+    s.parse::<T>()
+        .map_err(|e| Error::Message(format!("cannot parse column {idx}: {e}")))
+}
+
+/// Parse an optional `TEXT` column into `Option<T>`.
+pub fn parse_opt<T>(row: &RusqliteRow, idx: usize) -> Result<Option<T>, Error>
+where
+    T: FromStr,
+    T::Err: fmt::Display,
+{
+    row.get_ref(idx)
+        .map_err(|e| Error::Message(e.to_string()))?
+        .as_str_or_null()
+        .map_err(|e| Error::Message(e.to_string()))?
+        .map(|s| {
+            s.parse::<T>()
+                .map_err(|e| Error::Message(format!("cannot parse column {idx}: {e}")))
+        })
+        .transpose()
+}
+
+/// Decode a JSON column.
+pub fn get_json(row: &RusqliteRow, idx: usize) -> Result<serde_json::Value, Error> {
+    let s = row
+        .get_ref(idx)
+        .map_err(|e| Error::Message(e.to_string()))?
+        .as_str()
+        .map_err(|e| Error::Message(e.to_string()))?;
+    serde_json::from_str(s)
+        .map_err(|e| Error::Message(format!("cannot decode JSON from column {idx}: {e}")))
+}
+
+/// Decode an optional JSON column.
+pub fn get_json_opt(row: &RusqliteRow, idx: usize) -> Result<Option<serde_json::Value>, Error> {
+    match row
+        .get_ref(idx)
+        .map_err(|e| Error::Message(e.to_string()))?
+        .as_str_or_null()
+        .map_err(|e| Error::Message(e.to_string()))?
+    {
+        None => Ok(None),
+        Some(s) => serde_json::from_str(s)
+            .map(Some)
+            .map_err(|e| Error::Message(format!("cannot decode JSON from column {idx}: {e}"))),
     }
 }
 
 macro_rules! tuple_from_value {
     ($($T:ident $idx:tt),+) => {
         impl<$($T: FromValue),+> FromRusqliteRow for ($($T,)+) {
-            fn from_rusqlite_row(row: &mut Row) -> Result<Self, Error> {
+            fn from_rusqlite_row(row: &RusqliteRow) -> Result<Self, Error> {
                 Ok((
                     $(
-                        row.take::<$T>($idx)?
+                        {
+                            let value = row
+                                .get::<_, RusqliteValue>($idx)
+                                .map_err(|e| Error::Message(e.to_string()))?;
+                            $T::from_value(&value)?
+                        }
+                    ,)+
+                ))
+            }
+        }
+
+        impl<$($T: FromValue),+> FromOwnedRow for ($($T,)+) {
+            fn from_owned_row(row: &Row) -> Result<Self, Error> {
+                Ok((
+                    $(
+                        $T::from_value(&row.0[$idx])?
                     ,)+
                 ))
             }
@@ -661,6 +820,10 @@ tuple_from_value! { A 0, B 1, C 2, D 3, E 4 }
 tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5 }
 tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5, G 6 }
 tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7 }
+tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7, I 8 }
+tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7, I 8, J 9 }
+tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7, I 8, J 9, K 10 }
+tuple_from_value! { A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7, I 8, J 9, K 10, L 11 }
 
 /// Apply performance and correctness PRAGMAs to a fresh `rusqlite` connection.
 ///

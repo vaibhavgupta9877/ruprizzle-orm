@@ -324,7 +324,9 @@ where
                 && self.filter.node == crate::filter::FilterNode::And(Vec::new())
                 && self.order.is_empty()
                 && self.limit.is_none();
-            self.nested.load(exec, &mut children, child_full_table).await?;
+            self.nested
+                .load(exec, &mut children, child_full_table)
+                .await?;
 
             // Group children into pre-sized buckets indexed by parent position.
             // This avoids a `HashMap` entry per child and a `remove` per parent;
@@ -511,7 +513,9 @@ where
                 && self.filter.node == crate::filter::FilterNode::And(Vec::new())
                 && self.order.is_empty()
                 && self.limit.is_none();
-            self.nested.load(exec, &mut children, child_full_table).await?;
+            self.nested
+                .load(exec, &mut children, child_full_table)
+                .await?;
 
             // Only the first child per key can be attached, so keep just that
             // one rather than a `Vec` that is always length 1 in practice.

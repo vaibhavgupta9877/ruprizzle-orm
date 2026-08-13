@@ -36,6 +36,7 @@ pub trait RowDecode:
     + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
     + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
     + crate::rusqlite::FromRusqliteRow
+    + crate::rusqlite::FromOwnedRow
 {
 }
 
@@ -66,6 +67,7 @@ pub trait RowDecode:
     + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
     + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
     + crate::rusqlite::FromRusqliteRow
+    + crate::rusqlite::FromOwnedRow
     + crate::tokio_postgres::FromTokioPostgresRow
 {
 }
@@ -95,6 +97,7 @@ impl<T> RowDecode for T where
         + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
         + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
         + crate::rusqlite::FromRusqliteRow
+        + crate::rusqlite::FromOwnedRow
 {
 }
 
@@ -121,6 +124,7 @@ impl<T> RowDecode for T where
         + for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>
         + for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>
         + crate::rusqlite::FromRusqliteRow
+        + crate::rusqlite::FromOwnedRow
         + crate::tokio_postgres::FromTokioPostgresRow
 {
 }

@@ -46,11 +46,22 @@ ruprizzle::tokio_postgres_default_row!(User);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<i64>(0)?,
-            email: row.take::<String>(1)?,
-            age: row.take::<i64>(2)?,
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            email: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
+            age: ::ruprizzle::rusqlite::get::<i64>(row, 2)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for User {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            email: row.get::<String>(1)?,
+            age: row.get::<i64>(2)?,
         })
     }
 }

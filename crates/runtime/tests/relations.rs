@@ -17,10 +17,21 @@ ruprizzle::tokio_postgres_default_row!(User);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<i64>(0)?,
-            name: row.take::<String>(1)?,
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            name: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
+            posts: Related::default(),
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for User {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            name: row.get::<String>(1)?,
             posts: Related::default(),
         })
     }
@@ -45,11 +56,23 @@ ruprizzle::tokio_postgres_default_row!(Post);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Post {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<i64>(0)?,
-            title: row.take::<String>(1)?,
-            author_id: row.take::<i64>(2)?,
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            title: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
+            author_id: ::ruprizzle::rusqlite::get::<i64>(row, 2)?,
+            author: Related::default(),
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Post {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            title: row.get::<String>(1)?,
+            author_id: row.get::<i64>(2)?,
             author: Related::default(),
         })
     }

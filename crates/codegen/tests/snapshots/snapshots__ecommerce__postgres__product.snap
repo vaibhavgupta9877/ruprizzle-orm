@@ -62,13 +62,27 @@ for Product {
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for Product {
     fn from_rusqlite_row(
-        row: &mut ::ruprizzle::rusqlite::Row,
+        row: &::ruprizzle::rusqlite::RusqliteRow,
     ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<Uuid>(0)?,
-            sku: row.take::<String>(1)?,
-            name: row.take::<String>(2)?,
-            price: row.take::<Decimal>(3)?,
+            id: ::ruprizzle::rusqlite::parse::<Uuid>(row, 0)?,
+            sku: ::ruprizzle::rusqlite::get_text(row, 1)?,
+            name: ::ruprizzle::rusqlite::get_text(row, 2)?,
+            price: ::ruprizzle::rusqlite::parse::<Decimal>(row, 3)?,
+            items: ::ruprizzle::Related::default(),
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for Product {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::Row::get::<Uuid>(row, 0)?,
+            sku: ::ruprizzle::rusqlite::Row::get::<String>(row, 1)?,
+            name: ::ruprizzle::rusqlite::Row::get::<String>(row, 2)?,
+            price: ::ruprizzle::rusqlite::Row::get::<Decimal>(row, 3)?,
             items: ::ruprizzle::Related::default(),
         })
     }

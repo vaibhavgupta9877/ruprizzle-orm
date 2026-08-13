@@ -36,12 +36,24 @@ ruprizzle::tokio_postgres_default_row!(Event);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Event {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<Uuid>(0)?,
-            created_at: row.take::<DateTime<Utc>>(1)?,
-            price: row.take::<Decimal>(2)?,
-            meta: row.take::<serde_json::Value>(3)?,
+            id: ::ruprizzle::rusqlite::get::<Uuid>(row, 0)?,
+            created_at: ::ruprizzle::rusqlite::get::<DateTime<Utc>>(row, 1)?,
+            price: ::ruprizzle::rusqlite::get::<Decimal>(row, 2)?,
+            meta: ::ruprizzle::rusqlite::get::<serde_json::Value>(row, 3)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Event {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<Uuid>(0)?,
+            created_at: row.get::<DateTime<Utc>>(1)?,
+            price: row.get::<Decimal>(2)?,
+            meta: row.get::<serde_json::Value>(3)?,
         })
     }
 }

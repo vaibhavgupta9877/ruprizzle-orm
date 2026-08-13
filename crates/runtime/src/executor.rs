@@ -455,7 +455,7 @@ where
             .map(|r| T::from_row(r).map_err(Error::Sqlx))
             .collect(),
         #[cfg(feature = "sqlite-rusqlite")]
-        RowBatch::Rusqlite(mut rows) => rows.iter_mut().map(|r| T::from_rusqlite_row(r)).collect(),
+        RowBatch::Rusqlite(rows) => rows.iter().map(|r| T::from_owned_row(r)).collect(),
         #[cfg(feature = "postgres-tokio-postgres")]
         RowBatch::PostgresNative(rows) => {
             rows.iter().map(|r| T::from_tokio_postgres_row(r)).collect()

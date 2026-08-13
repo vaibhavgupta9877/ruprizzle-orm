@@ -524,6 +524,22 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         })
         .collect();
 
+    let mut next_owned_index = 0;
+    let owned_from_row_fields: Vec<_> = model
+        .fields
+        .values()
+        .map(|f| {
+            let idx = if f.has_column() {
+                let i = next_owned_index;
+                next_owned_index += 1;
+                Some(i)
+            } else {
+                None
+            };
+            emit_from_owned_row_field(schema, model.name.as_str(), f, idx)
+        })
+        .collect();
+
     let mut next_tokio_postgres_index = 0;
     let tokio_postgres_from_row_fields: Vec<_> = model
         .fields
@@ -585,9 +601,18 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
 
         #[cfg(feature = "sqlite-rusqlite")]
         impl ::ruprizzle::rusqlite::FromRusqliteRow for #model_name {
-            fn from_rusqlite_row(row: &mut ::ruprizzle::rusqlite::Row) -> Result<Self, ::ruprizzle::Error> {
+            fn from_rusqlite_row(row: &::ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ::ruprizzle::Error> {
                 Ok(Self {
                     #( #rusqlite_from_row_fields )*
+                })
+            }
+        }
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        impl ::ruprizzle::rusqlite::FromOwnedRow for #model_name {
+            fn from_owned_row(row: &::ruprizzle::rusqlite::Row) -> Result<Self, ::ruprizzle::Error> {
+                Ok(Self {
+                    #( #owned_from_row_fields )*
                 })
             }
         }
@@ -803,8 +828,134 @@ fn emit_from_rusqlite_row_field(
 
     let idx = syn::Index::from(idx.unwrap_or(0));
     let ty = rust_type_tokens(schema, owner, field, field.optional, false);
+    let inner_ty = rust_type_tokens(schema, owner, field, false, false);
 
-    quote! { #name: row.take::<#ty>(#idx)?, }
+    let expr = match &field.kind {
+        ruprizzle_core::ir::FieldKind::Scalar(st) => {
+            scalar_rusqlite_expr(*st, &idx, &ty, &inner_ty, field.optional)
+        }
+        ruprizzle_core::ir::FieldKind::Enum(_) => {
+            if field.optional {
+                quote! { ::ruprizzle::rusqlite::parse_opt::<#inner_ty>(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::parse::<#inner_ty>(row, #idx)? }
+            }
+        }
+        _ => {
+            if field.optional {
+                quote! { ::ruprizzle::rusqlite::get_text_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_text(row, #idx)? }
+            }
+        }
+    };
+
+    quote! { #name: #expr, }
+}
+
+fn emit_from_owned_row_field(
+    schema: &Schema,
+    owner: &str,
+    field: &Field,
+    idx: Option<usize>,
+) -> TokenStream {
+    let name = safe_field_ident(field.name.as_str());
+
+    if !field.has_column() {
+        return quote! { #name: ::ruprizzle::Related::default(), };
+    }
+
+    let idx = syn::Index::from(idx.unwrap_or(0));
+    let ty = rust_type_tokens(schema, owner, field, field.optional, false);
+
+    quote! { #name: ::ruprizzle::rusqlite::Row::get::<#ty>(row, #idx)?, }
+}
+
+fn scalar_rusqlite_expr(
+    st: ruprizzle_core::ir::ScalarType,
+    idx: &syn::Index,
+    _ty: &TokenStream,
+    inner_ty: &TokenStream,
+    optional: bool,
+) -> TokenStream {
+    use ruprizzle_core::ir::ScalarType;
+
+    let col = proc_macro2::Literal::usize_unsuffixed(idx.index as usize);
+
+    match st {
+        ScalarType::String => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::get_text_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_text(row, #idx)? }
+            }
+        }
+        ScalarType::BigInt => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::get_i64_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_i64(row, #idx)? }
+            }
+        }
+        ScalarType::Int => {
+            if optional {
+                quote! {
+                    ::ruprizzle::rusqlite::get_i64_opt(row, #idx)?
+                        .map(|v| v.try_into().map_err(|e: std::num::TryFromIntError| {
+                            ::ruprizzle::Error::Message(format!("cannot decode i32 from column {}: {}", #col, e))
+                        }))
+                        .transpose()?
+                }
+            } else {
+                quote! {
+                    ::ruprizzle::rusqlite::get_i64(row, #idx)?
+                        .try_into()
+                        .map_err(|e: std::num::TryFromIntError| {
+                            ::ruprizzle::Error::Message(format!("cannot decode i32 from column {}: {}", #col, e))
+                        })?
+                }
+            }
+        }
+        ScalarType::Float => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::get_f64_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_f64(row, #idx)? }
+            }
+        }
+        ScalarType::Boolean => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::get_bool_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_bool(row, #idx)? }
+            }
+        }
+        ScalarType::Json => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::get_json_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_json(row, #idx)? }
+            }
+        }
+        ScalarType::Bytes => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::get_bytes_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_bytes(row, #idx)? }
+            }
+        }
+        ScalarType::Decimal
+        | ScalarType::DateTime
+        | ScalarType::Date
+        | ScalarType::Time
+        | ScalarType::Uuid => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::parse_opt::<#inner_ty>(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::parse::<#inner_ty>(row, #idx)? }
+            }
+        }
+    }
 }
 
 fn emit_from_tokio_postgres_row_field(

@@ -28,13 +28,26 @@ ruprizzle::tokio_postgres_default_row!(User);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<i64>(0)?,
-            email: row.take::<String>(1)?,
-            age: row.take::<i64>(2)?,
-            name: row.take::<String>(3)?,
-            created_at: row.take::<i64>(4)?,
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            email: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
+            age: ::ruprizzle::rusqlite::get::<i64>(row, 2)?,
+            name: ::ruprizzle::rusqlite::get::<String>(row, 3)?,
+            created_at: ::ruprizzle::rusqlite::get::<i64>(row, 4)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for User {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            email: row.get::<String>(1)?,
+            age: row.get::<i64>(2)?,
+            name: row.get::<String>(3)?,
+            created_at: row.get::<i64>(4)?,
         })
     }
 }
@@ -46,7 +59,6 @@ impl Model for User {
 const ID: Column<User, i64> = Column::new("users", "id");
 const EMAIL: Column<User, String> = Column::new("users", "email");
 const AGE: Column<User, i64> = Column::new("users", "age");
-
 
 struct NoopExecutor;
 
@@ -126,8 +138,7 @@ fn query_construction(c: &mut Criterion) {
         b.iter(|| {
             let q = SelectQuery::<User>::new(black_box(&exec))
                 .filter(
-                    AGE
-                        .gt(18i64)
+                    AGE.gt(18i64)
                         .and(EMAIL.contains("example.com"))
                         .and(ID.between(100i64, 900i64)),
                 )

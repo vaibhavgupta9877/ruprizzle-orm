@@ -13,8 +13,8 @@ use std::time::Instant;
 use ruprizzle::serde::Serialize;
 use ruprizzle::serde_json;
 use ruprizzle::{
-    Column, CountingExecutor, Encodable, Executor, IncludeList, IncludeOne, InsertManyQuery,
-    Model, Related, SelectQuery,
+    Column, CountingExecutor, Encodable, Executor, IncludeList, IncludeOne, InsertManyQuery, Model,
+    Related, SelectQuery,
 };
 use simple_process_stats::ProcessStats;
 use sqlx::FromRow;
@@ -53,13 +53,31 @@ ruprizzle::tokio_postgres_default_row!(User);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<i64>(0)?,
-            email: row.take::<String>(1)?,
-            age: row.take::<i64>(2)?,
-            name: row.take::<String>(3)?,
-            created_at: row.take::<i64>(4)?,
+            id: ::ruprizzle::rusqlite::get_i64(row, 0)?,
+            email: ::ruprizzle::rusqlite::get_text(row, 1)?,
+            age: ::ruprizzle::rusqlite::get_i64(row, 2)?,
+            name: ::ruprizzle::rusqlite::get_text(row, 3)?,
+            created_at: ::ruprizzle::rusqlite::get_i64(row, 4)?,
+            posts: Related::default(),
+            comments: Related::default(),
+            likes: Related::default(),
+            following: Related::default(),
+            followers: Related::default(),
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for User {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            email: row.get::<String>(1)?,
+            age: row.get::<i64>(2)?,
+            name: row.get::<String>(3)?,
+            created_at: row.get::<i64>(4)?,
             posts: Related::default(),
             comments: Related::default(),
             likes: Related::default(),
@@ -87,10 +105,21 @@ ruprizzle::tokio_postgres_default_row!(Category);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Category {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<i64>(0)?,
-            name: row.take::<String>(1)?,
+            id: ::ruprizzle::rusqlite::get_i64(row, 0)?,
+            name: ::ruprizzle::rusqlite::get_text(row, 1)?,
+            posts: Related::default(),
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Category {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            name: row.get::<String>(1)?,
             posts: Related::default(),
         })
     }
@@ -130,14 +159,33 @@ ruprizzle::tokio_postgres_default_row!(Post);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Post {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<i64>(0)?,
-            author_id: row.take::<i64>(1)?,
-            category_id: row.take::<i64>(2)?,
-            title: row.take::<String>(3)?,
-            published_at: row.take::<i64>(4)?,
-            views: row.take::<i64>(5)?,
+            id: ::ruprizzle::rusqlite::get_i64(row, 0)?,
+            author_id: ::ruprizzle::rusqlite::get_i64(row, 1)?,
+            category_id: ::ruprizzle::rusqlite::get_i64(row, 2)?,
+            title: ::ruprizzle::rusqlite::get_text(row, 3)?,
+            published_at: ::ruprizzle::rusqlite::get_i64(row, 4)?,
+            views: ::ruprizzle::rusqlite::get_i64(row, 5)?,
+            author: Related::default(),
+            category: Related::default(),
+            comments: Related::default(),
+            likes: Related::default(),
+            post_tags: Related::default(),
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Post {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            author_id: row.get::<i64>(1)?,
+            category_id: row.get::<i64>(2)?,
+            title: row.get::<String>(3)?,
+            published_at: row.get::<i64>(4)?,
+            views: row.get::<i64>(5)?,
             author: Related::default(),
             category: Related::default(),
             comments: Related::default(),
@@ -171,13 +219,28 @@ ruprizzle::tokio_postgres_default_row!(Comment);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Comment {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<i64>(0)?,
-            post_id: row.take::<i64>(1)?,
-            author_id: row.take::<i64>(2)?,
-            content: row.take::<String>(3)?,
-            created_at: row.take::<i64>(4)?,
+            id: ::ruprizzle::rusqlite::get_i64(row, 0)?,
+            post_id: ::ruprizzle::rusqlite::get_i64(row, 1)?,
+            author_id: ::ruprizzle::rusqlite::get_i64(row, 2)?,
+            content: ::ruprizzle::rusqlite::get_text(row, 3)?,
+            created_at: ::ruprizzle::rusqlite::get_i64(row, 4)?,
+            post: Related::default(),
+            author: Related::default(),
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Comment {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            post_id: row.get::<i64>(1)?,
+            author_id: row.get::<i64>(2)?,
+            content: row.get::<String>(3)?,
+            created_at: row.get::<i64>(4)?,
             post: Related::default(),
             author: Related::default(),
         })
@@ -202,10 +265,21 @@ ruprizzle::tokio_postgres_default_row!(Tag);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Tag {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<i64>(0)?,
-            name: row.take::<String>(1)?,
+            id: ::ruprizzle::rusqlite::get_i64(row, 0)?,
+            name: ::ruprizzle::rusqlite::get_text(row, 1)?,
+            post_tags: Related::default(),
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Tag {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            name: row.get::<String>(1)?,
             post_tags: Related::default(),
         })
     }
@@ -232,10 +306,22 @@ ruprizzle::tokio_postgres_default_row!(PostTag);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for PostTag {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            post_id: row.take::<i64>(0)?,
-            tag_id: row.take::<i64>(1)?,
+            post_id: ::ruprizzle::rusqlite::get_i64(row, 0)?,
+            tag_id: ::ruprizzle::rusqlite::get_i64(row, 1)?,
+            post: Related::default(),
+            tag: Related::default(),
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for PostTag {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            post_id: row.get::<i64>(0)?,
+            tag_id: row.get::<i64>(1)?,
             post: Related::default(),
             tag: Related::default(),
         })
@@ -265,11 +351,24 @@ ruprizzle::tokio_postgres_default_row!(Follower);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Follower {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            follower_id: row.take::<i64>(0)?,
-            followee_id: row.take::<i64>(1)?,
-            created_at: row.take::<i64>(2)?,
+            follower_id: ::ruprizzle::rusqlite::get_i64(row, 0)?,
+            followee_id: ::ruprizzle::rusqlite::get_i64(row, 1)?,
+            created_at: ::ruprizzle::rusqlite::get_i64(row, 2)?,
+            follower: Related::default(),
+            followee: Related::default(),
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Follower {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            follower_id: row.get::<i64>(0)?,
+            followee_id: row.get::<i64>(1)?,
+            created_at: row.get::<i64>(2)?,
             follower: Related::default(),
             followee: Related::default(),
         })
@@ -300,12 +399,26 @@ ruprizzle::tokio_postgres_default_row!(Like);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Like {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<i64>(0)?,
-            user_id: row.take::<i64>(1)?,
-            post_id: row.take::<i64>(2)?,
-            created_at: row.take::<i64>(3)?,
+            id: ::ruprizzle::rusqlite::get_i64(row, 0)?,
+            user_id: ::ruprizzle::rusqlite::get_i64(row, 1)?,
+            post_id: ::ruprizzle::rusqlite::get_i64(row, 2)?,
+            created_at: ::ruprizzle::rusqlite::get_i64(row, 3)?,
+            user: Related::default(),
+            post: Related::default(),
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Like {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            user_id: row.get::<i64>(1)?,
+            post_id: row.get::<i64>(2)?,
+            created_at: row.get::<i64>(3)?,
             user: Related::default(),
             post: Related::default(),
         })
@@ -328,11 +441,22 @@ ruprizzle::tokio_postgres_default_row!(BenchBulk);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for BenchBulk {
-    fn from_rusqlite_row(row: &mut ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.take::<i64>(0)?,
-            name: row.take::<String>(1)?,
-            n: row.take::<i64>(2)?,
+            id: ::ruprizzle::rusqlite::get_i64(row, 0)?,
+            name: ::ruprizzle::rusqlite::get_text(row, 1)?,
+            n: ::ruprizzle::rusqlite::get_i64(row, 2)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for BenchBulk {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            name: row.get::<String>(1)?,
+            n: row.get::<i64>(2)?,
         })
     }
 }
@@ -590,7 +714,11 @@ async fn main() -> Result<(), ruprizzle::Error> {
                     .fetch_all()
                     .await
                     .expect("fetch filtered users");
-                assert!(rows.len() >= 980, "expected ~1000 users, got {}", rows.len());
+                assert!(
+                    rows.len() >= 980,
+                    "expected ~1000 users, got {}",
+                    rows.len()
+                );
                 BenchOutcome {
                     rows: rows.len(),
                     queries: counter.count(),
@@ -942,10 +1070,7 @@ async fn main() -> Result<(), ruprizzle::Error> {
     } else {
         "ruprizzle-results.json"
     };
-    let path = std::path::Path::new(&path)
-        .parent()
-        .unwrap()
-        .join(filename);
+    let path = std::path::Path::new(&path).parent().unwrap().join(filename);
     tokio::fs::write(&path, serde_json::to_string_pretty(&results).unwrap())
         .await
         .expect("write results");

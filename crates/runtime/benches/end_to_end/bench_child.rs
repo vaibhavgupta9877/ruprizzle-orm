@@ -60,13 +60,24 @@ for BenchChild {
 }
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for BenchChild {
-    fn from_rusqlite_row(
-        row: &mut ::ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ::ruprizzle::Error> {
+    fn from_rusqlite_row(row: &::ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: ::ruprizzle::rusqlite::Row::get::<i64>(&row, 0)?,
-            parent_id: ::ruprizzle::rusqlite::Row::get::<i64>(&row, 1)?,
-            name: ::ruprizzle::rusqlite::Row::get::<String>(&row, 2)?,
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            parent_id: ::ruprizzle::rusqlite::get::<i64>(row, 1)?,
+            name: ::ruprizzle::rusqlite::get::<String>(row, 2)?,
+            parent: ::ruprizzle::Related::default(),
+            grandchildren: ::ruprizzle::Related::default(),
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for BenchChild {
+    fn from_owned_row(row: &::ruprizzle::rusqlite::Row) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            parent_id: row.get::<i64>(1)?,
+            name: row.get::<String>(2)?,
             parent: ::ruprizzle::Related::default(),
             grandchildren: ::ruprizzle::Related::default(),
         })

@@ -48,13 +48,22 @@ for BenchBulk {
 }
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for BenchBulk {
-    fn from_rusqlite_row(
-        row: &mut ::ruprizzle::rusqlite::Row,
-    ) -> Result<Self, ::ruprizzle::Error> {
+    fn from_rusqlite_row(row: &::ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: ::ruprizzle::rusqlite::Row::get::<i64>(&row, 0)?,
-            name: ::ruprizzle::rusqlite::Row::get::<String>(&row, 1)?,
-            n: ::ruprizzle::rusqlite::Row::get::<i64>(&row, 2)?,
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            name: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
+            n: ::ruprizzle::rusqlite::get::<i64>(row, 2)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for BenchBulk {
+    fn from_owned_row(row: &::ruprizzle::rusqlite::Row) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            name: row.get::<String>(1)?,
+            n: row.get::<i64>(2)?,
         })
     }
 }
