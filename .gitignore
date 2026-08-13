@@ -18,6 +18,9 @@ __pycache__/
 *.sqlite-journal
 *.sqlite-wal
 
+# Transient test directories created by tempfile under local/deep-tests/db
+local/deep-tests/db/.tmp*/
+
 # Proptest regression artefacts
 *.proptest-regressions
 

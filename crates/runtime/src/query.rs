@@ -376,9 +376,10 @@ where
     where
         Out: Send + Unpin + RowDecode,
     {
-        if self.limit.is_none() {
-            self.limit = Some(1);
-        }
+        // `fetch_optional` only needs one row. Forcing `LIMIT 1` prevents the
+        // database from materialising and ruprizzle from decoding a larger
+        // result set when the caller set a higher limit.
+        self.limit = Some(1);
         let compiled = self.to_sql();
 
         #[cfg(feature = "sqlite-rusqlite")]

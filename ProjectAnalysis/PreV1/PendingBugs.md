@@ -444,6 +444,10 @@ measuring there too — it sits on the hot path of every query compile.
 `v.remove(0)` shifts the whole vector to return the first. Use `into_iter().next()`, and
 consider overriding the limit unconditionally.
 
+**Status:** Fixed. `SelectQuery::fetch_optional` now overrides `self.limit` to
+`Some(1)` unconditionally and returns the first decoded row with
+`into_iter().next()`.
+
 ### PERF-04
 
 **`dedup` clones every join key; grouping allocates a `Vec` per parent.**

@@ -420,6 +420,9 @@ input-reachable arithmetic or indexing panic remains in library source.
 *0.25 day.* Replace `v.remove(0)` with `into_iter().next()`, and force `limit = 1`
 unconditionally rather than only when unset.
 
+- [x] `SelectQuery::fetch_optional` now sets `self.limit = Some(1)` unconditionally.
+  The result is returned with `into_iter().next()`, so only the first row is decoded.
+
 ## PERF-04 · Reduce allocation in the include loader
 
 *0.5 day.*
