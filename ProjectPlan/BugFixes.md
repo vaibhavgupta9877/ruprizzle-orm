@@ -151,28 +151,49 @@ which hid the hazard.
 
 **Files:** `crates/runtime/src/tokio_postgres.rs`, `crates/runtime/tests/tx_lifecycle.rs`
 
-- [ ] **Step 1 — Confirm first.** BUG-03 is reasoned from source, not reproduced. Against a
+- [x] **Step 1 — Confirm first.** BUG-03 is reasoned from source, not reproduced. Against a
       live Postgres with `--features postgres-tokio-postgres`: begin a transaction, `INSERT`,
       drop without commit, then acquire connections until the same one is reused and check
       for an open transaction (`SELECT txid_current_if_assigned()`, or observe
       `idle in transaction` in `pg_stat_activity`). **If it does not reproduce, record why
       and close the finding** — do not implement a fix for a bug that is not there.
-- [ ] **Step 2 — Async rollback from a sync `Drop`.** `ROLLBACK` is async. Capture a
+      ***Reproduced against PostgreSQL 17.10.*** The test is behavioural rather than a
+      `pg_stat_activity` probe, which is a stronger statement of the harm: after abandoning
+      a transaction, a write issued through the pool was invisible to a second session,
+      because it had landed inside the abandoned transaction. Observed count 0, expected 1.
+- [x] **Step 2 — Async rollback from a sync `Drop`.** `ROLLBACK` is async. Capture a
       `tokio::runtime::Handle` at `begin()` and `spawn` the rollback in `Drop` before the
       `Object` is released, mirroring `sqlx::Transaction`. Handle the no-runtime case without
       panicking.
-- [ ] **Step 3 — Ordering.** The rollback must complete before the connection is reusable.
+      *No-runtime case: `Object::take` detaches the connection instead of returning it.
+      Losing a connection beats handing out a dirty one.*
+- [x] **Step 3 — Ordering.** The rollback must complete before the connection is reusable.
       If spawning cannot guarantee that, take the `Object` into the spawned task so it is
       returned to `deadpool` only after the rollback resolves. This is the crux of the fix —
       get it right rather than quick.
-- [ ] **Step 4 — Defence in depth.** Switch the default `RecyclingMethod` from `Fast` to
+      *Done by moving the `Object` into the spawned task. The regression test runs on a
+      `max_connections = 1` pool, so its next checkout can only succeed once the rollback
+      task has finished and released the connection — the ordering is what it asserts.*
+- [x] **Step 4 — Defence in depth.** Switch the default `RecyclingMethod` from `Fast` to
       `Clean`, which discards session state on recycle. Measure the cost: it adds a round
       trip per checkout, so if it is material, gate it behind `PoolConfig`. Do not treat this
       as a substitute for Step 2.
-- [ ] **Step 5 — Test** that a connection reused after an abandoned transaction has no open
+      *Measured over 2,000 checkout+query cycles against a local PostgreSQL 17.10, release
+      build: `Fast` 72–78 µs, `Verified` 143 µs, `Clean` 144–178 µs. Roughly **2×**, which
+      is material for the driver that exists to cut per-query latency — so it is gated
+      behind the new `PoolConfig::reset_on_recycle` (default `false`) rather than made the
+      default. Step 2 is the actual fix; this is optional hardening for callers who leave
+      session state behind.*
+- [x] **Step 5 — Test** that a connection reused after an abandoned transaction has no open
       transaction and that the abandoned writes are absent.
-- [ ] **Step 6 — Wire into CI.** This needs the `postgres-tokio-postgres` job from the v1
+      *Both asserted in one count: the abandoned write must be gone and the following write
+      must be committed and visible from a separate session.*
+- [x] **Step 6 — Wire into CI.** This needs the `postgres-tokio-postgres` job from the v1
       plan's W0-03. Pull that task forward into this one — the fix is untested in CI without it.
+      *Added a `native-drivers` job with a Postgres service: clippy and tests for
+      `sqlite-rusqlite`, for `postgres-tokio-postgres`, and for both together, with
+      `RUPRIZZLE_REQUIRE_DB=1`. **No CI job compiled either native driver before this** —
+      that, not the individual defects, is why all four reached a published release.*
 
 ## FIX-06 · Remove `Clone` from `RusqliteTransaction`
 

@@ -13,6 +13,7 @@ fn defaults_match_ruprizzle() {
     assert_eq!(config.idle_timeout, Some(Duration::from_secs(600)));
     assert_eq!(config.max_lifetime, Some(Duration::from_secs(1800)));
     assert!(!config.test_before_acquire);
+    assert!(!config.reset_on_recycle);
     assert_eq!(config.row_buffer_size, 1024);
 }
 

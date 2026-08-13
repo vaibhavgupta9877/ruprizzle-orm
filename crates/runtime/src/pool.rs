@@ -291,6 +291,19 @@ pub struct PoolConfig {
     /// Defaults to `false` to avoid a per-query ping round-trip (or ~10 µs on
     /// SQLite). Set `true` when connections are killed between checkouts.
     pub test_before_acquire: bool,
+    /// Whether to reset session state when a connection returns to the pool.
+    ///
+    /// Only meaningful for the native `tokio-postgres` backend, where it
+    /// selects `deadpool`'s `Clean` recycling: temp tables, listens, advisory
+    /// locks, `SET` values and any open transaction are discarded on recycle.
+    ///
+    /// Defaults to `false` because it costs a round trip on every checkout —
+    /// measured at roughly 2× the total per-query latency on a local database
+    /// — and the driver exists to avoid exactly that. Correctness does not
+    /// depend on it: an abandoned transaction is rolled back before its
+    /// connection is released. Turn it on as defence in depth when application
+    /// code sets session state it does not clean up itself.
+    pub reset_on_recycle: bool,
     /// Number of rows the SQLite driver buffers per prepared statement.
     ///
     /// This is only meaningful when `connect`/`connect_with` build a native
@@ -307,6 +320,7 @@ impl Default for PoolConfig {
             idle_timeout: Some(Duration::from_secs(600)),
             max_lifetime: Some(Duration::from_secs(1800)),
             test_before_acquire: false,
+            reset_on_recycle: false,
             row_buffer_size: 1024,
         }
     }

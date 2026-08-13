@@ -77,6 +77,47 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
 
+  native-drivers:
+    name: native drivers (rusqlite + tokio-postgres)
+    runs-on: ubuntu-latest
+    # Neither native driver is in the default feature set, so no other job
+    # compiles them — which is how a leaked connection, a divide-by-zero panic
+    # and a connection returned mid-transaction all reached a published
+    # release. This job is the one that would have caught them.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ruprizzle
+          POSTGRES_PASSWORD: ruprizzle
+          POSTGRES_DB: ruprizzle_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ruprizzle -d ruprizzle_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      RUPRIZZLE_TEST_PG_URL: postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test
+      # Mandatory here: the tokio-postgres lifecycle tests skip themselves
+      # without a database, and a skipped test reporting green is precisely the
+      # failure mode this job exists to prevent.
+      RUPRIZZLE_REQUIRE_DB: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy -p ruprizzle --features sqlite-rusqlite --all-targets -- -D warnings
+      - run: cargo clippy -p ruprizzle --features postgres-tokio-postgres --all-targets -- -D warnings
+      - run: cargo test -p ruprizzle --features sqlite-rusqlite
+      - run: cargo test -p ruprizzle --features postgres-tokio-postgres
+      # Both at once: the two backends share `Tx`, `RowBatch` and the
+      # `RowDecode` bound, and each combination cfg-selects a different one.
+      - run: cargo test -p ruprizzle --features sqlite-rusqlite,postgres-tokio-postgres
+
   generated-code:
     name: generated code compiles clean
     runs-on: ubuntu-latest

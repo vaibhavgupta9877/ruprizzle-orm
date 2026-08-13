@@ -15,7 +15,7 @@ against a real SQLite database and then deleted; none remain in the tree.
 |---|---|---|---|
 | [BUG-01](#bug-01) | Dropping a `Tx` permanently leaks a `rusqlite` connection; the pool dies | **Critical** | ✔️ **Fixed** (FIX-01) |
 | [BUG-02](#bug-02) | `RusqlitePool::acquire` panics with divide-by-zero when all connections are in transactions | **Critical** | ✔️ **Fixed** (FIX-02) |
-| [BUG-03](#bug-03) | Dropping a `Tx` returns a `tokio-postgres` connection to the pool with an open `BEGIN` | **Critical** | ⚠️ Confirmed by inspection |
+| [BUG-03](#bug-03) | Dropping a `Tx` returns a `tokio-postgres` connection to the pool with an open `BEGIN` | **Critical** | ✔️ **Fixed** (FIX-03) — reproduced on PG 17.10 first |
 | [BUG-04](#bug-04) | `fetch_one` / `fetch_optional` silently discard `.include()`, then panic on access | **High** | ✅ Confirmed, reproduced |
 | [BUG-05](#bug-05) | Divide-by-zero panic on an insert with an empty column set | **High** | ✅ Confirmed, reproduced |
 | [BUG-06](#bug-06) | `RusqliteTransaction` derives `Clone`, allowing a connection to be returned twice | Medium | ✔️ **Fixed** (FIX-06) |
@@ -136,8 +136,11 @@ half of this fix.
 
 - **Location:** `crates/runtime/src/tokio_postgres.rs:64-70, 120-126, 160-190`
 - **Severity:** Critical — silent cross-request data-integrity hazard
-- **Status:** Confirmed by inspection; not reproduced (needs a live Postgres and the
-  `postgres-tokio-postgres` feature). **Verify before fixing.**
+- **Status:** **Reproduced and fixed.** Confirmed against PostgreSQL 17.10 with the
+  `postgres-tokio-postgres` feature before the fix was written: after abandoning a
+  transaction on a single-connection pool, the *next* write issued through the pool was
+  invisible to a second session, because it executed inside the abandoned transaction. See
+  `crates/runtime/tests/tx_lifecycle.rs`.
 
 `TokioPostgresPool::begin` issues `BEGIN` and wraps a `deadpool_postgres::Object`.
 `TokioPostgresTransaction` has **no `Drop` impl**. `Object`'s own `Drop` returns the
