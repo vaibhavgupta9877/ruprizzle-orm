@@ -16,6 +16,7 @@ use std::time::Duration;
 
 use ::rusqlite::{self, OpenFlags, types::Value as RusqliteValue};
 use ruprizzle_core::ir::Provider;
+use smallvec::SmallVec;
 use ruprizzle_dialect::dialect_for;
 
 use crate::BoxFuture;
@@ -27,9 +28,11 @@ use crate::value::Value;
 /// A single row from the `rusqlite` backend.
 ///
 /// Columns are stored in result-set order as `rusqlite::types::Value` so that
-/// decoding can be implemented without a `rusqlite::Row` borrow.
+/// decoding can be implemented without a `rusqlite::Row` borrow. The inline
+/// buffer avoids a heap allocation for the common case of eight or fewer
+/// columns.
 #[derive(Debug, Clone)]
-pub struct Row(pub Vec<RusqliteValue>);
+pub struct Row(pub SmallVec<[RusqliteValue; 8]>);
 
 /// A pool of synchronous `rusqlite` connections.
 ///
@@ -221,7 +224,7 @@ impl RusqliteTransaction {
 
         let rows = stmt
             .query_map(rusqlite::params_from_iter(binds), |row| {
-                let mut values = Vec::with_capacity(column_count);
+                let mut values = SmallVec::with_capacity(column_count);
                 for i in 0..column_count {
                     values.push(row.get::<_, RusqliteValue>(i)?);
                 }
@@ -348,7 +351,7 @@ fn fetch_all(
 
     let rows = stmt
         .query_map(rusqlite::params_from_iter(&binds), |row| {
-            let mut values = Vec::with_capacity(column_count);
+            let mut values = SmallVec::with_capacity(column_count);
             for i in 0..column_count {
                 values.push(row.get::<_, RusqliteValue>(i)?);
             }
