@@ -13,7 +13,7 @@ against a real SQLite database and then deleted; none remain in the tree.
 
 | ID | Finding | Severity | Status |
 |---|---|---|---|
-| [BUG-01](#bug-01) | Dropping a `Tx` permanently leaks a `rusqlite` connection; the pool dies | **Critical** | ✅ Confirmed, reproduced |
+| [BUG-01](#bug-01) | Dropping a `Tx` permanently leaks a `rusqlite` connection; the pool dies | **Critical** | ✔️ **Fixed** (FIX-01) |
 | [BUG-02](#bug-02) | `RusqlitePool::acquire` panics with divide-by-zero when all connections are in transactions | **Critical** | ✅ Confirmed, reproduced |
 | [BUG-03](#bug-03) | Dropping a `Tx` returns a `tokio-postgres` connection to the pool with an open `BEGIN` | **Critical** | ⚠️ Confirmed by inspection |
 | [BUG-04](#bug-04) | `fetch_one` / `fetch_optional` silently discard `.include()`, then panic on access | **High** | ✅ Confirmed, reproduced |

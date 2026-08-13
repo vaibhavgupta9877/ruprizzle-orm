@@ -144,11 +144,9 @@ impl RusqlitePool {
         let pool = self.clone();
         tokio::task::spawn_blocking(move || -> Result<RusqliteTransaction, Error> {
             let conn = {
-                let mut conns = pool
-                    .inner
-                    .conns
-                    .lock()
-                    .map_err(|_| Error::Message("rusqlite connection pool mutex poisoned".into()))?;
+                let mut conns = pool.inner.conns.lock().map_err(|_| {
+                    Error::Message("rusqlite connection pool mutex poisoned".into())
+                })?;
                 conns
                     .pop()
                     .ok_or_else(|| Error::Message("rusqlite connection pool exhausted".into()))?
@@ -167,7 +165,10 @@ impl RusqlitePool {
                 force_schema_reload(&guard);
             }
 
-            Ok(RusqliteTransaction { pool, conn })
+            Ok(RusqliteTransaction {
+                pool,
+                conn: Some(conn),
+            })
         })
         .await
         .map_err(|e| Error::Message(e.to_string()))?
@@ -225,18 +226,31 @@ impl RusqlitePool {
 /// A `rusqlite` transaction that owns its connection.
 ///
 /// The connection is removed from the [`RusqlitePool`] for the lifetime of the
-/// transaction and is only returned on [`Self::commit`] or [`Self::rollback`].
-#[derive(Debug, Clone)]
+/// transaction and is returned by [`Self::commit`], [`Self::rollback`], or —
+/// for a transaction abandoned without either — the [`Drop`] impl below.
+///
+/// `conn` is an `Option` purely so `Drop` can distinguish a transaction that
+/// was finished explicitly (`None`) from one that was abandoned (`Some`);
+/// `commit`/`rollback` consume `self`, so without it `Drop` would run on a
+/// finished transaction and return the same connection twice.
+#[derive(Debug)]
 pub(crate) struct RusqliteTransaction {
     pool: RusqlitePool,
-    conn: Arc<std::sync::Mutex<rusqlite::Connection>>,
+    conn: Option<Arc<std::sync::Mutex<rusqlite::Connection>>>,
 }
 
 impl RusqliteTransaction {
+    /// The connection this transaction owns, or an error if it has finished.
+    fn conn(&self) -> Result<&Arc<std::sync::Mutex<rusqlite::Connection>>, Error> {
+        self.conn
+            .as_ref()
+            .ok_or_else(|| Error::Message("transaction already finished".into()))
+    }
+
     /// Execute `sql` with `binds`, returning the number of affected rows.
     pub(crate) fn execute_sync(&self, sql: &str, binds: &[Value]) -> Result<u64, Error> {
         let guard = self
-            .conn
+            .conn()?
             .lock()
             .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
         if is_ddl(sql) {
@@ -261,7 +275,7 @@ impl RusqliteTransaction {
     /// Fetch all rows from `sql` with `binds`.
     pub(crate) fn fetch_all_sync(&self, sql: &str, binds: &[Value]) -> Result<RowBatch, Error> {
         let guard = self
-            .conn
+            .conn()?
             .lock()
             .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
         if is_ddl(sql) {
@@ -294,43 +308,105 @@ impl RusqliteTransaction {
     }
 
     /// Commit the transaction and return the connection to the pool.
-    pub(crate) fn commit(self) -> Result<(), Error> {
-        let conn = self.conn;
-        let pool = self.pool;
-
-        let guard = conn
-            .lock()
-            .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
-        guard
-            .execute("COMMIT", [])
-            .map_err(|e| Error::Message(e.to_string()))?;
-        // DDL can invalidate cached prepared statements. Flush before returning
-        // the connection so the next statement recompiles against the current
-        // schema.
-        guard.flush_prepared_statement_cache();
-        drop(guard);
-
-        pool.return_conn(conn);
-        Ok(())
+    pub(crate) fn commit(mut self) -> Result<(), Error> {
+        self.finish("COMMIT")
     }
 
     /// Roll the transaction back and return the connection to the pool.
-    pub(crate) fn rollback(self) -> Result<(), Error> {
-        let conn = self.conn;
-        let pool = self.pool;
-
-        let guard = conn
-            .lock()
-            .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
-        guard
-            .execute("ROLLBACK", [])
-            .map_err(|e| Error::Message(e.to_string()))?;
-        guard.flush_prepared_statement_cache();
-        drop(guard);
-
-        pool.return_conn(conn);
-        Ok(())
+    pub(crate) fn rollback(mut self) -> Result<(), Error> {
+        self.finish("ROLLBACK")
     }
+
+    /// Run `stmt` (`COMMIT` or `ROLLBACK`) and hand the connection back.
+    ///
+    /// The connection is taken out of the `Option` first, so it is returned to
+    /// the pool exactly once and on every path — including a failed `COMMIT`.
+    /// Leaking it on the failure path is half of what BUG-01 was.
+    fn finish(&mut self, stmt: &'static str) -> Result<(), Error> {
+        let Some(conn) = self.conn.take() else {
+            return Err(Error::Message("transaction already finished".into()));
+        };
+
+        let result = end_transaction(&conn, stmt);
+        self.pool.return_conn(conn);
+        result
+    }
+}
+
+/// Roll back and return the connection when a transaction is abandoned.
+///
+/// `sqlx::Transaction` does this for the `sqlx` backends; without it, dropping
+/// a transaction — which `?` does on every early return — removed a connection
+/// from the pool permanently (BUG-01).
+///
+/// This must never panic: a `Drop` that panics during an existing unwind aborts
+/// the process. Every failure path here logs and continues, and the connection
+/// goes back to the pool regardless.
+impl Drop for RusqliteTransaction {
+    fn drop(&mut self) {
+        let Some(conn) = self.conn.take() else {
+            return;
+        };
+
+        tracing::warn!(
+            target: "ruprizzle::query",
+            "transaction dropped without commit or rollback; rolling back"
+        );
+
+        if let Err(error) = end_transaction(&conn, "ROLLBACK") {
+            tracing::warn!(
+                target: "ruprizzle::query",
+                error = %error,
+                "failed to roll back an abandoned transaction"
+            );
+        }
+
+        self.pool.return_conn(conn);
+    }
+}
+
+/// Ends the transaction on `conn` with `stmt`, leaving no transaction open on
+/// the connection whatever the outcome.
+///
+/// This is the last thing to touch a connection before it goes back into the
+/// pool, so it must not leave one mid-transaction: a failed `COMMIT` does not
+/// end the transaction in SQLite, and handing that connection to the next
+/// caller would put their statements inside this transaction.
+///
+/// Never panics — it is called from `Drop`.
+fn end_transaction(
+    conn: &std::sync::Mutex<rusqlite::Connection>,
+    stmt: &'static str,
+) -> Result<(), Error> {
+    // A poisoned mutex means another task panicked while holding it. The guard
+    // is still recoverable, and ending the transaction matters more here than
+    // honouring the poison flag.
+    let guard = match conn.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            tracing::warn!(
+                target: "ruprizzle::query",
+                "ending a transaction on a poisoned connection"
+            );
+            poisoned.into_inner()
+        }
+    };
+
+    let result = guard
+        .execute(stmt, [])
+        .map(|_| ())
+        .map_err(|e| Error::Message(e.to_string()));
+
+    if result.is_err() && stmt != "ROLLBACK" {
+        let _ = guard.execute("ROLLBACK", []);
+    }
+
+    // DDL can invalidate cached prepared statements. Flush before the
+    // connection is reused so the next statement recompiles against the
+    // current schema.
+    guard.flush_prepared_statement_cache();
+
+    result
 }
 
 impl fmt::Debug for RusqlitePool {

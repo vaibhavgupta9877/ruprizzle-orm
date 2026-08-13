@@ -77,27 +77,39 @@ compensate. Fix them together so the invariant is established once.
 
 **Files:** `crates/runtime/src/rusqlite.rs`, `crates/runtime/tests/tx_lifecycle.rs` (new)
 
-- [ ] **Step 1 — Failing test first.** Create `crates/runtime/tests/tx_lifecycle.rs`. Build
+- [x] **Step 1 — Failing test first.** Create `crates/runtime/tests/tx_lifecycle.rs`. Build
       a `rusqlite` pool with `max_connections = 2`, begin and drop two transactions, then
       assert a third `begin()` succeeds. Confirm it fails today with
       `"rusqlite connection pool exhausted"`.
-- [ ] **Step 2 — Restructure for `Drop`.** `commit`/`rollback` consume `self`, so `Drop`
+      *Confirmed: 4 of 7 new tests failed on the unfixed tree, three of them with exactly
+      that message.*
+- [x] **Step 2 — Restructure for `Drop`.** `commit`/`rollback` consume `self`, so `Drop`
       cannot tell "finished" from "abandoned". Change the fields to
       `conn: Option<Arc<Mutex<Connection>>>` and have `commit`/`rollback` `take()` it. Do not
       use `ManuallyDrop`; `Option` is clearer and has no unsafe requirement.
-- [ ] **Step 3 — Implement `Drop`.** If `conn` is still `Some`, issue `ROLLBACK`, flush the
+      *Done via a shared `finish(&mut self, stmt)`; statement methods go through
+      `conn()`, which reports `"transaction already finished"` instead of panicking.*
+- [x] **Step 3 — Implement `Drop`.** If `conn` is still `Some`, issue `ROLLBACK`, flush the
       prepared-statement cache to match `commit`/`rollback`, and `return_conn`. `rusqlite` is
       synchronous, so this needs no runtime handle.
-- [ ] **Step 4 — Never panic in `Drop`.** A failing `ROLLBACK` or a poisoned mutex must not
+- [x] **Step 4 — Never panic in `Drop`.** A failing `ROLLBACK` or a poisoned mutex must not
       unwind — `Drop` during an existing unwind would abort the process. Return the
       connection regardless and emit `tracing::warn!` on failure.
-- [ ] **Step 5 — Observability.** Emit `tracing::warn!` with a stable message on every
+      *A poisoned mutex is recovered with `into_inner()` and rolled back anyway: honouring
+      the poison flag would mean returning a connection mid-transaction, which is worse.*
+- [x] **Step 5 — Observability.** Emit `tracing::warn!` with a stable message on every
       abandoned transaction. Silently rolling back is correct behaviour but a code smell in
       the caller, and it should be visible.
-- [ ] **Step 6 — Extend the test.** Assert: drop after statements rolls back (data absent);
+- [x] **Step 6 — Extend the test.** Assert: drop after statements rolls back (data absent);
       drop then reuse of the same connection works; `commit` still commits; `rollback` still
       rolls back; 100 sequential drops leave the pool at full capacity.
-- [ ] **Step 7 — Verify** with `cargo test -p ruprizzle --features sqlite-rusqlite`.
+- [x] **Step 7 — Verify** with `cargo test -p ruprizzle --features sqlite-rusqlite`.
+      *Whole suite green, including the 5 new lifecycle tests.*
+
+**Also fixed here (found while implementing):** a failed `COMMIT` does not end the
+transaction in SQLite, so the shared end-of-transaction path now issues a `ROLLBACK` before
+the connection goes back to the pool. Previously that path leaked the connection instead,
+which hid the hazard.
 
 ## FIX-02 · Pool exhaustion instead of divide-by-zero
 
