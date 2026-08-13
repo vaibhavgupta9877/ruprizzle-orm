@@ -19,8 +19,29 @@ use sqlx::postgres::PgRow;
 use sqlx::sqlite::SqliteRow;
 
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 static FULL_TABLE_INCLUDE_LIMIT: AtomicU64 = AtomicU64::new(100_000);
+static SLOW_QUERY_THRESHOLD_NS: AtomicU64 = AtomicU64::new(0);
+
+/// Sets the duration above which a query is logged as a slow query.
+///
+/// `None` disables the warning.
+pub fn set_slow_query_threshold(threshold: Option<Duration>) {
+    let ns = threshold.map_or(0, |d| d.as_nanos() as u64);
+    SLOW_QUERY_THRESHOLD_NS.store(ns, Ordering::Relaxed);
+}
+
+/// Returns the current slow-query threshold, if any.
+#[must_use]
+pub fn slow_query_threshold() -> Option<Duration> {
+    let ns = SLOW_QUERY_THRESHOLD_NS.load(Ordering::Relaxed);
+    if ns == 0 {
+        None
+    } else {
+        Some(Duration::from_nanos(ns))
+    }
+}
 
 /// Sets the process-wide full-table include limit.
 ///
@@ -213,6 +234,134 @@ pub enum RawRow {
 pub type BoxRowStream<'a> =
     std::pin::Pin<Box<dyn futures_core::Stream<Item = Result<RawRow, Error>> + Send + 'a>>;
 
+/// Observes a completed `fut` for metrics, debug tracing, and slow-query warnings.
+///
+/// This is the single place where query execution is observed so that pools and
+/// transactions cannot drift. `sql` is logged by shape only; `binds` is the
+/// placeholder count, never the values.
+pub(crate) async fn trace_and_record_query<F>(
+    sql: Cow<'static, str>,
+    bind_count: usize,
+    fut: F,
+) -> Result<RowBatch, Error>
+where
+    F: std::future::Future<Output = Result<RowBatch, Error>>,
+{
+    crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
+    let started = std::time::Instant::now();
+    let result = fut.await;
+    let elapsed = started.elapsed();
+    crate::metrics::histogram(
+        crate::metrics::QUERY_DURATION_SECONDS,
+        elapsed.as_secs_f64(),
+    );
+    if let Err(error) = &result {
+        crate::metrics::counter_with(
+            crate::metrics::QUERY_ERRORS_TOTAL,
+            [("kind", error.kind())],
+            1,
+        );
+    }
+
+    if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
+        let elapsed_ms = elapsed.as_millis() as u64;
+        match &result {
+            Ok(batch) => tracing::debug!(
+                target: "ruprizzle::query",
+                sql = %sql,
+                binds = bind_count,
+                rows = batch.len(),
+                elapsed_ms,
+                "query"
+            ),
+            Err(error) => tracing::warn!(
+                target: "ruprizzle::query",
+                sql = %sql,
+                binds = bind_count,
+                elapsed_ms,
+                error = error.kind(),
+                "query failed"
+            ),
+        }
+    }
+
+    if let Some(threshold) = slow_query_threshold() {
+        if elapsed > threshold {
+            tracing::warn!(
+                target: "ruprizzle::slow_query",
+                sql = %sql,
+                binds = bind_count,
+                elapsed_ms = elapsed.as_millis(),
+                "slow query"
+            );
+        }
+    }
+
+    result
+}
+
+/// Observes a completed execute `fut` for metrics, debug tracing, and slow-query warnings.
+pub(crate) async fn trace_and_record_execute<F>(
+    sql: Cow<'static, str>,
+    bind_count: usize,
+    fut: F,
+) -> Result<u64, Error>
+where
+    F: std::future::Future<Output = Result<u64, Error>>,
+{
+    crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
+    let started = std::time::Instant::now();
+    let result = fut.await;
+    let elapsed = started.elapsed();
+    crate::metrics::histogram(
+        crate::metrics::QUERY_DURATION_SECONDS,
+        elapsed.as_secs_f64(),
+    );
+    if let Err(error) = &result {
+        crate::metrics::counter_with(
+            crate::metrics::QUERY_ERRORS_TOTAL,
+            [("kind", error.kind())],
+            1,
+        );
+    }
+
+    if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
+        let elapsed_ms = elapsed.as_millis() as u64;
+        match &result {
+            Ok(rows_affected) => tracing::debug!(
+                target: "ruprizzle::query",
+                sql = %sql,
+                binds = bind_count,
+                rows_affected,
+                elapsed_ms,
+                "execute"
+            ),
+            Err(error) => tracing::warn!(
+                target: "ruprizzle::query",
+                sql = %sql,
+                binds = bind_count,
+                elapsed_ms,
+                error = error.kind(),
+                "execute failed"
+            ),
+        }
+    }
+
+    if let Some(threshold) = slow_query_threshold() {
+        if elapsed > threshold {
+            tracing::warn!(
+                target: "ruprizzle::slow_query",
+                sql = %sql,
+                binds = bind_count,
+                elapsed_ms = elapsed.as_millis(),
+                "slow query"
+            );
+        }
+    }
+
+    result
+}
+
 /// Resolves a pending fetch, then yields its rows one at a time.
 ///
 /// Both executors currently buffer: a `Tx` must, because it owns one connection
@@ -302,43 +451,11 @@ impl Executor for Pool {
         sql: Cow<'static, str>,
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<RowBatch, Error>> {
-        Box::pin(async move {
-            crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
-            let bind_count = binds.len();
-            let started = std::time::Instant::now();
-            let result = dispatch_raw_query(self, sql.clone(), binds).await;
-            let elapsed = started.elapsed().as_secs_f64();
-            crate::metrics::histogram(crate::metrics::QUERY_DURATION_SECONDS, elapsed);
-            if let Err(ref error) = result {
-                crate::metrics::counter_with(
-                    crate::metrics::QUERY_ERRORS_TOTAL,
-                    [("kind", error.kind())],
-                    1,
-                );
-            }
-            if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
-                let elapsed_ms = (elapsed * 1000.0) as u64;
-                match &result {
-                    Ok(batch) => tracing::debug!(
-                        target: "ruprizzle::query",
-                        sql = %sql,
-                        binds = bind_count,
-                        rows = batch.len(),
-                        elapsed_ms,
-                        "query"
-                    ),
-                    Err(error) => tracing::warn!(
-                        target: "ruprizzle::query",
-                        sql = %sql,
-                        binds = bind_count,
-                        elapsed_ms,
-                        error = error.kind(),
-                        "query failed"
-                    ),
-                }
-            }
-            result
-        })
+        let bind_count = binds.len();
+        let pool = self.clone();
+        Box::pin(trace_and_record_query(sql.clone(), bind_count, async move {
+            dispatch_raw_query(&pool, sql, binds).await
+        }))
     }
 
     fn execute_raw(
@@ -346,43 +463,11 @@ impl Executor for Pool {
         sql: Cow<'static, str>,
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<u64, Error>> {
-        Box::pin(async move {
-            crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
-            let bind_count = binds.len();
-            let started = std::time::Instant::now();
-            let result = dispatch_raw_execute(self, sql.clone(), binds).await;
-            let elapsed = started.elapsed().as_secs_f64();
-            crate::metrics::histogram(crate::metrics::QUERY_DURATION_SECONDS, elapsed);
-            if let Err(ref error) = result {
-                crate::metrics::counter_with(
-                    crate::metrics::QUERY_ERRORS_TOTAL,
-                    [("kind", error.kind())],
-                    1,
-                );
-            }
-            if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
-                let elapsed_ms = (elapsed * 1000.0) as u64;
-                match &result {
-                    Ok(rows_affected) => tracing::debug!(
-                        target: "ruprizzle::query",
-                        sql = %sql,
-                        binds = bind_count,
-                        rows_affected,
-                        elapsed_ms,
-                        "execute"
-                    ),
-                    Err(error) => tracing::warn!(
-                        target: "ruprizzle::query",
-                        sql = %sql,
-                        binds = bind_count,
-                        elapsed_ms,
-                        error = error.kind(),
-                        "execute failed"
-                    ),
-                }
-            }
-            result
-        })
+        let bind_count = binds.len();
+        let pool = self.clone();
+        Box::pin(trace_and_record_execute(sql.clone(), bind_count, async move {
+            dispatch_raw_execute(&pool, sql, binds).await
+        }))
     }
 
     fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {

@@ -360,7 +360,7 @@ builder or relations sections that a competitor scores `Yes` on; every new build
       histogram, error count by `Error::kind()`, pool size/idle/waiters, migration
       application count and duration. Emit via the `metrics` crate facade so users pick
       Prometheus or OTel rather than us picking for them. **2 days.** *(finding #5)*
-- [ ] **W3-02 · Slow-query threshold event.** A configurable duration above which a query
+- [x] **W3-02 · Slow-query threshold event.** A configurable duration above which a query
       emits `WARN` with the SQL *shape* — bind counts, never values. The existing PII
       discipline in `error_redaction.rs` is the standard to hold. **0.5 day.**
 - [ ] **W3-03 · `docs/Operations.md`.** What each span means, what to alert on, how to read

@@ -329,6 +329,11 @@ pub struct PoolConfig {
     /// table. `None` disables fast-path include loading entirely and always uses
     /// chunked `IN`. Defaults to `100_000`.
     pub full_table_include_limit: Option<u64>,
+    /// Duration above which a query emits a `WARN` event with the SQL shape and
+    /// bind count. `None` disables slow-query warnings.
+    ///
+    /// This is a process-wide setting; the last `connect_with` call wins.
+    pub slow_query_threshold: Option<Duration>,
 }
 
 impl Default for PoolConfig {
@@ -343,6 +348,7 @@ impl Default for PoolConfig {
             reset_on_recycle: false,
             row_buffer_size: 1024,
             full_table_include_limit: Some(100_000),
+            slow_query_threshold: None,
         }
     }
 }
@@ -367,6 +373,7 @@ pub async fn connect(url: &str) -> Result<Pool, crate::Error> {
 /// Returns an error if the URL cannot be parsed or the connection fails.
 pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate::Error> {
     crate::executor::set_full_table_include_limit(config.full_table_include_limit);
+    crate::executor::set_slow_query_threshold(config.slow_query_threshold);
     sqlx::any::install_default_drivers();
 
     let scheme = url.split(':').next().unwrap_or("");

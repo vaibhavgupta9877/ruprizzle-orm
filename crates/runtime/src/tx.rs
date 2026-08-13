@@ -591,35 +591,12 @@ impl crate::executor::Executor for Tx {
         sql: Cow<'static, str>,
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<RowBatch, Error>> {
-        Box::pin(async move {
-            let bind_count = binds.len();
-            if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
-                let started = std::time::Instant::now();
-                let result = self.fetch_all_rows(sql.as_ref(), &binds).await;
-                let elapsed_ms = started.elapsed().as_millis() as u64;
-                match &result {
-                    Ok(batch) => tracing::debug!(
-                        target: "ruprizzle::query",
-                        sql = %sql,
-                        binds = bind_count,
-                        rows = batch.len(),
-                        elapsed_ms,
-                        "query"
-                    ),
-                    Err(error) => tracing::warn!(
-                        target: "ruprizzle::query",
-                        sql = %sql,
-                        binds = bind_count,
-                        elapsed_ms,
-                        error = error.kind(),
-                        "query failed"
-                    ),
-                }
-                result
-            } else {
-                self.fetch_all_rows(sql.as_ref(), &binds).await
-            }
-        })
+        let bind_count = binds.len();
+        Box::pin(crate::executor::trace_and_record_query(
+            sql.clone(),
+            bind_count,
+            async move { self.fetch_all_rows(sql.as_ref(), &binds).await },
+        ))
     }
 
     fn execute_raw(
@@ -627,35 +604,12 @@ impl crate::executor::Executor for Tx {
         sql: Cow<'static, str>,
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<u64, Error>> {
-        Box::pin(async move {
-            let bind_count = binds.len();
-            if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
-                let started = std::time::Instant::now();
-                let result = self.execute(sql.as_ref(), &binds).await;
-                let elapsed_ms = started.elapsed().as_millis() as u64;
-                match &result {
-                    Ok(rows_affected) => tracing::debug!(
-                        target: "ruprizzle::query",
-                        sql = %sql,
-                        binds = bind_count,
-                        rows_affected,
-                        elapsed_ms,
-                        "execute"
-                    ),
-                    Err(error) => tracing::warn!(
-                        target: "ruprizzle::query",
-                        sql = %sql,
-                        binds = bind_count,
-                        elapsed_ms,
-                        error = error.kind(),
-                        "execute failed"
-                    ),
-                }
-                result
-            } else {
-                self.execute(sql.as_ref(), &binds).await
-            }
-        })
+        let bind_count = binds.len();
+        Box::pin(crate::executor::trace_and_record_execute(
+            sql.clone(),
+            bind_count,
+            async move { self.execute(sql.as_ref(), &binds).await },
+        ))
     }
 
     /// Buffers rather than streaming incrementally.
