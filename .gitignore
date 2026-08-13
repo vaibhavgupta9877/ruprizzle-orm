@@ -35,3 +35,6 @@ local/deep-tests/db/.tmp*/
 
 # Generated coverage reports (kept in working tree, not committed)
 /local/coverage/
+
+# Isolated dev worktrees
+/.worktrees/
