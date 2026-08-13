@@ -1,13 +1,9 @@
 //! The `ruprizzle` command-line interface.
 //!
-//! The command surface is declared in full from P0 so that the shape of the tool
-//! is fixed early and the `migrate dev` / `migrate deploy` split — the guard that
-//! keeps a prototyping command away from production data — is structural rather
-//! than something bolted on later.
-//!
-//! Subcommands are implemented incrementally: P6 delivers `migrate deploy`,
-//! `migrate status`, and `db push` (schema push without migration files).
-//! P7 fills in the remaining commands.
+//! Provides `generate`, `validate`, `format`, `migrate dev`, `migrate deploy`,
+//! `migrate status`, `db push`, `db seed`, and other schema-first workflow
+//! commands. The `migrate dev` / `migrate deploy` split is structural: `dev` is
+//! for prototyping, `deploy` is for production data.
 
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]

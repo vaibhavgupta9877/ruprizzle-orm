@@ -1,7 +1,8 @@
 # Query guide
 
 The generated client gives you two query styles: a type-safe builder that mirrors
-SQL, and a model convenience wrapper.
+SQL, and a model convenience wrapper. The model wrapper is the default starting
+point for application code.
 
 ## Select
 
@@ -9,7 +10,7 @@ SQL, and a model convenience wrapper.
 use my_app::db;
 
 let users = db.user()
-    .select()
+    .find_many()
     .filter(user::EMAIL.eq("alice@example.com"))
     .order_by(user::NAME.asc())
     .limit(10)
@@ -22,7 +23,7 @@ Call `.to_sql()` on any builder to see the generated SQL before running it:
 
 ```rust
 let sql = db.user()
-    .select()
+    .find_many()
     .filter(user::EMAIL.eq("alice@example.com"))
     .to_sql();
 println!("{sql}");
@@ -43,29 +44,54 @@ Select only the columns you need:
 
 ```rust
 let names = db.user()
-    .select()
-    .project(user::NAME)
+    .find_many()
+    .columns(user::NAME)
     .fetch_all()
     .await?;
 ```
 
 ## Insert
 
+Use the generated `UserInsert` shape to create one row:
+
 ```rust
-db.user()
-    .insert()
-    .set(user::EMAIL, "alice@example.com")
-    .set(user::NAME, "Alice")
+let user = db.user()
+    .create(db::UserInsert {
+        id: None,
+        email: "alice@example.com".into(),
+        name: Some("Alice".into()),
+    })
     .exec()
     .await?;
 ```
 
-`insert_many` is supported for bulk inserts.
+For a lower-level insert, `db.insert::<User>()` gives the same `InsertQuery` and
+lets you call `.set(...)` / `.set_optional(...)` directly:
+
+```rust
+let user = db.insert::<User>()
+    .set(user::EMAIL, "alice@example.com")
+    .set_optional(user::NAME, Some("Alice"))
+    .exec()
+    .await?;
+```
+
+`create_many` is supported for bulk inserts:
+
+```rust
+let users = db.user()
+    .create_many(vec![
+        db::UserInsert { id: None, email: "a@example.com".into(), name: None },
+        db::UserInsert { id: None, email: "b@example.com".into(), name: None },
+    ])
+    .exec()
+    .await?;
+```
 
 ## Update
 
 ```rust
-db.user()
+let updated = db.user()
     .update()
     .set(user::NAME, "Alicia")
     .filter(user::EMAIL.eq("alice@example.com"))
@@ -76,7 +102,7 @@ db.user()
 ## Delete
 
 ```rust
-db.user()
+let deleted = db.user()
     .delete()
     .filter(user::EMAIL.eq("alice@example.com"))
     .exec()
@@ -85,25 +111,42 @@ db.user()
 
 ## Pagination
 
-```rust
-use ruprizzle::Page;
+`page(size)` fetches a `Page<Out>` with a cursor. `has_next` is exact because one
+extra row is fetched and discarded.
 
-let page = db.user()
-    .select()
-    .paginate(Page::new(1, 20))   // page 1, 20 per page
-    .fetch()
+```rust
+let first_page = db.user()
+    .find_many()
+    .order_by(user::ID.asc())
+    .page(20)
     .await?;
 
-println!("page {} of {}, total {}", page.number, page.total, page.total_rows);
+for user in &first_page.items {
+    println!("{}", user.email);
+}
+
+if first_page.has_next {
+    let next_cursor = first_page.next_cursor.unwrap();
+    let next_page = db.user()
+        .find_many()
+        .order_by(user::ID.asc())
+        .after(user::ID, next_cursor, 20)
+        .await?;
+}
 ```
 
 ## Transactions
 
 ```rust
-let mut tx = db.begin().await?;
+use ruprizzle::prelude::*;
 
-// tx implements Executor, so all builders work unchanged.
-let id = tx.user().insert().set(user::EMAIL, "a@b.c").exec().await?;
+let mut tx = db.raw_pool().begin().await?;
+
+// `&tx` implements `Executor`, so the raw builders work unchanged.
+let user = InsertQuery::new(&tx)
+    .set(user::EMAIL, "a@b.c")
+    .exec()
+    .await?;
 
 if should_commit {
     tx.commit().await?;
@@ -117,54 +160,13 @@ if should_commit {
 If the builder cannot express a query, drop down to the executor:
 
 ```rust
-let rows = db.fetch_all_raw(
-    "SELECT * FROM users WHERE email LIKE $1".to_owned(),
-    vec![Value::from("%@example.com")],
-).await?;
+use ruprizzle::prelude::*;
+
+let rows = db
+    .raw_pool()
+    .fetch_all_raw(
+        "SELECT * FROM users WHERE email LIKE ?".into(),
+        vec![Value::Str("%alice%".into())],
+    )
+    .await?;
 ```
-
-## Observability
-
-Add `tracing-subscriber` with its `fmt` and `env-filter` features, then install a
-subscriber in the application to see database activity:
-
-```toml
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-```
-
-```rust
-tracing_subscriber::fmt()
-    .with_env_filter("ruprizzle::query=debug,ruprizzle::migrate=info")
-    .init();
-```
-
-`ruprizzle::query` reports SQL text, bind count, result counts, elapsed
-milliseconds, and a non-sensitive error category on failure. Bind values and
-database error detail are not logged. `ruprizzle::migrate` reports migration
-start and completion events with the migration ID and elapsed time. Avoid embedding
-sensitive literals in raw SQL because raw SQL text is intentionally observable.
-
-## Connection pooling
-
-Use `PoolConfig` when the application needs limits different from sqlx defaults:
-
-```rust
-use std::time::Duration;
-use ruprizzle::pool::{connect_with, PoolConfig};
-
-let mut config = PoolConfig::default();
-config.max_connections = 8;
-config.acquire_timeout = Duration::from_secs(5);
-let pool = connect_with("postgres://...", &config).await?;
-```
-
-Set `max_connections` below the database's `max_connections` after accounting for
-the number of application instances and other database clients.
-
-## Error handling and sensitive values
-
-Constraint errors include table and column context in their default `Display`
-text, but conflicting values are deliberately omitted because they may contain
-PII. If an application has an explicit policy for using the value, call
-`Error::conflicting_value()` and handle the returned data deliberately rather
-than logging the complete error blindly.

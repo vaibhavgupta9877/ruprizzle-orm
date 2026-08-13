@@ -22,7 +22,7 @@ model Post {
 let users = db.user()
     .find_many()
     .include(user::posts().take(5))
-    .exec()
+    .fetch_all()
     .await?;
 
 for user in &users {
@@ -46,7 +46,7 @@ db.user()
             .order_by(post::CREATED_AT.desc())
             .take(10)
     )
-    .exec()
+    .fetch_all()
     .await?;
 ```
 
@@ -83,7 +83,7 @@ Filter parents by a condition on their children:
 db.user()
     .find_many()
     .filter(user::posts().some(post::PUBLISHED.eq(true)))
-    .exec()
+    .fetch_all()
     .await?;
 ```
 

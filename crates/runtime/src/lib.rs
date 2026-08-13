@@ -1,8 +1,29 @@
 //! The ruprizzle runtime: the crate your application depends on.
 //!
-//! This crate provides the types that generated code compiles against:
-//! typed columns, filters, relation wrappers, and the query builders that the
-//! P4 implementation will fill in.
+//! This crate provides the types that generated code compiles against: typed
+//! [`Column`]s, [`Filter`]s, [`Related`] wrappers, and the query builders that
+//! produce [`CompiledSql`]. It also owns connection pooling ([`Pool`]),
+//! transactions ([`Tx`]), query execution ([`Executor`]), and migration helpers
+//! re-exported from `ruprizzle_migrate` for the CLI.
+//!
+//! # Backends
+//!
+//! By default `ruprizzle` builds on `sqlx::Any`, which lets the same binary talk
+//! to Postgres and SQLite. You can opt into native-driver paths:
+//!
+//! * **`sqlite-rusqlite`** — a synchronous `rusqlite` backend that skips the
+//!   `sqlx::Any` text round-trip for SQLite. Enable it in `Cargo.toml` and use a
+//!   `driver=rusqlite` query parameter on the SQLite URL.
+//! * **`postgres-tokio-postgres`** — experimental native `tokio-postgres`
+//!   backend behind the matching feature flag.
+//!
+//! The public API is identical across backends. Use the typed `Pool::as_any`,
+//! `Pool::as_sqlite`, `Pool::as_postgres`, and feature-gated `Pool::as_rusqlite`
+//! / `Pool::as_tokio_postgres` accessors when you need driver-specific behaviour.
+//!
+//! # Prelude
+//!
+//! Most application code can start with [`prelude`].
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs, clippy::all)]

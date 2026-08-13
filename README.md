@@ -108,7 +108,7 @@ Wrong-typed and cross-model filters are compile errors, not runtime ones:
 
 ```rust
 user::EMAIL.eq(42)                              // error: expected String, found i32
-db.post().select().filter(user::EMAIL.eq(""))  // error: expected Filter<Post>, found Filter<User>
+db.post().find_many().filter(user::EMAIL.eq(""))  // error: expected Filter<Post>, found Filter<User>
 ```
 
 ---
@@ -196,9 +196,9 @@ ruprizzle tries to give you all three at once:
 
 ### Transactions and escape hatches
 
-- **First-class transactions**: `db.begin().await?`, `tx.commit().await?`, `tx.rollback().await?`. All builders work unchanged against a transaction.
+- **First-class transactions**: `db.raw_pool().begin().await?`, `tx.commit().await?`, `tx.rollback().await?`. Builders take `&dyn Executor`, so the same query works against a pool or a transaction.
 - **Isolation levels**: `ReadUncommitted`, `ReadCommitted`, `RepeatableRead`, `Serializable`.
-- **Raw SQL execution**: `db.fetch_all_raw(sql, params).await?` and `db.execute_raw(sql, params).await?`.
+- **Raw SQL execution**: `db.raw_pool().fetch_all_raw(sql, params).await?` and `db.raw_pool().execute_raw(sql, params).await?`.
 - **Retry helpers**: `ruprizzle::is_retryable(&error)` for transient error handling.
 
 ---
@@ -264,7 +264,7 @@ async fn main() -> Result<(), ruprizzle::Error> {
         .create(db::UserInsert {
             id: None,
             email: "alice@example.com".into(),
-            name: "Alice".into(),
+            name: Some("Alice".into()),
         })
         .exec()
         .await?;
@@ -292,7 +292,7 @@ See the full [quickstart](docs/Quickstart.md) for a step-by-step walkthrough.
 ```rust
 let users = db
     .user()
-    .select()
+    .find_many()
     .filter(user::EMAIL.eq("alice@example.com"))
     .order_by(user::NAME.asc())
     .limit(10)
@@ -306,8 +306,8 @@ let users = db
 ```rust
 let names = db
     .user()
-    .select()
-    .project(user::NAME)
+    .find_many()
+    .columns(user::NAME)
     .fetch_all()
     .await?;
 ```
@@ -315,16 +315,25 @@ let names = db
 ### Insert and upsert
 
 ```rust
-db.user()
-    .insert()
+let user = db
+    .user()
+    .create(db::UserInsert {
+        id: None,
+        email: "alice@example.com".into(),
+        name: Some("Alice".into()),
+    })
+    .exec()
+    .await?;
+
+// Or build an insert directly:
+db.insert::<User>()
     .set(user::EMAIL, "alice@example.com")
-    .set(user::NAME, "Alice")
+    .set_optional(user::NAME, Some("Alice"))
     .exec()
     .await?;
 
 // Insert or update on conflict
-db.user()
-    .insert()
+db.insert::<User>()
     .set(user::EMAIL, "alice@example.com")
     .set(user::NAME, "Alice")
     .on_conflict(["email"])
@@ -336,24 +345,29 @@ db.user()
 ### Pagination
 
 ```rust
-use ruprizzle::Page;
-
 let page = db
     .user()
-    .select()
-    .paginate(Page::new(1, 20))
-    .fetch()
+    .find_many()
+    .order_by(user::ID.asc())
+    .page(20)
     .await?;
 
-println!("page {} of {}, total {}", page.number, page.total, page.total_rows);
+for user in &page.items {
+    println!("{}", user.email);
+}
 ```
 
 ### Transactions
 
 ```rust
-let mut tx = db.begin().await?;
+use ruprizzle::prelude::*;
 
-let id = tx.user().insert().set(user::EMAIL, "a@b.c").exec().await?;
+let mut tx = db.raw_pool().begin().await?;
+
+let user = InsertQuery::new(&tx)
+    .set(db::user::EMAIL, "a@b.c")
+    .exec()
+    .await?;
 
 if should_commit {
     tx.commit().await?;
@@ -365,10 +379,13 @@ if should_commit {
 ### Raw SQL
 
 ```rust
+use ruprizzle::prelude::*;
+
 let rows = db
+    .raw_pool()
     .fetch_all_raw(
-        "SELECT * FROM users WHERE email LIKE $1".to_owned(),
-        vec![Value::from("%@example.com")],
+        "SELECT * FROM users WHERE email LIKE ?".into(),
+        vec![Value::Str("%@example.com".into())],
     )
     .await?;
 ```

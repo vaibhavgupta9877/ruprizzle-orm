@@ -1,9 +1,10 @@
 //! Snapshot, diff, plan, apply.
 //!
-//! Implemented in P6; see `ProjectPlan/ImplementationPlan/ImplPlan07Migrations.md`.
-//!
-//! The snapshot format is the serialized [`ruprizzle_core::ir::Schema`] (ADR-007),
-//! so this crate never defines a second description of a schema.
+//! Computes the difference between the target `Schema` and the schema stored in
+//! the database, emits up/down SQL, and applies migrations in order under
+//! advisory locking. The snapshot format is the serialized
+//! `ruprizzle_core::ir::Schema`, so this crate never defines a second
+//! description of a schema.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs, clippy::pedantic)]
