@@ -363,7 +363,7 @@ builder or relations sections that a competitor scores `Yes` on; every new build
 - [x] **W3-02 · Slow-query threshold event.** A configurable duration above which a query
       emits `WARN` with the SQL *shape* — bind counts, never values. The existing PII
       discipline in `error_redaction.rs` is the standard to hold. **0.5 day.**
-- [ ] **W3-03 · `docs/Operations.md`.** What each span means, what to alert on, how to read
+- [x] **W3-03 · `docs/Operations.md`.** What each span means, what to alert on, how to read
       `PoolStats`, how to interpret saturation, what to do when `ping` fails, and a worked
       example dashboard. The assessment has called this out for two passes. **1 day.**
 - [ ] **W3-04 · Connection lifecycle events.** Trace connect, disconnect, acquire-timeout,
