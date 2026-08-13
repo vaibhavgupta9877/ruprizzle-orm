@@ -110,6 +110,16 @@ A beta milestone that closes the remaining alpha.3 beta blockers: clippy warning
 
 ### Fixed
 
+- `SelectQuery::fetch_one()` and `fetch_optional()` are now only available on
+  queries without `.include(...)`. Queries with includes must use the new
+  `exec_one()` / `exec_optional()` methods, which load the requested relations
+  and return the single matching row. This prevents a silent `Related::Absent`
+  result when a user added an include but called the non-include terminal.
+  (BUG-04)
+- The panic message in `Related::get()` now points at `.exec()` / `.exec_one()`
+  rather than only mentioning `.include()`, which was itself the source of the
+  confusion.
+
 - CI: stale `generated-code-lint` job (which asserted the code generator was still unimplemented) replaced with the working `generated-code` gate.
 - CI: `cargo-deny-action` pinned to `v2.1.1` to avoid the positional-argument regression in `v2.1.0`.
 - Docs: security advisory reporting link in `ProductionReadinessPlan.md` now points at the real repository.

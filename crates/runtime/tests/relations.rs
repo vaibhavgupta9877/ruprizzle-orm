@@ -231,6 +231,73 @@ async fn include_with_filter_and_take_round_trip() {
 }
 
 #[tokio::test]
+async fn exec_one_and_optional_with_include_round_trip() {
+    let pool = fresh_pool().await;
+
+    pool.execute_raw(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
+            .to_string()
+            .into(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)".to_string().into(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
+
+    for (id, name) in [(1, "alice"), (2, "bob")] {
+        InsertQuery::<User>::new(&pool)
+            .set(USER_ID, id)
+            .set(USER_NAME, name)
+            .exec()
+            .await
+            .unwrap();
+    }
+
+    for (id, title, author_id) in [(1, "first", 1), (2, "second", 1), (3, "third", 2)] {
+        InsertQuery::<Post>::new(&pool)
+            .set(POST_ID, id)
+            .set(POST_TITLE, title)
+            .set(POST_AUTHOR_ID, author_id)
+            .exec()
+            .await
+            .unwrap();
+    }
+
+    let alice = SelectQuery::<User>::new(&pool)
+        .filter(USER_ID.eq(1))
+        .include(posts())
+        .exec_one()
+        .await
+        .unwrap();
+    assert_eq!(alice.name, "alice");
+    assert_eq!(alice.posts.get().len(), 2);
+
+    let bob = SelectQuery::<User>::new(&pool)
+        .filter(USER_ID.eq(2))
+        .include(posts())
+        .exec_optional()
+        .await
+        .unwrap()
+        .expect("bob exists");
+    assert_eq!(bob.name, "bob");
+    assert_eq!(bob.posts.get().len(), 1);
+    assert_eq!(bob.posts.get()[0].title, "third");
+
+    let missing = SelectQuery::<User>::new(&pool)
+        .filter(USER_ID.eq(99))
+        .include(posts())
+        .exec_optional()
+        .await
+        .unwrap();
+    assert!(missing.is_none());
+}
+
+#[tokio::test]
 async fn nested_create_round_trip() {
     let pool = fresh_pool().await;
 

@@ -16,7 +16,7 @@ against a real SQLite database and then deleted; none remain in the tree.
 | [BUG-01](#bug-01) | Dropping a `Tx` permanently leaks a `rusqlite` connection; the pool dies | **Critical** | ✔️ **Fixed** (FIX-01) |
 | [BUG-02](#bug-02) | `RusqlitePool::acquire` panics with divide-by-zero when all connections are in transactions | **Critical** | ✔️ **Fixed** (FIX-02) |
 | [BUG-03](#bug-03) | Dropping a `Tx` returns a `tokio-postgres` connection to the pool with an open `BEGIN` | **Critical** | ✔️ **Fixed** (FIX-03) — reproduced on PG 17.10 first |
-| [BUG-04](#bug-04) | `fetch_one` / `fetch_optional` silently discard `.include()`, then panic on access | **High** | ✅ Confirmed, reproduced |
+| [BUG-04](#bug-04) | `fetch_one` / `fetch_optional` silently discard `.include()`, then panic on access | **High** | ✔️ **Fixed** (FIX-04) |
 | [BUG-05](#bug-05) | Divide-by-zero panic on an insert with an empty column set | **High** | ✔️ **Fixed** (FIX-05) |
 | [BUG-06](#bug-06) | `RusqliteTransaction` derives `Clone`, allowing a connection to be returned twice | Medium | ✔️ **Fixed** (FIX-06) |
 | [BUG-07](#bug-07) | `PoolStats` always reports zeros for the `rusqlite` backend | Medium | ✅ Confirmed by inspection |
@@ -215,6 +215,10 @@ let alice: User = SelectQuery::<User>::new(&pool)
 and add include-aware `exec_optional`/`exec_one` on the `IncludeSet` impl alongside `exec`.
 Both halves are needed: the bound alone would remove the ability to fetch a single row with
 relations, which is the single most common ORM operation there is.
+
+**Status:** Fixed by FIX-04. `SelectQuery::exec_one` and `exec_optional` now live on the
+include-aware impl and load relations with `is_full_table = false`; the non-include
+`fetch_one`/`fetch_optional` are only available on `SelectQuery<'_, M, Out, ()>`.
 
 ---
 

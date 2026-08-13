@@ -303,27 +303,20 @@ input-reachable arithmetic or indexing panic remains in library source.
 
 **Files:** `crates/runtime/src/query.rs`, `crates/runtime/tests/relations.rs`
 
-- [ ] **Step 1 — Failing test first.** `.include(posts()).fetch_one()` returns a model whose
-      relation `is_absent()`. Add to `relations.rs`.
-- [ ] **Step 2 — Apply the existing guard.** Move `fetch_optional` and `fetch_one` from the
-      generic `impl<'db, M, Out, I>` (line 63) to the `impl<'db, M, Out> …, ()>` block that
-      already holds `fetch_all`, `stream`, and `page`. This makes the broken call a compile
-      error, matching the design intent already documented on those three methods.
-- [ ] **Step 3 — Add the include-aware equivalents.** Step 2 alone would remove the ability
-      to fetch one row with relations, which is a core operation. Add `exec_optional` and
-      `exec_one` to the `I: IncludeSet<M>` impl beside `exec`, loading includes via
-      `self.includes.load(...)`. Reuse `exec`'s decode path rather than duplicating the
-      feature-gated `rusqlite` branch.
-- [ ] **Step 4 — `is_full_table` must be `false`** for these: a single-row fetch is not a
-      full-table scan, and passing `true` would trigger PERF-01's whole-child-table load for
-      one parent. Verify explicitly — this is an easy and expensive mistake.
-- [ ] **Step 5 — Fix the misleading message.** `Related::get()` currently says *"add an
-      `.include()` to the query"* — the exact thing the BUG-04 user did. Reword to also
-      mention using `exec`/`exec_one` rather than `fetch_*`.
-- [ ] **Step 6 — Compile-fail coverage.** Add a `trybuild` case asserting
-      `.include(...).fetch_one()` no longer compiles.
-- [ ] **Step 7 — Docs.** Update `docs/QueryGuide.md` and `docs/RelationsGuide.md`; this is a
-      breaking API change and belongs in `CHANGELOG.md`.
+- [x] **Step 1 — Failing test first.** Added `exec_one_and_optional_with_include_round_trip` in
+      `crates/runtime/tests/relations.rs` to assert includes are loaded for single-row fetches.
+- [x] **Step 2 — Apply the existing guard.** `fetch_optional` and `fetch_one` now live in the
+      `SelectQuery<'db, M, Out, ()>` impl; calling them after `.include(...)` is a compile-time
+      error.
+- [x] **Step 3 — Add the include-aware equivalents.** Added `exec_optional` and `exec_one` to
+      the `I: IncludeSet<M>` impl; they decode a single row and call `self.includes.load(...)`.
+- [x] **Step 4 — `is_full_table` must be `false`** for these: both `exec_optional` and
+      `exec_one` pass `false` to `load`.
+- [x] **Step 5 — Fix the misleading message.** `Related::get()` now says *"add an `.include()`
+      and execute the query with `.exec()` or `.exec_one()`"*.
+- [x] **Step 6 — Compile-fail coverage.** Added `tests/trybuild/include_then_fetch_one.rs`.
+- [x] **Step 7 — Docs.** Updated `docs/QueryGuide.md`, `docs/RelationsGuide.md`, and
+      `CHANGELOG.md`.
 
 ## FIX-08 · `IncludeList` must handle duplicate parent keys
 

@@ -178,58 +178,6 @@ where
         )
     }
 
-    /// Executes the query and returns the first row, if any.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::Sqlx`] for database errors.
-    pub async fn fetch_optional(self) -> Result<Option<Out>, Error>
-    where
-        Out: Send + Unpin + RowDecode,
-    {
-        let mut q = self;
-        if q.limit.is_none() {
-            q.limit = Some(1);
-        }
-        let compiled = q.to_sql();
-
-        #[cfg(feature = "sqlite-rusqlite")]
-        let mut v: Vec<Out> = if let Some(pool) = q.exec.as_rusqlite() {
-            q.exec.on_query();
-            pool.fetch_all_sync_decoded::<Out>(compiled.sql, compiled.binds)?
-        } else {
-            let batch = q.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
-            crate::executor::decode_rows(batch)?
-        };
-
-        #[cfg(not(feature = "sqlite-rusqlite"))]
-        let mut v: Vec<Out> = {
-            let batch = q.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
-            crate::executor::decode_rows(batch)?
-        };
-
-        Ok(if v.is_empty() {
-            None
-        } else {
-            Some(v.remove(0))
-        })
-    }
-
-    /// Executes the query and returns exactly one row.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::Sqlx`] for database errors, including the case where no
-    /// row matches.
-    pub async fn fetch_one(self) -> Result<Out, Error>
-    where
-        Out: Send + Unpin + RowDecode,
-    {
-        self.fetch_optional()
-            .await?
-            .ok_or_else(|| Error::Message("no row found for query".into()))
-    }
-
     /// Returns the number of rows the query would return.
     ///
     /// `ORDER BY`, `LIMIT` and `OFFSET` are ignored for the count: counting the
@@ -413,6 +361,61 @@ where
         }
         Ok(Page::new(items, has_next, None))
     }
+
+    /// Executes the query and returns the first row, if any.
+    ///
+    /// Only available when the query has no `.include(...)`: fetching a single
+    /// row without loading declared includes would silently return the wrong
+    /// data. Use [`exec_optional`](SelectQuery::exec_optional) for include-aware
+    /// execution.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors.
+    pub async fn fetch_optional(mut self) -> Result<Option<Out>, Error>
+    where
+        Out: Send + Unpin + RowDecode,
+    {
+        if self.limit.is_none() {
+            self.limit = Some(1);
+        }
+        let compiled = self.to_sql();
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        let v: Vec<Out> = if let Some(pool) = self.exec.as_rusqlite() {
+            self.exec.on_query();
+            pool.fetch_all_sync_decoded::<Out>(compiled.sql, compiled.binds)?
+        } else {
+            let batch = self.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            crate::executor::decode_rows(batch)?
+        };
+
+        #[cfg(not(feature = "sqlite-rusqlite"))]
+        let v: Vec<Out> = {
+            let batch = self.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            crate::executor::decode_rows(batch)?
+        };
+
+        Ok(v.into_iter().next())
+    }
+
+    /// Executes the query and returns exactly one row.
+    ///
+    /// Only available when the query has no `.include(...)`. Use
+    /// [`exec_one`](SelectQuery::exec_one) when includes are requested.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors, including the case where no
+    /// row matches.
+    pub async fn fetch_one(self) -> Result<Out, Error>
+    where
+        Out: Send + Unpin + RowDecode,
+    {
+        self.fetch_optional()
+            .await?
+            .ok_or_else(|| Error::Message("no row found for query".into()))
+    }
 }
 
 impl<'db, M, I> SelectQuery<'db, M, M, I>
@@ -453,6 +456,57 @@ where
             .load(self.exec, &mut rows, self.is_full_table())
             .await?;
         Ok(rows)
+    }
+
+    /// Executes the query, loads any requested includes, and returns the first
+    /// row if one matches.
+    ///
+    /// A single-row fetch is never a full-table scan, so the full-table include
+    /// fast path is disabled for this call.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors.
+    pub async fn exec_optional(mut self) -> Result<Option<M>, Error> {
+        self.limit = Some(1);
+        let compiled = self.to_sql();
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        let mut rows: Vec<M> = if let Some(pool) = self.exec.as_rusqlite() {
+            self.exec.on_query();
+            pool.fetch_all_sync_decoded::<M>(compiled.sql, compiled.binds)?
+        } else {
+            let batch = self
+                .exec
+                .fetch_all_raw(compiled.sql, compiled.binds)
+                .await?;
+            crate::executor::decode_rows(batch)?
+        };
+
+        #[cfg(not(feature = "sqlite-rusqlite"))]
+        let mut rows: Vec<M> = {
+            let batch = self
+                .exec
+                .fetch_all_raw(compiled.sql, compiled.binds)
+                .await?;
+            crate::executor::decode_rows(batch)?
+        };
+
+        self.includes.load(self.exec, &mut rows, false).await?;
+        Ok(rows.into_iter().next())
+    }
+
+    /// Executes the query, loads any requested includes, and returns exactly one
+    /// row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors, including the case where no
+    /// row matches.
+    pub async fn exec_one(self) -> Result<M, Error> {
+        self.exec_optional()
+            .await?
+            .ok_or_else(|| Error::Message("no row found for query".into()))
     }
 }
 

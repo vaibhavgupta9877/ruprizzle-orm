@@ -22,7 +22,7 @@ model Post {
 let users = db.user()
     .find_many()
     .include(user::posts().take(5))
-    .fetch_all()
+    .exec()
     .await?;
 
 for user in &users {
@@ -46,9 +46,30 @@ db.user()
             .order_by(post::CREATED_AT.desc())
             .take(10)
     )
-    .fetch_all()
+    .exec()
     .await?;
 ```
+
+## Single-row includes
+
+`fetch_one()` and `fetch_optional()` are only available on plain selects. Once
+you add `.include(...)`, use the include-aware single-row methods instead:
+
+```rust
+let user = db.user()
+    .find_many()
+    .filter(user::ID.eq(1))
+    .include(user::posts().take(5))
+    .exec_one()
+    .await?;
+
+for post in user.posts.get() {
+    println!("{}", post.title);
+}
+```
+
+`exec_optional()` returns `Option<M>` and also loads the requested includes.
+`exec()` remains the choice when you expect many rows.
 
 ## Many-to-many with an explicit join model
 

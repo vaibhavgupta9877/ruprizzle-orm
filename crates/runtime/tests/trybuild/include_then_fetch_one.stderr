@@ -1,0 +1,8 @@
+error[E0599]: no method named `fetch_one` found for struct `SelectQuery<'_, User, User, IncludeList<'_, User, Post, i64>>` in the current scope
+  --> tests/trybuild/include_then_fetch_one.rs:36:59
+   |
+36 |     let _ = SelectQuery::<User>::new(db).include(include).fetch_one();
+   |                                                           ^^^^^^^^^ method not found in `SelectQuery<'_, User, User, IncludeList<'_, User, Post, i64>>`
+   |
+   = note: the method was found for
+           - `SelectQuery<'db, M, Out>`

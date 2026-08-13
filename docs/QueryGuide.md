@@ -19,6 +19,19 @@ let users = db.user()
     .await?;
 ```
 
+`fetch_one()` and `fetch_optional()` are available on selects without `.include()`.
+Once you add an include, use `exec_one()` and `exec_optional()` so the relation
+is loaded:
+
+```rust
+let user = db.user()
+    .find_many()
+    .filter(user::EMAIL.eq("alice@example.com"))
+    .include(user::posts().take(5))
+    .exec_one()
+    .await?;
+```
+
 Call `.to_sql()` on any builder to see the generated SQL before running it:
 
 ```rust
