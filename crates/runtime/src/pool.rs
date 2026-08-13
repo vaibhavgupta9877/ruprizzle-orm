@@ -309,6 +309,14 @@ pub struct PoolConfig {
     /// This is only meaningful when `connect`/`connect_with` build a native
     /// SQLite pool. The default matches `sqlx-sqlite`'s own default.
     pub row_buffer_size: u32,
+    /// Maximum child-table rows that can be loaded in a single batched `include`
+    /// query before the loader falls back to a chunked `IN (...)` list.
+    ///
+    /// This bounds the full-table fast path so a parent table with millions of
+    /// rows does not cause the loader to materialise and decode the entire child
+    /// table. `None` disables fast-path include loading entirely and always uses
+    /// chunked `IN`. Defaults to `100_000`.
+    pub full_table_include_limit: Option<u64>,
 }
 
 impl Default for PoolConfig {
@@ -322,6 +330,7 @@ impl Default for PoolConfig {
             test_before_acquire: false,
             reset_on_recycle: false,
             row_buffer_size: 1024,
+            full_table_include_limit: Some(100_000),
         }
     }
 }
@@ -345,6 +354,7 @@ pub async fn connect(url: &str) -> Result<Pool, crate::Error> {
 ///
 /// Returns an error if the URL cannot be parsed or the connection fails.
 pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate::Error> {
+    crate::executor::set_full_table_include_limit(config.full_table_include_limit);
     sqlx::any::install_default_drivers();
 
     let scheme = url.split(':').next().unwrap_or("");

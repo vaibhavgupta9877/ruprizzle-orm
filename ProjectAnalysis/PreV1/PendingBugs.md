@@ -418,6 +418,11 @@ large include incrementally.
 (`PoolConfig::full_table_include_limit`, defaulting to something like 100k), falling back to
 chunked `IN` above it. Document the threshold.
 
+**Status:** Fixed. `PoolConfig::full_table_include_limit` defaults to `Some(100_000)`.
+`fetch_children` now `COUNT(*)`s the child table before taking the full-table fast path and
+falls back to the chunked `IN` path when the count exceeds the limit. The check applies at
+every nested include level. `None` disables the fast path entirely.
+
 ### PERF-02
 
 **`Tx` takes a mutex and re-boxes the dialect on every statement.**

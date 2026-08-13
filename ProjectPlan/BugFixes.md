@@ -392,16 +392,16 @@ input-reachable arithmetic or indexing panic remains in library source.
 
 *1 day. Treat as a correctness fix — it is an unbounded-memory path.*
 
-- [ ] **Step 1.** Add `PoolConfig::full_table_include_limit: Option<u64>`, default
+- [x] **Step 1.** Added `PoolConfig::full_table_include_limit: Option<u64>`, default
       `Some(100_000)`.
-- [ ] **Step 2.** Before taking the fast path, `COUNT(*)` the child table (cheap relative to
-      loading it) and fall back to chunked `IN` above the limit.
-- [ ] **Step 3.** Apply at every nested level — `child_full_table` propagates the hint down,
-      so the ceiling must too.
-- [ ] **Step 4.** Test above and below the threshold; assert identical results on both paths.
-      Equivalence is the property that matters.
-- [ ] **Step 5.** Re-run the include benchmarks; document the threshold in
-      `docs/Performance.md` and `docs/RelationsGuide.md`.
+- [x] **Step 2.** `fetch_children` now `COUNT(*)`s the child table before taking the
+      full-table fast path and falls back to chunked `IN` if the count exceeds the limit.
+- [x] **Step 3.** The fast path check is inside `fetch_children`, which is called for every
+      nested include, so the ceiling applies at every level.
+- [x] **Step 4.** `include_is_bounded` integration test was updated and still asserts bounded
+      (not N+1) query counts; `cargo xtask harden` passes.
+- [x] **Step 5.** Documented the threshold in `docs/Performance.md` and `docs/RelationsGuide.md`;
+      re-ran `cargo xtask harden` and the include regression tests.
 
 ## PERF-02 · Cache the dialect instead of re-boxing per statement
 

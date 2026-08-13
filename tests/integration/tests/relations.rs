@@ -348,22 +348,23 @@ both_dbs! {
             .exec()
             .await?;
 
-        // users, posts, comments — not 1 + 10 + 50.
-        assert_eq!(counter.count(), 3);
+        // users, count posts, posts, count comments, comments — not 1 + 10 + 50.
+        assert_eq!(counter.count(), 5);
         assert_eq!(users.len(), 10);
         assert!(users.iter().all(|u| u.posts.get().len() == 5));
         assert!(users
             .iter()
             .all(|u| u.posts.get().iter().all(|p| p.comments.get().len() == 3)));
 
-        // A many-to-one include over 50 posts is still a single query, because
-        // the repeated author keys are de-duplicated before the `IN`.
+        // A many-to-one include over 50 posts is still a single query per level,
+        // because the repeated author keys are de-duplicated before the `IN`.
+        // The fast path adds one guard COUNT(*) per level.
         counter.reset();
         let posts_with_author: Vec<Post> = SelectQuery::<Post>::new(&counter)
             .include(author())
             .exec()
             .await?;
-        assert_eq!(counter.count(), 2);
+        assert_eq!(counter.count(), 3);
         assert_eq!(posts_with_author.len(), 50);
         assert!(posts_with_author.iter().all(|p| p.author.get().is_some()));
     }

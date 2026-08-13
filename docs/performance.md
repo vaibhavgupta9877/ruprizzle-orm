@@ -15,6 +15,17 @@ RUPRIZZLE_TEST_PG_URL=postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_te
 If no database is reachable, the bench skips automatically so `cargo bench`
 still works offline.
 
+## Full-table include fast path
+
+Unfiltered parent queries use a fast path that loads the entire child table in
+one query instead of building a large `IN (...)` list. To avoid unbounded
+materialisation on huge child tables, `ruprizzle` first `COUNT(*)`s the child
+table and only takes the fast path when the count is below
+`PoolConfig::full_table_include_limit` (default `100_000`). Larger child tables
+fall back to a chunked `IN (...)` path, preserving the one-query-per-level
+guarantee without decoding millions of rows into memory. Set the field to `None`
+to disable the fast path entirely.
+
 ## P8-02 thresholds and measured results
 
 Measured on a single workstation (Intel Core Ultra 7 265K, 20 logical cores,

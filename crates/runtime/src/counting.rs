@@ -73,6 +73,10 @@ impl Executor for CountingExecutor<'_> {
         self.inner.dialect()
     }
 
+    fn full_table_include_limit(&self) -> u64 {
+        self.inner.full_table_include_limit()
+    }
+
     #[cfg(feature = "sqlite-rusqlite")]
     fn as_rusqlite(&self) -> Option<&crate::rusqlite::RusqlitePool> {
         self.inner.as_rusqlite()

@@ -18,6 +18,21 @@ use sqlx::any::AnyRow;
 use sqlx::postgres::PgRow;
 use sqlx::sqlite::SqliteRow;
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static FULL_TABLE_INCLUDE_LIMIT: AtomicU64 = AtomicU64::new(100_000);
+
+/// Sets the process-wide full-table include limit.
+///
+/// `0` (or `None`) disables the fast path entirely.
+pub(crate) fn set_full_table_include_limit(limit: Option<u64>) {
+    FULL_TABLE_INCLUDE_LIMIT.store(limit.unwrap_or(0), Ordering::Relaxed);
+}
+
+fn full_table_include_limit() -> u64 {
+    FULL_TABLE_INCLUDE_LIMIT.load(Ordering::Relaxed)
+}
+
 use crate::BoxFuture;
 use crate::error::Error;
 use crate::pool::Pool;
@@ -122,6 +137,15 @@ pub trait Executor: Send + Sync {
     /// reference is tied to the executor, which typically caches a `'static`
     /// dialect internally.
     fn dialect(&self) -> &dyn DbDialect;
+
+    /// Maximum child-table rows the include loader may load in one query when
+    /// using the full-table fast path.
+    ///
+    /// A value of `0` disables the fast path and forces chunked `IN (...)`. The
+    /// default is `100_000` and is configured through `PoolConfig`.
+    fn full_table_include_limit(&self) -> u64 {
+        full_table_include_limit()
+    }
 
     /// Runs a query and returns the raw rows.
     ///

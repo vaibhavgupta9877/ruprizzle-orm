@@ -59,6 +59,7 @@ pub struct Tx {
     inner: Mutex<Option<TxInner>>,
     provider: Provider,
     dialect: &'static dyn DbDialect,
+    full_table_include_limit: u64,
 }
 
 impl fmt::Debug for Tx {
@@ -66,6 +67,7 @@ impl fmt::Debug for Tx {
         f.debug_struct("Tx")
             .field("provider", &self.provider)
             .field("dialect", &self.dialect.name())
+            .field("full_table_include_limit", &self.full_table_include_limit)
             .finish_non_exhaustive()
     }
 }
@@ -91,6 +93,7 @@ impl Tx {
             inner: Mutex::new(Some(tx)),
             provider,
             dialect: dialect_for(provider),
+            full_table_include_limit: crate::executor::Executor::full_table_include_limit(pool),
         })
     }
 
@@ -436,6 +439,10 @@ impl Tx {
 impl crate::executor::Executor for Tx {
     fn dialect(&self) -> &dyn DbDialect {
         Self::dialect(self)
+    }
+
+    fn full_table_include_limit(&self) -> u64 {
+        self.full_table_include_limit
     }
 
     #[cfg(feature = "sqlite-rusqlite")]

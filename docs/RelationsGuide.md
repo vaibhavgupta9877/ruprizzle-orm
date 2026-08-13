@@ -115,3 +115,14 @@ db.user()
 A naive loop would issue one query per parent to fetch children. `include`
 batches children by parent key and issues one query per *level*, then maps the
 rows back into the parent structs in Rust.
+
+## Full-table fast path and its bound
+
+When the parent query is an unfiltered full-table fetch and the include has no
+extra filter, order, or per-parent limit, `ruprizzle` can load the whole child
+table in one query instead of building a large `IN (...)` list. Before taking
+that path, it `COUNT(*)`s the child table and only uses the full-table load when
+the count is below `PoolConfig::full_table_include_limit` (default `100_000`).
+If the child table is larger, the loader falls back to a chunked `IN (...)` list,
+which preserves the bounded-query guarantee without materialising millions of
+rows. Set the field to `None` to disable the fast path entirely.

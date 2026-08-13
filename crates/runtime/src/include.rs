@@ -39,16 +39,22 @@ where
     Key: Encodable + Eq + Hash + Clone + Send + Sync + 'static,
 {
     // Fast path: if the parent set is the whole parent table and the child
-    // include has no extra filter, order or per-parent limit, just load the
-    // whole child table. This avoids parsing and binding a large `IN` list and
-    // lets the database do a simple full scan. Rows with no matching parent are
-    // dropped during grouping, so the result is still correct.
+    // include has no extra filter, order or per-parent limit, we can avoid
+    // parsing and binding a large `IN` list by loading the whole child table.
+    // To prevent unbounded materialisation when the child table is huge, we
+    // first COUNT(*) it and fall back to chunked `IN` above the executor's
+    // limit. `0` disables the fast path entirely.
+    let full_table_limit = exec.full_table_include_limit();
     if full_table
+        && full_table_limit > 0
         && filter.node == crate::filter::FilterNode::And(Vec::new())
         && order.is_empty()
         && limit.is_none()
     {
-        return SelectQuery::<C>::new(exec).fetch_all().await;
+        let child_count = SelectQuery::<C>::new(exec).count().await?;
+        if child_count <= full_table_limit as i64 {
+            return SelectQuery::<C>::new(exec).fetch_all().await;
+        }
     }
 
     // The parent set repeats keys whenever several parents point at the same
