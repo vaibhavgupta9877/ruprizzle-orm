@@ -174,7 +174,10 @@ impl RusqlitePool {
                 })?
             };
 
-            {
+            // The connection is out of the pool from here on, and there is no
+            // `RusqliteTransaction` yet to drop it back in, so `?` would leak it
+            // exactly the way an abandoned transaction used to (BUG-01).
+            let started = (|| -> Result<(), Error> {
                 let guard = conn
                     .lock()
                     .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
@@ -185,6 +188,12 @@ impl RusqlitePool {
                 // after another connection changed the schema; refresh so that
                 // the transaction sees the current schema.
                 force_schema_reload(&guard);
+                Ok(())
+            })();
+
+            if let Err(error) = started {
+                pool.return_conn(conn);
+                return Err(error);
             }
 
             Ok(RusqliteTransaction {
