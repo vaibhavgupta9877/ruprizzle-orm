@@ -368,7 +368,7 @@ builder or relations sections that a competitor scores `Yes` on; every new build
       example dashboard. The assessment has called this out for two passes. **1 day.**
 - [x] **W3-04 · Connection lifecycle events.** Trace connect, disconnect, acquire-timeout,
       and reconnect. Today a pool that is thrashing is invisible.  **0.5 day.**
-- [ ] **W3-05 · Concurrency and throughput benchmarks.** The axis the current Criterion
+- [x] **W3-05 · Concurrency and throughput benchmarks.** The axis the current Criterion
       suite does not cover: queries/sec against pool size, tail latency under contention,
       behaviour at pool exhaustion. **2 days.**
 
