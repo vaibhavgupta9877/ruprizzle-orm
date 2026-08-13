@@ -13,14 +13,14 @@ authors      = ["Vaibhav Gupta <vaibhavgupta9877@gmail.com>"]
 
 [workspace.dependencies]
 # --- internal ---
-ruprizzle-core    = { path = "crates/core",    version = "0.1.0-alpha.3" }
-ruprizzle-dialect = { path = "crates/dialect", version = "0.1.0-alpha.3" }
-ruprizzle-parser  = { path = "crates/parser",  version = "0.1.0-alpha.3" }
-ruprizzle-codegen = { path = "crates/codegen", version = "0.1.0-alpha.3" }
-ruprizzle-migrate = { path = "crates/migrate", version = "0.1.0-alpha.3" }
-ruprizzle-macros  = { path = "crates/macros",  version = "0.1.0-alpha.3" }
-ruprizzle         = { path = "crates/runtime", version = "0.1.0-alpha.3" }
-ruprizzle-testkit = { path = "crates/testkit", version = "0.1.0-alpha.3" }
+ruprizzle-core    = { path = "crates/core",    version = "0.1.1-beta.1" }
+ruprizzle-dialect = { path = "crates/dialect", version = "0.1.1-beta.1" }
+ruprizzle-parser  = { path = "crates/parser",  version = "0.1.1-beta.1" }
+ruprizzle-codegen = { path = "crates/codegen", version = "0.1.1-beta.1" }
+ruprizzle-migrate = { path = "crates/migrate", version = "0.1.1-beta.1" }
+ruprizzle-macros  = { path = "crates/macros",  version = "0.1.1-beta.1" }
+ruprizzle         = { path = "crates/runtime", version = "0.1.1-beta.1" }
+ruprizzle-testkit = { path = "crates/testkit", version = "0.1.1-beta.1" }
 
 # --- external ---
 pest         = "2.8"

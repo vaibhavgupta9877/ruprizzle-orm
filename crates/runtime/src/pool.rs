@@ -119,7 +119,7 @@ impl Pool {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::NotImplemented`] for native driver-specific pools.
+    /// Returns [`crate::Error::NotImplemented`] for native driver-specific pools.
     /// Use the typed `as_*` accessors to reach those drivers.
     pub async fn acquire(&self) -> Result<sqlx::pool::PoolConnection<sqlx::Any>, crate::Error> {
         match self {

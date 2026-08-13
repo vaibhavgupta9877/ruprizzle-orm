@@ -243,10 +243,13 @@ fn run_harden() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    // Dry-run publish every crate that will be published, in dependency order.
-    // Verification is skipped because `cargo publish --dry-run` resolves path
-    // dependencies against the version on crates.io, which is stale until the
-    // actual release. Compile is already covered by the lint and test steps.
+    // Package every crate that will be published, in dependency order.
+    // We use `cargo package --list` instead of `cargo publish --dry-run` because
+    // the latter still resolves dependency versions against crates.io, which
+    // fails for a new workspace version whose internal dependencies have not yet
+    // been published. Listing the package files is sufficient to catch packaging
+    // and inclusion mistakes; compile correctness is already covered by the lint
+    // and test steps.
     for package in [
         "ruprizzle-core",
         "ruprizzle-parser",
@@ -257,17 +260,10 @@ fn run_harden() -> ExitCode {
         "ruprizzle-codegen",
         "ruprizzle-cli",
     ] {
-        eprintln!("--- xtask: dry-run publish {package} ---");
+        eprintln!("--- xtask: package check {package} ---");
         if !run_command(
             "cargo",
-            &[
-                "publish",
-                "-p",
-                package,
-                "--dry-run",
-                "--allow-dirty",
-                "--no-verify",
-            ],
+            &["package", "-p", package, "--list", "--allow-dirty"],
         ) {
             return ExitCode::FAILURE;
         }
