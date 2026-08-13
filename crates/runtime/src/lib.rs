@@ -84,7 +84,7 @@ pub use ruprizzle_macros::raw;
 pub use serde;
 pub use serde_json;
 pub use sqlx;
-pub use tx::{IsolationLevel, Tx, is_retryable};
+pub use tx::{IsolationLevel, Savepoint, Tx, is_retryable};
 pub use value::{Encodable, Ordered, Value};
 
 /// A boxed future, used by the transaction escape hatch.

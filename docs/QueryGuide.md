@@ -168,6 +168,51 @@ if should_commit {
 }
 ```
 
+### Nested transactions and savepoints
+
+Every `Tx` can create savepoints. Dropping a savepoint without calling
+`release()` or `rollback()` rolls it back, so the same ergonomic rules that
+apply to `Tx` apply to savepoints.
+
+```rust
+use ruprizzle::prelude::*;
+use ruprizzle::Error;
+
+let tx = db.raw_pool().begin().await?;
+
+// Take a savepoint and run a block of work.
+let sp = tx.savepoint().await?;
+
+InsertQuery::new(&sp)
+    .set(user::EMAIL, "a@b.c")
+    .exec()
+    .await?;
+
+// Release it to keep the work, or `rollback()` to undo it.
+sp.release().await?;
+
+// For one-off nested operations, use the closure form. On `Ok` the savepoint
+// is released; on `Err` it is rolled back and the error is returned.
+let result: Result<(), Error> = tx
+    .transaction(|sp| {
+        Box::pin(async move {
+            InsertQuery::new(&sp)
+                .set(user::EMAIL, "c@d.e")
+                .exec()
+                .await?;
+            Ok::<(), Error>(())
+        })
+    })
+    .await;
+
+// The outer transaction is still active and must be committed.
+tx.commit().await?;
+```
+
+Savepoints can be nested to arbitrary depth. Savepoint names are generated
+internally and are never exposed, so user code cannot accidentally inject SQL
+through a savepoint identifier.
+
 ## Raw SQL
 
 If the builder cannot express a query, drop down to the executor:

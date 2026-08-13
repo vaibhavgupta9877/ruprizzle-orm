@@ -2301,6 +2301,7 @@ dependencies = [
  "ruprizzle-core",
  "ruprizzle-dialect",
  "ruprizzle-macros",
+ "ruprizzle-testkit",
  "rusqlite",
  "rust_decimal",
  "serde",
