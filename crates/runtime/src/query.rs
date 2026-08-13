@@ -632,14 +632,19 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         let pk_value = (nested.get_parent_pk)(&parent);
 
         if !nested.child_rows.is_empty() {
-            let mut rows: Vec<Vec<(&'static str, Value)>> = nested.child_rows;
+            let rows: Vec<Vec<(&'static str, Value)>> = nested.child_rows;
+            if rows.iter().any(|r| r.is_empty()) {
+                return Err(Error::Message("insert row has no columns".into()));
+            }
+
+            let mut rows = rows;
             for row in &mut rows {
                 row.push((nested.child_fk_col, pk_value.clone()));
             }
 
             let max = dialect.capabilities().max_query_params;
             let cols_per_row = rows[0].len() as u32;
-            let chunk_size = (max / cols_per_row).max(1) as usize;
+            let chunk_size = (max / cols_per_row.max(1)).max(1) as usize;
 
             let mut child_rows: Option<crate::executor::RowBatch> = None;
             for chunk in rows.chunks(chunk_size) {
@@ -749,10 +754,14 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
             return Ok(Vec::new());
         }
 
+        if self.rows.iter().any(|r| r.is_empty()) {
+            return Err(Error::Message("insert row has no columns".into()));
+        }
+
         let dialect = dialect_for_pool(self.pool);
         let max = dialect.capabilities().max_query_params;
         let cols_per_row = self.rows[0].len() as u32;
-        let chunk_size = (max / cols_per_row).max(1) as usize;
+        let chunk_size = (max / cols_per_row.max(1)).max(1) as usize;
 
         let mut out = Vec::new();
         for chunk in self.rows.chunks(chunk_size) {
