@@ -32,8 +32,43 @@ A beta milestone that closes the remaining alpha.3 beta blockers: clippy warning
 
 ## [Unreleased]
 
+### Fixed
+
+- **Transaction lifecycle on the native drivers (pre-v1 Phase 1).** Neither hand-written
+  native transaction type implemented `Drop`, so a transaction abandoned rather than
+  explicitly committed or rolled back — which `?` does on every early return — was
+  mishandled on both. The `sqlx`-backed variants were never affected.
+  - `rusqlite`: an abandoned transaction lost its connection from the pool permanently.
+    After `max_connections` such drops every `begin()` failed with an exhaustion error and
+    the process had to be restarted. `RusqliteTransaction` now rolls back and returns the
+    connection on drop, and does so without ever panicking. (BUG-01)
+  - `rusqlite`: `RusqlitePool::acquire` computed `next % conns.len()` unguarded, so holding
+    `max_connections` transactions open and running any ordinary query panicked with a
+    divide-by-zero. It now returns the new `Error::PoolExhausted` variant. (BUG-02)
+  - `tokio-postgres`: an abandoned transaction did *not* leak a connection — it recycled one
+    with `BEGIN` still open, so the next request to receive it ran inside the previous
+    request's transaction, silently. Reproduced against PostgreSQL 17.10 before fixing.
+    `Drop` now spawns a `ROLLBACK` with the pooled object moved into the task, so the
+    connection is released only after the rollback resolves. (BUG-03)
+  - `rusqlite`: a failed `COMMIT` and a failure between checkout and `BEGIN` both leaked
+    their connection; both now return it.
+  - `RusqliteTransaction` no longer derives `Clone`, which would have let one connection be
+    returned to the pool twice. (BUG-06)
+
 ### Added
 
+- `Error::PoolExhausted { backend }` — a typed, matchable replacement for the previous
+  stringly-typed pool-exhaustion message, with a stable `kind()` of `"pool_exhausted"`.
+- `PoolConfig::reset_on_recycle` (default `false`) selects `deadpool`'s `Clean` recycling
+  for the native `tokio-postgres` backend, discarding session state on every checkout. It
+  is off by default because it measured roughly 2× the per-query latency against a local
+  database (144–178 µs versus 72–78 µs per checkout+query) and is not needed for
+  correctness — abandoned transactions are rolled back before their connection is released.
+- **CI**
+  - Added a `native-drivers` job that builds and tests `sqlite-rusqlite` and
+    `postgres-tokio-postgres`, separately and together, against a Postgres service with
+    `RUPRIZZLE_REQUIRE_DB=1`. No CI job compiled either native driver before this, which is
+    why the defects above reached a published release.
 - **CI / supply chain**
   - Added a `deny` job that runs `cargo-deny` (advisories, licences, bans, sources) on every pull request.
   - Added `dependabot.yml` for weekly `cargo` dependency updates and monthly GitHub Actions updates.

@@ -216,6 +216,43 @@ which hid the hazard.
 Postgres/SQLite, `rusqlite`, and `tokio-postgres`. Abandoning a transaction on any backend
 rolls back, returns the connection, and leaves the pool at full capacity.
 
+- [x] **MET.** 12 tests in `crates/runtime/tests/tx_lifecycle.rs`, split into three
+      feature-gated modules, all green with both native features enabled and a live
+      PostgreSQL 17.10:
+
+      ```
+      running 12 tests
+      test result: ok. 12 passed; 0 failed
+      ```
+
+      The `sqlx` backends are covered even though they were never broken: the invariant
+      belongs to ruprizzle's transaction API, not to whichever driver is underneath, and the
+      native drivers only broke it because nothing asserted it anywhere.
+
+**Verification run.**
+
+| Command | Result |
+|---|---|
+| `cargo clippy --workspace --all-targets -- -D warnings` | clean |
+| `cargo test --workspace` (with `RUPRIZZLE_REQUIRE_DB=1` + live PG) | green except one pre-existing environmental failure, below |
+| `cargo test -p ruprizzle --features sqlite-rusqlite` | green |
+| `cargo test -p ruprizzle --features postgres-tokio-postgres` (live PG) | green |
+| `cargo test -p ruprizzle --features sqlite-rusqlite,postgres-tokio-postgres` | green |
+| `cargo xtask harden` | green; every crate at budget, `crates/runtime` 1/1 |
+
+`cargo fmt --all --check` reports four diffs, all of them pre-existing at the Phase 1
+baseline (`crates/runtime/examples/layer_attribution.rs`, `examples/pg_any_types.rs`) and
+untouched by this work. Every file Phase 1 modified is formatted.
+
+**Pre-existing failure, not caused by Phase 1.** `ruprizzle-migrate`'s
+`applied_diff_reaches_the_target_schema` fails against this developer's local Postgres
+because the `public` schema still holds `bench_*`, `conc_a`/`conc_b` and `events` tables
+left behind by earlier benchmark and test runs; the property asserts a clean schema and
+reports them as drift. Verified identical at the pre-Phase-1 tree. The test databases
+were left untouched rather than cleaned. Worth a follow-up: this suite should isolate
+itself in a throwaway schema the way the testkit already does, since as it stands any
+leftover table anywhere in the database fails it.
+
 ---
 
 # Phase 2 — Panic elimination and the audit gap

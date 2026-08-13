@@ -339,3 +339,137 @@ mod tokio_postgres_backend {
         exec(&pool, &format!("DROP TABLE IF EXISTS {table}")).await;
     }
 }
+
+/// The same invariants on the `sqlx`-backed pools.
+///
+/// These are expected to pass without any work on our side, because
+/// `sqlx::Transaction` implements `Drop` itself. That is exactly why they are
+/// here: the invariant is a property of `ruprizzle`'s transaction API, not of
+/// whichever driver happens to be underneath, and the native drivers only broke
+/// it because nothing asserted it anywhere.
+mod sqlx_backends {
+    use ruprizzle::{Executor, Pool, PoolConfig, connect_with, decode_rows};
+    use tempfile::TempDir;
+
+    async fn create_table(pool: &Pool) {
+        pool.execute_raw(
+            "CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)".into(),
+            Vec::new(),
+        )
+        .await
+        .expect("create table");
+    }
+
+    fn sqlite_url(dir: &TempDir) -> String {
+        let path = dir.path().join("tx_lifecycle.sqlite");
+        let file = path.to_str().expect("utf-8 path").replace('\\', "/");
+        format!("sqlite:///{file}?mode=rwc")
+    }
+
+    fn config(max_connections: u32) -> PoolConfig {
+        let mut config = PoolConfig::default();
+        config.max_connections = max_connections;
+        config
+    }
+
+    /// `Pool::Sqlite` — the native `sqlx` SQLite backend.
+    async fn sqlite_pool() -> (Pool, TempDir) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let pool = connect_with(&sqlite_url(&dir), &config(2))
+            .await
+            .expect("connect");
+        assert!(
+            pool.as_sqlite().is_some(),
+            "expected the sqlx sqlite backend"
+        );
+        create_table(&pool).await;
+        (pool, dir)
+    }
+
+    /// `Pool::Any` — the generic driver. `connect_with` routes `sqlite://` to
+    /// the native backend, so this one is built directly.
+    async fn any_pool() -> (Pool, TempDir) {
+        ruprizzle::sqlx::any::install_default_drivers();
+        let dir = tempfile::tempdir().expect("tempdir");
+        let any = ruprizzle::sqlx::any::AnyPoolOptions::new()
+            .max_connections(2)
+            .connect(&sqlite_url(&dir))
+            .await
+            .expect("connect");
+        let pool = Pool::Any(any);
+        create_table(&pool).await;
+        (pool, dir)
+    }
+
+    /// `Pool::Postgres` — the native `sqlx` Postgres backend, when configured.
+    async fn postgres_pool() -> Option<Pool> {
+        let Ok(url) = std::env::var("RUPRIZZLE_TEST_PG_URL") else {
+            assert!(
+                std::env::var("RUPRIZZLE_REQUIRE_DB").is_err(),
+                "RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not"
+            );
+            return None;
+        };
+
+        let pool = connect_with(&url, &config(2)).await.expect("connect");
+        assert!(
+            pool.as_postgres().is_some(),
+            "expected the sqlx postgres backend"
+        );
+        pool.execute_raw("DROP TABLE IF EXISTS kv".into(), Vec::new())
+            .await
+            .expect("drop table");
+        create_table(&pool).await;
+        Some(pool)
+    }
+
+    async fn kv_count(pool: &Pool) -> i64 {
+        let batch = pool
+            .fetch_all_raw("SELECT COUNT(*) FROM kv".into(), Vec::new())
+            .await
+            .expect("count");
+        decode_rows::<(i64,)>(batch).expect("decode")[0].0
+    }
+
+    /// Abandoning a transaction rolls back, releases the connection, and leaves
+    /// the pool able to serve `max_connections` transactions again.
+    async fn abandoning_a_transaction_is_a_rollback(pool: &Pool) {
+        let tx = pool.begin().await.expect("begin");
+        tx.execute("INSERT INTO kv (k, v) VALUES ('a', '1')", &[])
+            .await
+            .expect("insert");
+        drop(tx);
+
+        assert_eq!(kv_count(pool).await, 0, "abandoned writes must not persist");
+
+        // Capacity is intact: two concurrent transactions still start.
+        let first = pool.begin().await.expect("begin");
+        let second = pool.begin().await.expect("begin");
+        first.commit().await.expect("commit");
+        second.commit().await.expect("commit");
+    }
+
+    #[tokio::test]
+    async fn sqlite_backend_rolls_back_an_abandoned_transaction() {
+        let (pool, _dir) = sqlite_pool().await;
+        abandoning_a_transaction_is_a_rollback(&pool).await;
+    }
+
+    #[tokio::test]
+    async fn any_backend_rolls_back_an_abandoned_transaction() {
+        let (pool, _dir) = any_pool().await;
+        abandoning_a_transaction_is_a_rollback(&pool).await;
+    }
+
+    #[tokio::test]
+    async fn postgres_backend_rolls_back_an_abandoned_transaction() {
+        let Some(pool) = postgres_pool().await else {
+            eprintln!("skipping postgres tx lifecycle test: no RUPRIZZLE_TEST_PG_URL");
+            return;
+        };
+        abandoning_a_transaction_is_a_rollback(&pool).await;
+        pool.execute_raw("DROP TABLE IF EXISTS kv".into(), Vec::new())
+            .await
+            .expect("drop table");
+    }
+}
