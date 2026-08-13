@@ -48,22 +48,39 @@ for BenchBulk {
 }
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for BenchBulk {
-    fn from_rusqlite_row(row: &::ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ::ruprizzle::Error> {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::RusqliteRow,
+    ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
-            name: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
-            n: ::ruprizzle::rusqlite::get::<i64>(row, 2)?,
+            id: ::ruprizzle::rusqlite::get_i64(row, 0)?,
+            name: ::ruprizzle::rusqlite::get_text(row, 1)?,
+            n: ::ruprizzle::rusqlite::get_i64(row, 2)?,
         })
     }
 }
-
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromOwnedRow for BenchBulk {
-    fn from_owned_row(row: &::ruprizzle::rusqlite::Row) -> Result<Self, ::ruprizzle::Error> {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: row.get::<i64>(0)?,
-            name: row.get::<String>(1)?,
-            n: row.get::<i64>(2)?,
+            id: ::ruprizzle::rusqlite::Row::get::<i64>(row, 0)?,
+            name: ::ruprizzle::rusqlite::Row::get::<String>(row, 1)?,
+            n: ::ruprizzle::rusqlite::Row::get::<i64>(row, 2)?,
+        })
+    }
+}
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for BenchBulk {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: row.try_get::<usize, i64>(0).map_err(::ruprizzle::Error::TokioPostgres)?,
+            name: row
+                .try_get::<usize, String>(1)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            n: row.try_get::<usize, i64>(2).map_err(::ruprizzle::Error::TokioPostgres)?,
         })
     }
 }

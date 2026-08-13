@@ -19,6 +19,3 @@ thiserror      = { workspace = true }
 
 [dev-dependencies]
 ruprizzle-parser = { workspace = true }
-ruprizzle-testkit = { workspace = true }
-insta            = { workspace = true }
-tokio            = { workspace = true }

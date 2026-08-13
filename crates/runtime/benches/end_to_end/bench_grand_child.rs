@@ -53,23 +53,43 @@ for BenchGrandChild {
 }
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for BenchGrandChild {
-    fn from_rusqlite_row(row: &::ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ::ruprizzle::Error> {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::RusqliteRow,
+    ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
-            child_id: ::ruprizzle::rusqlite::get::<i64>(row, 1)?,
-            name: ::ruprizzle::rusqlite::get::<String>(row, 2)?,
+            id: ::ruprizzle::rusqlite::get_i64(row, 0)?,
+            child_id: ::ruprizzle::rusqlite::get_i64(row, 1)?,
+            name: ::ruprizzle::rusqlite::get_text(row, 2)?,
             child: ::ruprizzle::Related::default(),
         })
     }
 }
-
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromOwnedRow for BenchGrandChild {
-    fn from_owned_row(row: &::ruprizzle::rusqlite::Row) -> Result<Self, ::ruprizzle::Error> {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: row.get::<i64>(0)?,
-            child_id: row.get::<i64>(1)?,
-            name: row.get::<String>(2)?,
+            id: ::ruprizzle::rusqlite::Row::get::<i64>(row, 0)?,
+            child_id: ::ruprizzle::rusqlite::Row::get::<i64>(row, 1)?,
+            name: ::ruprizzle::rusqlite::Row::get::<String>(row, 2)?,
+            child: ::ruprizzle::Related::default(),
+        })
+    }
+}
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for BenchGrandChild {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: row.try_get::<usize, i64>(0).map_err(::ruprizzle::Error::TokioPostgres)?,
+            child_id: row
+                .try_get::<usize, i64>(1)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            name: row
+                .try_get::<usize, String>(2)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
             child: ::ruprizzle::Related::default(),
         })
     }

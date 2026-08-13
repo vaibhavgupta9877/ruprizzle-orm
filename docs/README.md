@@ -22,7 +22,7 @@ the wire protocol and pooling; we do not write a driver.
 
 `0.1.1-beta.1` is published on crates.io. The core P0–P8 implementation is
 complete and the public API is now stabilising; the production-readiness assessment
-has been refreshed for the `0.1.0-alpha.3` / `0.1.1-beta.1` work. See the
+has been refreshed for `0.1.1-beta.1`. See the
 [implementation plan](../ProjectPlan/ImplementationPlan/MasterPlan.md) for the phase state
 and the [production-readiness plan](../ProjectPlan/ProductionReadinessPlan.md) for the
 assessment.
