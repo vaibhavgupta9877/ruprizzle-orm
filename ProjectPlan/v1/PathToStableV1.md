@@ -177,7 +177,7 @@ Prisma all support this; Drizzle implements nested `transaction()` as savepoints
 `tokio_postgres.rs:325`). It reads as unimplemented rather than dead. Postgres arrays are a
 headline Postgres feature and their absence is called out in `KnownLimitations.md`.
 
-- [ ] **Step 1.** Decide the scope and record it as an ADR: Postgres arrays are real
+- [x] **Step 1.** Decide the scope and record it as an ADR: Postgres arrays are real
       (`int4[]`, `text[]`, `uuid[]`); SQLite has no array type. The honest answer is native
       support on Postgres and a documented, explicit JSON-encoded fallback on SQLite —
       **not** silent divergence between backends.
