@@ -1,5 +1,7 @@
 # Bug Fixes Implementation Plan
 
+> **Status:** ACTIVE — Phases 1–3 and 5 complete; Phase 4 (FIX-07, FIX-10) and exit criteria still open.
+>
 > **For agentic workers:** REQUIRED SUB-SKILL — use `superpowers:test-driven-development`
 > for every task in this plan, without exception. Each fix below has a **known, reproducible
 > failing state**; write that reproducer as a committed test *first*, watch it fail, then

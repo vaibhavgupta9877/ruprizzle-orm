@@ -79,10 +79,9 @@ where
 
         let mut all = Vec::new();
         for chunk in keys.chunks(chunk_size) {
-            let combined =
-                filter
-                    .clone()
-                    .and(child_key.in_set(chunk.iter().copied().cloned().collect::<Vec<_>>()));
+            let combined = filter
+                .clone()
+                .and(child_key.in_set(chunk.iter().copied().cloned().collect::<Vec<_>>()));
             let compiled = select_partitioned::<C>(
                 dialect,
                 C::TABLE,
@@ -148,9 +147,7 @@ where
 /// caller clones only the keys it actually uses in `IN`/`=` binds.
 fn dedup<Key: Eq + Hash>(keys: &[Key]) -> Vec<&Key> {
     let mut seen = HashSet::with_capacity(keys.len());
-    keys.iter()
-        .filter(|k| seen.insert(*k))
-        .collect()
+    keys.iter().filter(|k| seen.insert(*k)).collect()
 }
 
 /// A set of includes to attach to a parent model.
@@ -351,13 +348,9 @@ where
             // cloned into every matching bucket. The single-parent case avoids a
             // clone.
             let bucket_hint = children.len() / parents.len();
-            let mut parent_index: HashMap<Key, Vec<usize>> =
-                HashMap::with_capacity(parents.len());
+            let mut parent_index: HashMap<Key, Vec<usize>> = HashMap::with_capacity(parents.len());
             for (i, parent) in parents.iter().enumerate() {
-                parent_index
-                    .entry((self.get)(parent))
-                    .or_default()
-                    .push(i);
+                parent_index.entry((self.get)(parent)).or_default().push(i);
             }
 
             let mut buckets: Vec<Vec<C>> =

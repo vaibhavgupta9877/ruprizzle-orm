@@ -1,0 +1,26 @@
+name: Feature Request
+description: Suggest an idea or improvement for ruprizzle
+title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What is the feature or improvement?
+      description: A clear and concise description of what you want.
+      placeholder: I'd like to be able to ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does it solve?
+      description: Describe the use case or pain point this addresses.
+      placeholder: When building ... I run into ...
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you considered other ways to solve this, or is there a workaround today?

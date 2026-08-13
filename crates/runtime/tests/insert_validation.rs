@@ -24,9 +24,8 @@ const NAME: Column<Task, String> = Column::new("tasks", "name");
 struct SetChildren;
 impl NestedSetter<Task> for SetChildren {
     fn set(&self, parent: &mut Task, batch: ruprizzle::executor::RowBatch) {
-        parent.children = Related::Loaded(
-            ruprizzle::executor::decode_rows::<Task>(batch).unwrap_or_default(),
-        );
+        parent.children =
+            Related::Loaded(ruprizzle::executor::decode_rows::<Task>(batch).unwrap_or_default());
     }
 }
 
@@ -96,7 +95,10 @@ async fn insert_many_heterogeneous_rows_errors() {
     let pool = fresh_pool().await;
     let err = InsertManyQuery::<Task>::new(&pool)
         .row([("name", Value::Str("first".into()))])
-        .row([("name", Value::Str("second".into())), ("parent_id", Value::I64(1))])
+        .row([
+            ("name", Value::Str("second".into())),
+            ("parent_id", Value::I64(1)),
+        ])
         .exec()
         .await
         .unwrap_err();
@@ -112,8 +114,14 @@ async fn insert_many_heterogeneous_rows_errors() {
 async fn insert_many_wrong_column_order_errors() {
     let pool = fresh_pool().await;
     let err = InsertManyQuery::<Task>::new(&pool)
-        .row([("name", Value::Str("first".into())), ("parent_id", Value::I64(1))])
-        .row([("parent_id", Value::I64(1)), ("name", Value::Str("second".into()))])
+        .row([
+            ("name", Value::Str("first".into())),
+            ("parent_id", Value::I64(1)),
+        ])
+        .row([
+            ("parent_id", Value::I64(1)),
+            ("name", Value::Str("second".into())),
+        ])
         .exec()
         .await
         .unwrap_err();
@@ -135,7 +143,10 @@ async fn insert_query_with_related_heterogeneous_child_rows_errors() {
             "parent_id",
             InsertManyQuery::<Task>::new(&pool)
                 .row([("name", Value::Str("first".into()))])
-                .row([("name", Value::Str("second".into())), ("parent_id", Value::I64(1))]),
+                .row([
+                    ("name", Value::Str("second".into())),
+                    ("parent_id", Value::I64(1)),
+                ]),
             SetChildren,
         )
         .exec()

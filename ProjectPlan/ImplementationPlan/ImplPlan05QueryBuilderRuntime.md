@@ -1,5 +1,6 @@
 # ImplPlan 05 — Query Builder & Runtime (Phase P4)
 
+**Status:** COMPLETE — the query builder, runtime, and transaction surface shipped; all P4 tasks below are treated as complete.
 **Duration:** 5 days · **Owners:** Vaibhav Gupta (filter algebra, typestate), Vaibhav Gupta (DML builders, tx)
 **Exit gate G4:** full CRUD round-trips against live Postgres **and** SQLite via
 the `both_dbs!` harness.

@@ -169,10 +169,7 @@ async fn round_trip(
         .map_err(|e| e.to_string())?;
 
     let empty = parse("empty", &empty_schema()).map_err(|_| "parse empty".to_owned())?;
-    for sql in [
-        up_sql(&empty, from, dialect),
-        up_sql(from, to, dialect),
-    ] {
+    for sql in [up_sql(&empty, from, dialect), up_sql(from, to, dialect)] {
         for stmt in ruprizzle_migrate::runner::split_statements(&sql) {
             pool.execute_raw(Cow::Owned(stmt.clone()), Vec::new())
                 .await

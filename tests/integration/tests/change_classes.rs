@@ -492,8 +492,7 @@ model Post {
             let prev_s = ruprizzle_parser::parse("prev", &schema_template(provider, prev)).unwrap();
             let next_s = ruprizzle_parser::parse("next", &schema_template(provider, next)).unwrap();
             let dialect = ruprizzle_dialect::dialect_for(next_s.datasource.provider);
-            let init_sql =
-                ruprizzle_migrate::up_sql(&empty_like(&prev_s), &prev_s, dialect);
+            let init_sql = ruprizzle_migrate::up_sql(&empty_like(&prev_s), &prev_s, dialect);
 
             let dir = tempfile::tempdir().unwrap();
             write_migration(dir.path(), "000_init", &init_sql, "").unwrap();
@@ -562,8 +561,7 @@ model User {
             let prev_s = ruprizzle_parser::parse("prev", &schema_template(provider, prev)).unwrap();
             let next_s = ruprizzle_parser::parse("next", &schema_template(provider, next)).unwrap();
             let dialect = ruprizzle_dialect::dialect_for(next_s.datasource.provider);
-            let init_sql =
-                ruprizzle_migrate::up_sql(&empty_like(&prev_s), &prev_s, dialect);
+            let init_sql = ruprizzle_migrate::up_sql(&empty_like(&prev_s), &prev_s, dialect);
 
             let dir = tempfile::tempdir().unwrap();
             write_migration(dir.path(), "000_init", &init_sql, "").unwrap();

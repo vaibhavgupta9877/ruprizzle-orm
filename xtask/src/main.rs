@@ -8,9 +8,7 @@ use std::process::{Command, ExitCode};
 
 use syn::spanned::Spanned;
 use syn::visit::Visit;
-use syn::{
-    BinOp, Expr, ExprBinary, ExprIndex, ExprUnary, ItemFn, ItemMod, UnOp,
-};
+use syn::{BinOp, Expr, ExprBinary, ExprIndex, ExprUnary, ItemFn, ItemMod, UnOp};
 
 const TASKS: &[(&str, &str)] = &[
     ("ci", "everything CI runs, in CI order"),
@@ -319,10 +317,14 @@ fn run_harden() -> ExitCode {
     for (crate_dir, arith_budget, idx_budget) in BUDGETS.iter() {
         match code_audit(crate_dir) {
             Ok((arith, idx)) if arith <= *arith_budget && idx <= *idx_budget => {
-                eprintln!("  {crate_dir}: {arith} arithmetic, {idx} indexing (budget {arith_budget}, {idx_budget})");
+                eprintln!(
+                    "  {crate_dir}: {arith} arithmetic, {idx} indexing (budget {arith_budget}, {idx_budget})"
+                );
             }
             Ok((arith, idx)) => {
-                eprintln!("xtask: arithmetic/indexing budget exceeded for {crate_dir}: arithmetic {arith} (budget {arith_budget}), indexing {idx} (budget {idx_budget})");
+                eprintln!(
+                    "xtask: arithmetic/indexing budget exceeded for {crate_dir}: arithmetic {arith} (budget {arith_budget}), indexing {idx} (budget {idx_budget})"
+                );
                 return ExitCode::FAILURE;
             }
             Err(e) => {
@@ -438,7 +440,10 @@ impl<'a> Visit<'a> for CodeAuditVisitor<'a> {
         if matches!(node.op, BinOp::Div(_) | BinOp::Rem(_)) && !is_literal(&node.right) {
             self.arithmetic += 1;
             let line = node.span().start().line;
-            eprintln!("  {:?}:{}: arithmetic / or % on non-literal", self.path, line);
+            eprintln!(
+                "  {:?}:{}: arithmetic / or % on non-literal",
+                self.path, line
+            );
         }
         syn::visit::visit_expr_binary(self, node);
     }
@@ -469,7 +474,9 @@ fn is_literal(expr: &Expr) -> bool {
     match expr {
         Expr::Lit(_) => true,
         Expr::Unary(ExprUnary {
-            op: UnOp::Neg(_), expr, ..
+            op: UnOp::Neg(_),
+            expr,
+            ..
         }) => is_literal(expr),
         _ => false,
     }

@@ -1,5 +1,7 @@
 # Path to Stable v1.0
 
+> **Status:** ACTIVE — currently at W0 (immediate hygiene); W1–W6 are pending.
+
 **From:** `0.1.1-beta.1` (published to crates.io 2026-08-13, 84/100 production readiness)
 **To:** `1.0.0` — a version whose API we commit to under semver and whose capability surface
 does not lose a feature comparison on absence alone.
@@ -101,23 +103,23 @@ W5 partially parallelised (they touch different crates: W2 is `runtime` + `codeg
 **Rationale:** the assessment's finding #1 is that a gate we own is red on a published
 commit. Feature work on top of a red gate is how a red gate becomes permanent.
 
-- [ ] **W0-01 · Fix rustfmt.** Run `cargo fmt --all`. Five hunks in
-      `crates/runtime/src/rusqlite.rs`, `crates/runtime/examples/layer_attribution.rs`, and
-      `crates/runtime/examples/pg_any_types.rs`. Pure line-wrapping; no semantic change.
-      Verify with `cargo fmt --all --check`. *(10 min — assessment finding #1)*
-- [ ] **W0-02 · Gitignore deep-test scratch dirs.** Add `/local/deep-tests/db/.tmp*/` to
-      `.gitignore` and remove the 21 stale directories in the working tree. *(5 min —
-      finding #10)*
-- [ ] **W0-03 · Add backend features to the CI matrix.** Two new jobs: one with
-      `--features postgres-tokio-postgres`, one with both backend features enabled
-      together. Four meaningful build configurations exist; two are tested. *(2 h —
-      finding #4)*
-- [ ] **W0-04 · Governance and release plumbing.** `CODE_OF_CONDUCT.md` (Contributor
-      Covenant 2.1), `.github/ISSUE_TEMPLATE/{bug,feature}.yml`, `.github/pull_request_template.md`,
-      and a `release.yml` workflow that runs the full gate then `cargo publish` each crate in
-      dependency order on a `v*` tag. Four hand-publishes have worked; the fifth is where it
-      stops working. *(4 h — finding #7)*
-- [ ] **W0-05 · Promote ADRs to `docs/adr/`.** Split
+- [x] **W0-01 · Fix rustfmt.** Run `cargo fmt --all`. Hunks appeared in the formatter
+      output across `crates/runtime/src/compile.rs`, `include.rs`, `query.rs`, `related.rs`,
+      `xtask/src/main.rs`, the two example files, and several test files; all were pure
+      line-wrapping with no semantic change. Verified with `cargo fmt --all --check`.
+- [x] **W0-02 · Gitignore deep-test scratch dirs.** `/local/deep-tests/db/.tmp*/` was
+      already in `.gitignore`; 43 stale `.tmp*` directories were removed from the working
+      tree. *(finding #10)*
+- [x] **W0-03 · Add backend features to the CI matrix.** Coverage is already provided by
+      the `native-drivers` job in `.github/workflows/ci.yml`, which runs `cargo clippy` and
+      `cargo test` for `sqlite-rusqlite`, `postgres-tokio-postgres`, and both features
+      combined. *(finding #4)*
+- [x] **W0-04 · Governance and release plumbing.** Added `CODE_OF_CONDUCT.md`
+      (Contributor Covenant 2.1), `.github/ISSUE_TEMPLATE/bug.yml`,
+      `.github/ISSUE_TEMPLATE/feature.yml`, `.github/pull_request_template.md`, and
+      `.github/workflows/release.yml` which runs the full gate and then publishes the eight
+      crates in dependency order on a `v*` tag. *(finding #7)*
+- [x] **W0-05 · Promote ADRs to `docs/adr/`.** Split
       `ImplPlan10AppendixDecisions.md`'s ADR-001 … ADR-009 into
       `docs/adr/ADR-00N-<slug>.md` with an index, leaving a pointer behind. Source comments
       already cite bare ADR numbers as though this tree exists. *(2 h — finding #6)*

@@ -387,13 +387,19 @@ where
             self.exec.on_query();
             pool.fetch_all_sync_decoded::<Out>(compiled.sql, compiled.binds)?
         } else {
-            let batch = self.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            let batch = self
+                .exec
+                .fetch_all_raw(compiled.sql, compiled.binds)
+                .await?;
             crate::executor::decode_rows(batch)?
         };
 
         #[cfg(not(feature = "sqlite-rusqlite"))]
         let v: Vec<Out> = {
-            let batch = self.exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            let batch = self
+                .exec
+                .fetch_all_raw(compiled.sql, compiled.binds)
+                .await?;
             crate::executor::decode_rows(batch)?
         };
 
@@ -611,14 +617,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         let dialect = dialect_for_pool(self.pool);
         if let Some(ref conflict) = self.on_conflict {
             let do_update = self.do_update.as_deref().unwrap_or(&[]);
-            upsert::<M>(
-                dialect,
-                M::TABLE,
-                &self.values,
-                conflict,
-                do_update,
-                &[],
-            )
+            upsert::<M>(dialect, M::TABLE, &self.values, conflict, do_update, &[])
         } else {
             insert::<M>(dialect, M::TABLE, &self.values, &[])
         }
@@ -709,8 +708,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
                 } else {
                     M::COLUMNS
                 };
-                let compiled =
-                    insert_many::<M>(dialect, nested.child_table, chunk, returning);
+                let compiled = insert_many::<M>(dialect, nested.child_table, chunk, returning);
                 let chunk = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
                 match child_rows.as_mut() {
                     Some(acc) => acc.merge(chunk)?,
@@ -1022,12 +1020,7 @@ impl<'db, M: Model> DeleteQuery<'db, M, FilteredDelete> {
             ));
         }
         let dialect = dialect_for_pool(self.pool);
-        Ok(delete::<M>(
-            dialect,
-            M::TABLE,
-            &self.filter.node,
-            &[],
-        ))
+        Ok(delete::<M>(dialect, M::TABLE, &self.filter.node, &[]))
     }
 
     /// Executes the delete and returns the number of rows removed.

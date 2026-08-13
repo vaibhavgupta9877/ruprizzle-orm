@@ -11,7 +11,8 @@
 >
 > **This document is now history, not a work queue.** It is retained because each task
 > records the reasoning behind a change that is still in the tree, and because the
-> assessment cites it. Do not pick up work from here.
+> assessment cites it. Do not pick up work from here. The unchecked checkboxes below
+> are stale historical artifacts; the "Exit criteria — actuals" table is the source of truth.
 >
 > **Active planning has moved to [`v1/PathToStableV1.md`](v1/PathToStableV1.md)** — the path
 > from `0.1.1-beta.1` to a stable `1.0.0`, covering the capability gaps this plan

@@ -779,16 +779,7 @@ mod tests {
     #[test]
     fn placeholders_are_sqlite_q() {
         let f = ID.eq(1).and(EMAIL.eq("a".to_string()));
-        let c = select::<User>(
-            sqlite(),
-            "users",
-            &[],
-            &f.node,
-            &[],
-            None,
-            None,
-            false,
-        );
+        let c = select::<User>(sqlite(), "users", &[], &f.node, &[], None, None, false);
         assert_eq!(
             c.sql,
             r#"SELECT * FROM `users` WHERE (`users`.`id` = ? AND `users`.`email` = ?)"#
@@ -980,16 +971,7 @@ mod tests {
             vec![Value::Str("a@b.c".into())],
         );
         let f: Filter<User> = Filter::raw(fragment);
-        let c = select::<User>(
-            sqlite(),
-            "users",
-            &[],
-            &f.node,
-            &[],
-            None,
-            None,
-            false,
-        );
+        let c = select::<User>(sqlite(), "users", &[], &f.node, &[], None, None, false);
         assert_eq!(c.sql, r#"SELECT * FROM `users` WHERE email = ?"#);
         assert_eq!(c.binds, vec![Value::Str("a@b.c".into())]);
     }

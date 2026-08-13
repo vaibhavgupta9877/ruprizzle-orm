@@ -122,10 +122,7 @@ async fn round_trip(from: &Schema, to: &Schema) -> Result<Vec<String>, String> {
     apply_sql(&pool, &drop).await?;
 
     let empty = empty_schema();
-    for sql in [
-        up_sql(&empty, from, dialect),
-        up_sql(from, to, dialect),
-    ] {
+    for sql in [up_sql(&empty, from, dialect), up_sql(from, to, dialect)] {
         apply_sql(&pool, &sql).await?;
     }
 

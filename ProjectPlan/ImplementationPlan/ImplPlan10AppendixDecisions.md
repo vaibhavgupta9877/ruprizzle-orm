@@ -1,5 +1,9 @@
 # ImplPlan 10 — Decisions, Risks & Deferrals
 
+> **Architecture decision records have moved.** The canonical ADRs (ADR-001 …
+> ADR-009) now live in [`docs/adr/`](../../docs/adr/index.md). The sections below
+> are kept for history; use the `docs/adr/` tree for the current versions.
+
 Reference document. Not a phase. Update the ADR log as decisions change.
 
 ---

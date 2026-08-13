@@ -1,5 +1,6 @@
 # ImplPlan 09 — Testing, Benchmarks & Release (Phase P8)
 
+**Status:** PARTIAL — test and benchmark infrastructure plus release automation are in place; the P8-04 pre-release hardening checklist and P8-05 manual publication steps remain open.
 **Duration:** 4 days · **Owners:** Vaibhav Gupta (suites, CI), Vaibhav Gupta (benchmark design, release notes)
 **Exit gate:** `0.1.0-alpha.1` published to crates.io with the definition-of-done
 from MasterPlan satisfied.

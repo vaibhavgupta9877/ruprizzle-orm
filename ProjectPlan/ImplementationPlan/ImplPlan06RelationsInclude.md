@@ -1,5 +1,6 @@
 # ImplPlan 06 — Relations & Nested Include (Phase P5)
 
+**Status:** COMPLETE — bounded `include` loading shipped; all P5 tasks below are treated as complete.
 **Duration:** 4 days · **Owners:** Vaibhav Gupta (loader algorithm), Vaibhav Gupta (codegen + tests)
 **Exit gate G5:** two-level nested include returns correct data in a bounded number
 of queries, proven by a query-count assertion test.

@@ -410,5 +410,8 @@ async fn include_list_duplicate_parent_key_round_trip() {
     let second = posts.iter().find(|p| p.id == 2).unwrap();
     assert_eq!(first.co_posts.get().len(), 3);
     assert_eq!(second.co_posts.get().len(), 3);
-    assert_eq!(first.co_posts.get()[0].title, second.co_posts.get()[0].title);
+    assert_eq!(
+        first.co_posts.get()[0].title,
+        second.co_posts.get()[0].title
+    );
 }

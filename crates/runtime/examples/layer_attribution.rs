@@ -181,7 +181,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .fetch_all(&any)
             .await
             .unwrap();
-        rows.iter().map(|r| decode_user(r).unwrap()).fold(0, |acc, _| acc + 1)
+        rows.iter()
+            .map(|r| decode_user(r).unwrap())
+            .fold(0, |acc, _| acc + 1)
     })
     .await;
     let d = bench("4 ruprizzle      SelectQuery", 200, || async {
@@ -222,7 +224,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .fetch_all(&any)
             .await
             .unwrap();
-        rows.iter().map(|r| decode_user(r).unwrap()).fold(0, |acc, _| acc + 1)
+        rows.iter()
+            .map(|r| decode_user(r).unwrap())
+            .fold(0, |acc, _| acc + 1)
     })
     .await;
     let d = bench("4 ruprizzle      SelectQuery", 200, || async {
@@ -244,7 +248,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     let mut n = 0usize;
     for _ in 0..200 {
-        n += rows.iter().map(|r| decode_user(r).unwrap()).fold(0, |acc, _| acc + 1);
+        n += rows
+            .iter()
+            .map(|r| decode_user(r).unwrap())
+            .fold(0, |acc, _| acc + 1);
     }
     let by_name = start.elapsed().as_secs_f64() * 1e6 / 200.0;
     let start = Instant::now();

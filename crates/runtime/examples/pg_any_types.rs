@@ -35,7 +35,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("Json", "JSONB", "'{}'::jsonb"),
     ];
 
-    println!("\n{:<10} {:<20} {:<8} detail", "rz type", "PG DDL type", "reads?");
+    println!(
+        "\n{:<10} {:<20} {:<8} detail",
+        "rz type", "PG DDL type", "reads?"
+    );
     println!("{}", "-".repeat(96));
     let mut broken = vec![];
     for (rz, ddl, expr) in cases {

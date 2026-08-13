@@ -1,5 +1,7 @@
 # ruprizzle-orm — Master Plan (v1 MVP)
 
+**Status:** COMPLETE — the 0.1.0-alpha.1 through 0.1.1-beta.1 scope shipped; the path from 0.1.1-beta.1 to 1.0 is now tracked in `v1/PathToStableV1.md`.
+
 **What:** A pure-Rust ORM that takes the best of Prisma (declarative schema DSL as
 single source of truth, codegen'd client, migration diffing, nested relation
 loading, great errors) and Drizzle (SQL-transparent query builder, zero hidden
