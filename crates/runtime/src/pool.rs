@@ -58,6 +58,8 @@ impl Pool {
         crate::tx::Tx::begin(self).await
     }
 
+
+
     /// Total connections currently held by the pool.
     #[must_use]
     pub fn size(&self) -> u32 {
@@ -192,6 +194,7 @@ impl Pool {
 
     /// Closes the pool and waits for all connections to finish.
     pub async fn close(&self) {
+        tracing::info!(target: "ruprizzle::connection", event = "disconnect", "pool closing");
         match self {
             Pool::Any(p) => p.close().await,
             Pool::Postgres(p) => p.close().await,
@@ -377,6 +380,13 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
     sqlx::any::install_default_drivers();
 
     let scheme = url.split(':').next().unwrap_or("");
+
+    tracing::info!(
+        target: "ruprizzle::connection",
+        event = "connect",
+        scheme,
+        "connecting to database"
+    );
     match scheme {
         "postgres" | "postgresql" => {
             #[cfg(feature = "postgres-tokio-postgres")]
@@ -395,6 +405,17 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
                 .idle_timeout(config.idle_timeout)
                 .max_lifetime(config.max_lifetime)
                 .test_before_acquire(config.test_before_acquire)
+                .after_connect(|_conn, _meta| {
+                    Box::pin(async move {
+                        tracing::info!(
+                            target: "ruprizzle::connection",
+                            event = "connect",
+                            backend = "postgres",
+                            "sqlx connection opened"
+                        );
+                        Ok(())
+                    })
+                })
                 .connect(url)
                 .await
                 .map_err(crate::Error::Sqlx)?;
@@ -428,6 +449,17 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
                 .idle_timeout(config.idle_timeout)
                 .max_lifetime(config.max_lifetime)
                 .test_before_acquire(config.test_before_acquire)
+                .after_connect(|_conn, _meta| {
+                    Box::pin(async move {
+                        tracing::info!(
+                            target: "ruprizzle::connection",
+                            event = "connect",
+                            backend = "sqlite",
+                            "sqlx connection opened"
+                        );
+                        Ok(())
+                    })
+                })
                 .connect_with(connect_opts)
                 .await
                 .map_err(crate::Error::Sqlx)?;
@@ -441,6 +473,17 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
                 .idle_timeout(config.idle_timeout)
                 .max_lifetime(config.max_lifetime)
                 .test_before_acquire(config.test_before_acquire)
+                .after_connect(|_conn, _meta| {
+                    Box::pin(async move {
+                        tracing::info!(
+                            target: "ruprizzle::connection",
+                            event = "connect",
+                            backend = "any",
+                            "sqlx connection opened"
+                        );
+                        Ok(())
+                    })
+                })
                 .connect(url)
                 .await
                 .map_err(crate::Error::Sqlx)?;

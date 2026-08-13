@@ -42,6 +42,9 @@ pub enum Error {
     #[error("{backend} connection pool exhausted")]
     PoolExhausted { backend: &'static str },
 
+    #[error("connection acquire timed out: {reason}")]
+    AcquireTimeout { reason: String },
+
     #[error("sqlx error: {0}")]
     Sqlx(sqlx::Error),
 
@@ -69,6 +72,7 @@ impl Error {
             Self::SerializationFailure => "serialization_failure",
             Self::ConnectionFailure { .. } => "connection_failure",
             Self::PoolExhausted { .. } => "pool_exhausted",
+            Self::AcquireTimeout { .. } => "acquire_timeout",
             Self::Sqlx(_) => "sqlx",
             #[cfg(feature = "postgres-tokio-postgres")]
             Self::TokioPostgres(_) => "tokio_postgres",
@@ -153,7 +157,10 @@ fn classify_sqlx(err: sqlx::Error) -> Error {
 
             Error::Sqlx(original)
         }
-        SqlxError::PoolClosed | SqlxError::PoolTimedOut | SqlxError::Io(_) => {
+        SqlxError::PoolTimedOut => Error::AcquireTimeout {
+            reason: err.to_string(),
+        },
+        SqlxError::PoolClosed | SqlxError::Io(_) => {
             Error::ConnectionFailure {
                 reason: err.to_string(),
             }

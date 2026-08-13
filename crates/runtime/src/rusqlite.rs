@@ -119,9 +119,18 @@ impl RusqlitePool {
             reason: e.to_string(),
         })?;
 
-        Ok(Self {
+        let pool = Self {
             inner: Arc::new(inner?),
-        })
+        };
+
+        tracing::info!(
+            target: "ruprizzle::connection",
+            event = "connect",
+            backend = "rusqlite",
+            "rusqlite pool opened"
+        );
+
+        Ok(pool)
     }
 
     /// Pick a connection for a single statement using round-robin distribution.

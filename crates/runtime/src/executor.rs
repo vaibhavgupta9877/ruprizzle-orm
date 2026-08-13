@@ -261,6 +261,7 @@ where
             [("kind", error.kind())],
             1,
         );
+        emit_connection_events(error);
     }
 
     if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
@@ -323,6 +324,7 @@ where
             [("kind", error.kind())],
             1,
         );
+        emit_connection_events(error);
     }
 
     if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
@@ -360,6 +362,38 @@ where
     }
 
     result
+}
+
+/// Emit connection lifecycle tracing for error categories that represent the
+/// pool or network rather than the SQL.
+pub(crate) fn emit_connection_events(error: &crate::Error) {
+    match error {
+        crate::Error::AcquireTimeout { reason } => {
+            tracing::warn!(
+                target: "ruprizzle::connection",
+                event = "acquire_timeout",
+                reason,
+                "connection acquire timed out"
+            );
+        }
+        crate::Error::ConnectionFailure { reason } => {
+            tracing::warn!(
+                target: "ruprizzle::connection",
+                event = "disconnect",
+                reason,
+                "connection lost"
+            );
+        }
+        crate::Error::PoolExhausted { backend } => {
+            tracing::warn!(
+                target: "ruprizzle::connection",
+                event = "acquire_timeout",
+                backend,
+                "connection pool exhausted"
+            );
+        }
+        _ => {}
+    }
 }
 
 /// Resolves a pending fetch, then yields its rows one at a time.

@@ -366,7 +366,7 @@ builder or relations sections that a competitor scores `Yes` on; every new build
 - [x] **W3-03 · `docs/Operations.md`.** What each span means, what to alert on, how to read
       `PoolStats`, how to interpret saturation, what to do when `ping` fails, and a worked
       example dashboard. The assessment has called this out for two passes. **1 day.**
-- [ ] **W3-04 · Connection lifecycle events.** Trace connect, disconnect, acquire-timeout,
+- [x] **W3-04 · Connection lifecycle events.** Trace connect, disconnect, acquire-timeout,
       and reconnect. Today a pool that is thrashing is invisible.  **0.5 day.**
 - [ ] **W3-05 · Concurrency and throughput benchmarks.** The axis the current Criterion
       suite does not cover: queries/sec against pool size, tail latency under contention,
