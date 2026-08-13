@@ -356,7 +356,7 @@ builder or relations sections that a competitor scores `Yes` on; every new build
 
 **Goal:** close the largest remaining scoring gap (dimension 3, 7.5/10). **Effort:** ~1 week.
 
-- [ ] **W3-01 · Metrics export behind a `metrics` feature.** Query count, duration
+- [x] **W3-01 · Metrics export behind a `metrics` feature.** Query count, duration
       histogram, error count by `Error::kind()`, pool size/idle/waiters, migration
       application count and duration. Emit via the `metrics` crate facade so users pick
       Prometheus or OTel rather than us picking for them. **2 days.** *(finding #5)*

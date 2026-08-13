@@ -35,6 +35,7 @@ pub mod error;
 pub mod executor;
 pub mod filter;
 pub mod include;
+pub mod metrics;
 pub mod model;
 pub mod order;
 pub mod page;

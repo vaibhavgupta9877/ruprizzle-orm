@@ -111,6 +111,12 @@ impl TokioPostgresPool {
         self.inner.status().available
     }
 
+    /// Connections currently waiting for a checkout.
+    #[must_use]
+    pub fn num_waiters(&self) -> usize {
+        self.inner.status().waiting
+    }
+
     /// Fetch all rows from `sql` with `binds`.
     pub(crate) async fn fetch_all(&self, sql: &str, binds: &[Value]) -> Result<RowBatch, Error> {
         let client = self.inner.get().await.map_err(tokio_postgres_pool_error)?;

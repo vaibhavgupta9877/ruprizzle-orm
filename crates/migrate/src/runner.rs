@@ -303,7 +303,10 @@ impl Migrator {
                 }
             }
 
-            let elapsed = stmt_start.elapsed().as_millis() as i64;
+            let elapsed = stmt_start.elapsed().as_secs_f64();
+            ruprizzle::metrics::counter(ruprizzle::metrics::MIGRATION_APPLIED_TOTAL, 1);
+            ruprizzle::metrics::histogram(ruprizzle::metrics::MIGRATION_DURATION_SECONDS, elapsed);
+            let elapsed_ms = (elapsed * 1000.0) as i64;
             let tracking_sql = format!(
                 "INSERT INTO _ruprizzle_migrations (id, checksum, applied_at, execution_ms) \
                  VALUES ({}, {}, CURRENT_TIMESTAMP, {}) \
@@ -321,7 +324,7 @@ impl Migrator {
                 vec![
                     Value::Str(m.id.clone().into()),
                     Value::Str(m.meta.checksum.clone().into()),
-                    Value::I64(elapsed),
+                    Value::I64(elapsed_ms),
                 ],
             )
             .await?;
@@ -330,7 +333,7 @@ impl Migrator {
             tracing::info!(
                 target: "ruprizzle::migrate",
                 migration = %m.id,
-                elapsed_ms = elapsed,
+                elapsed_ms = elapsed_ms,
                 "migration applied"
             );
             applied_ids.push(m.id);

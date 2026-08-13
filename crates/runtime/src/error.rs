@@ -59,7 +59,7 @@ pub enum Error {
 impl Error {
     /// Returns a stable, non-sensitive category for telemetry.
     #[must_use]
-    pub(crate) fn kind(&self) -> &'static str {
+    pub fn kind(&self) -> &'static str {
         match self {
             Self::UniqueViolation { .. } => "unique_violation",
             Self::ForeignKeyViolation { .. } => "foreign_key_violation",

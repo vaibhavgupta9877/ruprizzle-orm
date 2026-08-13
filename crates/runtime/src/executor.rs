@@ -303,11 +303,21 @@ impl Executor for Pool {
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<RowBatch, Error>> {
         Box::pin(async move {
+            crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
             let bind_count = binds.len();
+            let started = std::time::Instant::now();
+            let result = dispatch_raw_query(self, sql.clone(), binds).await;
+            let elapsed = started.elapsed().as_secs_f64();
+            crate::metrics::histogram(crate::metrics::QUERY_DURATION_SECONDS, elapsed);
+            if let Err(ref error) = result {
+                crate::metrics::counter_with(
+                    crate::metrics::QUERY_ERRORS_TOTAL,
+                    [("kind", error.kind())],
+                    1,
+                );
+            }
             if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
-                let started = std::time::Instant::now();
-                let result = dispatch_raw_query(self, sql.clone(), binds.clone()).await;
-                let elapsed_ms = started.elapsed().as_millis() as u64;
+                let elapsed_ms = (elapsed * 1000.0) as u64;
                 match &result {
                     Ok(batch) => tracing::debug!(
                         target: "ruprizzle::query",
@@ -326,10 +336,8 @@ impl Executor for Pool {
                         "query failed"
                     ),
                 }
-                result
-            } else {
-                dispatch_raw_query(self, sql, binds).await
             }
+            result
         })
     }
 
@@ -339,11 +347,21 @@ impl Executor for Pool {
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<u64, Error>> {
         Box::pin(async move {
+            crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
             let bind_count = binds.len();
+            let started = std::time::Instant::now();
+            let result = dispatch_raw_execute(self, sql.clone(), binds).await;
+            let elapsed = started.elapsed().as_secs_f64();
+            crate::metrics::histogram(crate::metrics::QUERY_DURATION_SECONDS, elapsed);
+            if let Err(ref error) = result {
+                crate::metrics::counter_with(
+                    crate::metrics::QUERY_ERRORS_TOTAL,
+                    [("kind", error.kind())],
+                    1,
+                );
+            }
             if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
-                let started = std::time::Instant::now();
-                let result = dispatch_raw_execute(self, sql.clone(), binds.clone()).await;
-                let elapsed_ms = started.elapsed().as_millis() as u64;
+                let elapsed_ms = (elapsed * 1000.0) as u64;
                 match &result {
                     Ok(rows_affected) => tracing::debug!(
                         target: "ruprizzle::query",
@@ -362,10 +380,8 @@ impl Executor for Pool {
                         "execute failed"
                     ),
                 }
-                result
-            } else {
-                dispatch_raw_execute(self, sql, binds).await
             }
+            result
         })
     }
 

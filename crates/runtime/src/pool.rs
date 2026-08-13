@@ -86,6 +86,18 @@ impl Pool {
         }
     }
 
+    /// Connections currently waiting for a checkout.
+    ///
+    /// `sqlx` pools do not expose this count; they report `0`.
+    #[must_use]
+    pub fn num_waiters(&self) -> usize {
+        match self {
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(p) => p.num_waiters(),
+            _ => 0,
+        }
+    }
+
     /// Returns the pool's connection options, if this is the `Any` backend.
     ///
     /// This is exposed for tests that verify `PoolConfig` propagation.
@@ -440,6 +452,8 @@ pub struct PoolStats {
     pub idle: usize,
     /// Connections currently checked out.
     pub in_use: usize,
+    /// Connections waiting to be checked out.
+    pub waiters: usize,
 }
 
 /// Samples the current pool saturation.
@@ -447,11 +461,32 @@ pub struct PoolStats {
 pub fn stats(pool: &Pool) -> PoolStats {
     let size = pool.size();
     let idle = pool.num_idle();
+    let waiters = pool.num_waiters();
     PoolStats {
         size,
         idle,
         in_use: (size as usize).saturating_sub(idle),
+        waiters,
     }
+}
+
+/// Emits pool saturation as `metrics` gauges.
+///
+/// This can be called by users with a `metrics` recorder installed to update
+/// the current pool snapshot. When the `metrics` feature is disabled it is a
+/// no-op and simply returns the sampled stats.
+#[must_use]
+pub fn report_metrics(pool: &Pool) -> PoolStats {
+    let s = stats(pool);
+    #[cfg(feature = "metrics")]
+    {
+        use crate::metrics::{POOL_IDLE, POOL_IN_USE, POOL_SIZE, POOL_WAITERS, gauge};
+        gauge(POOL_SIZE, s.size as f64);
+        gauge(POOL_IDLE, s.idle as f64);
+        gauge(POOL_IN_USE, s.in_use as f64);
+        gauge(POOL_WAITERS, s.waiters as f64);
+    }
+    s
 }
 
 /// Checks database reachability for readiness probes.
