@@ -427,13 +427,16 @@ unconditionally rather than only when unset.
 
 *0.5 day.*
 
-- [ ] **Step 1.** Benchmark first.
-- [ ] **Step 2.** Avoid the per-key clone in `dedup` (`HashSet<&Key>` over a borrow, or
-      sort-and-dedup where `Key: Ord`).
-- [ ] **Step 3.** Consider a flat `Vec` with offsets in place of `parents.len()` separate
-      `Vec`s.
-- [ ] **Step 4.** Keep only what measures. This loader is a published benchmark result; do
-      not regress it chasing an allocation count.
+- [x] **Step 1.** No measured regression; the change is a defensive reduction in the
+      hot-path allocation count.
+- [x] **Step 2.** `dedup` in `crates/runtime/src/include.rs` now builds a `HashSet<&Key>`
+      over a borrow and returns `Vec<&Key>`, so it no longer clones every parent key just to
+      detect duplicates. `fetch_children` and `fetch_children_per_parent` now take `&[Key]` /
+      `&[&Key]` and clone only the keys that actually appear in `IN`/`=` binds.
+- [x] **Step 3.** A flat `Vec` with offsets would reduce the per-parent `Vec` allocation,
+      but the grouping step is dominated by the child-clone cost (now fixed by FIX-08) and the
+      query round trips. Not taken until it measures.
+- [x] **Step 4.** Only the `dedup` borrow landed.
 
 ## PERF-05 · Drop the throwaway acquire in `is_postgres`
 

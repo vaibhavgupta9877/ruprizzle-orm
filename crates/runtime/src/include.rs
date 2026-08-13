@@ -31,7 +31,7 @@ async fn fetch_children<C, Key>(
     filter: &Filter<C>,
     order: &[OrderBy<C>],
     limit: Option<u64>,
-    keys: Vec<Key>,
+    keys: &[Key],
     full_table: bool,
 ) -> Result<Vec<C>, Error>
 where
@@ -53,7 +53,9 @@ where
 
     // The parent set repeats keys whenever several parents point at the same
     // child (every many-to-one relation does). Sending the duplicates would
-    // inflate the `IN` list and burn the parameter budget for nothing.
+    // inflate the `IN` list and burn the parameter budget for nothing. The
+    // dedup set borrows the keys so we avoid cloning every parent key just to
+    // spot duplicates.
     let keys = dedup(keys);
     if keys.is_empty() {
         return Ok(Vec::new());
@@ -71,7 +73,10 @@ where
 
         let mut all = Vec::new();
         for chunk in keys.chunks(chunk_size) {
-            let combined = filter.clone().and(child_key.in_set(chunk.to_vec()));
+            let combined =
+                filter
+                    .clone()
+                    .and(child_key.in_set(chunk.iter().copied().cloned().collect::<Vec<_>>()));
             let compiled = select_partitioned::<C>(
                 dialect.as_ref(),
                 C::TABLE,
@@ -88,7 +93,8 @@ where
 
     let mut all = Vec::new();
     for chunk in keys.chunks(chunk_size) {
-        let mut q = SelectQuery::<C>::new(exec).filter(child_key.in_set(chunk.to_vec()));
+        let mut q = SelectQuery::<C>::new(exec)
+            .filter(child_key.in_set(chunk.iter().copied().cloned().collect::<Vec<_>>()));
         if filter.node != crate::filter::FilterNode::And(Vec::new()) {
             q = q.filter(filter.clone());
         }
@@ -110,7 +116,7 @@ async fn fetch_children_per_parent<C, Key>(
     filter: &Filter<C>,
     order: &[OrderBy<C>],
     limit: u64,
-    keys: &[Key],
+    keys: &[&Key],
 ) -> Result<Vec<C>, Error>
 where
     C: Model + Send + Unpin,
@@ -118,7 +124,7 @@ where
 {
     let mut all = Vec::new();
     for key in keys {
-        let mut q = SelectQuery::<C>::new(exec).filter(child_key.eq(key.clone()));
+        let mut q = SelectQuery::<C>::new(exec).filter(child_key.eq((*key).clone()));
         if filter.node != crate::filter::FilterNode::And(Vec::new()) {
             q = q.filter(filter.clone());
         }
@@ -131,10 +137,13 @@ where
 }
 
 /// Removes duplicates while keeping first-seen order.
-fn dedup<Key: Eq + Hash + Clone>(keys: Vec<Key>) -> Vec<Key> {
+///
+/// Borrows from `keys` so the deduplication set does not clone every key; the
+/// caller clones only the keys it actually uses in `IN`/`=` binds.
+fn dedup<Key: Eq + Hash>(keys: &[Key]) -> Vec<&Key> {
     let mut seen = HashSet::with_capacity(keys.len());
-    keys.into_iter()
-        .filter(|k| seen.insert(k.clone()))
+    keys.iter()
+        .filter(|k| seen.insert(*k))
         .collect()
 }
 
@@ -315,7 +324,7 @@ where
                 &self.filter,
                 &self.order,
                 self.limit,
-                keys,
+                &keys,
                 full_table,
             )
             .await?;
@@ -524,7 +533,7 @@ where
                 &self.filter,
                 &self.order,
                 self.limit,
-                keys,
+                &keys,
                 full_table,
             )
             .await?;

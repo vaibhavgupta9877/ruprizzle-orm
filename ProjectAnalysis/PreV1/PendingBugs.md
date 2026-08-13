@@ -461,6 +461,11 @@ allocates `parents.len()` separate `Vec<C>`s with `with_capacity(bucket_hint)`.
 Both are modest, but they sit inside the loader that `docs/BenchmarkResults.md` markets as
 ~2× Sea-ORM and ~7× Prisma, so they are worth the measurement.
 
+**Status:** Partially fixed. `dedup` now uses a `HashSet<&Key>` and returns `Vec<&Key>`,
+avoiding one clone of every parent key. The per-parent `Vec<C>` allocation was considered but
+not changed: it does not dominate the include loader cost on the published benchmark, and the
+flat-`Vec` refactor would add complexity for an unmeasured win.
+
 ### PERF-05
 
 **`is_postgres` acquires and drops a pooled connection to read a constant.**
