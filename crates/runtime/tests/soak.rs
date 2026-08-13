@@ -82,7 +82,7 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
                     ruprizzle::Encodable::to_value(&key),
                     ruprizzle::Encodable::to_value(&value),
                 ];
-                if let Err(_) = pool.execute_raw(sql.to_owned().into(), binds).await {
+                if pool.execute_raw(sql.to_owned().into(), binds).await.is_err() {
                     errors.fetch_add(1, Ordering::Relaxed);
                 }
                 ops.fetch_add(1, Ordering::Relaxed);

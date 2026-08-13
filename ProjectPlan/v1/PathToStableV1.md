@@ -393,7 +393,7 @@ sqlite-rusqlite --bench concurrency` all pass.
       forced failover, tracking memory, file descriptors, and pool health. This is the
       evidence the assessment has cited as missing in all three passes and the reason the
       "critical data" verdict is ⚠️ rather than ✅. **3 days.**
-- [ ] **W4-03 · Feature-combination CI matrix.** Formalise W0-03 into a real matrix across
+- [x] **W4-03 · Feature-combination CI matrix.** Formalise W0-03 into a real matrix across
       the three driver paths and both databases. **0.5 day.**
 - [ ] **W4-04 · Justify or remove the `grammar.rs` panic sites.** 27 of 29. Either a comment
       per site naming the Pest invariant that makes it unreachable, or a real error path.
