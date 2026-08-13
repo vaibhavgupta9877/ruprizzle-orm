@@ -16,6 +16,7 @@ Command-line interface for `ruprizzle-orm`.
 - `ruprizzle format` — rewrite the schema file in canonical form.
 - `ruprizzle migrate` — plan, apply, and inspect schema migrations.
 - `ruprizzle db pull` — introspect an existing database into `schema.ruprizzle`.
+- `ruprizzle db seed` — transactionally apply idempotent rows from `seeds/main.json`.
 - `ruprizzle db push` — push schema changes directly without migration files.
 
 ## Installation

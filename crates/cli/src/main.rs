@@ -29,6 +29,7 @@ use ruprizzle_migrate::runner::{compute_checksum, split_statements};
 use ruprizzle_migrate::{Change, MigrationMeta, Migrator, diff, down_sql, up_sql};
 
 mod introspect;
+mod seed;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -870,21 +871,30 @@ async fn db_seed(
     schema_path: &str,
     verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (_, source, warnings) = parse_schema(schema_path)?;
+    let (schema, source, warnings) = parse_schema(schema_path)?;
     print_warnings(&source, warnings);
 
     let base = Path::new(schema_path).parent().unwrap_or(Path::new("."));
-    let seed = base.join("seeds").join("main.sql");
-    if !seed.exists() {
-        return Err("create seeds/main.sql".into());
-    }
-    let sql = fs::read_to_string(&seed)?;
-
+    let seed = base.join("seeds").join("main.json");
+    let legacy_sql = base.join("seeds").join("main.sql");
     let url = resolve_database_url(schema_path, verbose)?;
     let pool = connect(&url).await?;
-    execute_statements(&pool, &sql).await?;
 
-    println!("Ran {}", seed.display());
+    if seed.exists() {
+        let document = fs::read_to_string(&seed)?;
+        let rows = seed::apply(&schema, &document, &pool).await?;
+        println!(
+            "Seeded {rows} row{} from {}",
+            if rows == 1 { "" } else { "s" },
+            seed.display()
+        );
+    } else if legacy_sql.exists() {
+        let sql = fs::read_to_string(&legacy_sql)?;
+        execute_statements(&pool, &sql).await?;
+        println!("Ran legacy SQL seed {}", legacy_sql.display());
+    } else {
+        return Err("create seeds/main.json".into());
+    }
     Ok(())
 }
 

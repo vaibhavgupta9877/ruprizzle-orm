@@ -185,7 +185,16 @@ ruprizzle tries to give you all three at once:
 - `ruprizzle format` — canonicalise the schema file.
 - `ruprizzle migrate dev|deploy|status|resolve|reset` — see [CLI workflow](#cli-workflow).
 - `ruprizzle db pull` — introspect an existing database into `schema.ruprizzle`.
-- `ruprizzle db push|seed` — direct schema push and seed scripts.
+- `ruprizzle db seed` — transactionally apply idempotent `seeds/main.json` data (legacy `main.sql` remains supported).
+- `ruprizzle db push` — direct schema push without migration files.
+
+A declarative seed file maps model or table names to row arrays:
+
+```json
+{"User": [{"id": 1, "email": "alice@example.com"}]}
+```
+
+Rows must include their primary key; repeated runs update the existing row instead of inserting a duplicate.
 
 ### Dialects
 
