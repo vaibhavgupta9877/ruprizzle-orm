@@ -184,6 +184,7 @@ ruprizzle tries to give you all three at once:
 - `ruprizzle validate` — CI-friendly schema validation.
 - `ruprizzle format` — canonicalise the schema file.
 - `ruprizzle migrate dev|deploy|status|resolve|reset` — see [CLI workflow](#cli-workflow).
+- `ruprizzle db pull` — introspect an existing database into `schema.ruprizzle`.
 - `ruprizzle db push|seed` — direct schema push and seed scripts.
 
 ### Dialects

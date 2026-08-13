@@ -61,7 +61,7 @@ variants.
 | Code-first schema in source | No | No | No | Partial | Partial | No | Yes |
 | Generated typed client | Yes | Yes | Yes | Partial | Partial | Yes | No |
 | Schema-first migrations (diff from schema) | Yes | Yes | Yes | Partial | No | Yes | Partial |
-| Introspection / codegen from existing DB | Planned | Planned | Partial | Yes | Partial (`print-schema`) | Yes | Yes |
+| Introspection / codegen from existing DB | Yes (`db pull`) | Yes (`db pull`) | Partial | Yes | Partial (`print-schema`) | Yes | Yes |
 | Compile-time query checking | Planned | Planned | Yes | No | Yes | N/A | No |
 | Type-safe column tokens | Yes | Yes | Yes | Partial | Yes | Yes (generated types) | Yes (typed columns) |
 | Type-safe nested `include` | Yes | Yes | Yes | Partial | No | Yes | Yes |

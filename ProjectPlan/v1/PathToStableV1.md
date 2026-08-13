@@ -1,6 +1,6 @@
 # Path to Stable v1.0
 
-> **Status:** ACTIVE — W5-01 (MySQL/MariaDB) complete; W5-02 is next. W1, W2, and W5-03–W5-07 remain pending.
+> **Status:** ACTIVE — W5-01 and W5-02 complete; W5-03 is next. W1, W2, and W5-04–W5-07 remain pending.
 
 **From:** `0.1.1-beta.1` (published to crates.io 2026-08-13, 84/100 production readiness)
 **To:** `1.0.0` — a version whose API we commit to under semver and whose capability surface
@@ -419,10 +419,7 @@ as a baseline (`docs/MutationTesting.md`).
 May run in parallel with W2 — different crates.
 
 - [x] **W5-01 · MySQL / MariaDB dialect.** Added the `mysql`/`mariadb` providers, a native SQLx MySQL pool and transaction path, MySQL/MariaDB DDL/DML generation, portable insert follow-up lookup, the three-backend `both_dbs!` harness, conformance coverage, Docker Compose, and CI service/matrix jobs. **5 days.**
-- [ ] **W5-02 · Introspection (`ruprizzle db pull`).** Generate `schema.ruprizzle` from an
-      existing database. Currently `Planned` in the comparison table while Prisma, Drizzle,
-      and SeaORM all ship it. This is the on-ramp for every existing project — arguably the
-      highest-adoption-leverage item in the whole plan. **4 days.**
+- [x] **W5-02 · Introspection (`ruprizzle db pull`).** Added provider-aware table, column, key, index, and foreign-key introspection for SQLite, PostgreSQL, and MySQL/MariaDB, plus deterministic schema rendering that preserves datasource/generator settings and round-trips through the parser. **4 days.**
 - [ ] **W5-03 · Seeding.** `ruprizzle db seed` with a declarative seed file and a
       transactional, idempotent apply. Every competitor has it. **2 days.**
 - [ ] **W5-04 · Migration squashing.** Deferred to 0.2 in `KnownLimitations.md`; collapse a

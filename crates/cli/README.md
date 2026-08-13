@@ -6,7 +6,7 @@
 
 Command-line interface for `ruprizzle-orm`.
 
-`ruprizzle-cli` is the entry point for working with `ruprizzle-orm` outside of Rust code. It parses the `schema.ruprizzle` file, generates typed clients, validates schemas, and runs migrations against Postgres or SQLite.
+`ruprizzle-cli` is the entry point for working with `ruprizzle-orm` outside of Rust code. It parses the `schema.ruprizzle` file, generates typed clients, introspects existing databases, validates schemas, and runs migrations against Postgres, MySQL/MariaDB, or SQLite.
 
 ## Commands
 
@@ -15,6 +15,7 @@ Command-line interface for `ruprizzle-orm`.
 - `ruprizzle validate` — parse and validate the schema without writing files; useful in CI.
 - `ruprizzle format` — rewrite the schema file in canonical form.
 - `ruprizzle migrate` — plan, apply, and inspect schema migrations.
+- `ruprizzle db pull` — introspect an existing database into `schema.ruprizzle`.
 - `ruprizzle db push` — push schema changes directly without migration files.
 
 ## Installation

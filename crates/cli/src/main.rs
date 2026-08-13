@@ -28,6 +28,8 @@ use ruprizzle_dialect::{check_schema_capabilities, dialect_for};
 use ruprizzle_migrate::runner::{compute_checksum, split_statements};
 use ruprizzle_migrate::{Change, MigrationMeta, Migrator, diff, down_sql, up_sql};
 
+mod introspect;
+
 #[derive(Parser, Debug)]
 #[command(
     name = "ruprizzle",
@@ -128,6 +130,8 @@ enum DbCommand {
         #[arg(long)]
         accept_data_loss: bool,
     },
+    /// Introspect the database and rewrite the schema from its live tables.
+    Pull,
     /// Run the project's seed script.
     Seed,
 }
@@ -192,6 +196,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Command::Db(DbCommand::Push { accept_data_loss }) => {
             db_push(&cli.schema, "migrations", *accept_data_loss, cli.verbose).await
         }
+        Command::Db(DbCommand::Pull) => db_pull(&cli.schema, cli.verbose).await,
         Command::Db(DbCommand::Seed) => db_seed(&cli.schema, cli.verbose).await,
     }
 }
@@ -833,6 +838,34 @@ async fn db_push(
     Ok(())
 }
 
+async fn db_pull(
+    schema_path: &str,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (schema, source, warnings) = parse_schema(schema_path)?;
+    print_warnings(&source, warnings);
+
+    let url = resolve_database_url(schema_path, verbose)?;
+    let pool = connect(&url).await?;
+    let database = ruprizzle_migrate::introspect::pull(&pool).await?;
+    if database.provider != schema.datasource.provider {
+        return Err(format!(
+            "database provider `{}` does not match schema provider `{}`",
+            database.provider, schema.datasource.provider
+        )
+        .into());
+    }
+
+    let pulled = introspect::render_schema(&database, &schema.datasource.url, &schema.generator);
+    fs::write(schema_path, pulled)?;
+    println!(
+        "Pulled {} table{} into {schema_path}",
+        database.tables.len(),
+        if database.tables.len() == 1 { "" } else { "s" }
+    );
+    Ok(())
+}
+
 async fn db_seed(
     schema_path: &str,
     verbose: bool,
@@ -925,5 +958,46 @@ mod tests {
         let cli =
             Cli::try_parse_from(["ruprizzle", "--schema", "db/app.ruprizzle", "validate"]).unwrap();
         assert_eq!(cli.schema, "db/app.ruprizzle");
+    }
+
+    #[tokio::test]
+    async fn db_pull_rewrites_schema_from_sqlite() {
+        use ruprizzle::Executor;
+        use std::borrow::Cow;
+
+        let base = std::env::temp_dir();
+        let stem = format!("ruprizzle-cli-pull-{}", std::process::id());
+        let database_path = base.join(format!("{stem}.sqlite"));
+        let schema_path = base.join(format!("{stem}.ruprizzle"));
+        let file = database_path.to_string_lossy().replace('\\', "/");
+        let url = format!("sqlite:///{file}?mode=rwc");
+        let schema = format!(
+            r#"datasource db {{ provider = "sqlite" url = "{url}" }}
+
+generator client {{ provider = "rust" output = "src/db" module_name = "db" }}
+"#
+        );
+        std::fs::write(&schema_path, schema).unwrap();
+
+        let pool = ruprizzle::connect(&url).await.unwrap();
+        pool.execute_raw(
+            Cow::Owned(
+                "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE)"
+                    .to_owned(),
+            ),
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+        pool.close().await;
+
+        db_pull(schema_path.to_str().unwrap(), false).await.unwrap();
+        let pulled = std::fs::read_to_string(&schema_path).unwrap();
+        let parsed = ruprizzle_parser::parse("pulled", &pulled).unwrap();
+        assert_eq!(parsed.model("Users").unwrap().table, "users");
+        assert!(pulled.contains("email String"));
+
+        let _ = std::fs::remove_file(database_path);
+        let _ = std::fs::remove_file(schema_path);
     }
 }
