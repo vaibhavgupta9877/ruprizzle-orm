@@ -4,6 +4,29 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1-beta.1] - 2026-08-13
+
+A beta milestone that closes the remaining alpha.3 beta blockers: clippy warnings, broken doc links, panic-audit failures in `crates/runtime`, and stale performance documentation. It also refreshes the production-readiness assessment for `0.1.0-alpha.3` and the `rusqlite` backend.
+
+### Added
+
+- `Pool` gained typed `as_any`, `as_sqlite`, `as_postgres`, and feature-gated `as_rusqlite` / `as_tokio_postgres` accessors.
+- `crates/runtime/benches/end_to_end` now creates an `sqlx::Any` pool explicitly so the PostgreSQL benchmark path is like-for-like with hand-written `sqlx`.
+
+### Changed
+
+- `Pool::options`, `Pool::postgres_options`, and `Pool::sqlite_options` now return `Option<&_>` instead of panicking for the wrong variant.
+- `Pool::acquire` now returns `Error::NotImplemented` for native driver-specific pools.
+- The `sqlx::Executor` implementation on `&Pool` now returns a clear `sqlx::Error` for native variants instead of `unimplemented!()`.
+- `Performance.md` now reports fresh PostgreSQL `sqlx::Any` numbers and the previously unmeasured bulk-insert case.
+
+### Fixed
+
+- Clippy warnings in `pg_any_types.rs`, `bottlenecks.rs`, `layer_attribution.rs`, `cross_orm_bench.rs`, `crates/runtime/tests/crud.rs`, `local/deep-tests`, and `crates/runtime/src/rusqlite.rs`.
+- Broken intra-doc links in `crates/runtime/src/executor.rs` and `crates/testkit/src/lib.rs`.
+- `rusqlite` mutex `unwrap()` calls replaced with error paths, satisfying the `crates/runtime` panic budget.
+- Examples and benchmarks that passed `&Pool` to `sqlx::query` now use an explicit `Pool::Any` wrapper where appropriate.
+
 ## [Unreleased]
 
 ### Added
@@ -89,6 +112,7 @@ Initial alpha release of **ruprizzle-orm**: a schema-first ORM for Rust. Write a
 
 See `docs/KnownLimitations.md` for the full list.
 
-[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.0-alpha.2...HEAD
+[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.1-beta.1...HEAD
+[0.1.1-beta.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.0-alpha.2...v0.1.1-beta.1
 [0.1.0-alpha.2]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/releases/tag/v0.1.0-alpha.1
