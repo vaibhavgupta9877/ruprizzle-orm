@@ -2,7 +2,7 @@
 
 use ruprizzle::{
     Column, Encodable, Executor, InsertManyQuery, InsertQuery, Model, NestedSetter, Pool, Related,
-    connect,
+    Value, connect,
 };
 use sqlx::FromRow;
 
@@ -88,5 +88,63 @@ async fn insert_query_with_related_empty_child_row_errors() {
     assert!(
         msg.contains("no columns"),
         "expected a clear error for an empty child insert row, got: {msg}"
+    );
+}
+
+#[tokio::test]
+async fn insert_many_heterogeneous_rows_errors() {
+    let pool = fresh_pool().await;
+    let err = InsertManyQuery::<Task>::new(&pool)
+        .row([("name", Value::Str("first".into()))])
+        .row([("name", Value::Str("second".into())), ("parent_id", Value::I64(1))])
+        .exec()
+        .await
+        .unwrap_err();
+
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("row 1"),
+        "expected error to name the offending row, got: {msg}"
+    );
+}
+
+#[tokio::test]
+async fn insert_many_wrong_column_order_errors() {
+    let pool = fresh_pool().await;
+    let err = InsertManyQuery::<Task>::new(&pool)
+        .row([("name", Value::Str("first".into())), ("parent_id", Value::I64(1))])
+        .row([("parent_id", Value::I64(1)), ("name", Value::Str("second".into()))])
+        .exec()
+        .await
+        .unwrap_err();
+
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("row 1"),
+        "expected error to name the offending row, got: {msg}"
+    );
+}
+
+#[tokio::test]
+async fn insert_query_with_related_heterogeneous_child_rows_errors() {
+    let pool = fresh_pool().await;
+    let err = InsertQuery::<Task>::new(&pool)
+        .set(NAME, "parent")
+        .with_related(
+            |t| t.id.to_value(),
+            "parent_id",
+            InsertManyQuery::<Task>::new(&pool)
+                .row([("name", Value::Str("first".into()))])
+                .row([("name", Value::Str("second".into())), ("parent_id", Value::I64(1))]),
+            SetChildren,
+        )
+        .exec()
+        .await
+        .unwrap_err();
+
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("row 1"),
+        "expected error to name the offending child row, got: {msg}"
     );
 }

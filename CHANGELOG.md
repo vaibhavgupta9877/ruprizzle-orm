@@ -119,6 +119,13 @@ A beta milestone that closes the remaining alpha.3 beta blockers: clippy warning
 - The panic message in `Related::get()` now points at `.exec()` / `.exec_one()`
   rather than only mentioning `.include()`, which was itself the source of the
   confusion.
+- `IncludeList` now correctly distributes children to every parent that shares
+  a join key, rather than only the first matching parent. This requires `C:
+  Clone` on the `IncludeSet` impl, matching `IncludeOne`. (BUG-08)
+- `InsertManyQuery::exec` and nested `with_related` child inserts now validate
+  that every row has the same columns in the same order as row 0, returning an
+  error that names the offending row and column instead of silently producing
+  the wrong SQL or an opaque driver error. (BUG-09)
 
 - CI: stale `generated-code-lint` job (which asserted the code generator was still unimplemented) replaced with the working `generated-code` gate.
 - CI: `cargo-deny-action` pinned to `v2.1.1` to avoid the positional-argument regression in `v2.1.0`.

@@ -690,6 +690,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
             if rows.iter().any(|r| r.is_empty()) {
                 return Err(Error::Message("insert row has no columns".into()));
             }
+            validate_row_shape(&rows)?;
 
             let mut rows = rows;
             for row in &mut rows {
@@ -811,6 +812,7 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
         if self.rows.iter().any(|r| r.is_empty()) {
             return Err(Error::Message("insert row has no columns".into()));
         }
+        validate_row_shape(&self.rows)?;
 
         let dialect = dialect_for_pool(self.pool);
         let max = dialect.capabilities().max_query_params;
@@ -834,6 +836,31 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
         }
         Ok(out)
     }
+}
+
+fn validate_row_shape(rows: &[Vec<(&'static str, Value)>]) -> Result<(), Error> {
+    if rows.len() < 2 {
+        return Ok(());
+    }
+    let first = &rows[0];
+    for (idx, row) in rows.iter().enumerate().skip(1) {
+        if row.len() != first.len() {
+            return Err(Error::Message(format!(
+                "insert row {idx} has {} columns, expected {} from row 0",
+                row.len(),
+                first.len()
+            )));
+        }
+        for (col_idx, (a, b)) in first.iter().zip(row.iter()).enumerate() {
+            if a.0 != b.0 {
+                return Err(Error::Message(format!(
+                    "insert row {idx} column {col_idx} differs from row 0: expected '{}', found '{}'",
+                    a.0, b.0
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// A typed `UPDATE` query.

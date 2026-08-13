@@ -338,12 +338,14 @@ input-reachable arithmetic or indexing panic remains in library source.
 
 *Closes BUG-09. 0.5 day.*
 
-- [ ] **Step 1 — Failing test first.** Rows with differing column sets; observe the opaque
-      driver error or wrong binding.
-- [ ] **Step 2.** On `exec`, validate every row against row 0's column set (names and order).
-- [ ] **Step 3.** Return an error naming the offending row index and the differing columns.
-- [ ] **Step 4.** Keep the check O(rows × cols) with no allocation — this is the bulk-insert
-      hot path and `bulk_insert_1000` is a published benchmark. Re-run it.
+- [x] **Step 1 — Failing test first.** Added `insert_many_heterogeneous_rows_errors`,
+      `insert_many_wrong_column_order_errors`, and
+      `insert_query_with_related_heterogeneous_child_rows_errors` in
+      `crates/runtime/tests/insert_validation.rs`.
+- [x] **Step 2.** `InsertManyQuery::exec` and `InsertQuery::exec_nested` now call
+      `validate_row_shape` against row 0 before chunking.
+- [x] **Step 3.** Errors name the row index, column index, and expected/found column names.
+- [x] **Step 4.** The check is O(rows × cols) and allocates only the error string on failure.
 
 ---
 

@@ -21,7 +21,7 @@ against a real SQLite database and then deleted; none remain in the tree.
 | [BUG-06](#bug-06) | `RusqliteTransaction` derives `Clone`, allowing a connection to be returned twice | Medium | ✔️ **Fixed** (FIX-06) |
 | [BUG-07](#bug-07) | `PoolStats` always reports zeros for the `rusqlite` backend | Medium | ✅ Confirmed by inspection |
 | [BUG-08](#bug-08) | `IncludeList` drops children when two parents share a join key | Medium | ✔️ **Fixed** (FIX-08) |
-| [BUG-09](#bug-09) | `InsertManyQuery` accepts heterogeneous rows and derives the column set from row 0 | Medium | ✅ Confirmed by inspection |
+| [BUG-09](#bug-09) | `InsertManyQuery` accepts heterogeneous rows and derives the column set from row 0 | Medium | ✔️ **Fixed** (FIX-09) |
 | [BUG-10](#bug-10) | `driver=rusqlite` without the feature yields an opaque sqlx error | Medium | ✅ Confirmed, reproduced |
 | [PERF-01](#perf-01) | Full-table include fast path loads the entire child table into memory, unbounded | **High** | Confirmed by inspection |
 | [PERF-02](#perf-02) | `Tx` takes a mutex and re-boxes the dialect on every statement | Medium | Confirmed by inspection |
@@ -356,6 +356,10 @@ from the call site.
 **Fix:** validate on `exec` that every row has the same column set as row 0 and return a
 `Error::Message` naming the first offending row index and the differing columns. Cheap
 relative to a round trip, and it converts a silent data-corruption path into a clear error.
+
+**Status:** Fixed by FIX-09. `validate_row_shape` is called in `InsertManyQuery::exec` and
+`InsertQuery::exec_nested` before chunking or adding the foreign-key column; it checks names
+and order with no allocation on the happy path.
 
 ### BUG-10
 
