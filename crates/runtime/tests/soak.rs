@@ -5,12 +5,12 @@
 //! Set `RUPRIZZLE_SOAK_DURATION_SECONDS` and `RUPRIZZLE_SOAK_WORKERS` for longer
 //! or more aggressive runs; the W4 exit-gate target is 48 hours.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use ruprizzle::executor::Executor;
-use ruprizzle_testkit::{both_dbs, TestDb};
+use ruprizzle_testkit::{TestDb, both_dbs};
 use tokio::time::{Instant, interval};
 
 fn soak_duration() -> Duration {
@@ -83,7 +83,11 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
                     ruprizzle::Encodable::to_value(&key),
                     ruprizzle::Encodable::to_value(&value),
                 ];
-                if pool.execute_raw(sql.to_owned().into(), binds).await.is_err() {
+                if pool
+                    .execute_raw(sql.to_owned().into(), binds)
+                    .await
+                    .is_err()
+                {
                     errors.fetch_add(1, Ordering::Relaxed);
                 }
                 ops.fetch_add(1, Ordering::Relaxed);
@@ -112,7 +116,12 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
         async move {
             while start.elapsed() < duration {
                 health.tick().await;
-                report_pool_health(&db, start.elapsed(), ops.load(Ordering::Relaxed), errors.load(Ordering::Relaxed));
+                report_pool_health(
+                    &db,
+                    start.elapsed(),
+                    ops.load(Ordering::Relaxed),
+                    errors.load(Ordering::Relaxed),
+                );
             }
         }
     });
