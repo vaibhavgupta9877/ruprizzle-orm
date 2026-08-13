@@ -291,7 +291,9 @@ where
 impl<'db, M, C, Key, NI> IncludeSet<M> for IncludeList<'db, M, C, Key, NI>
 where
     M: Model + Send + Unpin,
-    C: Model + Send + Unpin,
+    // `Clone` because a one-to-many relation is one-to-many: when several parents
+    // share a join key, the same child row must appear in each parent's `Vec`.
+    C: Model + Clone + Send + Unpin,
     Key: Encodable + Eq + Hash + Clone + Send + Sync + 'static,
     NI: IncludeSet<C> + Sync,
 {
@@ -329,12 +331,18 @@ where
                 .await?;
 
             // Group children into pre-sized buckets indexed by parent position.
-            // This avoids a `HashMap` entry per child and a `remove` per parent;
-            // only a single map lookup is needed for each child.
+            // A parent key can map to more than one parent when the join key is not
+            // unique, so the index keeps a list of parent positions and a child is
+            // cloned into every matching bucket. The single-parent case avoids a
+            // clone.
             let bucket_hint = children.len() / parents.len();
-            let mut parent_index: HashMap<Key, usize> = HashMap::with_capacity(parents.len());
+            let mut parent_index: HashMap<Key, Vec<usize>> =
+                HashMap::with_capacity(parents.len());
             for (i, parent) in parents.iter().enumerate() {
-                parent_index.entry((self.get)(parent)).or_insert(i);
+                parent_index
+                    .entry((self.get)(parent))
+                    .or_default()
+                    .push(i);
             }
 
             let mut buckets: Vec<Vec<C>> =
@@ -343,8 +351,16 @@ where
                     .collect();
 
             for child in children {
-                if let Some(&idx) = parent_index.get(&(self.child_key_get)(&child)) {
-                    buckets[idx].push(child);
+                if let Some(indices) = parent_index.get(&(self.child_key_get)(&child)) {
+                    let mut iter = indices.iter();
+                    if let Some(&first) = iter.next() {
+                        // Clone only for additional parents; the first gets the
+                        // original child.
+                        for &idx in iter {
+                            buckets[idx].push(child.clone());
+                        }
+                        buckets[first].push(child);
+                    }
                 }
             }
 

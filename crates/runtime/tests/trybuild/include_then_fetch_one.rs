@@ -11,7 +11,7 @@ impl Model for User {
     const TABLE: &'static str = "users";
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(sqlx::FromRow, Clone)]
 struct Post {
     id: i64,
     author_id: i64,

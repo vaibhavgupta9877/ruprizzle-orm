@@ -49,6 +49,8 @@ struct Post {
     author_id: i64,
     #[sqlx(skip)]
     author: Related<Option<User>>,
+    #[sqlx(skip)]
+    co_posts: Related<Vec<Post>>,
 }
 
 #[cfg(feature = "postgres-tokio-postgres")]
@@ -62,6 +64,7 @@ impl ruprizzle::rusqlite::FromRusqliteRow for Post {
             title: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
             author_id: ::ruprizzle::rusqlite::get::<i64>(row, 2)?,
             author: Related::default(),
+            co_posts: Related::default(),
         })
     }
 }
@@ -74,6 +77,7 @@ impl ruprizzle::rusqlite::FromOwnedRow for Post {
             title: row.get::<String>(1)?,
             author_id: row.get::<i64>(2)?,
             author: Related::default(),
+            co_posts: Related::default(),
         })
     }
 }
@@ -104,6 +108,15 @@ fn author() -> IncludeOne<'static, Post, User, i64, ()> {
         |p, author| p.author = author,
         USER_ID,
         |u| u.id,
+    )
+}
+
+fn posts_by_author() -> IncludeList<'static, Post, Post, i64, ()> {
+    IncludeList::new(
+        |p| p.author_id,
+        |p, co_posts| p.co_posts = co_posts,
+        POST_AUTHOR_ID,
+        |p| p.author_id,
     )
 }
 
@@ -345,4 +358,57 @@ async fn nested_create_round_trip() {
     assert_eq!(user.posts.get()[0].title, "first");
     assert_eq!(user.posts.get()[1].title, "second");
     assert!(user.posts.get().iter().all(|p| p.author_id == 1));
+}
+
+#[tokio::test]
+async fn include_list_duplicate_parent_key_round_trip() {
+    let pool = fresh_pool().await;
+
+    pool.execute_raw(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
+            .to_string()
+            .into(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, author_id INTEGER NOT NULL)".to_string().into(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
+
+    InsertQuery::<User>::new(&pool)
+        .set(USER_ID, 1)
+        .set(USER_NAME, "alice")
+        .exec()
+        .await
+        .unwrap();
+
+    for (id, title) in [(1, "a"), (2, "b"), (3, "c")] {
+        InsertQuery::<Post>::new(&pool)
+            .set(POST_ID, id)
+            .set(POST_TITLE, title)
+            .set(POST_AUTHOR_ID, 1)
+            .exec()
+            .await
+            .unwrap();
+    }
+
+    // Both posts 1 and 2 share author_id == 1. With the duplicate-key fix,
+    // both must receive the same set of co-posts, including their own clone.
+    let posts: Vec<Post> = SelectQuery::<Post>::new(&pool)
+        .filter(POST_ID.in_set(vec![1, 2]))
+        .include(posts_by_author())
+        .exec()
+        .await
+        .unwrap();
+
+    assert_eq!(posts.len(), 2);
+    let first = posts.iter().find(|p| p.id == 1).unwrap();
+    let second = posts.iter().find(|p| p.id == 2).unwrap();
+    assert_eq!(first.co_posts.get().len(), 3);
+    assert_eq!(second.co_posts.get().len(), 3);
+    assert_eq!(first.co_posts.get()[0].title, second.co_posts.get()[0].title);
 }

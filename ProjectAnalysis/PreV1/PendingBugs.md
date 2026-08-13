@@ -20,7 +20,7 @@ against a real SQLite database and then deleted; none remain in the tree.
 | [BUG-05](#bug-05) | Divide-by-zero panic on an insert with an empty column set | **High** | ✔️ **Fixed** (FIX-05) |
 | [BUG-06](#bug-06) | `RusqliteTransaction` derives `Clone`, allowing a connection to be returned twice | Medium | ✔️ **Fixed** (FIX-06) |
 | [BUG-07](#bug-07) | `PoolStats` always reports zeros for the `rusqlite` backend | Medium | ✅ Confirmed by inspection |
-| [BUG-08](#bug-08) | `IncludeList` drops children when two parents share a join key | Medium | ✅ Confirmed by inspection |
+| [BUG-08](#bug-08) | `IncludeList` drops children when two parents share a join key | Medium | ✔️ **Fixed** (FIX-08) |
 | [BUG-09](#bug-09) | `InsertManyQuery` accepts heterogeneous rows and derives the column set from row 0 | Medium | ✅ Confirmed by inspection |
 | [BUG-10](#bug-10) | `driver=rusqlite` without the feature yields an opaque sqlx error | Medium | ✅ Confirmed, reproduced |
 | [PERF-01](#perf-01) | Full-table include fast path loads the entire child table into memory, unbounded | **High** | Confirmed by inspection |
@@ -336,6 +336,10 @@ documented restriction.
 **Fix:** build `HashMap<Key, Vec<usize>>` and push the children into every matching bucket,
 cloning as `IncludeOne` does. This requires `C: Clone`, matching the bound `IncludeOne`
 already carries for exactly this reason.
+
+**Status:** Fixed by FIX-08. `IncludeList::load` now indexes parents by `Vec<usize>`, clones
+children only when more than one parent shares a key, and the first matching parent receives
+the original child row.
 
 ### BUG-09
 

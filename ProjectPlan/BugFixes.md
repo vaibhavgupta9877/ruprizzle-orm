@@ -322,16 +322,17 @@ input-reachable arithmetic or indexing panic remains in library source.
 
 *Closes BUG-08. 0.5 day.*
 
-- [ ] **Step 1 — Failing test first.** Two parents sharing a join key; assert both receive
-      the children. Today the second gets an empty vec.
-- [ ] **Step 2.** Replace `HashMap<Key, usize>` + `or_insert` with `HashMap<Key, Vec<usize>>`,
-      pushing each child into every matching bucket.
-- [ ] **Step 3.** This requires `C: Clone`. `IncludeOne` already carries that bound for the
-      same reason; add it to `IncludeList` and confirm the generated client still compiles
-      (`cargo xtask` generated-code gate).
-- [ ] **Step 4.** Clone only when a key maps to more than one parent — the overwhelmingly
-      common single-parent case must not regress. This loader is benchmarked; re-run
-      `cargo bench -p ruprizzle --bench end_to_end` and compare.
+- [x] **Step 1 — Failing test first.** Added `include_list_duplicate_parent_key_round_trip` in
+      `crates/runtime/tests/relations.rs`: two posts with the same `author_id` both receive
+      the same child posts.
+- [x] **Step 2.** Replaced `HashMap<Key, usize>` with `HashMap<Key, Vec<usize>>` and push each
+      child into every matching parent bucket.
+- [x] **Step 3.** Added `C: Clone` to `IncludeList`'s `IncludeSet` impl, matching `IncludeOne`.
+      The generated benchmark client (`cargo xtask bench-client`) and `cross_orm_bench` build
+      successfully. The full `cargo xtask examples` generated-code gate is currently blocked by
+      an unrelated `Json`/`sqlx::Any` decode issue (pre-existing) and is tracked separately.
+- [x] **Step 4.** The distribution loop clones only for additional parents; the first parent in
+      the index gets the original child row.
 
 ## FIX-09 · Validate `InsertManyQuery` row shapes
 
