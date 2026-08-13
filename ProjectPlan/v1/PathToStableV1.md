@@ -148,25 +148,25 @@ retryable sub-unit inside a transaction — the standard pattern for "try the op
 path, fall back on conflict" — has to abandon the transaction entirely. Diesel, Drizzle, and
 Prisma all support this; Drizzle implements nested `transaction()` as savepoints directly.
 
-- [ ] **Step 1.** Add `Tx::savepoint(&self) -> Result<Savepoint<'_>, Error>` issuing
+- [x] **Step 1.** Add `Tx::savepoint(&self) -> Result<Savepoint<'_>, Error>` issuing
       `SAVEPOINT <generated_name>`. Names must be generated (monotonic counter per `Tx`), never
       user-supplied — a user-supplied savepoint name is a SQL identifier injection vector, and
       `xtask harden` will correctly reject any `format!` that interpolates one.
-- [ ] **Step 2.** `Savepoint::release(self)` → `RELEASE SAVEPOINT`; `Savepoint::rollback(self)`
+- [x] **Step 2.** `Savepoint::release(self)` → `RELEASE SAVEPOINT`; `Savepoint::rollback(self)`
       → `ROLLBACK TO SAVEPOINT`. Drop without either must roll back, matching `Tx`'s existing
       drop semantics, and emit a `tracing` warning.
-- [ ] **Step 3.** Nesting: a `Savepoint` must itself yield savepoints, to arbitrary depth.
+- [x] **Step 3.** Nesting: a `Savepoint` must itself yield savepoints, to arbitrary depth.
       Model the depth in the type or in a runtime counter — do not allow a released savepoint
       to be released twice.
-- [ ] **Step 4.** Ergonomic closure form: `tx.transaction(|sp| async { … })` that commits on
+- [x] **Step 4.** Ergonomic closure form: `tx.transaction(|sp| async { … })` that commits on
       `Ok` and rolls back to the savepoint on `Err`, mirroring Drizzle's nested-transaction API.
-- [ ] **Step 5.** Implement across all three driver paths — `sqlx::Any`, `rusqlite`,
+- [x] **Step 5.** Implement across all three driver paths — `sqlx::Any`, `rusqlite`,
       `tokio-postgres`. The `rusqlite` path is synchronous and runs on `spawn_blocking`;
       savepoint lifetime must not outlive the blocking task.
-- [ ] **Step 6.** `crates/runtime/tests/savepoint.rs` via the `both_dbs!` macro: nested commit,
+- [x] **Step 6.** `crates/runtime/tests/savepoint.rs` via the `both_dbs!` macro: nested commit,
       nested rollback leaving the outer transaction live, drop-without-release, depth ≥ 3, and
       rollback-to-savepoint after a constraint violation (the motivating case).
-- [ ] **Step 7.** Document in `docs/QueryGuide.md` and remove the savepoint entry from
+- [x] **Step 7.** Document in `docs/QueryGuide.md` and remove the savepoint entry from
       `docs/KnownLimitations.md`.
 
 ### W1-02 · Array bind values
