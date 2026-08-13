@@ -27,6 +27,8 @@ A beta milestone that closes the remaining alpha.3 beta blockers: clippy warning
 - `rusqlite` mutex `unwrap()` calls replaced with error paths, satisfying the `crates/runtime` panic budget.
 - Examples and benchmarks that passed `&Pool` to `sqlx::query` now use an explicit `Pool::Any` wrapper where appropriate.
 - Updated crate-level rustdocs and user-facing docs (`README.md`, `docs/QueryGuide.md`, `docs/RelationsGuide.md`, `docs/Quickstart.md`, `docs/MigratingFrom.md`, `docs/KnownLimitations.md`) to the `0.1.1-beta.1` API and backend features.
+- Moved `crates/dialect/tests/conformance.rs` into `tests/integration/tests/dialect_conformance.rs` and removed the `ruprizzle-testkit` dev-dependency from `ruprizzle-dialect` so the crate can be packaged and published.
+- Published `ruprizzle-core`, `ruprizzle-parser`, `ruprizzle-dialect`, `ruprizzle-macros`, `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, and `ruprizzle-cli` version `0.1.1-beta.1` to crates.io.
 
 ## [Unreleased]
 
