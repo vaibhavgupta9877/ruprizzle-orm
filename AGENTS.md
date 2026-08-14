@@ -22,3 +22,10 @@
   ```
   cargo test -p ruprizzle --features sqlite-rusqlite
   ```
+
+## Default branch
+
+- The repository default branch is now `dev-v0-2`. It was created from
+  `perf/research-harnesses` after merging `w2-phase`, `w3-phase`, `w4-phase`,
+  and `w5-phase` with `--no-ff`. Unless the user says otherwise or manually
+  changes branches, use `dev-v0-2` as the base for all future work.
