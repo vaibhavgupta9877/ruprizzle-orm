@@ -1,6 +1,9 @@
 //! Many-to-many relation loading through an explicit join model.
 
-use ruprizzle::{Column, IncludeMany, Model, Related, SelectQuery};
+use ruprizzle::{
+    Column, Encodable, IncludeMany, InsertQuery, M2mAction, M2mWrite, Model, Related, SelectQuery,
+    UpdateQuery,
+};
 use ruprizzle_testkit::both_dbs;
 use sqlx::FromRow;
 
@@ -83,9 +86,7 @@ ruprizzle::tokio_postgres_default_row!(PostTag);
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for PostTag {
-    fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::RusqliteRow,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             post_id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
             tag_id: ::ruprizzle::rusqlite::get::<i64>(row, 1)?,
@@ -109,6 +110,7 @@ impl Model for PostTag {
     const COLUMNS: &'static [&'static str] = &["post_id", "tag_id"];
 }
 
+const POST_ID: Column<Post, i64> = Column::new("m2m_posts", "id");
 const TAG_ID: Column<Tag, i64> = Column::new("m2m_tags", "id");
 const POST_TAG_POST_ID: Column<PostTag, i64> = Column::new("m2m_post_tags", "post_id");
 const POST_TAG_TAG_ID: Column<PostTag, i64> = Column::new("m2m_post_tags", "tag_id");
@@ -123,6 +125,23 @@ fn post_tags() -> IncludeMany<'static, Post, Tag, PostTag, i64, i64, ()> {
         POST_TAG_POST_ID,
         POST_TAG_TAG_ID,
         TAG_ID,
+    )
+}
+
+fn post_tags_write(
+    action: M2mAction,
+    ids: impl IntoIterator<Item = i64>,
+) -> M2mWrite<'static, Post, Tag, PostTag> {
+    M2mWrite::new(
+        action,
+        |p: &Post| Encodable::to_value(&p.id),
+        "m2m_post_tags",
+        "post_id",
+        "tag_id",
+        "m2m_tags",
+        "id",
+        ids.into_iter().map(|id| Encodable::to_value(&id)).collect(),
+        |p: &mut Post, tags: Vec<Tag>| p.tags = Related::Loaded(tags),
     )
 }
 
@@ -167,5 +186,64 @@ both_dbs! {
 
         assert_eq!(post1_tags, vec![10, 20]);
         assert_eq!(post2_tags, vec![20, 30]);
+    }
+}
+
+both_dbs! {
+    setup = SETUP_SQL;
+    async fn many_to_many_nested_writes(db: TestDb) {
+        // Attach an extra tag to an existing post.
+        UpdateQuery::<Post>::new(db.pool())
+            .filter(POST_ID.eq(1i64))
+            .with_m2m(post_tags_write(M2mAction::Attach, [30]))
+            .exec()
+            .await?;
+
+        let post1 = SelectQuery::<Post>::new(db.pool())
+            .filter(POST_ID.eq(1i64))
+            .include(post_tags())
+            .exec_one()
+            .await?;
+        let post1_tags: Vec<_> = post1.tags.get().iter().map(|t| t.id).collect();
+        assert_eq!(post1_tags, vec![10, 20, 30]);
+
+        // Set replaces all tags.
+        UpdateQuery::<Post>::new(db.pool())
+            .filter(POST_ID.eq(1i64))
+            .with_m2m(post_tags_write(M2mAction::Set, [10]))
+            .exec()
+            .await?;
+
+        let post1 = SelectQuery::<Post>::new(db.pool())
+            .filter(POST_ID.eq(1i64))
+            .include(post_tags())
+            .exec_one()
+            .await?;
+        let post1_tags: Vec<_> = post1.tags.get().iter().map(|t| t.id).collect();
+        assert_eq!(post1_tags, vec![10]);
+
+        // Detach removes a tag.
+        UpdateQuery::<Post>::new(db.pool())
+            .filter(POST_ID.eq(1i64))
+            .with_m2m(post_tags_write(M2mAction::Detach, [10]))
+            .exec()
+            .await?;
+
+        let post1 = SelectQuery::<Post>::new(db.pool())
+            .filter(POST_ID.eq(1i64))
+            .include(post_tags())
+            .exec_one()
+            .await?;
+        assert!(post1.tags.get().is_empty());
+
+        // Insert a new post with tags.
+        let post = InsertQuery::<Post>::new(db.pool())
+            .set(POST_ID, 3i64)
+            .with_m2m(post_tags_write(M2mAction::Set, [10, 20]))
+            .exec()
+            .await?;
+
+        let post3_tags: Vec<_> = post.tags.get().iter().map(|t| t.id).collect();
+        assert_eq!(post3_tags, vec![10, 20]);
     }
 }

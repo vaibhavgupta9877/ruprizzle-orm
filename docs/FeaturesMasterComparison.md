@@ -92,7 +92,7 @@ variants.
 |---|---|---|---|---|---|---|---|
 | One-to-many / many-to-one | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | One-to-one | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| Many-to-many | Partial | Partial | Yes | Yes | Yes | Yes | Yes |
+| Many-to-many | Yes [^2] | Yes [^2] | Yes | Yes | Yes | Yes | Yes |
 | Self-referential relations | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | Nested relation `include` | Yes | Yes | Yes | Partial | No | Yes | Yes |
 | Batched / auto N+1 avoidance | Yes (bounded 1 query/level) | Same | Yes | Yes (data loader) | Manual join | Yes (join or query) | Yes |
@@ -178,3 +178,8 @@ Numbers are from the latest `local/cross-orm-bench/BENCHMARKS.log`
    and SQLite (JSON1). Postgres and MySQL support full JSON containment (`@>`);
    SQLite approximates containment with a key-existence check because JSON1 has no
    containment operator. See `KnownLimitations.md`.
+
+[^2]: ruprizzle's many-to-many support uses explicit join models (ADR-006). You
+    model `PostTag` yourself, then declare `tags Tag[] @relation(through: PostTag)`
+    to get `post.tags`, `post.tags_attach(...)`, `post.tags_set(...)`, and
+    `post.tags_detach(...)` with batched `include` and transactional nested writes.

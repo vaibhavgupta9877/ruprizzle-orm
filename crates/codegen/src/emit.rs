@@ -1269,9 +1269,7 @@ struct AggregateField {
     output_inner: TokenStream,
 }
 
-fn numeric_aggregate_types(
-    st: ScalarType,
-) -> Option<(TokenStream, TokenStream, TokenStream)> {
+fn numeric_aggregate_types(st: ScalarType) -> Option<(TokenStream, TokenStream, TokenStream)> {
     match st {
         ScalarType::Int => Some((quote! { i64 }, quote! { f64 }, quote! { i32 })),
         ScalarType::BigInt => Some((quote! { i64 }, quote! { f64 }, quote! { i64 })),
@@ -1710,8 +1708,12 @@ fn emit_many_to_many_helpers(
     rel: &ResolvedRelation,
 ) -> Option<TokenStream> {
     let join_model = schema.models.get(rel.join_model.as_ref()?.as_str())?;
-    let owner_fk_field = join_model.fields.get(rel.join_owner_field.as_ref()?.as_str())?;
-    let target_fk_field = join_model.fields.get(rel.join_target_field.as_ref()?.as_str())?;
+    let owner_fk_field = join_model
+        .fields
+        .get(rel.join_owner_field.as_ref()?.as_str())?;
+    let target_fk_field = join_model
+        .fields
+        .get(rel.join_target_field.as_ref()?.as_str())?;
 
     let owner_fk_rel = owner_fk_field.relation()?;
     let target_fk_rel = target_fk_field.relation()?;
@@ -1729,8 +1731,12 @@ fn emit_many_to_many_helpers(
         return None;
     }
 
-    let owner_fk_col_field = join_model.fields.get(owner_fk_rel.fields.first()?.as_str())?;
-    let target_fk_col_field = join_model.fields.get(target_fk_rel.fields.first()?.as_str())?;
+    let owner_fk_col_field = join_model
+        .fields
+        .get(owner_fk_rel.fields.first()?.as_str())?;
+    let target_fk_col_field = join_model
+        .fields
+        .get(target_fk_rel.fields.first()?.as_str())?;
 
     let key_type = rust_type_tokens(schema, rel.owner.as_str(), owner_pk_field, false, true);
     let ckey_type = rust_type_tokens(schema, rel.target.as_str(), target_pk_field, false, true);
@@ -1766,6 +1772,38 @@ fn emit_many_to_many_helpers(
         include_helper_name
     );
 
+    let attach_helper_name = format_ident!("{}_attach", include_helper_name);
+    let set_helper_name = format_ident!("{}_set", include_helper_name);
+    let detach_helper_name = format_ident!("{}_detach", include_helper_name);
+
+    let attach_doc = format!(
+        "Returns an `M2mWrite::Attach` for the `{}` many-to-many relation.",
+        include_helper_name
+    );
+    let set_doc = format!(
+        "Returns an `M2mWrite::Set` for the `{}` many-to-many relation.",
+        include_helper_name
+    );
+    let detach_doc = format!(
+        "Returns an `M2mWrite::Detach` for the `{}` many-to-many relation.",
+        include_helper_name
+    );
+
+    let join_table = &join_model.table;
+    let join_owner_col = &owner_fk_col_field.column;
+    let join_target_col = &target_fk_col_field.column;
+    let target_table = &target_model.table;
+    let target_pk_col = &target_pk_field.column;
+
+    let m2m_type = quote! {
+        ::ruprizzle::M2mWrite<
+            'static,
+            #model_name,
+            super::#target_module_ident::#target_type,
+            super::#join_module_ident::#join_type,
+        >
+    };
+
     Some(quote! {
         #[doc = #query_doc]
         pub fn #query_helper_name<'__a>(
@@ -1800,6 +1838,63 @@ fn emit_many_to_many_helpers(
                 super::#join_module_ident::#owner_join_const,
                 super::#join_module_ident::#target_join_const,
                 super::#target_module_ident::#target_pk_const,
+            )
+        }
+
+        #[doc = #attach_doc]
+        pub fn #attach_helper_name(
+            ids: impl IntoIterator<Item = #ckey_type>,
+        ) -> #m2m_type {
+            ::ruprizzle::M2mWrite::new(
+                ::ruprizzle::M2mAction::Attach,
+                |__row: &#model_name| ::ruprizzle::Encodable::to_value(&__row.#owner_pk_field_ident),
+                #join_table,
+                #join_owner_col,
+                #join_target_col,
+                #target_table,
+                #target_pk_col,
+                ids.into_iter().map(|__id| ::ruprizzle::Encodable::to_value(&__id)).collect(),
+                |__row: &mut #model_name, __loaded: Vec<super::#target_module_ident::#target_type>| {
+                    __row.#field_ident = ::ruprizzle::Related::Loaded(__loaded);
+                },
+            )
+        }
+
+        #[doc = #set_doc]
+        pub fn #set_helper_name(
+            ids: impl IntoIterator<Item = #ckey_type>,
+        ) -> #m2m_type {
+            ::ruprizzle::M2mWrite::new(
+                ::ruprizzle::M2mAction::Set,
+                |__row: &#model_name| ::ruprizzle::Encodable::to_value(&__row.#owner_pk_field_ident),
+                #join_table,
+                #join_owner_col,
+                #join_target_col,
+                #target_table,
+                #target_pk_col,
+                ids.into_iter().map(|__id| ::ruprizzle::Encodable::to_value(&__id)).collect(),
+                |__row: &mut #model_name, __loaded: Vec<super::#target_module_ident::#target_type>| {
+                    __row.#field_ident = ::ruprizzle::Related::Loaded(__loaded);
+                },
+            )
+        }
+
+        #[doc = #detach_doc]
+        pub fn #detach_helper_name(
+            ids: impl IntoIterator<Item = #ckey_type>,
+        ) -> #m2m_type {
+            ::ruprizzle::M2mWrite::new(
+                ::ruprizzle::M2mAction::Detach,
+                |__row: &#model_name| ::ruprizzle::Encodable::to_value(&__row.#owner_pk_field_ident),
+                #join_table,
+                #join_owner_col,
+                #join_target_col,
+                #target_table,
+                #target_pk_col,
+                ids.into_iter().map(|__id| ::ruprizzle::Encodable::to_value(&__id)).collect(),
+                |__row: &mut #model_name, __loaded: Vec<super::#target_module_ident::#target_type>| {
+                    __row.#field_ident = ::ruprizzle::Related::Loaded(__loaded);
+                },
             )
         }
     })

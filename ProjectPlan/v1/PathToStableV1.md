@@ -371,9 +371,14 @@ in two hops" is why the table says `Partial`.
       many-to-many list fields; fixed the parser so each endpoint gets its own
       oriented `ResolvedRelation`. New `both_dbs!` integration test passes on
       Postgres, SQLite and MySQL.
-- [ ] **Step 4.** Nested writes: attach/detach/set semantics on the join rows.
-- [ ] **Step 5.** Upgrade the comparison table entry to `Yes` with a footnote naming the
-      explicit-join-model design.
+- [x] **Step 4.** Nested writes: attach/detach/set semantics on the join rows.
+      Added `M2mWrite`/`M2mAction` to the runtime, `InsertQuery::with_m2m` and
+      `UpdateQuery::with_m2m` to run the writes in the same transaction as the
+      parent mutation, and codegen `tags_attach`/`tags_set`/`tags_detach` helpers.
+      `crates/runtime/tests/m2m.rs` now covers all three actions end-to-end on
+      Postgres, SQLite and MySQL.
+- [x] **Step 5.** Upgraded `docs/FeaturesMasterComparison.md` many-to-many entry to
+      `Yes` with footnote [^2] explaining the explicit-join-model design.
 
 ### W2-06 · Nested writes and relation mutations
 

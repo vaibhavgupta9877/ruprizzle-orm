@@ -1,5 +1,6 @@
 ---
 source: crates/codegen/tests/snapshots.rs
+assertion_line: 55
 expression: content
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
@@ -390,6 +391,60 @@ pub fn tags() -> ::ruprizzle::IncludeMany<
         super::post_tag::POST_ID,
         super::post_tag::TAG_ID,
         super::tag::ID,
+    )
+}
+///Returns an `M2mWrite::Attach` for the `tags` many-to-many relation.
+pub fn tags_attach(
+    ids: impl IntoIterator<Item = i32>,
+) -> ::ruprizzle::M2mWrite<'static, Post, super::tag::Tag, super::post_tag::PostTag> {
+    ::ruprizzle::M2mWrite::new(
+        ::ruprizzle::M2mAction::Attach,
+        |__row: &Post| ::ruprizzle::Encodable::to_value(&__row.id),
+        "post_tags",
+        "post_id",
+        "tag_id",
+        "tags",
+        "id",
+        ids.into_iter().map(|__id| ::ruprizzle::Encodable::to_value(&__id)).collect(),
+        |__row: &mut Post, __loaded: Vec<super::tag::Tag>| {
+            __row.tags = ::ruprizzle::Related::Loaded(__loaded);
+        },
+    )
+}
+///Returns an `M2mWrite::Set` for the `tags` many-to-many relation.
+pub fn tags_set(
+    ids: impl IntoIterator<Item = i32>,
+) -> ::ruprizzle::M2mWrite<'static, Post, super::tag::Tag, super::post_tag::PostTag> {
+    ::ruprizzle::M2mWrite::new(
+        ::ruprizzle::M2mAction::Set,
+        |__row: &Post| ::ruprizzle::Encodable::to_value(&__row.id),
+        "post_tags",
+        "post_id",
+        "tag_id",
+        "tags",
+        "id",
+        ids.into_iter().map(|__id| ::ruprizzle::Encodable::to_value(&__id)).collect(),
+        |__row: &mut Post, __loaded: Vec<super::tag::Tag>| {
+            __row.tags = ::ruprizzle::Related::Loaded(__loaded);
+        },
+    )
+}
+///Returns an `M2mWrite::Detach` for the `tags` many-to-many relation.
+pub fn tags_detach(
+    ids: impl IntoIterator<Item = i32>,
+) -> ::ruprizzle::M2mWrite<'static, Post, super::tag::Tag, super::post_tag::PostTag> {
+    ::ruprizzle::M2mWrite::new(
+        ::ruprizzle::M2mAction::Detach,
+        |__row: &Post| ::ruprizzle::Encodable::to_value(&__row.id),
+        "post_tags",
+        "post_id",
+        "tag_id",
+        "tags",
+        "id",
+        ids.into_iter().map(|__id| ::ruprizzle::Encodable::to_value(&__id)).collect(),
+        |__row: &mut Post, __loaded: Vec<super::tag::Tag>| {
+            __row.tags = ::ruprizzle::Related::Loaded(__loaded);
+        },
     )
 }
 /// Prisma-flavoured repository for `#model_name`.

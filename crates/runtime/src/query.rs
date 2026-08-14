@@ -2,6 +2,7 @@
 
 use std::borrow::Cow;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use crate::Error;
 use crate::aggregate::{AggregateEntry, AggregateSet, GroupBy};
@@ -15,6 +16,7 @@ use crate::filter::{Cte, CteQuery, Filter, FilterNode};
 use crate::include::IncludeSet;
 use crate::join::{Join2, JoinKind, JoinOn, JoinSpec, LeftJoin2, Maybe};
 use crate::json::JsonSet;
+use crate::m2m::{AnyM2mWrite, M2mWrite};
 use crate::model::{Model, RowDecode};
 use crate::order::OrderBy;
 use crate::page::Page;
@@ -1074,6 +1076,7 @@ pub struct InsertQuery<'db, M: Model> {
     on_conflict: Option<Vec<&'static str>>,
     do_update: Option<Vec<&'static str>>,
     nested: Option<NestedInsert<'db, M>>,
+    m2m: Option<Box<dyn AnyM2mWrite<M> + 'db>>,
     _marker: PhantomData<fn() -> M>,
 }
 
@@ -1084,6 +1087,7 @@ impl<'db, M: Model> std::fmt::Debug for InsertQuery<'db, M> {
             .field("on_conflict", &self.on_conflict)
             .field("do_update", &self.do_update)
             .field("nested", &self.nested.is_some())
+            .field("m2m", &self.m2m.is_some())
             .finish()
     }
 }
@@ -1103,6 +1107,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
             on_conflict: None,
             do_update: None,
             nested: None,
+            m2m: None,
             _marker: PhantomData,
         }
     }
@@ -1161,6 +1166,15 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         self
     }
 
+    /// Attaches a many-to-many nested write to this insert.
+    ///
+    /// The write runs in the same transaction as the parent insert. The parent
+    /// is returned with the relation loaded.
+    pub fn with_m2m<C: Model + Unpin, J: Model>(mut self, m2m: M2mWrite<'db, M, C, J>) -> Self {
+        self.m2m = Some(Box::new(m2m) as Box<dyn AnyM2mWrite<M> + 'db>);
+        self
+    }
+
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> CompiledSql {
         let dialect = dialect_for_pool(self.pool);
@@ -1179,14 +1193,17 @@ impl<'db, M: Model> InsertQuery<'db, M> {
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exec(mut self) -> Result<M, Error> {
         let nested = self.nested.take();
-        match nested {
-            None => self.exec_single().await,
-            Some(nested) => self.exec_nested(nested).await,
+        let m2m = self.m2m.take();
+        match (nested, m2m) {
+            (None, None) => self.exec_single().await,
+            (Some(nested), None) => self.exec_nested(nested, None).await,
+            (None, Some(m2m)) => self.exec_m2m(m2m).await,
+            (Some(nested), Some(m2m)) => self.exec_nested(nested, Some(m2m)).await,
         }
     }
 
-    async fn exec_single(self) -> Result<M, Error> {
-        let dialect = dialect_for_pool(self.pool);
+    async fn insert_parent(&self, exec: &dyn Executor) -> Result<M, Error> {
+        let dialect = exec.dialect();
         let returning: &[&str] = if M::COLUMNS.is_empty() {
             &["*"]
         } else {
@@ -1207,39 +1224,37 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         };
 
         if dialect.returning_supported() {
-            let batch = self
-                .pool
-                .fetch_all_raw(compiled.sql, compiled.binds)
-                .await?;
+            let batch = exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
             let mut rows = crate::executor::decode_rows::<M>(batch)?;
             rows.pop()
                 .ok_or_else(|| Error::Message("INSERT RETURNING returned no row".into()))
         } else {
-            self.pool.execute_raw(compiled.sql, compiled.binds).await?;
-            fetch_inserted_row(self.pool, dialect, &self.values).await
+            exec.execute_raw(compiled.sql, compiled.binds).await?;
+            fetch_inserted_row(exec, dialect, &self.values).await
         }
     }
 
-    async fn exec_nested(self, nested: NestedInsert<'db, M>) -> Result<M, Error> {
+    async fn exec_single(self) -> Result<M, Error> {
+        self.insert_parent(self.pool).await
+    }
+
+    async fn exec_m2m(self, m2m: Box<dyn AnyM2mWrite<M> + 'db>) -> Result<M, Error> {
+        let tx = crate::tx::Tx::begin(self.pool).await?;
+        let mut parent = self.insert_parent(&tx).await?;
+        m2m.execute_insert(&tx, &mut parent).await?;
+        tx.commit().await?;
+        Ok(parent)
+    }
+
+    async fn exec_nested(
+        self,
+        nested: NestedInsert<'db, M>,
+        m2m: Option<Box<dyn AnyM2mWrite<M> + 'db>>,
+    ) -> Result<M, Error> {
         let tx = crate::tx::Tx::begin(self.pool).await?;
 
         let dialect = dialect_for_pool(self.pool);
-        let returning: &[&str] = if M::COLUMNS.is_empty() {
-            &["*"]
-        } else {
-            M::COLUMNS
-        };
-        let compiled = insert::<M>(dialect, M::TABLE, &self.values, returning);
-        let mut parent = if dialect.returning_supported() {
-            let batch = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
-            let mut parent_rows = crate::executor::decode_rows::<M>(batch)?;
-            parent_rows
-                .pop()
-                .ok_or_else(|| Error::Message("INSERT RETURNING returned no row".into()))?
-        } else {
-            tx.execute_raw(compiled.sql, compiled.binds).await?;
-            fetch_inserted_row(&tx, dialect, &self.values).await?
-        };
+        let mut parent = self.insert_parent(&tx).await?;
 
         let pk_value = (nested.get_parent_pk)(&parent);
 
@@ -1296,6 +1311,10 @@ impl<'db, M: Model> InsertQuery<'db, M> {
             nested
                 .setter
                 .set(&mut parent, crate::executor::RowBatch::Any(Vec::new()));
+        }
+
+        if let Some(m2m) = m2m {
+            m2m.execute_insert(&tx, &mut parent).await?;
         }
 
         tx.commit().await?;
@@ -1444,6 +1463,7 @@ pub struct UpdateQuery<'db, M: Model> {
     sets: Vec<SetExpr>,
     filter: Filter<M>,
     all_rows: bool,
+    m2m: Option<Arc<dyn AnyM2mWrite<M> + 'db>>,
     _marker: PhantomData<fn() -> M>,
 }
 
@@ -1456,6 +1476,7 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
             sets: Vec::new(),
             filter: Filter::new(FilterNode::And(Vec::new())),
             all_rows: false,
+            m2m: None,
             _marker: PhantomData,
         }
     }
@@ -1513,6 +1534,14 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
         self
     }
 
+    /// Attaches a many-to-many nested write to this update.
+    ///
+    /// The write runs in the same transaction as the parent update.
+    pub fn with_m2m<C: Model + Unpin, J: Model>(mut self, m2m: M2mWrite<'db, M, C, J>) -> Self {
+        self.m2m = Some(Arc::new(m2m) as Arc<dyn AnyM2mWrite<M> + 'db>);
+        self
+    }
+
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> Result<CompiledSql, Error> {
         if !self.all_rows && matches!(self.filter.node, FilterNode::And(ref v) if v.is_empty()) {
@@ -1539,8 +1568,62 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
     ///
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exec(self) -> Result<u64, Error> {
+        if self.m2m.is_some() && self.sets.is_empty() {
+            // No parent columns to update; just run the many-to-many write
+            // inside a transaction.
+            return self.exec_m2m_only().await;
+        }
+
         let compiled = self.to_sql()?;
-        self.pool.execute_raw(compiled.sql, compiled.binds).await
+        if self.m2m.is_none() {
+            return self.pool.execute_raw(compiled.sql, compiled.binds).await;
+        }
+
+        let tx = crate::tx::Tx::begin(self.pool).await?;
+        let parent_count = tx.execute_raw(compiled.sql, compiled.binds).await?;
+        let m2m_count = self.apply_m2m(&tx).await?;
+        tx.commit().await?;
+        Ok(parent_count + m2m_count)
+    }
+
+    async fn apply_m2m(self, exec: &dyn Executor) -> Result<u64, Error> {
+        let Some(m2m) = self.m2m else {
+            return Ok(0);
+        };
+
+        if !self.all_rows && matches!(self.filter.node, FilterNode::And(ref v) if v.is_empty()) {
+            return Err(Error::Message(
+                "m2m update has no filter; call .all_rows() to update every row".into(),
+            ));
+        }
+
+        let dialect = exec.dialect();
+        let compiled = select::<M>(
+            dialect,
+            M::TABLE,
+            M::COLUMNS,
+            &self.filter.node,
+            &[],
+            None,
+            None,
+            false,
+        );
+        let batch = exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
+        let parents = crate::executor::decode_rows::<M>(batch)?;
+
+        let mut total = 0u64;
+        for parent in parents {
+            let pk = m2m.parent_pk(&parent);
+            total += m2m.execute_update(exec, pk).await?;
+        }
+        Ok(total)
+    }
+
+    async fn exec_m2m_only(self) -> Result<u64, Error> {
+        let tx = crate::tx::Tx::begin(self.pool).await?;
+        let m2m_count = self.apply_m2m(&tx).await?;
+        tx.commit().await?;
+        Ok(m2m_count)
     }
 }
 

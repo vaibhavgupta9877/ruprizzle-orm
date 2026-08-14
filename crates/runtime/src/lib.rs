@@ -38,6 +38,7 @@ pub mod filter;
 pub mod include;
 pub mod join;
 pub mod json;
+pub mod m2m;
 pub mod metrics;
 pub mod model;
 #[doc(hidden)]
@@ -88,8 +89,9 @@ pub use filter::{
     any,
 };
 pub use include::{IncludeList, IncludeMany, IncludeOne, IncludeSet};
-pub use json::{JsonColumn, JsonPath, JsonSet};
 pub use join::{Join2, JoinKind, JoinOn, JoinSide, LeftJoin2, Maybe};
+pub use json::{JsonColumn, JsonPath, JsonSet};
+pub use m2m::{M2mAction, M2mWrite};
 pub use model::Model;
 pub use order::OrderBy;
 pub use page::Page;
