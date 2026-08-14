@@ -25,24 +25,19 @@ impl Model for Item {
 }
 
 impl<'r> ruprizzle::sqlx::FromRow<'r, ruprizzle::sqlx::any::AnyRow> for Item {
-    fn from_row(
-        row: &'r ruprizzle::sqlx::any::AnyRow,
-    ) -> Result<Self, ruprizzle::sqlx::Error> {
+    fn from_row(row: &'r ruprizzle::sqlx::any::AnyRow) -> Result<Self, ruprizzle::sqlx::Error> {
         Ok(Self {
             id: ruprizzle::decode::direct(row, "id")?,
             meta: {
                 let s: String = row.try_get("meta")?;
-                serde_json::from_str(&s)
-                    .map_err(|e| ruprizzle::sqlx::Error::Decode(Box::new(e)))?
+                serde_json::from_str(&s).map_err(|e| ruprizzle::sqlx::Error::Decode(Box::new(e)))?
             },
         })
     }
 }
 
 impl<'r> ruprizzle::sqlx::FromRow<'r, ruprizzle::sqlx::postgres::PgRow> for Item {
-    fn from_row(
-        row: &'r ruprizzle::sqlx::postgres::PgRow,
-    ) -> Result<Self, ruprizzle::sqlx::Error> {
+    fn from_row(row: &'r ruprizzle::sqlx::postgres::PgRow) -> Result<Self, ruprizzle::sqlx::Error> {
         Ok(Self {
             id: ruprizzle::decode::direct(row, "id")?,
             meta: ruprizzle::decode::json(row, "meta")?,
@@ -62,9 +57,7 @@ impl<'r> ruprizzle::sqlx::FromRow<'r, ruprizzle::sqlx::sqlite::SqliteRow> for It
 }
 
 impl<'r> ruprizzle::sqlx::FromRow<'r, ruprizzle::sqlx::mysql::MySqlRow> for Item {
-    fn from_row(
-        row: &'r ruprizzle::sqlx::mysql::MySqlRow,
-    ) -> Result<Self, ruprizzle::sqlx::Error> {
+    fn from_row(row: &'r ruprizzle::sqlx::mysql::MySqlRow) -> Result<Self, ruprizzle::sqlx::Error> {
         Ok(Self {
             id: ruprizzle::decode::direct(row, "id")?,
             meta: ruprizzle::decode::json(row, "meta")?,
@@ -74,9 +67,7 @@ impl<'r> ruprizzle::sqlx::FromRow<'r, ruprizzle::sqlx::mysql::MySqlRow> for Item
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Item {
-    fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::RusqliteRow,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
             meta: ::ruprizzle::rusqlite::get::<serde_json::Value>(row, 1)?,
@@ -100,7 +91,9 @@ impl ruprizzle::tokio_postgres::FromTokioPostgresRow for Item {
         row: &ruprizzle::tokio_postgres::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.try_get::<usize, i64>(0).map_err(ruprizzle::Error::TokioPostgres)?,
+            id: row
+                .try_get::<usize, i64>(0)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
             meta: row
                 .try_get::<usize, serde_json::Value>(1)
                 .map_err(ruprizzle::Error::TokioPostgres)?,

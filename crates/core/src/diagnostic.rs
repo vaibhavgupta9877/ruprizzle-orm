@@ -256,7 +256,9 @@ pub enum SchemaError {
     },
 
     /// V08 — the join model is not a valid many-to-many join.
-    #[error("join model `{through}` is not a valid many-to-many join between `{owner}` and `{target}`")]
+    #[error(
+        "join model `{through}` is not a valid many-to-many join between `{owner}` and `{target}`"
+    )]
     #[diagnostic(code(ruprizzle::relation::invalid_join_model))]
     InvalidJoinModel {
         through: String,

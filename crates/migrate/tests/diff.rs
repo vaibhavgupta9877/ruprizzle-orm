@@ -178,11 +178,9 @@ fn up_sql_defer_foreign_keys_for_sqlite_cycle() {
 
 #[test]
 fn up_sql_defers_constraints_for_postgres_cycle() {
-    let schema =
-        ruprizzle_parser::parse("cycle", &cycle_schema("postgres")).expect("parse cycle");
+    let schema = ruprizzle_parser::parse("cycle", &cycle_schema("postgres")).expect("parse cycle");
     let dialect = ruprizzle_dialect::dialect_for(schema.datasource.provider);
-    let empty =
-        ruprizzle_parser::parse("empty", &empty_schema("postgres")).expect("empty parses");
+    let empty = ruprizzle_parser::parse("empty", &empty_schema("postgres")).expect("empty parses");
     let up = up_sql(&empty, &schema, dialect);
     let down = down_sql(&empty, &schema, dialect);
 
@@ -190,7 +188,10 @@ fn up_sql_defers_constraints_for_postgres_cycle() {
     assert!(up.contains("SET CONSTRAINTS ALL IMMEDIATE;"), "up:\n{up}");
     assert!(up.contains("DEFERRABLE INITIALLY IMMEDIATE"), "up:\n{up}");
 
-    assert!(down.contains("CASCADE"), "down should cascade drop tables in a cycle:\n{down}");
+    assert!(
+        down.contains("CASCADE"),
+        "down should cascade drop tables in a cycle:\n{down}"
+    );
 }
 
 #[test]
@@ -203,8 +204,14 @@ fn up_sql_disables_fk_checks_for_mysql_cycle() {
 
     assert!(up.contains("SET FOREIGN_KEY_CHECKS = 0;"), "up:\n{up}");
     assert!(up.contains("SET FOREIGN_KEY_CHECKS = 1;"), "up:\n{up}");
-    assert!(down.contains("SET FOREIGN_KEY_CHECKS = 0;"), "down:\n{down}");
-    assert!(down.contains("SET FOREIGN_KEY_CHECKS = 1;"), "down:\n{down}");
+    assert!(
+        down.contains("SET FOREIGN_KEY_CHECKS = 0;"),
+        "down:\n{down}"
+    );
+    assert!(
+        down.contains("SET FOREIGN_KEY_CHECKS = 1;"),
+        "down:\n{down}"
+    );
 }
 
 #[test]

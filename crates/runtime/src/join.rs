@@ -7,7 +7,7 @@
 use std::ops::{Deref, DerefMut};
 
 use sqlx::{
-    any::AnyRow, mysql::MySqlRow, postgres::PgRow, sqlite::SqliteRow, ColumnIndex, Row, ValueRef,
+    ColumnIndex, Row, ValueRef, any::AnyRow, mysql::MySqlRow, postgres::PgRow, sqlite::SqliteRow,
 };
 
 use crate::col::Column;
@@ -392,19 +392,25 @@ mod tokio_postgres_impl {
 
     impl<A: RowDecode, B: RowDecode> FromTokioPostgresRow for Join2<A, B> {
         fn from_tokio_postgres_row(_row: &Row) -> Result<Self, Error> {
-            Err(Error::Message("tokio-postgres joins not yet implemented".into()))
+            Err(Error::Message(
+                "tokio-postgres joins not yet implemented".into(),
+            ))
         }
     }
 
     impl<A: RowDecode, B: RowDecode> FromTokioPostgresRow for LeftJoin2<A, B> {
         fn from_tokio_postgres_row(_row: &Row) -> Result<Self, Error> {
-            Err(Error::Message("tokio-postgres joins not yet implemented".into()))
+            Err(Error::Message(
+                "tokio-postgres joins not yet implemented".into(),
+            ))
         }
     }
 
     impl<B: RowDecode> FromTokioPostgresRow for Maybe<B> {
         fn from_tokio_postgres_row(_row: &Row) -> Result<Self, Error> {
-            Err(Error::Message("tokio-postgres joins not yet implemented".into()))
+            Err(Error::Message(
+                "tokio-postgres joins not yet implemented".into(),
+            ))
         }
     }
 }

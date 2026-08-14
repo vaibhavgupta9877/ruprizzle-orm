@@ -460,7 +460,9 @@ fn relation_ref(decl: &FieldDecl) -> RelationRef {
             .map(str::to_owned)
     });
 
-    let through = attr.and_then(|a| a.named("through")).and_then(Value::as_ident);
+    let through = attr
+        .and_then(|a| a.named("through"))
+        .and_then(Value::as_ident);
 
     let name_list = |key: &str| -> Vec<FieldName> {
         attr.and_then(|a| a.named(key))
@@ -861,7 +863,8 @@ fn is_join_fk_side(model: &Model, target: &Model, rel: &RelationRef) -> bool {
     rel.through.is_none()
         && !rel.fields.is_empty()
         && target.fields.values().any(|f| {
-            f.relation().is_some_and(|r| r.through.as_ref() == Some(&model.name))
+            f.relation()
+                .is_some_and(|r| r.through.as_ref() == Some(&model.name))
         })
 }
 
@@ -1074,7 +1077,9 @@ fn resolve_through_relations(
                 through: group[0].join_model.as_ref().unwrap().to_string(),
                 owner: group[0].model.to_string(),
                 target: group[0].target.to_string(),
-                advice: Some("a many-to-many needs exactly two list sides and two FK sides".to_owned()),
+                advice: Some(
+                    "a many-to-many needs exactly two list sides and two FK sides".to_owned(),
+                ),
                 span: group[0].span.into(),
             });
             continue;
@@ -1293,7 +1298,10 @@ fn build_many_to_many_relation(
             through: through_name.to_string(),
             owner: owner.model.to_string(),
             target: back.model.to_string(),
-            advice: Some(format!("`{through_name}` needs a foreign key to `{}`", owner.model)),
+            advice: Some(format!(
+                "`{through_name}` needs a foreign key to `{}`",
+                owner.model
+            )),
             span: owner.span.into(),
         });
         return None;
@@ -1304,7 +1312,10 @@ fn build_many_to_many_relation(
             through: through_name.to_string(),
             owner: owner.model.to_string(),
             target: back.model.to_string(),
-            advice: Some(format!("`{through_name}` needs a foreign key to `{}`", back.model)),
+            advice: Some(format!(
+                "`{through_name}` needs a foreign key to `{}`",
+                back.model
+            )),
             span: back.span.into(),
         });
         return None;
@@ -1318,12 +1329,22 @@ fn build_many_to_many_relation(
     let owner_cols: Vec<String> = owner_fk_rel
         .fields
         .iter()
-        .filter_map(|n| through_model.fields.get(n.as_str()).map(|f| f.column.clone()))
+        .filter_map(|n| {
+            through_model
+                .fields
+                .get(n.as_str())
+                .map(|f| f.column.clone())
+        })
         .collect();
     let target_cols: Vec<String> = target_fk_rel
         .fields
         .iter()
-        .filter_map(|n| through_model.fields.get(n.as_str()).map(|f| f.column.clone()))
+        .filter_map(|n| {
+            through_model
+                .fields
+                .get(n.as_str())
+                .map(|f| f.column.clone())
+        })
         .collect();
 
     Some(ResolvedRelation {
@@ -1339,7 +1360,9 @@ fn build_many_to_many_relation(
         target_table: through_model.table.clone(),
         target_cols,
         target_field: Some(back.field.clone()),
-        on_delete: owner_fk_rel.on_delete.unwrap_or(ReferentialAction::Restrict),
+        on_delete: owner_fk_rel
+            .on_delete
+            .unwrap_or(ReferentialAction::Restrict),
         on_update: owner_fk_rel.on_update.unwrap_or(ReferentialAction::Cascade),
         optional: false,
         constraint_name: naming::foreign_key_name(&through_model.table, &[]),

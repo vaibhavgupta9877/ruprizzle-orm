@@ -25,7 +25,11 @@ pub struct Aggregate<M, R> {
 }
 
 impl<M, R> Aggregate<M, R> {
-    pub(crate) const fn new(table: &'static str, column: &'static str, kind: AggregateKind) -> Self {
+    pub(crate) const fn new(
+        table: &'static str,
+        column: &'static str,
+        kind: AggregateKind,
+    ) -> Self {
         Self {
             table,
             column,
@@ -180,7 +184,9 @@ impl<M, T> Column<M, T> {
 /// decodable by every active backend driver.
 #[cfg(all(feature = "sqlite-rusqlite", not(feature = "postgres-tokio-postgres")))]
 pub trait AggregateScalar:
-    Send + Sync + 'static
+    Send
+    + Sync
+    + 'static
     + for<'r> sqlx::Decode<'r, sqlx::Any>
     + sqlx::Type<sqlx::Any>
     + for<'r> sqlx::Decode<'r, sqlx::Postgres>
@@ -197,7 +203,9 @@ pub trait AggregateScalar:
 /// native `tokio-postgres` backend is enabled.
 #[cfg(all(not(feature = "sqlite-rusqlite"), feature = "postgres-tokio-postgres"))]
 pub trait AggregateScalar:
-    Send + Sync + 'static
+    Send
+    + Sync
+    + 'static
     + for<'r> sqlx::Decode<'r, sqlx::Any>
     + sqlx::Type<sqlx::Any>
     + for<'r> sqlx::Decode<'r, sqlx::Postgres>
@@ -214,7 +222,9 @@ pub trait AggregateScalar:
 /// native backends are enabled.
 #[cfg(all(feature = "sqlite-rusqlite", feature = "postgres-tokio-postgres"))]
 pub trait AggregateScalar:
-    Send + Sync + 'static
+    Send
+    + Sync
+    + 'static
     + for<'r> sqlx::Decode<'r, sqlx::Any>
     + sqlx::Type<sqlx::Any>
     + for<'r> sqlx::Decode<'r, sqlx::Postgres>
@@ -230,9 +240,14 @@ pub trait AggregateScalar:
 
 /// Scalar types that can be decoded from an aggregate result column when no
 /// native backend is enabled.
-#[cfg(all(not(feature = "sqlite-rusqlite"), not(feature = "postgres-tokio-postgres")))]
+#[cfg(all(
+    not(feature = "sqlite-rusqlite"),
+    not(feature = "postgres-tokio-postgres")
+))]
 pub trait AggregateScalar:
-    Send + Sync + 'static
+    Send
+    + Sync
+    + 'static
     + for<'r> sqlx::Decode<'r, sqlx::Any>
     + sqlx::Type<sqlx::Any>
     + for<'r> sqlx::Decode<'r, sqlx::Postgres>

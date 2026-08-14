@@ -790,57 +790,57 @@ impl Planner<'_> {
 
         for change in self.changes {
             match change {
-                Change::CreateModel(m)
-                    if cycle.models.contains(&m.name) => {
-                        return true;
-                    }
-                Change::DropModel(m, _)
-                    if cycle.models.contains(m) => {
-                        return true;
-                    }
+                Change::CreateModel(m) if cycle.models.contains(&m.name) => {
+                    return true;
+                }
+                Change::DropModel(m, _) if cycle.models.contains(m) => {
+                    return true;
+                }
                 Change::RenameModel { from, to, .. }
-                    if (cycle.models.contains(from) || cycle.models.contains(to)) => {
-                        return true;
-                    }
+                    if (cycle.models.contains(from) || cycle.models.contains(to)) =>
+                {
+                    return true;
+                }
                 Change::AddColumn { model, field }
                     if cycle.models.contains(model)
-                        && cycle_fields(model, &field.name, &field.column)
-                    => {
-                        return true;
-                    }
-                Change::AlterColumn { model, from, to, .. }
-                    if cycle.models.contains(model)
-                        && (cycle_fields(model, &from.name, &from.column)
-                            || cycle_fields(model, &to.name, &to.column))
-                    => {
-                        return true;
-                    }
+                        && cycle_fields(model, &field.name, &field.column) =>
+                {
+                    return true;
+                }
+                Change::AlterColumn {
+                    model, from, to, ..
+                } if cycle.models.contains(model)
+                    && (cycle_fields(model, &from.name, &from.column)
+                        || cycle_fields(model, &to.name, &to.column)) =>
+                {
+                    return true;
+                }
                 Change::DropColumn { model, column }
                     if cycle.models.contains(model)
                         && cycle
                             .fields
                             .get(model)
-                            .is_some_and(|set| set.contains(column))
-                        => {
-                            return true;
-                        }
+                            .is_some_and(|set| set.contains(column)) =>
+                {
+                    return true;
+                }
                 Change::RenameColumn {
                     model,
                     from,
                     to,
                     from_column,
                     to_column,
+                } if cycle.models.contains(model)
+                    && (cycle_fields(model, from, from_column)
+                        || cycle_fields(model, to, to_column)) =>
+                {
+                    return true;
                 }
-                    if cycle.models.contains(model)
-                        && (cycle_fields(model, from, from_column)
-                            || cycle_fields(model, to, to_column))
-                    => {
-                        return true;
-                    }
                 Change::AddForeignKey(_, r) | Change::DropForeignKey(_, r)
-                    if cycle.relations.contains(&r.name) => {
-                        return true;
-                    }
+                    if cycle.relations.contains(&r.name) =>
+                {
+                    return true;
+                }
                 _ => {}
             }
         }

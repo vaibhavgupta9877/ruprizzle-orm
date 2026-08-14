@@ -338,8 +338,11 @@ impl RusqliteTransaction {
             .map_err(|e| Error::Message(e.to_string()))?;
 
         let column_count = stmt.column_count();
-        let column_names: Vec<String> =
-            stmt.column_names().into_iter().map(|s| s.to_string()).collect();
+        let column_names: Vec<String> = stmt
+            .column_names()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect();
 
         let rows = stmt
             .query_map(rusqlite::params_from_iter(binds), |row| {
@@ -536,8 +539,11 @@ fn fetch_all(
         .map_err(|e| Error::Message(e.to_string()))?;
 
     let column_count = stmt.column_count();
-    let column_names: Vec<String> =
-        stmt.column_names().into_iter().map(|s| s.to_string()).collect();
+    let column_names: Vec<String> = stmt
+        .column_names()
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect();
 
     let rows = stmt
         .query_map(rusqlite::params_from_iter(&binds), |row| {

@@ -621,7 +621,10 @@ where
     }
 
     /// Adds a nested include on the target.
-    pub fn include<Next: IncludeSet<C>>(self, include: Next) -> IncludeMany<'db, M, C, J, Key, CKey, Next> {
+    pub fn include<Next: IncludeSet<C>>(
+        self,
+        include: Next,
+    ) -> IncludeMany<'db, M, C, J, Key, CKey, Next> {
         IncludeMany {
             get: self.get,
             set: self.set,
@@ -688,10 +691,7 @@ where
                 .iter()
                 .map(|j| (self.join_target_get)(j))
                 .collect();
-            let child_keys = dedup(&child_keys)
-                .into_iter()
-                .cloned()
-                .collect::<Vec<_>>();
+            let child_keys = dedup(&child_keys).into_iter().cloned().collect::<Vec<_>>();
 
             // 3. Load the target rows in one (possibly chunked) query,
             //    applying the user filter and order.
@@ -733,8 +733,9 @@ where
 
             // 7. Walk the target rows in the requested order and distribute
             //    them to the matching parent buckets.
-            let mut buckets: Vec<Vec<C>> =
-                std::iter::repeat_with(Vec::new).take(parents.len()).collect();
+            let mut buckets: Vec<Vec<C>> = std::iter::repeat_with(Vec::new)
+                .take(parents.len())
+                .collect();
             for child in children {
                 let target_key = (self.child_key_get)(&child);
                 if let Some(parents) = child_to_parents.get(&target_key) {

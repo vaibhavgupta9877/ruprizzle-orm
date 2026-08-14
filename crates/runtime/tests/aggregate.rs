@@ -18,20 +18,28 @@ impl ruprizzle::tokio_postgres::FromTokioPostgresRow for Employee {
         row: &ruprizzle::tokio_postgres::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.try_get::<usize, i64>(0).map_err(ruprizzle::Error::TokioPostgres)?,
-            name: row.try_get::<usize, String>(1).map_err(ruprizzle::Error::TokioPostgres)?,
-            role: row.try_get::<usize, String>(2).map_err(ruprizzle::Error::TokioPostgres)?,
-            age: row.try_get::<usize, i64>(3).map_err(ruprizzle::Error::TokioPostgres)?,
-            salary: row.try_get::<usize, f64>(4).map_err(ruprizzle::Error::TokioPostgres)?,
+            id: row
+                .try_get::<usize, i64>(0)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
+            name: row
+                .try_get::<usize, String>(1)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
+            role: row
+                .try_get::<usize, String>(2)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
+            age: row
+                .try_get::<usize, i64>(3)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
+            salary: row
+                .try_get::<usize, f64>(4)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
         })
     }
 }
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Employee {
-    fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::RusqliteRow,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
             name: ::ruprizzle::rusqlite::get::<String>(row, 1)?,

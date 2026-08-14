@@ -138,10 +138,7 @@ fn name_similarity(previous: &str, next: &str) -> u8 {
     }
     if distance == 0 {
         3
-    } else if distance * 2 <= max_len
-        || previous.contains(&next)
-        || next.contains(&previous)
-    {
+    } else if distance * 2 <= max_len || previous.contains(&next) || next.contains(&previous) {
         2
     } else {
         u8::from(common_prefix(&previous, &next) >= 3)

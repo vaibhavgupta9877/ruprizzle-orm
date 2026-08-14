@@ -99,9 +99,7 @@ where
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
-    fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::RusqliteRow,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
             name: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
@@ -121,9 +119,7 @@ impl ruprizzle::rusqlite::FromOwnedRow for User {
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Post {
-    fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::RusqliteRow,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
             title: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
@@ -149,8 +145,12 @@ impl ruprizzle::tokio_postgres::FromTokioPostgresRow for User {
         row: &ruprizzle::tokio_postgres::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.try_get::<usize, i64>(0).map_err(ruprizzle::Error::TokioPostgres)?,
-            name: row.try_get::<usize, String>(1).map_err(ruprizzle::Error::TokioPostgres)?,
+            id: row
+                .try_get::<usize, i64>(0)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
+            name: row
+                .try_get::<usize, String>(1)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
         })
     }
 }
@@ -161,9 +161,15 @@ impl ruprizzle::tokio_postgres::FromTokioPostgresRow for Post {
         row: &ruprizzle::tokio_postgres::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.try_get::<usize, i64>(0).map_err(ruprizzle::Error::TokioPostgres)?,
-            title: row.try_get::<usize, String>(1).map_err(ruprizzle::Error::TokioPostgres)?,
-            user_id: row.try_get::<usize, i64>(2).map_err(ruprizzle::Error::TokioPostgres)?,
+            id: row
+                .try_get::<usize, i64>(0)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
+            title: row
+                .try_get::<usize, String>(1)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
+            user_id: row
+                .try_get::<usize, i64>(2)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
         })
     }
 }
@@ -187,18 +193,30 @@ INSERT INTO posts (id, title, user_id) VALUES (10, 'First', 1), (20, 'Second', 1
 
 fn expected_inner_join_sql(backend: &str) -> &'static str {
     match backend {
-        "postgres" => r#"SELECT "users"."id", "users"."name", "posts"."id", "posts"."title", "posts"."user_id" FROM "users" INNER JOIN "posts" ON "users"."id" = "posts"."user_id""#,
-        "sqlite" => r#"SELECT `users`.`id`, `users`.`name`, `posts`.`id`, `posts`.`title`, `posts`.`user_id` FROM `users` INNER JOIN `posts` ON `users`.`id` = `posts`.`user_id`"#,
-        "mysql" => r#"SELECT `users`.`id`, `users`.`name`, `posts`.`id`, `posts`.`title`, `posts`.`user_id` FROM `users` INNER JOIN `posts` ON `users`.`id` = `posts`.`user_id`"#,
+        "postgres" => {
+            r#"SELECT "users"."id", "users"."name", "posts"."id", "posts"."title", "posts"."user_id" FROM "users" INNER JOIN "posts" ON "users"."id" = "posts"."user_id""#
+        }
+        "sqlite" => {
+            r#"SELECT `users`.`id`, `users`.`name`, `posts`.`id`, `posts`.`title`, `posts`.`user_id` FROM `users` INNER JOIN `posts` ON `users`.`id` = `posts`.`user_id`"#
+        }
+        "mysql" => {
+            r#"SELECT `users`.`id`, `users`.`name`, `posts`.`id`, `posts`.`title`, `posts`.`user_id` FROM `users` INNER JOIN `posts` ON `users`.`id` = `posts`.`user_id`"#
+        }
         _ => panic!("unknown backend {backend}"),
     }
 }
 
 fn expected_left_join_sql(backend: &str) -> &'static str {
     match backend {
-        "postgres" => r#"SELECT "users"."id", "users"."name", "posts"."id", "posts"."title", "posts"."user_id" FROM "users" LEFT JOIN "posts" ON "users"."id" = "posts"."user_id""#,
-        "sqlite" => r#"SELECT `users`.`id`, `users`.`name`, `posts`.`id`, `posts`.`title`, `posts`.`user_id` FROM `users` LEFT JOIN `posts` ON `users`.`id` = `posts`.`user_id`"#,
-        "mysql" => r#"SELECT `users`.`id`, `users`.`name`, `posts`.`id`, `posts`.`title`, `posts`.`user_id` FROM `users` LEFT JOIN `posts` ON `users`.`id` = `posts`.`user_id`"#,
+        "postgres" => {
+            r#"SELECT "users"."id", "users"."name", "posts"."id", "posts"."title", "posts"."user_id" FROM "users" LEFT JOIN "posts" ON "users"."id" = "posts"."user_id""#
+        }
+        "sqlite" => {
+            r#"SELECT `users`.`id`, `users`.`name`, `posts`.`id`, `posts`.`title`, `posts`.`user_id` FROM `users` LEFT JOIN `posts` ON `users`.`id` = `posts`.`user_id`"#
+        }
+        "mysql" => {
+            r#"SELECT `users`.`id`, `users`.`name`, `posts`.`id`, `posts`.`title`, `posts`.`user_id` FROM `users` LEFT JOIN `posts` ON `users`.`id` = `posts`.`user_id`"#
+        }
         _ => panic!("unknown backend {backend}"),
     }
 }

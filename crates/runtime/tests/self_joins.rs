@@ -54,9 +54,7 @@ where
 
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Employee {
-    fn from_rusqlite_row(
-        row: &ruprizzle::rusqlite::RusqliteRow,
-    ) -> Result<Self, ruprizzle::Error> {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
             id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
             name: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
@@ -82,9 +80,15 @@ impl ruprizzle::tokio_postgres::FromTokioPostgresRow for Employee {
         row: &ruprizzle::tokio_postgres::Row,
     ) -> Result<Self, ruprizzle::Error> {
         Ok(Self {
-            id: row.try_get::<usize, i64>(0).map_err(ruprizzle::Error::TokioPostgres)?,
-            name: row.try_get::<usize, String>(1).map_err(ruprizzle::Error::TokioPostgres)?,
-            manager_id: row.try_get::<usize, i64>(2).map_err(ruprizzle::Error::TokioPostgres)?,
+            id: row
+                .try_get::<usize, i64>(0)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
+            name: row
+                .try_get::<usize, String>(1)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
+            manager_id: row
+                .try_get::<usize, i64>(2)
+                .map_err(ruprizzle::Error::TokioPostgres)?,
         })
     }
 }
@@ -106,9 +110,15 @@ INSERT INTO employees (id, name, manager_id) VALUES
 
 fn expected_self_join_sql(backend: &str) -> &'static str {
     match backend {
-        "postgres" => r#"SELECT "employees"."id", "employees"."name", "employees"."manager_id", "m"."id", "m"."name", "m"."manager_id" FROM "employees" INNER JOIN "employees" AS "m" ON "employees"."manager_id" = "m"."id""#,
-        "sqlite" => r#"SELECT `employees`.`id`, `employees`.`name`, `employees`.`manager_id`, `m`.`id`, `m`.`name`, `m`.`manager_id` FROM `employees` INNER JOIN `employees` AS `m` ON `employees`.`manager_id` = `m`.`id`"#,
-        "mysql" => r#"SELECT `employees`.`id`, `employees`.`name`, `employees`.`manager_id`, `m`.`id`, `m`.`name`, `m`.`manager_id` FROM `employees` INNER JOIN `employees` AS `m` ON `employees`.`manager_id` = `m`.`id`"#,
+        "postgres" => {
+            r#"SELECT "employees"."id", "employees"."name", "employees"."manager_id", "m"."id", "m"."name", "m"."manager_id" FROM "employees" INNER JOIN "employees" AS "m" ON "employees"."manager_id" = "m"."id""#
+        }
+        "sqlite" => {
+            r#"SELECT `employees`.`id`, `employees`.`name`, `employees`.`manager_id`, `m`.`id`, `m`.`name`, `m`.`manager_id` FROM `employees` INNER JOIN `employees` AS `m` ON `employees`.`manager_id` = `m`.`id`"#
+        }
+        "mysql" => {
+            r#"SELECT `employees`.`id`, `employees`.`name`, `employees`.`manager_id`, `m`.`id`, `m`.`name`, `m`.`manager_id` FROM `employees` INNER JOIN `employees` AS `m` ON `employees`.`manager_id` = `m`.`id`"#
+        }
         _ => panic!("unknown backend {backend}"),
     }
 }
