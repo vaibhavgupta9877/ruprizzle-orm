@@ -3,6 +3,7 @@
 use std::marker::PhantomData;
 
 use crate::Error;
+use crate::aggregate::{AggregateEntry, AggregateSet, GroupBy};
 use crate::col::{Column, Projection};
 use crate::compile::{
     CompiledSql, delete, dialect_for_pool, insert, insert_many, select, update, upsert,
@@ -118,6 +119,44 @@ where
         Self {
             distinct: true,
             ..self
+        }
+    }
+
+    /// Switches the query to return aggregate results rather than rows.
+    ///
+    /// The output type is a tuple, e.g. `(Option<i64>, i64)` for
+    /// `aggregate((User::age.sum(), User::id.count()))`.
+    #[must_use]
+    pub fn aggregate<R, A>(self, set: A) -> AggregateQuery<'db, M, R>
+    where
+        R: RowDecode,
+        A: AggregateSet<M, R>,
+    {
+        let mut entries = Vec::new();
+        set.push_entries(&mut entries);
+        AggregateQuery {
+            exec: self.exec,
+            filter: self.filter,
+            aggregates: entries,
+            group_by: Vec::new(),
+            having: Filter::new(FilterNode::And(Vec::new())),
+            order: self.order,
+            limit: self.limit,
+            offset: self.offset,
+            _out: PhantomData,
+        }
+    }
+
+    /// Groups the query by one or more columns.
+    ///
+    /// Returns a [`GroupedQuery`] that supports `having` and `aggregate`.
+    #[must_use]
+    pub fn group_by<G: GroupBy<M>>(self, g: G) -> GroupedQuery<'db, M, Out, I> {
+        GroupedQuery {
+            inner: self,
+            group_by: g.columns(),
+            having: Filter::new(FilterNode::And(Vec::new())),
+            _marker: PhantomData,
         }
     }
 
@@ -1093,5 +1132,219 @@ impl<'db, M: Model> DeleteQuery<'db, M, FilteredDelete> {
     pub async fn exec(self) -> Result<u64, Error> {
         let compiled = self.to_sql()?;
         self.pool.execute_raw(compiled.sql, compiled.binds).await
+    }
+}
+
+/// A grouped `SELECT` query, created by [`SelectQuery::group_by`].
+///
+/// Add `HAVING` filters with [`having`](GroupedQuery::having), then call
+/// [`aggregate`](GroupedQuery::aggregate) to produce the final result set.
+#[derive(Clone)]
+#[allow(dead_code)]
+pub struct GroupedQuery<'db, M: Model, Out = M, I = ()> {
+    inner: SelectQuery<'db, M, Out, I>,
+    group_by: Vec<&'static str>,
+    having: Filter<M>,
+    _marker: PhantomData<fn() -> M>,
+}
+
+impl<'db, M, Out, I> GroupedQuery<'db, M, Out, I>
+where
+    M: Model,
+{
+    /// Adds a `HAVING` filter (`AND`).
+    ///
+    /// `HAVING` is applied after grouping; the filter is the same `Filter<M>`
+    /// used for `WHERE`, so group columns can be referenced directly.
+    pub fn having(self, f: Filter<M>) -> Self {
+        Self {
+            having: self.having.and(f),
+            ..self
+        }
+    }
+
+    /// Adds an additional `HAVING` filter (`OR`).
+    pub fn or_having(self, f: Filter<M>) -> Self {
+        Self {
+            having: self.having.or(f),
+            ..self
+        }
+    }
+
+    /// Switches the grouped query to return aggregate results.
+    #[must_use]
+    pub fn aggregate<R, A>(self, set: A) -> AggregateQuery<'db, M, R>
+    where
+        R: RowDecode,
+        A: AggregateSet<M, R>,
+    {
+        let mut entries = Vec::new();
+        set.push_entries(&mut entries);
+        AggregateQuery {
+            exec: self.inner.exec,
+            filter: self.inner.filter,
+            aggregates: entries,
+            group_by: self.group_by,
+            having: self.having,
+            order: self.inner.order,
+            limit: self.inner.limit,
+            offset: self.inner.offset,
+            _out: PhantomData,
+        }
+    }
+}
+
+/// A `SELECT` query whose projection is a set of aggregate expressions.
+///
+/// The output type `R` is a Rust tuple such as `(Option<i64>, i64)`, one element
+/// per aggregate expression. Generated per-model structs for named fields are
+/// added in Step 4.
+#[derive(Clone)]
+#[allow(dead_code)]
+pub struct AggregateQuery<'db, M: Model, R: RowDecode> {
+    exec: &'db dyn Executor,
+    filter: Filter<M>,
+    aggregates: Vec<AggregateEntry>,
+    group_by: Vec<&'static str>,
+    having: Filter<M>,
+    order: Vec<OrderBy<M>>,
+    limit: Option<u64>,
+    offset: Option<u64>,
+    _out: PhantomData<fn() -> R>,
+}
+
+impl<'db, M, R> AggregateQuery<'db, M, R>
+where
+    M: Model,
+    R: RowDecode,
+{
+    /// Adds a `WHERE` filter (`AND`).
+    pub fn filter(self, f: Filter<M>) -> Self {
+        Self {
+            filter: self.filter.and(f),
+            ..self
+        }
+    }
+
+    /// Adds a `WHERE` filter (`OR`).
+    pub fn or_filter(self, f: Filter<M>) -> Self {
+        Self {
+            filter: self.filter.or(f),
+            ..self
+        }
+    }
+
+    /// Adds an ordering.
+    pub fn order_by(self, o: OrderBy<M>) -> Self {
+        let mut order = self.order;
+        order.push(o);
+        Self { order, ..self }
+    }
+
+    /// Sets the limit.
+    pub fn limit(self, n: u64) -> Self {
+        Self {
+            limit: Some(n),
+            ..self
+        }
+    }
+
+    /// Sets the offset.
+    pub fn offset(self, n: u64) -> Self {
+        Self {
+            offset: Some(n),
+            ..self
+        }
+    }
+
+    /// Compiles the query to SQL and binds.
+    pub fn to_sql(&self) -> CompiledSql {
+        let dialect = self.exec.dialect();
+        crate::compile::aggregate_select::<M>(
+            dialect,
+            M::TABLE,
+            &self.aggregates,
+            &self.filter.node,
+            &self.group_by,
+            &self.having.node,
+            &self.order,
+            self.limit,
+            self.offset,
+        )
+    }
+
+    /// Executes the query and returns all matching aggregate rows.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors.
+    pub async fn fetch_all(self) -> Result<Vec<R>, Error>
+    where
+        R: Send + Unpin,
+    {
+        let compiled = self.to_sql();
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        if let Some(pool) = self.exec.as_rusqlite() {
+            self.exec.on_query();
+            return pool.fetch_all_sync_decoded::<R>(compiled.sql, compiled.binds);
+        }
+
+        let batch = self
+            .exec
+            .fetch_all_raw(compiled.sql, compiled.binds)
+            .await?;
+        crate::executor::decode_rows(batch)
+    }
+
+    /// Executes the query and returns the first aggregate row, if any.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors.
+    pub async fn fetch_optional(mut self) -> Result<Option<R>, Error>
+    where
+        R: Send + Unpin,
+    {
+        self.limit = Some(1);
+        let compiled = self.to_sql();
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        let v: Vec<R> = if let Some(pool) = self.exec.as_rusqlite() {
+            self.exec.on_query();
+            pool.fetch_all_sync_decoded::<R>(compiled.sql, compiled.binds)?
+        } else {
+            let batch = self
+                .exec
+                .fetch_all_raw(compiled.sql, compiled.binds)
+                .await?;
+            crate::executor::decode_rows(batch)?
+        };
+
+        #[cfg(not(feature = "sqlite-rusqlite"))]
+        let v: Vec<R> = {
+            let batch = self
+                .exec
+                .fetch_all_raw(compiled.sql, compiled.binds)
+                .await?;
+            crate::executor::decode_rows(batch)?
+        };
+
+        Ok(v.into_iter().next())
+    }
+
+    /// Executes the query and returns exactly one aggregate row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors, including the case where no
+    /// row matches.
+    pub async fn fetch_one(self) -> Result<R, Error>
+    where
+        R: Send + Unpin,
+    {
+        self.fetch_optional()
+            .await?
+            .ok_or_else(|| Error::Message("no row found for aggregate query".into()))
     }
 }

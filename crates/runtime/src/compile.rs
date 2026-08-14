@@ -8,6 +8,7 @@ use std::borrow::Cow;
 
 use ruprizzle_dialect::{DbDialect, dialect_for};
 
+use crate::aggregate::{AggregateEntry, AggregateKind};
 use crate::filter::{CmpOp, FilterNode};
 use crate::model::Model;
 use crate::order::OrderBy;
@@ -69,6 +70,86 @@ pub fn select<M: Model>(
     if !matches!(filter, FilterNode::And(v) if v.is_empty()) {
         c.push_str(" WHERE ");
         c.push_filter(filter);
+    }
+
+    if !order.is_empty() {
+        c.push_str(" ORDER BY ");
+        c.push_order(order);
+    }
+
+    if let Some(n) = limit {
+        c.push_str(" LIMIT ");
+        c.push_str(&n.to_string());
+    }
+
+    if let Some(n) = offset {
+        c.push_str(" OFFSET ");
+        c.push_str(&n.to_string());
+    }
+
+    c.finish()
+}
+
+/// Compile an aggregate `SELECT` for `M`.
+///
+/// The projection is a list of aggregate expressions; `GROUP BY` and `HAVING`
+/// are included when their inputs are non-empty.
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn aggregate_select<M: Model>(
+    dialect: &dyn DbDialect,
+    table: &str,
+    aggregates: &[AggregateEntry],
+    filter: &FilterNode,
+    group_by: &[&str],
+    having: &FilterNode,
+    order: &[OrderBy<M>],
+    limit: Option<u64>,
+    offset: Option<u64>,
+) -> CompiledSql {
+    let mut c = Compiler::new(dialect);
+
+    c.push_str("SELECT ");
+    for (i, agg) in aggregates.iter().enumerate() {
+        if i > 0 {
+            c.push_str(", ");
+        }
+        c.push_str(agg.kind.sql_fn());
+        c.push('(');
+        if agg.kind == AggregateKind::CountDistinct {
+            c.push_str("DISTINCT ");
+        }
+        c.push_quoted(agg.table);
+        c.push('.');
+        c.push_quoted(agg.column);
+        c.push(')');
+        c.push_str(" AS ");
+        c.push_quoted(&agg.alias);
+    }
+
+    c.push_str(" FROM ");
+    c.push_quoted(table);
+
+    if !matches!(filter, FilterNode::And(v) if v.is_empty()) {
+        c.push_str(" WHERE ");
+        c.push_filter(filter);
+    }
+
+    if !group_by.is_empty() {
+        c.push_str(" GROUP BY ");
+        for (i, col) in group_by.iter().enumerate() {
+            if i > 0 {
+                c.push_str(", ");
+            }
+            c.push_quoted(table);
+            c.push('.');
+            c.push_quoted(col);
+        }
+    }
+
+    if !matches!(having, FilterNode::And(v) if v.is_empty()) {
+        c.push_str(" HAVING ");
+        c.push_filter(having);
     }
 
     if !order.is_empty() {

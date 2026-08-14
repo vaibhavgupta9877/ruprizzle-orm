@@ -62,12 +62,16 @@ pub mod decode;
 /// Common imports for application code.
 pub mod prelude {
     pub use crate::{
-        Aggregate, Column, Encodable, Error, Executor, Filter, InsertQuery, IsolationLevel, Model,
-        Numeric, OrderBy, Page, Pool, RawFragment, Related, SelectQuery, Tx, Value, raw,
+        Aggregate, AggregateQuery, AggregateScalar, Column, Encodable, Error, Executor, Filter,
+        GroupBy, GroupedQuery, InsertQuery, IsolationLevel, Model, Numeric, OrderBy, Page, Pool,
+        RawFragment, Related, SelectQuery, Tx, Value, raw,
     };
 }
 
-pub use aggregate::{Aggregate, AggregateKind, Numeric};
+pub use aggregate::{
+    Aggregate, AggregateEntry, AggregateKind, AggregateScalar, AggregateSet, GroupBy, IntoAggregate,
+    Numeric,
+};
 pub use col::{Column, Projection};
 pub use compile::{CompiledSql, delete, dialect_for_pool, insert, insert_many, select, update};
 pub use counting::CountingExecutor;
@@ -80,7 +84,8 @@ pub use order::OrderBy;
 pub use page::Page;
 pub use pool::{Pool, PoolConfig, PoolStats, connect, connect_with, ping, stats};
 pub use query::{
-    DeleteQuery, InsertManyQuery, InsertQuery, NestedSetter, SelectQuery, UpdateQuery,
+    AggregateQuery, DeleteQuery, GroupedQuery, InsertManyQuery, InsertQuery, NestedSetter,
+    SelectQuery, UpdateQuery,
 };
 pub use related::Related;
 pub use ruprizzle_macros::raw;

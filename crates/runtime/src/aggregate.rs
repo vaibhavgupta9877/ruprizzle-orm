@@ -7,7 +7,7 @@
 use std::marker::PhantomData;
 
 use crate::col::Column;
-use crate::types::Decimal;
+use crate::model::RowDecode;
 
 /// A typed aggregate expression for a model `M` with return type `R`.
 ///
@@ -86,12 +86,17 @@ impl AggregateKind {
 /// Marker trait for scalar types that can appear in numeric aggregates.
 ///
 /// `Numeric` is sealed so third-party types cannot accidentally claim to be
-/// numeric. Implementations are provided for the integer, float, and decimal
-/// types ruprizzle supports, plus `Option<T>` for nullable numeric columns.
+/// numeric. Implementations are provided for the integer and float types
+/// ruprizzle supports, plus `Option<T>` for nullable numeric columns.
+///
+/// `Decimal` is intentionally omitted from the first pass because `sqlx::Any`
+/// and SQLite do not provide native `sqlx::Decode`/`sqlx::Type` for
+/// `rust_decimal::Decimal`; aggregate decoding would require a custom
+/// `FromRow` path that is left for a follow-up.
 pub trait Numeric: Send + Sync + 'static {
     /// The Rust type returned by `SUM` over this column.
     ///
-    /// Widens `i32` to `i64` and keeps `Decimal` and `f64` unchanged so the
+    /// Widens `i32` to `i64` and keeps `f64` unchanged so the
     /// value can be decoded without silent overflow.
     type Sum: Send + Sync + 'static;
     /// The Rust type returned by `AVG` over this column.
@@ -116,12 +121,6 @@ impl Numeric for f64 {
     type Sum = f64;
     type Avg = f64;
     type MinMax = f64;
-}
-
-impl Numeric for Decimal {
-    type Sum = Decimal;
-    type Avg = Decimal;
-    type MinMax = Decimal;
 }
 
 impl<T: Numeric> Numeric for Option<T> {
@@ -169,3 +168,139 @@ impl<M, T> Column<M, T> {
         Aggregate::new(self.table, self.column, AggregateKind::CountDistinct)
     }
 }
+
+/// Trait for scalar types that can be decoded from a single aggregate result
+/// column.
+///
+/// This is the output-side counterpart of `Numeric`: the result set produced by
+/// `SUM`, `AVG`, etc. contains one value per aggregate, and that value must be
+/// decodable by `sqlx`.
+pub trait AggregateScalar:
+    Send + Sync + 'static
+    + for<'r> sqlx::Decode<'r, sqlx::Any>
+    + sqlx::Type<sqlx::Any>
+    + for<'r> sqlx::Decode<'r, sqlx::Postgres>
+    + sqlx::Type<sqlx::Postgres>
+    + for<'r> sqlx::Decode<'r, sqlx::Sqlite>
+    + sqlx::Type<sqlx::Sqlite>
+    + for<'r> sqlx::Decode<'r, sqlx::MySql>
+    + sqlx::Type<sqlx::MySql>
+{
+}
+
+impl AggregateScalar for i32 {}
+impl AggregateScalar for i64 {}
+impl AggregateScalar for f64 {}
+impl<T: AggregateScalar> AggregateScalar for Option<T> {}
+
+/// A single aggregate item in the SQL projection.
+#[derive(Debug, Clone)]
+pub struct AggregateEntry {
+    /// The table the aggregate is over.
+    pub table: &'static str,
+    /// The column the aggregate is over.
+    pub column: &'static str,
+    /// The kind of aggregate.
+    pub kind: AggregateKind,
+    /// The alias the aggregate uses in the result set.
+    pub alias: String,
+}
+
+/// Trait for a single aggregate expression that maps to a scalar output.
+pub trait IntoAggregate<M> {
+    /// The scalar Rust type the single aggregate decodes into.
+    type Out: AggregateScalar;
+
+    /// Pushes the aggregate entry into `out`.
+    fn push_entry(&self, out: &mut Vec<AggregateEntry>);
+}
+
+impl<M, T: AggregateScalar> IntoAggregate<M> for Aggregate<M, T> {
+    type Out = T;
+
+    fn push_entry(&self, out: &mut Vec<AggregateEntry>) {
+        out.push(AggregateEntry {
+            table: self.table,
+            column: self.column,
+            kind: self.kind,
+            alias: self.alias(),
+        });
+    }
+}
+
+/// Trait for a set of aggregate expressions that defines an aggregate query.
+///
+/// Implementations are provided for a single aggregate and for tuples of up to
+/// eight aggregates, matching the arity generated applications most often need.
+pub trait AggregateSet<M, R: RowDecode> {
+    /// Pushes each aggregate entry into `out`.
+    fn push_entries(&self, out: &mut Vec<AggregateEntry>);
+}
+
+impl<M, T: AggregateScalar> AggregateSet<M, (T,)> for Aggregate<M, T> {
+    fn push_entries(&self, out: &mut Vec<AggregateEntry>) {
+        IntoAggregate::push_entry(self, out);
+    }
+}
+
+macro_rules! impl_aggregate_set_tuples {
+    ($($n:tt $T:ident),+) => {
+        impl<M, $($T),+> AggregateSet<M, ($($T::Out,)+)> for ($($T,)+)
+        where
+            $( $T: IntoAggregate<M>, )+
+        {
+            fn push_entries(&self, out: &mut Vec<AggregateEntry>) {
+                $(
+                    self.$n.push_entry(out);
+                )+
+            }
+        }
+    };
+}
+
+impl_aggregate_set_tuples! { 0 A0 }
+impl_aggregate_set_tuples! { 0 A0, 1 A1 }
+impl_aggregate_set_tuples! { 0 A0, 1 A1, 2 A2 }
+impl_aggregate_set_tuples! { 0 A0, 1 A1, 2 A2, 3 A3 }
+impl_aggregate_set_tuples! { 0 A0, 1 A1, 2 A2, 3 A3, 4 A4 }
+impl_aggregate_set_tuples! { 0 A0, 1 A1, 2 A2, 3 A3, 4 A4, 5 A5 }
+impl_aggregate_set_tuples! { 0 A0, 1 A1, 2 A2, 3 A3, 4 A4, 5 A5, 6 A6 }
+impl_aggregate_set_tuples! { 0 A0, 1 A1, 2 A2, 3 A3, 4 A4, 5 A5, 6 A6, 7 A7 }
+
+/// Trait for column sets that can appear in `GROUP BY`.
+pub trait GroupBy<M> {
+    /// The column names, in order.
+    fn columns(&self) -> Vec<&'static str>;
+}
+
+impl<M, T> GroupBy<M> for Column<M, T> {
+    fn columns(&self) -> Vec<&'static str> {
+        vec![self.column]
+    }
+}
+
+macro_rules! impl_group_by_tuples {
+    ($($n:tt $T:ident),+) => {
+        impl<M, $($T),+> GroupBy<M> for ($($T,)+)
+        where
+            $( $T: GroupBy<M>, )+
+        {
+            fn columns(&self) -> Vec<&'static str> {
+                let mut cols = Vec::new();
+                $(
+                    cols.extend(self.$n.columns());
+                )+
+                cols
+            }
+        }
+    };
+}
+
+impl_group_by_tuples! { 0 G0 }
+impl_group_by_tuples! { 0 G0, 1 G1 }
+impl_group_by_tuples! { 0 G0, 1 G1, 2 G2 }
+impl_group_by_tuples! { 0 G0, 1 G1, 2 G2, 3 G3 }
+impl_group_by_tuples! { 0 G0, 1 G1, 2 G2, 3 G3, 4 G4 }
+impl_group_by_tuples! { 0 G0, 1 G1, 2 G2, 3 G3, 4 G4, 5 G5 }
+impl_group_by_tuples! { 0 G0, 1 G1, 2 G2, 3 G3, 4 G4, 5 G5, 6 G6 }
+impl_group_by_tuples! { 0 G0, 1 G1, 2 G2, 3 G3, 4 G4, 5 G5, 6 G6, 7 G7 }
