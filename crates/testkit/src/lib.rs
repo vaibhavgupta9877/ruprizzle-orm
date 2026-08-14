@@ -248,6 +248,7 @@ impl TestDb {
         })
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn connect_sqlite() -> std::result::Result<Self, TestDbError> {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("test.sqlite");
@@ -278,6 +279,9 @@ impl TestDb {
                         sqlx::query("PRAGMA foreign_keys = ON")
                             .execute(&mut *conn)
                             .await?;
+                        sqlx::query("PRAGMA busy_timeout = 5000")
+                            .execute(&mut *conn)
+                            .await?;
                         Ok(())
                     })
                 })
@@ -291,7 +295,8 @@ impl TestDb {
             let opts = SqliteConnectOptions::new()
                 .filename(&path)
                 .create_if_missing(true)
-                .foreign_keys(true);
+                .foreign_keys(true)
+                .busy_timeout(Duration::from_secs(5));
             let sqlite_pool = SqlitePoolOptions::new()
                 .max_connections(4)
                 .acquire_timeout(Duration::from_secs(5))
@@ -318,7 +323,8 @@ impl TestDb {
             .create_if_missing(true)
             // Off by default in SQLite, which would make every foreign-key test
             // silently pass. Matches what the runtime will set in P4.
-            .foreign_keys(true);
+            .foreign_keys(true)
+            .busy_timeout(Duration::from_secs(5));
 
         let sqlite_pool = SqlitePoolOptions::new()
             .max_connections(4)
@@ -336,6 +342,9 @@ impl TestDb {
             .after_connect(|conn, _meta| {
                 Box::pin(async move {
                     sqlx::query("PRAGMA foreign_keys = ON")
+                        .execute(&mut *conn)
+                        .await?;
+                    sqlx::query("PRAGMA busy_timeout = 5000")
                         .execute(&mut *conn)
                         .await?;
                     Ok(())

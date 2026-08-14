@@ -25,7 +25,8 @@ local/deep-tests/db/.tmp*/
 *.proptest-regressions
 
 # Local cargo-deny database and config
-/.cargo
+/.cargo/*
+!/.cargo/mutants.toml
 
 # Private project planning notes (not published to GitHub)
 /docs/superpowers/
@@ -35,6 +36,10 @@ local/deep-tests/db/.tmp*/
 
 # Generated coverage reports (kept in working tree, not committed)
 /local/coverage/
+
+# cargo-mutants output
+/mutants.out
+/mutants.out.old
 
 # Isolated dev worktrees
 /.worktrees/

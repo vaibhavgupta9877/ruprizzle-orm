@@ -1,0 +1,20 @@
+# cargo-mutants configuration for ruprizzle-orm.
+#
+# Run: cargo mutants -p <package>
+
+# Test tool (default cargo)
+test_tool = "cargo"
+
+# Build and test timeouts (relative to baseline)
+build_timeout_multiplier = 3.0
+timeout_multiplier = 3.0
+
+# Cap lints so warning-as-error doesn't stop a mutant build.
+cap_lints = true
+
+# Write results under `local/` so the default `mutants.out` directory is not
+# left at the repository root.
+output = "local/mutants"
+
+# Skip the long-running soak test when mutation-testing `crates/runtime`.
+# Usage: cargo mutants -p ruprizzle -- --skip soak

@@ -38,7 +38,7 @@ const PANIC_BUDGET: &[(&str, usize)] = &[
     ("crates/dialect", 0),
     ("crates/macros", 0),
     ("crates/runtime", 1),
-    ("crates/parser", 29),
+    ("crates/parser", 16),
     ("crates/codegen", 1),
     ("crates/migrate", 2),
     ("crates/cli", 2),

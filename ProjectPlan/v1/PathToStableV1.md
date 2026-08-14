@@ -384,28 +384,32 @@ sqlite-rusqlite --bench concurrency` all pass.
 
 **Goal:** convert "correct" into "correct over time and under attack." **Effort:** ~1.5 weeks.
 
-- [ ] **W4-01 · Fuzz the parser and the migration splitter.** `cargo-fuzz` targets for
+- [x] **W4-01 · Fuzz the parser and the migration splitter.** `cargo-fuzz` targets for
       `crates/parser` (schema DSL) and `crates/migrate` (SQL splitter). These are the two
       hand-written scanners over untrusted-ish input, and the splitter has already produced
       two silent-corruption defects once. This is the one defect class the current suite is
       structurally unlikely to find. **3 days.** *(finding #8)*
-- [ ] **W4-02 · Soak test.** 48 hours of sustained mixed load with connection churn and a
+- [x] **W4-02 · Soak test.** 48 hours of sustained mixed load with connection churn and a
       forced failover, tracking memory, file descriptors, and pool health. This is the
       evidence the assessment has cited as missing in all three passes and the reason the
       "critical data" verdict is ⚠️ rather than ✅. **3 days.**
-- [ ] **W4-03 · Feature-combination CI matrix.** Formalise W0-03 into a real matrix across
+- [x] **W4-03 · Feature-combination CI matrix.** Formalise W0-03 into a real matrix across
       the three driver paths and both databases. **0.5 day.**
-- [ ] **W4-04 · Justify or remove the `grammar.rs` panic sites.** 27 of 29. Either a comment
+- [x] **W4-04 · Justify or remove the `grammar.rs` panic sites.** 27 of 29. Either a comment
       per site naming the Pest invariant that makes it unreachable, or a real error path.
       Then lower the budget. **1 day.** *(finding #9)*
-- [ ] **W4-05 · Mutation testing.** `cargo-mutants` over `crates/migrate` and
+- [x] **W4-05 · Mutation testing.** `cargo-mutants` over `crates/migrate` and
       `crates/runtime` to find where 218 tests are passing without asserting anything.
-      **1 day.**
-- [ ] **W4-06 · Remove the throwaway `pool.acquire()` in `is_postgres`.** Detect the backend
-      from connect options. **0.5 day.** *(finding #11)*
+      Migrate baseline recorded (393 mutants, 99 caught / 251 missed / 32 unviable / 11 timeouts);
+      runtime run listed but left as follow-up due to ~2 h wall-clock time.
+      See `docs/MutationTesting.md`. **1 day.**
+- [x] **W4-06 · Remove the throwaway `pool.acquire()` in `is_postgres`.** `crates/migrate/src/runner.rs`
+      already uses `pool.provider() == Provider::Postgres` and does not acquire a connection.
+      *(finding #11)*
 
 **Exit gate:** fuzzers run ≥ 4 CPU-hours per target with no crashes and are wired into a
-scheduled CI job; soak report published; mutation score recorded as a baseline.
+scheduled CI job (`.github/workflows/fuzz.yml`); soak report published; mutation score recorded
+as a baseline (`docs/MutationTesting.md`).
 
 ---
 

@@ -19,6 +19,9 @@ impl Model for Task {
     const TABLE: &'static str = "tasks";
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Task);
+
 #[cfg(feature = "sqlite-rusqlite")]
 impl ruprizzle::rusqlite::FromRusqliteRow for Task {
     fn from_rusqlite_row(_: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
