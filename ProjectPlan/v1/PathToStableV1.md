@@ -258,7 +258,7 @@ ADR-004 chose batched relation loading over JOINs, and that decision is correct 
 about the query language. There is currently no way to express a join at all, which blocks
 every reporting query.
 
-- [ ] **Step 1.** Write ADR-010 first, distinguishing "batched loading is the default for
+- [x] **Step 1.** Write ADR-011 first, distinguishing "batched loading is the default for
       `include`" from "explicit joins are available for queries the batcher cannot express."
       Do not weaken ADR-004.
 - [ ] **Step 2.** `SelectQuery::inner_join` / `left_join` / `right_join` / `full_join` over

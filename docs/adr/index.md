@@ -15,3 +15,4 @@ explains the decision, the rationale, and the costs.
 | ADR-008 | [Postgres and SQLite together from day one](ADR-008-PostgresAndSqlite.md) |
 | ADR-009 | [Runtime dialect selection via `sqlx::Any`](ADR-009-RuntimeDialectSelection.md) |
 | ADR-010 | [Postgres arrays and SQLite JSON fallback](ADR-010-PostgresArraysAndSqliteFallback.md) |
+| ADR-011 | [Explicit joins alongside batched relations](ADR-011-ExplicitJoinsAlongsideBatchedRelations.md) |
