@@ -972,6 +972,54 @@ impl<'d> Compiler<'d> {
         }
     }
 
+    /// Convert a JSON comparison value to a dialect-appropriate bind type.
+    ///
+    /// SQLite `json_extract` returns the JSON scalar as a native SQL value
+    /// (integer, real, text), so the bind must have the same storage class.
+    /// MySQL numeric comparisons against `JSON_EXTRACT` also work more reliably
+    /// with integer/float binds. Postgres keeps the JSON wrapper so `jsonb`
+    /// operators compare JSON values.
+    fn json_cmp_value(&self, text: bool, value: &Value) -> Value {
+        if text || self.dialect.name() == "postgres" {
+            return value.clone();
+        }
+        let Value::Json(v) = value else {
+            return value.clone();
+        };
+        match self.dialect.name() {
+            "sqlite" => match v {
+                serde_json::Value::Null => Value::Null,
+                serde_json::Value::Bool(b) => Value::Bool(*b),
+                serde_json::Value::Number(n) => {
+                    if let Some(i) = n.as_i64() {
+                        Value::I64(i)
+                    } else if let Some(f) = n.as_f64() {
+                        Value::F64(f)
+                    } else {
+                        Value::Json(v.clone())
+                    }
+                }
+                serde_json::Value::String(s) => Value::Str(s.as_str().into()),
+                serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                    Value::Json(v.clone())
+                }
+            },
+            "mysql" => match v {
+                serde_json::Value::Number(n) => {
+                    if let Some(i) = n.as_i64() {
+                        Value::I64(i)
+                    } else if let Some(f) = n.as_f64() {
+                        Value::F64(f)
+                    } else {
+                        Value::Json(v.clone())
+                    }
+                }
+                _ => value.clone(),
+            },
+            _ => value.clone(),
+        }
+    }
+
     /// Emit a JSON extraction expression for the current dialect.
     fn push_json_expr(&mut self, table: &str, column: &str, path: &JsonPath, text: bool) {
         match self.dialect.name() {
@@ -1489,7 +1537,8 @@ impl<'d> Compiler<'d> {
                     self.push(' ');
                     self.push_op(*cmp);
                     self.push(' ');
-                    self.push_bind(value.clone());
+                    let bind = self.json_cmp_value(*text, value);
+                    self.push_bind(bind);
                 }
                 JsonFilterOp::Contains => {
                     self.push_json_contains(table, column, path, value);
@@ -2547,10 +2596,7 @@ mod tests {
             c.sql,
             r##"SELECT * FROM `docs` WHERE json_extract(`docs`.`data`, '$.title') = ?"##
         );
-        assert_eq!(
-            c.binds,
-            vec![Value::Json(serde_json::Value::String("hello".into()))]
-        );
+        assert_eq!(c.binds, vec![Value::Str("hello".into())]);
     }
 
     #[test]
@@ -2609,6 +2655,100 @@ mod tests {
             r##"SELECT * FROM `docs` WHERE JSON_CONTAINS_PATH(`docs`.`data`, 'one', '$.tags')"##
         );
         assert!(c.binds.is_empty());
+    }
+
+    #[test]
+    fn json_multi_path_sqlite() {
+        let f = DATA.get("a").get("b").eq(1);
+        let c = select::<User>(sqlite(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM `docs` WHERE json_extract(`docs`.`data`, '$.a.b') = ?"##
+        );
+        assert_eq!(c.binds, vec![Value::I64(1)]);
+    }
+
+    #[test]
+    fn json_multi_path_mysql() {
+        let f = DATA.get("a").get("b").eq(1);
+        let c = select::<User>(mysql(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM `docs` WHERE JSON_EXTRACT(`docs`.`data`, '$.a.b') = ?"##
+        );
+        assert_eq!(c.binds, vec![Value::I64(1)]);
+    }
+
+    #[test]
+    fn json_order_by_sqlite() {
+        let c = select::<User>(
+            sqlite(),
+            "docs",
+            &[],
+            &FilterNode::And(vec![]),
+            &[DATA.get("title").desc()],
+            None,
+            None,
+            false,
+        );
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM `docs` ORDER BY json_extract(`docs`.`data`, '$.title') DESC"##
+        );
+    }
+
+    #[test]
+    fn json_order_by_mysql() {
+        let c = select::<User>(
+            mysql(),
+            "docs",
+            &[],
+            &FilterNode::And(vec![]),
+            &[DATA.get("title").desc()],
+            None,
+            None,
+            false,
+        );
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM `docs` ORDER BY JSON_EXTRACT(`docs`.`data`, '$.title') DESC"##
+        );
+    }
+
+    #[test]
+    fn json_at_postgres() {
+        let f = DATA.at(0).get("title").eq("hello");
+        let c = select::<User>(pg(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM "docs" WHERE "docs"."data"#>'{0,"title"}' = $1"##
+        );
+        assert_eq!(
+            c.binds,
+            vec![Value::Json(serde_json::Value::String("hello".into()))]
+        );
+    }
+
+    #[test]
+    fn json_at_sqlite() {
+        let f = DATA.at(0).get_text("title").eq("hello");
+        let c = select::<User>(sqlite(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM `docs` WHERE `docs`.`data`->>'$[0].title' = ?"##
+        );
+        assert_eq!(c.binds, vec![Value::Str("hello".into())]);
+    }
+
+    #[test]
+    fn json_at_mysql() {
+        let f = DATA.at(0).get_text("title").eq("hello");
+        let c = select::<User>(mysql(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM `docs` WHERE JSON_UNQUOTE(JSON_EXTRACT(`docs`.`data`, '$[0].title')) = ?"##
+        );
+        assert_eq!(c.binds, vec![Value::Str("hello".into())]);
     }
 
     #[test]

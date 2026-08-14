@@ -325,21 +325,23 @@ None of these exist. They are what "SQL-like typed builder" means to a Drizzle u
       `JSON_CONTAINS`, `JSON_CONTAINS_PATH`, `JSON_SET` on MySQL. SQLite
       JSON containment is a partial key-existence approximation because JSON1
       has no containment operator.
-- [ ] **Step 3.** Path-based filtering and ordering on JSON fields.
+- [x] **Step 3.** Path-based filtering and ordering on JSON fields.
 - [ ] **Step 4.** Update `KnownLimitations.md` and the comparison table.
 
-> **Current status (2026-08-15):** W2-04 Step 1 and Step 2 are complete.
+> **Current status (2026-08-16):** W2-04 Steps 1, 2, and 3 are complete.
 > `JsonPath`, `JsonPathSegment`, `JsonColumn`, `JsonFilterOp`, and `JsonSet`
 > are implemented in `crates/runtime/src/json.rs`. `Column<M, serde_json::Value>`
-> gains `get`, `get_text`, `contains`, `has_key`, and `jsonb_set`. `JsonColumn`
-> supports `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `asc`, and
-> `desc`. SQL generation in `crates/runtime/src/compile.rs` now emits
-> dialect-aware JSON: Postgres operators (`->`, `->>`, `#>`, `#>>`, `@>`, `?`,
-> `jsonb_set`), SQLite JSON1 (`json_extract`, `->>`, `json_type`, `json_set`),
-> and MySQL JSON (`JSON_EXTRACT`, `JSON_UNQUOTE`, `JSON_CONTAINS`,
-> `JSON_CONTAINS_PATH`, `JSON_SET`). `SetExpr::JsonbSet` was renamed to
-> `SetExpr::JsonSet`. Unit tests cover all three dialects. Steps 3–4 remain
-> open.
+> gains `get`, `get_text`, `at`, `contains`, `has_key`, and `jsonb_set`. `JsonColumn`
+> supports `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `asc`, `desc`,
+> `get`, `get_text`, and `at`. SQL generation in `crates/runtime/src/compile.rs`
+> now emits dialect-aware JSON: Postgres operators (`->`, `->>`, `#>`, `#>>`, `@>`,
+> `?`, `jsonb_set`), SQLite JSON1 (`json_extract`, `->>`, `json_type`,
+> `json_set`), and MySQL JSON (`JSON_EXTRACT`, `JSON_UNQUOTE`, `JSON_CONTAINS`,
+> `JSON_CONTAINS_PATH`, `JSON_SET`). Unit tests cover all three dialects for
+> multi-segment paths, array-index paths, and JSON ordering. A new
+> `both_dbs!` integration test in `crates/runtime/tests/json.rs` covers
+> path-based filtering and ordering end-to-end on SQLite and MySQL and verifies
+> generated SQL on Postgres. Step 4 remains open.
 
 ### W2-05 · Full many-to-many
 

@@ -318,6 +318,18 @@ impl<M> Column<M, serde_json::Value> {
         }
     }
 
+    /// Extract a JSON array element by index (`column->[index]` or `column#>'{index}'`).
+    #[must_use]
+    pub fn at(self, index: usize) -> JsonColumn<M, serde_json::Value> {
+        JsonColumn {
+            table: self.table,
+            column: self.column,
+            path: JsonPath(vec![JsonPathSegment::Index(index)]),
+            text: false,
+            _marker: PhantomData,
+        }
+    }
+
     /// `column @> value` (JSON containment).
     pub fn contains(self, value: serde_json::Value) -> Filter<M> {
         Filter::new(FilterNode::Json {
