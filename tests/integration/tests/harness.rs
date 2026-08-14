@@ -88,6 +88,11 @@ both_dbs! {
                 assert!(db.sqlite_pool().is_some());
                 assert!(db.pg_pool().is_none());
             }
+            ruprizzle_testkit::Backend::MySql => {
+                assert!(db.sqlite_pool().is_none());
+                assert!(db.pg_pool().is_none());
+                assert!(db.pool().as_mysql().is_some());
+            }
         }
     }
 }

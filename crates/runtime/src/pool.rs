@@ -7,6 +7,7 @@ use futures_core::future::BoxFuture;
 use futures_core::stream::BoxStream;
 use ruprizzle_core::ir::Provider;
 use sqlx::any::AnyPoolOptions;
+use sqlx::mysql::MySqlPoolOptions;
 use sqlx::sqlite::SqlitePoolOptions;
 
 /// An ORM pool that may wrap a native `sqlx` pool or the generic `Any` driver.
@@ -22,6 +23,8 @@ pub enum Pool {
     Postgres(sqlx::Pool<sqlx::Postgres>),
     /// Native SQLite pool.
     Sqlite(sqlx::Pool<sqlx::Sqlite>),
+    /// Native MySQL / MariaDB pool.
+    Mysql(sqlx::Pool<sqlx::MySql>),
     /// Native `rusqlite`-backed SQLite pool.
     #[cfg(feature = "sqlite-rusqlite")]
     SqliteNative(crate::rusqlite::RusqlitePool),
@@ -44,6 +47,7 @@ impl Pool {
             #[cfg(feature = "postgres-tokio-postgres")]
             Pool::PostgresNative(_) => Provider::Postgres,
             Pool::Sqlite(_) => Provider::Sqlite,
+            Pool::Mysql(_) => Provider::Mysql,
             #[cfg(feature = "sqlite-rusqlite")]
             Pool::SqliteNative(_) => Provider::Sqlite,
         }
@@ -65,6 +69,7 @@ impl Pool {
             Pool::Any(p) => p.size(),
             Pool::Postgres(p) => p.size(),
             Pool::Sqlite(p) => p.size(),
+            Pool::Mysql(p) => p.size(),
             #[cfg(feature = "sqlite-rusqlite")]
             Pool::SqliteNative(_) => 0,
             #[cfg(feature = "postgres-tokio-postgres")]
@@ -79,6 +84,7 @@ impl Pool {
             Pool::Any(p) => p.num_idle(),
             Pool::Postgres(p) => p.num_idle(),
             Pool::Sqlite(p) => p.num_idle(),
+            Pool::Mysql(p) => p.num_idle(),
             #[cfg(feature = "sqlite-rusqlite")]
             Pool::SqliteNative(_) => 0,
             #[cfg(feature = "postgres-tokio-postgres")]
@@ -170,6 +176,15 @@ impl Pool {
         }
     }
 
+    /// Borrows the wrapped native `sqlx::MySql` pool, if any.
+    #[must_use]
+    pub fn as_mysql(&self) -> Option<&sqlx::Pool<sqlx::MySql>> {
+        match self {
+            Pool::Mysql(p) => Some(p),
+            _ => None,
+        }
+    }
+
     /// Borrows the wrapped native `rusqlite` pool, if any.
     #[cfg(feature = "sqlite-rusqlite")]
     #[must_use]
@@ -197,6 +212,7 @@ impl Pool {
             Pool::Any(p) => p.close().await,
             Pool::Postgres(p) => p.close().await,
             Pool::Sqlite(p) => p.close().await,
+            Pool::Mysql(p) => p.close().await,
             #[cfg(feature = "sqlite-rusqlite")]
             Pool::SqliteNative(_) => (),
             #[cfg(feature = "postgres-tokio-postgres")]
@@ -418,6 +434,30 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
                 .await
                 .map_err(crate::Error::Sqlx)?;
             Ok(Pool::Postgres(pool))
+        }
+        "mysql" | "mariadb" => {
+            let pool = MySqlPoolOptions::new()
+                .max_connections(config.max_connections)
+                .min_connections(config.min_connections)
+                .acquire_timeout(config.acquire_timeout)
+                .idle_timeout(config.idle_timeout)
+                .max_lifetime(config.max_lifetime)
+                .test_before_acquire(config.test_before_acquire)
+                .after_connect(|_conn, _meta| {
+                    Box::pin(async move {
+                        tracing::info!(
+                            target: "ruprizzle::connection",
+                            event = "connect",
+                            backend = "mysql",
+                            "sqlx connection opened"
+                        );
+                        Ok(())
+                    })
+                })
+                .connect(url)
+                .await
+                .map_err(crate::Error::Sqlx)?;
+            Ok(Pool::Mysql(pool))
         }
         "sqlite" => {
             #[cfg(feature = "sqlite-rusqlite")]

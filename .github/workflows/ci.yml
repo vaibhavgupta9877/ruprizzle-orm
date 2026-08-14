@@ -50,7 +50,7 @@ jobs:
       - run: cargo test --workspace
 
   integration:
-    name: integration (postgres + sqlite)
+    name: integration (postgres + mysql + sqlite)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -66,10 +66,25 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_USER: ruprizzle
+          MYSQL_PASSWORD: ruprizzle
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ruprizzle_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -uruprizzle -pruprizzle"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     env:
       RUPRIZZLE_TEST_PG_URL: postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test
+      RUPRIZZLE_TEST_MYSQL_URL: mysql://ruprizzle:ruprizzle@localhost:3306/ruprizzle_test
       # Turns "database unavailable" from a skip into a failure. Without this the
-      # suite would pass green while silently testing nothing on Postgres.
+      # suite would pass green while silently testing nothing on Postgres/MySQL.
       RUPRIZZLE_REQUIRE_DB: "1"
     steps:
       - uses: actions/checkout@v4
@@ -80,9 +95,8 @@ jobs:
   feature-combination:
     name: feature matrix (${{ matrix.features }}) on ${{ matrix.db }}
     runs-on: ubuntu-latest
-    # Formalises W0-03: the three driver paths (default sqlx, native rusqlite,
-    # native tokio-postgres, and both native backends together) crossed with
-    # the two databases (SQLite in-memory, PostgreSQL, and both).
+    # Formalises W0-03/W5-01: the three native driver paths crossed with
+    # SQLite, PostgreSQL, MySQL, and the combined database run.
     strategy:
       fail-fast: false
       matrix:
@@ -91,7 +105,8 @@ jobs:
           - { features: "sqlite-rusqlite", db: sqlite }
           - { features: "", db: postgres }
           - { features: "postgres-tokio-postgres", db: postgres }
-          - { features: "sqlite-rusqlite,postgres-tokio-postgres", db: both }
+          - { features: "", db: mysql }
+          - { features: "sqlite-rusqlite,postgres-tokio-postgres", db: all }
     services:
       postgres:
         image: postgres:17-alpine
@@ -106,9 +121,24 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_USER: ruprizzle
+          MYSQL_PASSWORD: ruprizzle
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ruprizzle_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -uruprizzle -pruprizzle"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     env:
-      RUPRIZZLE_TEST_PG_URL: ${{ (matrix.db == 'postgres' || matrix.db == 'both') && 'postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test' || '' }}
-      RUPRIZZLE_REQUIRE_DB: ${{ (matrix.db == 'postgres' || matrix.db == 'both') && '1' || '' }}
+      RUPRIZZLE_TEST_PG_URL: ${{ (matrix.db == 'postgres' || matrix.db == 'all') && 'postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test' || '' }}
+      RUPRIZZLE_TEST_MYSQL_URL: ${{ (matrix.db == 'mysql' || matrix.db == 'all') && 'mysql://ruprizzle:ruprizzle@localhost:3306/ruprizzle_test' || '' }}
+      RUPRIZZLE_REQUIRE_DB: ${{ (matrix.db == 'postgres' || matrix.db == 'mysql' || matrix.db == 'all') && '1' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

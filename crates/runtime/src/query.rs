@@ -271,6 +271,7 @@ where
                     crate::executor::RawRow::Any(r) => Out::from_row(&r).map_err(Error::Sqlx),
                     crate::executor::RawRow::Postgres(r) => Out::from_row(&r).map_err(Error::Sqlx),
                     crate::executor::RawRow::Sqlite(r) => Out::from_row(&r).map_err(Error::Sqlx),
+                    crate::executor::RawRow::Mysql(r) => Out::from_row(&r).map_err(Error::Sqlx),
                     #[cfg(feature = "sqlite-rusqlite")]
                     crate::executor::RawRow::Rusqlite(r) => Out::from_owned_row(&r),
                     #[cfg(feature = "postgres-tokio-postgres")]
@@ -517,6 +518,44 @@ where
     }
 }
 
+async fn fetch_inserted_row<M: Model>(
+    exec: &dyn Executor,
+    dialect: &dyn ruprizzle_dialect::DbDialect,
+    values: &[(&'static str, Value)],
+) -> Result<M, Error> {
+    let projection = if M::COLUMNS.is_empty() {
+        "*".to_owned()
+    } else {
+        M::COLUMNS
+            .iter()
+            .map(|col| dialect.quote_ident(col))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let table = dialect.quote_ident(M::TABLE);
+    let key = dialect.quote_ident(M::PRIMARY_KEY);
+    let (predicate, binds) =
+        if let Some((_, value)) = values.iter().find(|(column, _)| *column == M::PRIMARY_KEY) {
+            (
+                format!("{key} = {}", dialect.placeholder(0)),
+                vec![value.clone()],
+            )
+        } else if dialect.name() == "mysql" {
+            (format!("{key} = LAST_INSERT_ID()"), Vec::new())
+        } else {
+            return Err(Error::Message(
+                "inserted row cannot be fetched: primary key was not supplied".into(),
+            ));
+        };
+
+    let sql = format!("SELECT {projection} FROM {table} WHERE {predicate}");
+    let batch = exec.fetch_all_raw(sql.into(), binds).await?;
+    crate::executor::decode_rows(batch)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| Error::Message("inserted row was not found after INSERT".into()))
+}
+
 /// A typed `INSERT` query.
 #[allow(dead_code)]
 pub struct InsertQuery<'db, M: Model> {
@@ -656,15 +695,19 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         } else {
             insert::<M>(dialect, M::TABLE, &self.values, returning)
         };
-        let batch = self
-            .pool
-            .fetch_all_raw(compiled.sql, compiled.binds)
-            .await?;
-        let mut rows = crate::executor::decode_rows::<M>(batch)?;
-        let row = rows
-            .pop()
-            .ok_or_else(|| Error::Message("INSERT RETURNING returned no row".into()))?;
-        Ok(row)
+
+        if dialect.returning_supported() {
+            let batch = self
+                .pool
+                .fetch_all_raw(compiled.sql, compiled.binds)
+                .await?;
+            let mut rows = crate::executor::decode_rows::<M>(batch)?;
+            rows.pop()
+                .ok_or_else(|| Error::Message("INSERT RETURNING returned no row".into()))
+        } else {
+            self.pool.execute_raw(compiled.sql, compiled.binds).await?;
+            fetch_inserted_row(self.pool, dialect, &self.values).await
+        }
     }
 
     async fn exec_nested(self, nested: NestedInsert<'db, M>) -> Result<M, Error> {
@@ -677,11 +720,16 @@ impl<'db, M: Model> InsertQuery<'db, M> {
             M::COLUMNS
         };
         let compiled = insert::<M>(dialect, M::TABLE, &self.values, returning);
-        let batch = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
-        let mut parent_rows = crate::executor::decode_rows::<M>(batch)?;
-        let mut parent = parent_rows
-            .pop()
-            .ok_or_else(|| Error::Message("INSERT RETURNING returned no row".into()))?;
+        let mut parent = if dialect.returning_supported() {
+            let batch = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
+            let mut parent_rows = crate::executor::decode_rows::<M>(batch)?;
+            parent_rows
+                .pop()
+                .ok_or_else(|| Error::Message("INSERT RETURNING returned no row".into()))?
+        } else {
+            tx.execute_raw(compiled.sql, compiled.binds).await?;
+            fetch_inserted_row(&tx, dialect, &self.values).await?
+        };
 
         let pk_value = (nested.get_parent_pk)(&parent);
 
@@ -709,11 +757,25 @@ impl<'db, M: Model> InsertQuery<'db, M> {
                     M::COLUMNS
                 };
                 let compiled = insert_many::<M>(dialect, nested.child_table, chunk, returning);
-                let chunk = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
-                match child_rows.as_mut() {
-                    Some(acc) => acc.merge(chunk)?,
-                    None => child_rows = Some(chunk),
+                if dialect.returning_supported() {
+                    let chunk = tx.fetch_all_raw(compiled.sql, compiled.binds).await?;
+                    match child_rows.as_mut() {
+                        Some(acc) => acc.merge(chunk)?,
+                        None => child_rows = Some(chunk),
+                    }
+                } else {
+                    tx.execute_raw(compiled.sql, compiled.binds).await?;
                 }
+            }
+
+            if !dialect.returning_supported() {
+                let sql = format!(
+                    "SELECT * FROM {} WHERE {} = {}",
+                    dialect.quote_ident(nested.child_table),
+                    dialect.quote_ident(nested.child_fk_col),
+                    dialect.placeholder(0)
+                );
+                child_rows = Some(tx.fetch_all_raw(sql.into(), vec![pk_value.clone()]).await?);
             }
 
             nested.setter.set(

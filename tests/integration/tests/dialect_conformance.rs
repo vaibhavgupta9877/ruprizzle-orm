@@ -61,6 +61,7 @@ fn dialect_for_backend(db: &TestDb) -> &'static dyn DbDialect {
     match db.backend().as_str() {
         "postgres" => dialect_for(ruprizzle_core::ir::Provider::Postgres),
         "sqlite" => dialect_for(ruprizzle_core::ir::Provider::Sqlite),
+        "mysql" => dialect_for(ruprizzle_core::ir::Provider::Mysql),
         _ => unreachable!(),
     }
 }

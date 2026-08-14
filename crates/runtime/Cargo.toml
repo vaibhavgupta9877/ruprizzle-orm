@@ -23,7 +23,7 @@ futures-util      = { version = "0.3", default-features = false, features = ["st
 rust_decimal      = { workspace = true }
 serde             = { workspace = true }
 serde_json        = { workspace = true }
-sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"] }
+sqlx              = { workspace = true, features = ["any", "postgres", "sqlite", "mysql"] }
 rusqlite          = { version = "0.32", optional = true }
 bytes             = { version = "1", optional = true }
 deadpool-postgres = { version = "0.14", optional = true }

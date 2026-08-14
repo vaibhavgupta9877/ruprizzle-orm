@@ -15,10 +15,10 @@ use crate::Error;
 /// database matches the snapshot at the level of tables, columns, and
 /// nullability checked here.
 pub async fn detect(pool: &Pool, schema: &Schema) -> Result<Vec<String>, Error> {
-    let db_tables = if pool.provider() == Provider::Sqlite {
-        sqlite_tables(pool).await?
-    } else {
-        postgres_tables(pool).await?
+    let db_tables = match pool.provider() {
+        Provider::Sqlite => sqlite_tables(pool).await?,
+        Provider::Postgres => postgres_tables(pool).await?,
+        Provider::Mysql => mysql_tables(pool).await?,
     };
 
     let mut drift = Vec::new();
@@ -106,6 +106,31 @@ async fn sqlite_tables(pool: &Pool) -> Result<TableMap, Error> {
     Ok(out)
 }
 
+async fn mysql_tables(pool: &Pool) -> Result<TableMap, Error> {
+    let names_sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' AND table_name != '_ruprizzle_migrations'";
+    let batch = pool
+        .fetch_all_raw(Cow::Owned(names_sql.into()), Vec::new())
+        .await?;
+    let names = decode_string_rows(batch)?;
+
+    let mut out = TableMap::new();
+    for name in names {
+        let sql = "SELECT column_name, is_nullable FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?";
+        let rows = pool
+            .fetch_all_raw(
+                Cow::Owned(sql.to_owned()),
+                vec![Value::Str(name.as_str().into())],
+            )
+            .await?;
+        let mut cols = ColumnMap::new();
+        for (col, nullable) in decode_pair(rows)? {
+            cols.insert(col, nullable == "NO");
+        }
+        out.insert(name, cols);
+    }
+    Ok(out)
+}
+
 async fn postgres_tables(pool: &Pool) -> Result<TableMap, Error> {
     let names_sql = "SELECT table_name::text FROM information_schema.tables \
          WHERE table_schema = current_schema() AND table_type = 'BASE TABLE' AND table_name != '_ruprizzle_migrations'";
@@ -150,6 +175,10 @@ fn decode_string_rows(batch: RowBatch) -> Result<Vec<String>, Error> {
             .iter()
             .map(|r| Ok(r.try_get::<String, _>(0)?))
             .collect(),
+        RowBatch::Mysql(rows) => rows
+            .iter()
+            .map(|r| Ok(r.try_get::<String, _>(0)?))
+            .collect(),
         #[cfg(feature = "sqlite-rusqlite")]
         RowBatch::Rusqlite(rows) => rows.iter().map(|r| Ok(r.get::<String>(0)?)).collect(),
         _ => Err(Error::Message("unsupported row batch".into())),
@@ -167,6 +196,10 @@ fn decode_pair(batch: RowBatch) -> Result<Vec<(String, String)>, Error> {
             .map(|r| Ok((r.try_get::<String, _>(0)?, r.try_get::<String, _>(1)?)))
             .collect(),
         RowBatch::Sqlite(rows) => rows
+            .iter()
+            .map(|r| Ok((r.try_get::<String, _>(0)?, r.try_get::<String, _>(1)?)))
+            .collect(),
+        RowBatch::Mysql(rows) => rows
             .iter()
             .map(|r| Ok((r.try_get::<String, _>(0)?, r.try_get::<String, _>(1)?)))
             .collect(),
@@ -202,6 +235,15 @@ fn decode_sqlite_columns(batch: RowBatch) -> Result<Vec<(String, bool)>, Error> 
             })
             .collect(),
         RowBatch::Sqlite(rows) => rows
+            .iter()
+            .map(|r| {
+                let name: String = r.try_get::<String, _>(1)?;
+                let notnull: i64 = r.try_get::<i64, _>(3)?;
+                let pk: i64 = r.try_get::<i64, _>(5)?;
+                Ok((name, notnull != 0 || pk != 0))
+            })
+            .collect(),
+        RowBatch::Mysql(rows) => rows
             .iter()
             .map(|r| {
                 let name: String = r.try_get::<String, _>(1)?;

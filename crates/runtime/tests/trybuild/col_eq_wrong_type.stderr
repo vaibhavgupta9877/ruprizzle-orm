@@ -14,8 +14,8 @@ error[E0277]: the trait bound `std::string::String: From<{integer}>` is not sati
              `std::string::String` implements `From<Cow<'_, str>>`
              `std::string::String` implements `From<PgCiText>`
              `std::string::String` implements `From<char>`
-             `std::string::String` implements `From<ruprizzle::types::Uuid>`
-             `std::string::String` implements `From<url::Url>`
+             `std::string::String` implements `From<der::asn1::utf8_string::Utf8StringRef<'_>>`
+           and $N others
    = note: required for `{integer}` to implement `Into<std::string::String>`
 note: required by a bound in `ruprizzle::Column::<M, T>::eq`
   --> src/col.rs

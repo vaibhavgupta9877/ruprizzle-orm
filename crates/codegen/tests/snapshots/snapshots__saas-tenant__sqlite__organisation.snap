@@ -29,7 +29,7 @@ impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Organisation {
             id: ::ruprizzle::decode::text_idx(row, 0)?,
             slug: ::ruprizzle::decode::direct_idx(row, 1)?,
             plan: ::ruprizzle::decode::text_idx(row, 2)?,
-            settings: ::ruprizzle::decode::json_opt_idx(row, 3)?,
+            settings: ::ruprizzle::decode::json_text_opt_idx(row, 3)?,
             members: ::ruprizzle::Related::default(),
             created_at: ::ruprizzle::decode::text_idx(row, 4)?,
         })
@@ -54,6 +54,21 @@ impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>
 for Organisation {
     fn from_row(
         row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            slug: ::ruprizzle::decode::direct_idx(row, 1)?,
+            plan: ::ruprizzle::decode::text_idx(row, 2)?,
+            settings: ::ruprizzle::decode::json_opt_idx(row, 3)?,
+            members: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 4)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>
+for Organisation {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::mysql::MySqlRow,
     ) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
             id: ::ruprizzle::decode::text_idx(row, 0)?,

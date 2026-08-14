@@ -25,6 +25,7 @@ pub mod change;
 pub mod diff;
 pub mod drift;
 pub mod error;
+pub mod introspect;
 pub mod plan;
 pub mod runner;
 

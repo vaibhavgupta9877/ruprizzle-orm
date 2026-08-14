@@ -14,7 +14,7 @@ publish                = false
 
 [dependencies]
 ruprizzle = { workspace = true }
-sqlx      = { workspace = true, features = ["postgres", "sqlite", "any"] }
+sqlx      = { workspace = true, features = ["postgres", "sqlite", "mysql", "any"] }
 tempfile  = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true }

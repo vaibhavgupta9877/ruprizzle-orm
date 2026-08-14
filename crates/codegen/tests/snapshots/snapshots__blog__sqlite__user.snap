@@ -66,6 +66,21 @@ impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow> fo
         })
     }
 }
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow> for User {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::mysql::MySqlRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            email: ::ruprizzle::decode::direct_idx(row, 1)?,
+            name: ::ruprizzle::decode::direct_opt_idx(row, 2)?,
+            role: ::ruprizzle::decode::text_idx(row, 3)?,
+            posts: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 4)?,
+            updated_at: ::ruprizzle::decode::text_idx(row, 5)?,
+        })
+    }
+}
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for User {
     fn from_rusqlite_row(

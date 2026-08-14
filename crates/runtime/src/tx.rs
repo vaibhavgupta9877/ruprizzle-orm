@@ -9,7 +9,7 @@ use tokio::sync::Mutex as AsyncMutex;
 
 use ruprizzle_core::ir::Provider;
 use ruprizzle_dialect::{DbDialect, dialect_for};
-use sqlx::{Any, Postgres, Sqlite};
+use sqlx::{Any, MySql, Postgres, Sqlite};
 
 use crate::BoxFuture;
 use crate::Error;
@@ -50,6 +50,7 @@ enum TxInner {
     Any(sqlx::Transaction<'static, Any>),
     Postgres(sqlx::Transaction<'static, Postgres>),
     Sqlite(sqlx::Transaction<'static, Sqlite>),
+    Mysql(sqlx::Transaction<'static, MySql>),
     #[cfg(feature = "sqlite-rusqlite")]
     SqliteNative(crate::rusqlite::RusqliteTransaction),
     #[cfg(feature = "postgres-tokio-postgres")]
@@ -95,6 +96,7 @@ impl Tx {
             Pool::Any(p) => TxInner::Any(p.begin().await.map_err(Error::Sqlx)?),
             Pool::Postgres(p) => TxInner::Postgres(p.begin().await.map_err(Error::Sqlx)?),
             Pool::Sqlite(p) => TxInner::Sqlite(p.begin().await.map_err(Error::Sqlx)?),
+            Pool::Mysql(p) => TxInner::Mysql(p.begin().await.map_err(Error::Sqlx)?),
             #[cfg(feature = "sqlite-rusqlite")]
             Pool::SqliteNative(p) => TxInner::SqliteNative(p.begin_transaction().await?),
             #[cfg(feature = "postgres-tokio-postgres")]
@@ -197,6 +199,7 @@ impl Tx {
                 TxInner::Any(tx) => tx.commit().await.map_err(Error::Sqlx)?,
                 TxInner::Postgres(tx) => tx.commit().await.map_err(Error::Sqlx)?,
                 TxInner::Sqlite(tx) => tx.commit().await.map_err(Error::Sqlx)?,
+                TxInner::Mysql(tx) => tx.commit().await.map_err(Error::Sqlx)?,
                 #[cfg(feature = "sqlite-rusqlite")]
                 TxInner::SqliteNative(tx) => {
                     tx.commit()?;
@@ -225,6 +228,7 @@ impl Tx {
                 TxInner::Any(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
                 TxInner::Postgres(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
                 TxInner::Sqlite(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
+                TxInner::Mysql(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
                 #[cfg(feature = "sqlite-rusqlite")]
                 TxInner::SqliteNative(tx) => {
                     tx.rollback()?;
@@ -377,6 +381,16 @@ impl Tx {
                     .map(|r| r.rows_affected())
                     .map_err(Error::Sqlx)
             }
+            TxInner::Mysql(tx) => {
+                let mut q = sqlx::query::<MySql>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.execute(&mut **tx)
+                    .await
+                    .map(|r| r.rows_affected())
+                    .map_err(Error::Sqlx)
+            }
             #[cfg(feature = "sqlite-rusqlite")]
             TxInner::SqliteNative(tx) => tx.execute_sync(sql, binds),
             #[cfg(feature = "postgres-tokio-postgres")]
@@ -410,6 +424,13 @@ impl Tx {
             }
             TxInner::Sqlite(tx) => {
                 let mut q = sqlx::query_as::<Sqlite, T>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_all(&mut **tx).await.map_err(Error::Sqlx)
+            }
+            TxInner::Mysql(tx) => {
+                let mut q = sqlx::query_as::<MySql, T>(sql);
                 for b in binds {
                     q = q.bind(b);
                 }
@@ -467,6 +488,16 @@ impl Tx {
                 q.fetch_all(&mut **tx)
                     .await
                     .map(RowBatch::Sqlite)
+                    .map_err(Error::Sqlx)
+            }
+            TxInner::Mysql(tx) => {
+                let mut q = sqlx::query::<MySql>(sql);
+                for b in binds {
+                    q = q.bind(b);
+                }
+                q.fetch_all(&mut **tx)
+                    .await
+                    .map(RowBatch::Mysql)
                     .map_err(Error::Sqlx)
             }
             #[cfg(feature = "sqlite-rusqlite")]

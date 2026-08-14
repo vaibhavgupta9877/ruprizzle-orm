@@ -5,7 +5,12 @@ error[E0277]: the trait bound `uuid::Uuid: sqlx::Decode<'_, sqlx::Any>` is not s
    |                ^^^^ the trait `sqlx::Decode<'_, sqlx::Any>` is not implemented for `uuid::Uuid`
    |
 help: the following other types implement trait `sqlx::Decode<'r, DB>`
-  --> $CARGO/sqlx-postgres-$VERSION/src/types/uuid.rs
+  --> $CARGO/sqlx-mysql-$VERSION/src/types/uuid.rs
+   |
+   | impl Decode<'_, MySql> for Uuid {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `uuid::Uuid` implements `sqlx::Decode<'_, MySql>`
+   |
+  ::: $CARGO/sqlx-postgres-$VERSION/src/types/uuid.rs
    |
    | impl Decode<'_, Postgres> for Uuid {
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `uuid::Uuid` implements `sqlx::Decode<'_, sqlx::Postgres>`
@@ -36,7 +41,12 @@ error[E0277]: the trait bound `uuid::Uuid: sqlx::Type<sqlx::Any>` is not satisfi
    |                ^^^^ the trait `sqlx::Type<sqlx::Any>` is not implemented for `uuid::Uuid`
    |
 help: the following other types implement trait `sqlx::Type<DB>`
-  --> $CARGO/sqlx-postgres-$VERSION/src/types/uuid.rs
+  --> $CARGO/sqlx-mysql-$VERSION/src/types/uuid.rs
+   |
+   | impl Type<MySql> for Uuid {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^ `uuid::Uuid` implements `sqlx::Type<MySql>`
+   |
+  ::: $CARGO/sqlx-postgres-$VERSION/src/types/uuid.rs
    |
    | impl Type<Postgres> for Uuid {
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `uuid::Uuid` implements `sqlx::Type<sqlx::Postgres>`

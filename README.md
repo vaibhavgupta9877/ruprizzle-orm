@@ -179,20 +179,30 @@ ruprizzle tries to give you all three at once:
 
 ### CLI
 
-- `ruprizzle init --provider postgres|sqlite` — scaffold schema, `.env`, `.gitignore`, and `migrations/`.
+- `ruprizzle init --provider postgres|sqlite|mysql` — scaffold schema, `.env`, `.gitignore`, and `migrations/`.
 - `ruprizzle generate` and `ruprizzle generate --watch` — generate the typed client.
 - `ruprizzle validate` — CI-friendly schema validation.
 - `ruprizzle format` — canonicalise the schema file.
 - `ruprizzle migrate dev|deploy|status|resolve|reset` — see [CLI workflow](#cli-workflow).
-- `ruprizzle db push|seed` — direct schema push and seed scripts.
+- `ruprizzle db pull` — introspect an existing database into `schema.ruprizzle`.
+- `ruprizzle db seed` — transactionally apply idempotent `seeds/main.json` data (legacy `main.sql` remains supported).
+- `ruprizzle db push` — direct schema push without migration files.
+
+A declarative seed file maps model or table names to row arrays:
+
+```json
+{"User": [{"id": 1, "email": "alice@example.com"}]}
+```
+
+Rows must include their primary key; repeated runs update the existing row instead of inserting a duplicate.
 
 ### Dialects
 
-- **Postgres 17+** and **SQLite 3+** support from day one.
+- **Postgres 17+**, **MySQL/MariaDB**, and **SQLite 3+** are supported.
 - **Dialect capabilities model**: native enums, native UUID, `RETURNING`, `ALTER COLUMN`, window functions, JSON support, partial indexes, and max bind parameters are explicitly modelled.
-- **Additive dialect design**: adding MySQL/MariaDB means implementing `DbDialect` and a conformance suite; the runtime does not change.
+- **Portable MySQL DML**: inserts use a primary-key follow-up lookup because MySQL has no DML `RETURNING`; upserts use `ON DUPLICATE KEY UPDATE`.
 - **SQLite table rebuilds** for destructive column changes are handled automatically.
-- **UUID and JSON** are mapped idiomatically per dialect (`uuid`/`jsonb` on Postgres, text on SQLite where native storage is unavailable).
+- **UUID and JSON** are mapped idiomatically per dialect (`uuid`/`jsonb` on Postgres, `char(36)`/`json` on MySQL, and text on SQLite where native storage is unavailable).
 
 ### Transactions and escape hatches
 
@@ -486,12 +496,11 @@ The end-to-end I/O benchmark is `cargo bench -p ruprizzle --bench end_to_end`; f
 
 P0–P7 are complete, P8 is mostly complete (docs site / announcement pending), and `0.1.1-beta.1` is on crates.io. Remaining work before a stable 0.2:
 
-- MySQL / MariaDB dialect (additive via `DbDialect`).
 - Many-to-many implicit join tables (explicit join model works today).
 - Database introspection → schema (`db pull`).
 - Raw-SQL compile-time verification (`sqlx::query!` style).
 - Full LSP for the schema DSL.
-- Migration squashing and connection pool metrics.
+- Connection pool metrics.
 
 See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md) and [decisions log](ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md) for the full phase-by-phase state and ADRs.
 

@@ -27,7 +27,7 @@ serde_json        = { workspace = true }
 thiserror         = { workspace = true }
 sha2              = { workspace = true }
 chrono            = { workspace = true }
-sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"] }
+sqlx              = { workspace = true, features = ["any", "postgres", "sqlite", "mysql"] }
 tracing            = { version = "0.1", default-features = false, features = ["std"] }
 
 [dev-dependencies]

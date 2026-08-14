@@ -33,6 +33,7 @@
 )]
 
 mod common;
+mod mysql;
 mod postgres;
 mod sqlite;
 
@@ -41,6 +42,7 @@ use ruprizzle_core::ir::{
 };
 
 pub use common::{check_schema_capabilities, dialect_for, full_alter_column, full_create_table};
+pub use mysql::MySqlDialect;
 pub use postgres::PostgresDialect;
 pub use sqlite::SqliteDialect;
 
@@ -200,7 +202,7 @@ pub enum DialectError {
 ///
 /// The trait is object-safe: `&dyn DbDialect` can be passed around, and
 /// `dialect_for` returns a cheap `'static` reference. Implementations live in
-/// [`PostgresDialect`] and [`SqliteDialect`].
+/// [`PostgresDialect`], [`MySqlDialect`], and [`SqliteDialect`].
 pub trait DbDialect: Send + Sync {
     /// The canonical name of the dialect, e.g. `"postgres"`.
     fn name(&self) -> &'static str;
