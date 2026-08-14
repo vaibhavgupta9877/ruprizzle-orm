@@ -2,4 +2,4 @@
 source: crates/runtime/tests/aggregate.rs
 expression: compiled.sql.as_ref()
 ---
-SELECT SUM("employees"."salary") AS "sum_salary" FROM "employees" GROUP BY "employees"."role" HAVING ("employees"."role" = $1)
+SELECT SUM("employees"."salary") AS "sum_salary" FROM "employees" GROUP BY "employees"."role" HAVING "employees"."role" = $1

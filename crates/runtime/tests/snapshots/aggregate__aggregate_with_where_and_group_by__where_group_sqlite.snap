@@ -2,4 +2,4 @@
 source: crates/runtime/tests/aggregate.rs
 expression: compiled.sql.as_ref()
 ---
-SELECT SUM(`employees`.`salary`) AS `sum_salary`, COUNT(`employees`.`id`) AS `count_id` FROM `employees` WHERE (`employees`.`age` > ?) GROUP BY `employees`.`role` ORDER BY `employees`.`role` ASC
+SELECT SUM(`employees`.`salary`) AS `sum_salary`, COUNT(`employees`.`id`) AS `count_id` FROM `employees` WHERE `employees`.`age` > ? GROUP BY `employees`.`role` ORDER BY `employees`.`role` ASC

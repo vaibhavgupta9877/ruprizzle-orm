@@ -288,7 +288,7 @@ every reporting query.
 None of these exist. They are what "SQL-like typed builder" means to a Drizzle user, and
 `FeaturesMasterComparison.md` rates our query style as exactly that.
 
-- [ ] **Step 1.** Subqueries in filters: `User::id.in_subquery(Post::query().columns(Post::author_id))`.
+- [x] **Step 1.** Subqueries in filters: `User::id.in_subquery(Post::query().columns(Post::author_id))`.
 - [ ] **Step 2.** Correlated `EXISTS` / `NOT EXISTS` subqueries.
 - [ ] **Step 3.** CTEs: `Query::with("name", subquery)` emitting `WITH … AS (…)`, including
       the `RECURSIVE` form — recursive CTEs are the standard answer to tree/hierarchy
@@ -299,6 +299,11 @@ None of these exist. They are what "SQL-like typed builder" means to a Drizzle u
       differs on `RIGHT JOIN`. `DbDialect` must report capability and the builder must
       return a clear compile-time or construction-time error rather than emitting SQL that
       fails at the server. Document in `docs/DialectNotes.md`.
+
+> **Current status (2026-08-14):** W2-03 Step 1 is complete. `Subquery<T>`,
+> `Column::in_subquery` / `not_in_subquery`, and `FilterNode::InSubquery` are implemented
+> with dialect-aware placeholder offset for Postgres and `?` passthrough for SQLite/MySQL.
+> Unit tests in `compile.rs` and `both_dbs!` integration tests in `subqueries.rs` pass.
 
 ### W2-04 · JSON operators
 

@@ -2,7 +2,7 @@
 
 use std::marker::PhantomData;
 
-use crate::filter::{CmpOp, Filter, FilterNode};
+use crate::filter::{CmpOp, Filter, FilterNode, Subquery};
 use crate::join::JoinOn;
 use crate::order::OrderBy;
 use crate::value::{Encodable, Ordered, Value};
@@ -72,6 +72,28 @@ impl<M, T> Column<M, T> {
             column: self.column,
             _marker: PhantomData,
         }
+    }
+
+    /// `column IN (subquery)`.
+    pub fn in_subquery<Q: Into<Subquery<T>>>(self, subquery: Q) -> Filter<M> {
+        let subquery = subquery.into().compiled;
+        Filter::new(FilterNode::InSubquery {
+            table: self.table,
+            column: self.column,
+            subquery,
+            negated: false,
+        })
+    }
+
+    /// `column NOT IN (subquery)`.
+    pub fn not_in_subquery<Q: Into<Subquery<T>>>(self, subquery: Q) -> Filter<M> {
+        let subquery = subquery.into().compiled;
+        Filter::new(FilterNode::InSubquery {
+            table: self.table,
+            column: self.column,
+            subquery,
+            negated: true,
+        })
     }
 }
 

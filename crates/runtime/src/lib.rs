@@ -82,7 +82,7 @@ pub use compile::{CompiledSql, delete, dialect_for_pool, insert, insert_many, se
 pub use counting::CountingExecutor;
 pub use error::Error;
 pub use executor::{Executor, RowBatch, decode_rows};
-pub use filter::{Filter, FilterNode, RawFragment, all, any};
+pub use filter::{Filter, FilterNode, RawFragment, Subquery, all, any};
 pub use include::{IncludeList, IncludeOne, IncludeSet};
 pub use join::{Join2, JoinKind, JoinOn, JoinSide, LeftJoin2, Maybe};
 pub use model::Model;

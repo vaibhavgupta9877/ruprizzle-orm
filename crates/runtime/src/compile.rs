@@ -762,6 +762,39 @@ impl<'d> Compiler<'d> {
         self.sql.push_str(&self.dialect.placeholder(idx));
     }
 
+    fn push_subquery(&mut self, subquery: &CompiledSql) {
+        let sql = subquery.sql.as_ref();
+        if self.dialect.placeholder(0).starts_with('?') {
+            self.sql.push_str(sql);
+            self.binds.extend(subquery.binds.iter().cloned());
+            return;
+        }
+
+        let offset = self.binds.len();
+        let bytes = sql.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'$' {
+                let mut j = i + 1;
+                while j < bytes.len() && bytes[j].is_ascii_digit() {
+                    j += 1;
+                }
+                if j > i + 1 {
+                    let n = std::str::from_utf8(&bytes[i + 1..j])
+                        .unwrap()
+                        .parse::<usize>()
+                        .unwrap();
+                    self.sql.push_str(&self.dialect.placeholder(offset + n - 1));
+                    i = j;
+                    continue;
+                }
+            }
+            self.sql.push(bytes[i] as char);
+            i += 1;
+        }
+        self.binds.extend(subquery.binds.iter().cloned());
+    }
+
     fn push_filter(&mut self, node: &FilterNode) {
         match node {
             FilterNode::Cmp {
@@ -834,6 +867,23 @@ impl<'d> Compiler<'d> {
                 }
                 self.push(')');
             }
+            FilterNode::InSubquery {
+                table,
+                column,
+                subquery,
+                negated,
+            } => {
+                self.push_quoted(table);
+                self.push('.');
+                self.push_quoted(column);
+                if *negated {
+                    self.push_str(" NOT IN (");
+                } else {
+                    self.push_str(" IN (");
+                }
+                self.push_subquery(subquery);
+                self.push(')');
+            }
             FilterNode::ColumnCmp {
                 left_table,
                 left_col,
@@ -854,6 +904,8 @@ impl<'d> Compiler<'d> {
             FilterNode::And(nodes) => {
                 if nodes.is_empty() {
                     self.push_str("TRUE");
+                } else if nodes.len() == 1 {
+                    self.push_filter(&nodes[0]);
                 } else {
                     self.push('(');
                     for (i, n) in nodes.iter().enumerate() {
@@ -868,6 +920,8 @@ impl<'d> Compiler<'d> {
             FilterNode::Or(nodes) => {
                 if nodes.is_empty() {
                     self.push_str("FALSE");
+                } else if nodes.len() == 1 {
+                    self.push_filter(&nodes[0]);
                 } else {
                     self.push('(');
                     for (i, n) in nodes.iter().enumerate() {
@@ -1437,5 +1491,113 @@ mod tests {
             r#"SELECT "employees"."id", "employees"."name", "employees"."manager_id", "m"."id", "m"."name", "m"."manager_id" FROM "employees" INNER JOIN "employees" AS "m" ON "employees"."manager_id" = "m"."id""#
         );
         assert!(c.binds.is_empty());
+    }
+
+    #[test]
+    fn in_subquery_postgres() {
+        let subquery = CompiledSql {
+            sql: std::borrow::Cow::Borrowed(
+                r#"SELECT "posts"."author_id" FROM "posts" WHERE "posts"."published" = $1"#,
+            ),
+            binds: vec![Value::Bool(true)],
+        };
+        let f = Filter::<User>::new(FilterNode::InSubquery {
+            table: "users",
+            column: "id",
+            subquery,
+            negated: false,
+        });
+        let c = select::<User>(
+            pg(),
+            "users",
+            &["id", "name"],
+            &f.node,
+            &[],
+            None,
+            None,
+            false,
+        );
+        assert_eq!(
+            c.sql,
+            r#"SELECT "users"."id", "users"."name" FROM "users" WHERE "users"."id" IN (SELECT "posts"."author_id" FROM "posts" WHERE "posts"."published" = $1)"#
+        );
+        assert_eq!(c.binds, vec![Value::Bool(true)]);
+    }
+
+    #[test]
+    fn in_subquery_sqlite() {
+        let subquery = CompiledSql {
+            sql: std::borrow::Cow::Borrowed(
+                r#"SELECT `posts`.`author_id` FROM `posts` WHERE `posts`.`published` = ?"#,
+            ),
+            binds: vec![Value::Bool(true)],
+        };
+        let f = Filter::<User>::new(FilterNode::InSubquery {
+            table: "users",
+            column: "id",
+            subquery,
+            negated: false,
+        });
+        let c = select::<User>(
+            sqlite(),
+            "users",
+            &["id", "name"],
+            &f.node,
+            &[],
+            None,
+            None,
+            false,
+        );
+        assert_eq!(
+            c.sql,
+            r#"SELECT `users`.`id`, `users`.`name` FROM `users` WHERE `users`.`id` IN (SELECT `posts`.`author_id` FROM `posts` WHERE `posts`.`published` = ?)"#
+        );
+        assert_eq!(c.binds, vec![Value::Bool(true)]);
+    }
+
+    #[test]
+    fn in_subquery_postgres_with_outer_binds() {
+        let subquery = CompiledSql {
+            sql: std::borrow::Cow::Borrowed(
+                r#"SELECT "posts"."author_id" FROM "posts" WHERE "posts"."published" = $1 AND "posts"."title" = $2"#,
+            ),
+            binds: vec![Value::Bool(true), Value::Str("First".into())],
+        };
+        let f = Filter::<User>::new(FilterNode::And(vec![
+            FilterNode::Cmp {
+                table: "users",
+                column: "age",
+                op: CmpOp::Eq,
+                value: Value::I32(30),
+            },
+            FilterNode::InSubquery {
+                table: "users",
+                column: "id",
+                subquery,
+                negated: true,
+            },
+        ]));
+        let c = select::<User>(
+            pg(),
+            "users",
+            &["id", "name"],
+            &f.node,
+            &[],
+            None,
+            None,
+            false,
+        );
+        assert_eq!(
+            c.sql,
+            r#"SELECT "users"."id", "users"."name" FROM "users" WHERE ("users"."age" = $1 AND "users"."id" NOT IN (SELECT "posts"."author_id" FROM "posts" WHERE "posts"."published" = $2 AND "posts"."title" = $3))"#
+        );
+        assert_eq!(
+            c.binds,
+            vec![
+                Value::I32(30),
+                Value::Bool(true),
+                Value::Str("First".into())
+            ]
+        );
     }
 }

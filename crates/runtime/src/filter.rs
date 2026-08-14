@@ -2,6 +2,9 @@
 
 use std::marker::PhantomData;
 
+use crate::compile::CompiledSql;
+use crate::model::Model;
+use crate::query::SelectQuery;
 use crate::value::Value;
 
 /// An injection-safe raw SQL fragment with bound parameters.
@@ -46,6 +49,51 @@ impl RawFragment {
     #[must_use]
     pub fn binds(&self) -> &[Value] {
         &self.binds
+    }
+}
+
+/// A compiled `SELECT` subquery that returns a single column of type `T`.
+///
+/// It is typically produced by `SelectQuery::columns(...).into::<Subquery<T>>()`
+/// and consumed by [`Column::in_subquery`](crate::col::Column::in_subquery).
+pub struct Subquery<T> {
+    /// The compiled SQL of the subquery, including its bound values.
+    pub(crate) compiled: CompiledSql,
+    _marker: PhantomData<fn() -> T>,
+}
+
+impl<T> Clone for Subquery<T> {
+    fn clone(&self) -> Self {
+        Self {
+            compiled: self.compiled.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T> std::fmt::Debug for Subquery<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Subquery")
+            .field("compiled", &self.compiled)
+            .finish()
+    }
+}
+
+impl<T> PartialEq for Subquery<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.compiled == other.compiled
+    }
+}
+
+impl<'db, M, T, I> From<SelectQuery<'db, M, (T,), I>> for Subquery<T>
+where
+    M: Model,
+{
+    fn from(query: SelectQuery<'db, M, (T,), I>) -> Self {
+        Self {
+            compiled: query.to_sql(),
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -139,6 +187,13 @@ pub enum FilterNode {
         table: &'static str,
         column: &'static str,
         values: Vec<Value>,
+        negated: bool,
+    },
+    /// `column [NOT] IN (subquery)`.
+    InSubquery {
+        table: &'static str,
+        column: &'static str,
+        subquery: CompiledSql,
         negated: bool,
     },
     /// A comparison between two columns, used for join `ON` clauses.
