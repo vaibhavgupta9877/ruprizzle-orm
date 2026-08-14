@@ -247,7 +247,7 @@ Today only `count()` and `exists()`. There is no `sum`, `avg`, `min`, `max`, and
       `User::query(&db).group_by(User::role).aggregate(...)` returns named fields.
 - [x] **Step 5.** `.to_sql()` must work on grouped and aggregate queries — SQL transparency
       on every builder is a stated product promise and cannot have holes.
-- [~] **Step 6.** Tests via `both_dbs!` plus snapshot tests of emitted SQL.
+- [x] **Step 6.** Tests via `both_dbs!` plus snapshot tests of emitted SQL.
 
 ### W2-02 · Explicit joins
 
@@ -506,8 +506,8 @@ Tracks `docs/FeaturesMasterComparison.md`. **Bold** = changed by this plan.
 | Savepoints / nested transactions | No | **Yes** | W1-01 |
 | Array binds & array columns | No | **Yes** (Postgres native) | W1-02 |
 | Streaming / cursors | Buffered | **Yes** (both modes) | W1-03 |
-| Aggregates | Partial | **Yes** | W2-01 |
-| Group by / having | No | **Yes** | W2-01 |
+| Aggregates | **Yes** | **Yes** | W2-01 |
+| Group by / having | **Yes** | **Yes** | W2-01 |
 | Explicit joins | No | **Yes** | W2-02 |
 | Subqueries / CTEs / set ops | No | **Yes** | W2-03 |
 | JSON operators | Partial | **Yes** | W2-04 |

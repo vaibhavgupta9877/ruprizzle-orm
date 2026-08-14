@@ -178,7 +178,6 @@ impl<M, T> Column<M, T> {
 /// This is the output-side counterpart of `Numeric`: the result set produced by
 /// `SUM`, `AVG`, etc. contains one value per aggregate, and that value must be
 /// decodable by every active backend driver.
-
 #[cfg(all(feature = "sqlite-rusqlite", not(feature = "postgres-tokio-postgres")))]
 pub trait AggregateScalar:
     Send + Sync + 'static

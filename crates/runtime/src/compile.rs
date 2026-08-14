@@ -114,17 +114,7 @@ pub fn aggregate_select<M: Model>(
         if i > 0 {
             c.push_str(", ");
         }
-        c.push_str(agg.kind.sql_fn());
-        c.push('(');
-        if agg.kind == AggregateKind::CountDistinct {
-            c.push_str("DISTINCT ");
-        }
-        c.push_quoted(agg.table);
-        c.push('.');
-        c.push_quoted(agg.column);
-        c.push(')');
-        c.push_str(" AS ");
-        c.push_quoted(&agg.alias);
+        c.push_aggregate(agg);
     }
 
     c.push_str(" FROM ");
@@ -554,6 +544,50 @@ impl<'d> Compiler<'d> {
 
     fn push_quoted(&mut self, s: &str) {
         self.sql.push_str(&self.dialect.quote_ident(s));
+    }
+
+    fn push_aggregate(&mut self, agg: &AggregateEntry) {
+        self.push_str(agg.kind.sql_fn());
+        self.push('(');
+        if agg.kind == AggregateKind::CountDistinct {
+            self.push_str("DISTINCT ");
+        }
+
+        // AVG over an integer column returns NUMERIC/DECIMAL on Postgres and
+        // MySQL, which sqlx::Any cannot decode as f64. Cast the argument to a
+        // floating-point type so the aggregate result matches the Rust type.
+        if agg.kind == AggregateKind::Avg {
+            match self.dialect.name() {
+                "postgres" => {
+                    self.push_quoted(agg.table);
+                    self.push('.');
+                    self.push_quoted(agg.column);
+                    self.push_str("::double precision");
+                }
+                "mysql" => {
+                    self.push_str("CAST(");
+                    self.push_quoted(agg.table);
+                    self.push('.');
+                    self.push_quoted(agg.column);
+                    self.push_str(" AS DOUBLE)");
+                }
+                _ => {
+                    self.push_str("CAST(");
+                    self.push_quoted(agg.table);
+                    self.push('.');
+                    self.push_quoted(agg.column);
+                    self.push_str(" AS REAL)");
+                }
+            }
+        } else {
+            self.push_quoted(agg.table);
+            self.push('.');
+            self.push_quoted(agg.column);
+        }
+
+        self.push(')');
+        self.push_str(" AS ");
+        self.push_quoted(&agg.alias);
     }
 
     fn push_order<M: Model>(&mut self, order: &[OrderBy<M>]) {

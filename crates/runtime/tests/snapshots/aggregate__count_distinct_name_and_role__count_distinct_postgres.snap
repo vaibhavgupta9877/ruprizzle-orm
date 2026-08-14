@@ -1,0 +1,5 @@
+---
+source: crates/runtime/tests/aggregate.rs
+expression: compiled.sql.as_ref()
+---
+SELECT COUNT(DISTINCT "employees"."name") AS "count_distinct_name", COUNT(DISTINCT "employees"."role") AS "count_distinct_role" FROM "employees"
