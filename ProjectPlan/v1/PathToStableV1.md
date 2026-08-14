@@ -1,6 +1,6 @@
 # Path to Stable v1.0
 
-> **Status:** ACTIVE — W5-01 through W5-06 complete; W5-07 is next.
+> **Status:** ACTIVE — W2-05 complete. W0-01 rustfmt regressed and was re-applied 2026-08-14. Remaining before 1.0: W1-02 (array binds, only Step 1/ADR done), W1-03 (true streaming), W2-06 (nested writes beyond insert), W2-07 (prepared statements / dynamic building), W5-07 (LSP), and all of W6. Postgres integration tests currently fail in this environment due to disk-full, not code.
 
 **From:** `0.1.1-beta.1` (published to crates.io 2026-08-13, 84/100 production readiness)
 **To:** `1.0.0` — a version whose API we commit to under semver and whose capability surface
@@ -74,6 +74,8 @@ fastest `bulk_insert_1000` at 1,191 (Diesel 5,336, Prisma 13,154); nested `inclu
 4,468 versus Sea-ORM 23,437 and Prisma 33,534. **Performance is not this plan's problem.**
 Every workstream below is capability, operability, or assurance.
 
+> **Current position (2026-08-14, commit `4ca9170`):** `cargo fmt --all --check` now passes after re-application. `cargo clippy -p ruprizzle --features sqlite-rusqlite -- -D warnings` passes. Unit tests and SQLite/MySQL integration tests pass; Postgres integration tests fail with "could not extend file ... No space left on device" on the test environment (F/C drives low), not with code. Savepoint tests pass on all three backends. W0–W4 and W5-01 through W5-06 are functionally complete. W5-07 is deferred and unimplemented. W1-02 and W1-03 are partial. W2-06 and W2-07 are not yet started.
+
 ---
 
 ## 3. Workstream overview
@@ -128,6 +130,8 @@ commit. Feature work on top of a red gate is how a red gate becomes permanent.
 --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`,
 and `cargo xtask harden` all clean locally and in CI.
 
+> **Current status (2026-08-14):** W0-01 rustfmt regressed after W2/W5 code landed; re-applied with `cargo fmt --all` at this commit and `cargo fmt --all --check` is now green. Other W0 items remain in place.
+
 ---
 
 # W1 — Transaction & type completeness
@@ -138,6 +142,8 @@ and `cargo xtask harden` all clean locally and in CI.
 These are not parity features — they are correctness-adjacent holes in what we already
 claim to do. `Tx` exists but cannot nest. `Value::Array` exists but throws. `stream()` exists
 but buffers.
+
+> **Current status (2026-08-14):** W1-01 is complete and tested on all three backends. W1-02 Step 1 (ADR) is recorded; Steps 2-6 (encoding, schema DSL, operators, tests) are not yet implemented — `Value::Array` still returns "array bind values are not supported yet" in all four encoders. W1-03 is not yet started: `SelectQuery::stream` still buffers internally and there is no `stream_unbuffered` or server-side cursor.
 
 ### W1-01 · Savepoints and nested transactions — **the single most valuable item in this plan**
 
@@ -249,6 +255,8 @@ Today only `count()` and `exists()`. There is no `sum`, `avg`, `min`, `max`, and
       on every builder is a stated product promise and cannot have holes.
 - [x] **Step 6.** Tests via `both_dbs!` plus snapshot tests of emitted SQL.
 
+> **Current status (2026-08-14):** W2-01 is complete. Aggregate expression types, `SelectQuery::aggregate`, `group_by`/`having`, per-model aggregate result structs, and `.to_sql()` are implemented and tested on all three backends.
+
 ### W2-02 · Explicit joins
 
 *Drizzle's `leftJoin`/`innerJoin`; Diesel's join DSL. 5 days.*
@@ -328,7 +336,7 @@ None of these exist. They are what "SQL-like typed builder" means to a Drizzle u
 - [x] **Step 3.** Path-based filtering and ordering on JSON fields.
 - [x] **Step 4.** Update `KnownLimitations.md` and the comparison table.
 
-> **Current status (2026-08-16):** W2-04 is complete. `JsonPath`,
+> **Current status (2026-08-14):** W2-04 is complete. `JsonPath`,
 > `JsonPathSegment`, `JsonColumn`, `JsonFilterOp`, and `JsonSet` are implemented
 > in `crates/runtime/src/json.rs`. `Column<M, serde_json::Value>` gains `get`,
 > `get_text`, `at`, `contains`, `has_key`, and `jsonb_set`. `JsonColumn` supports
@@ -380,11 +388,15 @@ in two hops" is why the table says `Partial`.
 - [x] **Step 5.** Upgraded `docs/FeaturesMasterComparison.md` many-to-many entry to
       `Yes` with footnote [^2] explaining the explicit-join-model design.
 
+> **Current status (2026-08-14):** W2-05 is complete. The `@relation(through: ...)` DSL, codegen `tags_query`/`tags` helpers, `IncludeMany` runtime, and `M2mWrite` attach/set/detach are implemented and covered by `crates/runtime/tests/m2m.rs` on all three backends.
+
 ### W2-06 · Nested writes and relation mutations
 
 *Prisma's nested `create`/`connect`/`disconnect`. 3 days.*
 
 `InsertQuery::with_related` already exists, which is the hard half.
+
+> **Current status (2026-08-14):** Not started beyond the existing `InsertQuery::with_related`. `UpdateQuery` and `DeleteQuery` have no nested-relation support; no `connect`/`disconnect`/`set` helpers are generated; cascade behaviour is unimplemented.
 
 - [ ] **Step 1.** Extend to nested update and nested delete.
 - [ ] **Step 2.** `connect` / `disconnect` / `set` for existing rows by primary key.
@@ -396,6 +408,8 @@ in two hops" is why the table says `Partial`.
 ### W2-07 · Prepared statements and `$dynamic` building
 
 *Drizzle's `.prepare()` and dynamic query mode. 2 days.*
+
+> **Current status (2026-08-14):** Not started. `SelectQuery` has no `prepare()` method; dynamic conditional building still requires chaining `filter` calls manually.
 
 - [ ] **Step 1.** `SelectQuery::prepare()` producing a reusable compiled statement with
       named placeholders, skipping SQL construction per call. The benchmark already shows
@@ -415,6 +429,8 @@ builder or relations sections that a competitor scores `Yes` on; every new build
 # W3 — Operability
 
 **Goal:** close the largest remaining scoring gap (dimension 3, 7.5/10). **Effort:** ~1 week.
+
+> **Current status (2026-08-14):** All five items are complete. `metrics.rs`, `slow_query.rs`, `docs/Operations.md`, connection lifecycle tracing, and concurrency benchmarks are in place. Verified `cargo clippy -p ruprizzle --features sqlite-rusqlite` with no warnings.
 
 - [x] **W3-01 · Metrics export behind a `metrics` feature.** Query count, duration
       histogram, error count by `Error::kind()`, pool size/idle/waiters, migration
@@ -443,6 +459,8 @@ sqlite-rusqlite --bench concurrency` all pass.
 # W4 — Assurance
 
 **Goal:** convert "correct" into "correct over time and under attack." **Effort:** ~1.5 weeks.
+
+> **Current status (2026-08-14):** All six items are complete. `cargo-fuzz` targets, 48-hour soak report (`docs/SoakReport.md`), feature-combination CI matrix, parser panic audit, mutation testing baseline (`docs/MutationTesting.md`), and the `is_postgres` cleanup are all in place.
 
 - [x] **W4-01 · Fuzz the parser and the migration splitter.** `cargo-fuzz` targets for
       `crates/parser` (schema DSL) and `crates/migrate` (SQL splitter). These are the two
@@ -478,6 +496,8 @@ as a baseline (`docs/MutationTesting.md`).
 **Goal:** the features that decide adoption rather than evaluation. **Effort:** ~2.5 weeks.
 May run in parallel with W2 — different crates.
 
+> **Current status (2026-08-14):** W5-01 through W5-06 are complete. W5-07 (LSP) is not implemented — only the TextMate grammar in `editor/ruprizzle.tmLanguage.json` exists; the editor README states the language server is planned for the 0.2 release.
+
 - [x] **W5-01 · MySQL / MariaDB dialect.** Added the `mysql`/`mariadb` providers, a native SQLx MySQL pool and transaction path, MySQL/MariaDB DDL/DML generation, portable insert follow-up lookup, the three-backend `both_dbs!` harness, conformance coverage, Docker Compose, and CI service/matrix jobs. **5 days.**
 - [x] **W5-02 · Introspection (`ruprizzle db pull`).** Added provider-aware table, column, key, index, and foreign-key introspection for SQLite, PostgreSQL, and MySQL/MariaDB, plus deterministic schema rendering that preserves datasource/generator settings and round-trips through the parser. **4 days.**
 - [x] **W5-03 · Seeding.** `ruprizzle db seed` now accepts declarative `seeds/main.json`, maps values through the schema's scalar types, upserts by primary key for idempotence, and applies the complete document in one transaction across SQLite, PostgreSQL, and MySQL/MariaDB. Legacy `seeds/main.sql` remains supported. **2 days.**
@@ -503,6 +523,8 @@ alone or emptied.
 # W6 — Release engineering & the 1.0 commitment
 
 **Goal:** make the semver promise real. **Effort:** ~1 week.
+
+> **Current status (2026-08-14):** Not started. No public-api review, stability policy, `cargo-semver-checks` wiring, release candidates, final assessment, or migration guide exists yet.
 
 - [ ] **W6-01 · Public API review.** Enumerate the full public surface of every crate with
       `cargo-public-api`. Everything we are not prepared to support for years gets
@@ -611,6 +633,8 @@ footnotes rather than left looking like a gap.
 ## 7. Definition of done
 
 `1.0.0` ships when all of these hold:
+
+> **Current status (2026-08-14):** None of the definition-of-done items are met. Open work is W1-02/03, W2-06/07, W5-07, and all of W6. The `1.0.0-rc.1` feedback window cannot begin until W6 is complete.
 
 - [ ] Every workstream exit gate met.
 - [ ] Production readiness ≥ 92/100, with correctness and operability each ≥ 9.0.
