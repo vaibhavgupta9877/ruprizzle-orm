@@ -72,6 +72,78 @@ impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow> for 
         })
     }
 }
+impl ::ruprizzle::JoinSide<AnyRow> for Product {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, AnyRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            sku: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2 + __offset)?,
+            price: ::ruprizzle::decode::text_idx(row, 3 + __offset)?,
+            items: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::postgres::PgRow> for Product {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::postgres::PgRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            sku: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2 + __offset)?,
+            price: ::ruprizzle::decode::text_idx(row, 3 + __offset)?,
+            items: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::sqlite::SqliteRow> for Product {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            sku: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2 + __offset)?,
+            price: ::ruprizzle::decode::text_idx(row, 3 + __offset)?,
+            items: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::mysql::MySqlRow> for Product {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            sku: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2 + __offset)?,
+            price: ::ruprizzle::decode::text_idx(row, 3 + __offset)?,
+            items: ::ruprizzle::Related::default(),
+        })
+    }
+}
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for Product {
     fn from_rusqlite_row(

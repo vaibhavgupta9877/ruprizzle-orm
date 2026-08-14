@@ -358,9 +358,11 @@ in two hops" is why the table says `Partial`.
       that pairs the two list sides and the two join-model foreign keys. Dialect/migrate ignore
       `ManyToMany` for FK constraint generation; parser snapshot and example tests cover valid and
       invalid schemas.
-- [ ] **Step 2.** Codegen a direct `post.tags` accessor that hides the two-hop traversal
+- [x] **Step 2.** Codegen a direct `post.tags` accessor that hides the two-hop traversal
       while the join model stays visible and queryable — keeping ADR-006's honesty and
-      Prisma's ergonomics.
+      Prisma's ergonomics. `emit_relation_helper` now emits a `SelectQuery` helper for
+      `ManyToMany` list relations that translates `Tag.id IN (SELECT tag_id FROM post_tags
+      WHERE post_id = ?)`, and `emit_relation_filter_helpers` skips them for now.
 - [ ] **Step 3.** `include` support through the relation, preserving the bounded
       one-query-per-level batching guarantee.
 - [ ] **Step 4.** Nested writes: attach/detach/set semantics on the join rows.

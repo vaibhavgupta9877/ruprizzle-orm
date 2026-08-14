@@ -14,7 +14,7 @@ use ruprizzle_codegen::generate_all;
 use ruprizzle_core::ir::Provider;
 use ruprizzle_parser::parse;
 
-const EXAMPLES: [&str; 4] = ["blog", "ecommerce", "saas-tenant", "minimal"];
+const EXAMPLES: [&str; 5] = ["blog", "ecommerce", "m2m", "saas-tenant", "minimal"];
 
 #[test]
 #[ignore = "runs cargo check over 12 generated crates; expensive (CI: --ignored)"]

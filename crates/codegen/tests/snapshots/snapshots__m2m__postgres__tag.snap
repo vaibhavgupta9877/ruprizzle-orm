@@ -10,57 +10,52 @@ use ::ruprizzle::types::{Decimal, Uuid};
 use ::ruprizzle::serde_json::Value as JsonValue;
 use ::ruprizzle::Related;
 use ::ruprizzle::Column;
-///A user of the application.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(crate = "::ruprizzle::serde")]
-pub struct User {
-    pub id: Uuid,
-    pub email: String,
-    pub name: Option<String>,
+pub struct Tag {
+    pub id: i32,
+    #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
+    pub posts: ::ruprizzle::Related<Vec<super::post::Post>>,
 }
-impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for User {
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Tag {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::text_idx(row, 0)?,
-            email: ::ruprizzle::decode::direct_idx(row, 1)?,
-            name: ::ruprizzle::decode::direct_opt_idx(row, 2)?,
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            posts: ::ruprizzle::Related::default(),
         })
     }
 }
-impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow> for User {
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow> for Tag {
     fn from_row(
         row: &'r ::ruprizzle::sqlx::postgres::PgRow,
     ) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::text_idx(row, 0)?,
-            email: ::ruprizzle::decode::direct_idx(row, 1)?,
-            name: ::ruprizzle::decode::direct_opt_idx(row, 2)?,
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            posts: ::ruprizzle::Related::default(),
         })
     }
 }
-impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow> for User {
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow> for Tag {
     fn from_row(
         row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow,
     ) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::text_idx(row, 0)?,
-            email: ::ruprizzle::decode::direct_idx(row, 1)?,
-            name: ::ruprizzle::decode::direct_opt_idx(row, 2)?,
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            posts: ::ruprizzle::Related::default(),
         })
     }
 }
-impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow> for User {
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow> for Tag {
     fn from_row(
         row: &'r ::ruprizzle::sqlx::mysql::MySqlRow,
     ) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::text_idx(row, 0)?,
-            email: ::ruprizzle::decode::direct_idx(row, 1)?,
-            name: ::ruprizzle::decode::direct_opt_idx(row, 2)?,
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            posts: ::ruprizzle::Related::default(),
         })
     }
 }
-impl ::ruprizzle::JoinSide<AnyRow> for User {
+impl ::ruprizzle::JoinSide<AnyRow> for Tag {
     fn from_offset_row<'r>(
         __offset_row: &::ruprizzle::OffsetRow<'r, AnyRow>,
     ) -> Result<Self, ::ruprizzle::sqlx::Error>
@@ -70,13 +65,12 @@ impl ::ruprizzle::JoinSide<AnyRow> for User {
         let row = __offset_row.as_raw();
         let __offset = __offset_row.offset();
         Ok(Self {
-            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
-            email: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
-            name: ::ruprizzle::decode::direct_opt_idx(row, 2 + __offset)?,
+            id: ::ruprizzle::decode::direct_idx(row, 0 + __offset)?,
+            posts: ::ruprizzle::Related::default(),
         })
     }
 }
-impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::postgres::PgRow> for User {
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::postgres::PgRow> for Tag {
     fn from_offset_row<'r>(
         __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::postgres::PgRow>,
     ) -> Result<Self, ::ruprizzle::sqlx::Error>
@@ -86,13 +80,12 @@ impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::postgres::PgRow> for User {
         let row = __offset_row.as_raw();
         let __offset = __offset_row.offset();
         Ok(Self {
-            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
-            email: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
-            name: ::ruprizzle::decode::direct_opt_idx(row, 2 + __offset)?,
+            id: ::ruprizzle::decode::direct_idx(row, 0 + __offset)?,
+            posts: ::ruprizzle::Related::default(),
         })
     }
 }
-impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::sqlite::SqliteRow> for User {
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::sqlite::SqliteRow> for Tag {
     fn from_offset_row<'r>(
         __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>,
     ) -> Result<Self, ::ruprizzle::sqlx::Error>
@@ -102,13 +95,12 @@ impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::sqlite::SqliteRow> for User {
         let row = __offset_row.as_raw();
         let __offset = __offset_row.offset();
         Ok(Self {
-            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
-            email: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
-            name: ::ruprizzle::decode::direct_opt_idx(row, 2 + __offset)?,
+            id: ::ruprizzle::decode::direct_idx(row, 0 + __offset)?,
+            posts: ::ruprizzle::Related::default(),
         })
     }
 }
-impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::mysql::MySqlRow> for User {
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::mysql::MySqlRow> for Tag {
     fn from_offset_row<'r>(
         __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>,
     ) -> Result<Self, ::ruprizzle::sqlx::Error>
@@ -118,51 +110,47 @@ impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::mysql::MySqlRow> for User {
         let row = __offset_row.as_raw();
         let __offset = __offset_row.offset();
         Ok(Self {
-            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
-            email: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
-            name: ::ruprizzle::decode::direct_opt_idx(row, 2 + __offset)?,
+            id: ::ruprizzle::decode::direct_idx(row, 0 + __offset)?,
+            posts: ::ruprizzle::Related::default(),
         })
     }
 }
 #[cfg(feature = "sqlite-rusqlite")]
-impl ::ruprizzle::rusqlite::FromRusqliteRow for User {
+impl ::ruprizzle::rusqlite::FromRusqliteRow for Tag {
     fn from_rusqlite_row(
         row: &::ruprizzle::rusqlite::RusqliteRow,
     ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: ::ruprizzle::rusqlite::parse::<Uuid>(row, 0)?,
-            email: ::ruprizzle::rusqlite::get_text(row, 1)?,
-            name: ::ruprizzle::rusqlite::get_text_opt(row, 2)?,
+            id: ::ruprizzle::rusqlite::get_i64(row, 0)?
+                .try_into()
+                .map_err(|e: std::num::TryFromIntError| {
+                    ::ruprizzle::Error::Message(
+                        format!("cannot decode i32 from column {}: {}", 0, e),
+                    )
+                })?,
+            posts: ::ruprizzle::Related::default(),
         })
     }
 }
 #[cfg(feature = "sqlite-rusqlite")]
-impl ::ruprizzle::rusqlite::FromOwnedRow for User {
+impl ::ruprizzle::rusqlite::FromOwnedRow for Tag {
     fn from_owned_row(
         row: &::ruprizzle::rusqlite::Row,
     ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: ::ruprizzle::rusqlite::Row::get::<Uuid>(row, 0)?,
-            email: ::ruprizzle::rusqlite::Row::get::<String>(row, 1)?,
-            name: ::ruprizzle::rusqlite::Row::get::<Option<String>>(row, 2)?,
+            id: ::ruprizzle::rusqlite::Row::get::<i32>(row, 0)?,
+            posts: ::ruprizzle::Related::default(),
         })
     }
 }
 #[cfg(feature = "postgres-tokio-postgres")]
-impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for User {
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for Tag {
     fn from_tokio_postgres_row(
         row: &::ruprizzle::tokio_postgres::Row,
     ) -> Result<Self, ::ruprizzle::Error> {
         Ok(Self {
-            id: row
-                .try_get::<usize, Uuid>(0)
-                .map_err(::ruprizzle::Error::TokioPostgres)?,
-            email: row
-                .try_get::<usize, String>(1)
-                .map_err(::ruprizzle::Error::TokioPostgres)?,
-            name: row
-                .try_get::<usize, Option<String>>(2)
-                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            id: row.try_get::<usize, i32>(0).map_err(::ruprizzle::Error::TokioPostgres)?,
+            posts: ::ruprizzle::Related::default(),
         })
     }
 }
@@ -170,23 +158,15 @@ impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for User {
 /// are `Option` so the database can fill them in.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(crate = "::ruprizzle::serde")]
-pub struct UserInsert {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub id: Option<Uuid>,
-    pub email: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+pub struct TagInsert {
+    pub id: i32,
 }
 /// Update shape: every field is `Option` to support explicit nulls.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(crate = "::ruprizzle::serde")]
-pub struct UserUpdate {
+pub struct TagUpdate {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub id: Option<Uuid>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub email: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<Option<String>>,
+    pub id: Option<i32>,
 }
 #[derive(
     Debug,
@@ -198,30 +178,30 @@ pub struct UserUpdate {
     ::ruprizzle::sqlx::FromRow
 )]
 #[serde(crate = "::ruprizzle::serde", default)]
-pub struct UserAggregate {
+pub struct TagAggregate {
     #[sqlx(default)]
     pub count_id: Option<i64>,
     #[sqlx(default)]
     pub count_distinct_id: Option<i64>,
     #[sqlx(default)]
-    pub count_email: Option<i64>,
+    pub sum_id: Option<i64>,
     #[sqlx(default)]
-    pub count_distinct_email: Option<i64>,
+    pub avg_id: Option<f64>,
     #[sqlx(default)]
-    pub count_name: Option<i64>,
+    pub min_id: Option<i32>,
     #[sqlx(default)]
-    pub count_distinct_name: Option<i64>,
+    pub max_id: Option<i32>,
 }
 #[derive(Debug, Clone, Default)]
-pub struct UserAggregateInput {
-    pub count_id: Option<::ruprizzle::Aggregate<User, i64>>,
-    pub count_distinct_id: Option<::ruprizzle::Aggregate<User, i64>>,
-    pub count_email: Option<::ruprizzle::Aggregate<User, i64>>,
-    pub count_distinct_email: Option<::ruprizzle::Aggregate<User, i64>>,
-    pub count_name: Option<::ruprizzle::Aggregate<User, i64>>,
-    pub count_distinct_name: Option<::ruprizzle::Aggregate<User, i64>>,
+pub struct TagAggregateInput {
+    pub count_id: Option<::ruprizzle::Aggregate<Tag, i64>>,
+    pub count_distinct_id: Option<::ruprizzle::Aggregate<Tag, i64>>,
+    pub sum_id: Option<::ruprizzle::Aggregate<Tag, Option<i64>>>,
+    pub avg_id: Option<::ruprizzle::Aggregate<Tag, Option<f64>>>,
+    pub min_id: Option<::ruprizzle::Aggregate<Tag, Option<i32>>>,
+    pub max_id: Option<::ruprizzle::Aggregate<Tag, Option<i32>>>,
 }
-impl ::ruprizzle::AggregateSet<User, UserAggregate> for UserAggregateInput {
+impl ::ruprizzle::AggregateSet<Tag, TagAggregate> for TagAggregateInput {
     fn push_entries(&self, out: &mut Vec<::ruprizzle::AggregateEntry>) {
         use ::ruprizzle::IntoAggregate;
         if let Some(a) = &self.count_id {
@@ -230,22 +210,22 @@ impl ::ruprizzle::AggregateSet<User, UserAggregate> for UserAggregateInput {
         if let Some(a) = &self.count_distinct_id {
             a.push_entry(out);
         }
-        if let Some(a) = &self.count_email {
+        if let Some(a) = &self.sum_id {
             a.push_entry(out);
         }
-        if let Some(a) = &self.count_distinct_email {
+        if let Some(a) = &self.avg_id {
             a.push_entry(out);
         }
-        if let Some(a) = &self.count_name {
+        if let Some(a) = &self.min_id {
             a.push_entry(out);
         }
-        if let Some(a) = &self.count_distinct_name {
+        if let Some(a) = &self.max_id {
             a.push_entry(out);
         }
     }
 }
 #[cfg(feature = "sqlite-rusqlite")]
-impl ::ruprizzle::rusqlite::FromRusqliteRow for UserAggregate {
+impl ::ruprizzle::rusqlite::FromRusqliteRow for TagAggregate {
     fn from_rusqlite_row(
         row: &::ruprizzle::rusqlite::RusqliteRow,
     ) -> Result<Self, ::ruprizzle::Error> {
@@ -259,25 +239,22 @@ impl ::ruprizzle::rusqlite::FromRusqliteRow for UserAggregate {
             Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
             Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
         };
-        let count_email = match row.get::<_, Option<i64>>("count_email") {
+        let sum_id = match row.get::<_, Option<i64>>("sum_id") {
             Ok(v) => v,
             Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
             Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
         };
-        let count_distinct_email = match row
-            .get::<_, Option<i64>>("count_distinct_email")
-        {
+        let avg_id = match row.get::<_, Option<f64>>("avg_id") {
             Ok(v) => v,
             Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
             Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
         };
-        let count_name = match row.get::<_, Option<i64>>("count_name") {
+        let min_id = match row.get::<_, Option<i32>>("min_id") {
             Ok(v) => v,
             Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
             Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
         };
-        let count_distinct_name = match row.get::<_, Option<i64>>("count_distinct_name")
-        {
+        let max_id = match row.get::<_, Option<i32>>("max_id") {
             Ok(v) => v,
             Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
             Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
@@ -285,37 +262,36 @@ impl ::ruprizzle::rusqlite::FromRusqliteRow for UserAggregate {
         Ok(Self {
             count_id,
             count_distinct_id,
-            count_email,
-            count_distinct_email,
-            count_name,
-            count_distinct_name,
+            sum_id,
+            avg_id,
+            min_id,
+            max_id,
         })
     }
 }
 #[cfg(feature = "sqlite-rusqlite")]
-impl ::ruprizzle::rusqlite::FromOwnedRow for UserAggregate {
+impl ::ruprizzle::rusqlite::FromOwnedRow for TagAggregate {
     fn from_owned_row(
         row: &::ruprizzle::rusqlite::Row,
     ) -> Result<Self, ::ruprizzle::Error> {
         let count_id = row.get_by_name::<Option<i64>>("count_id")?;
         let count_distinct_id = row.get_by_name::<Option<i64>>("count_distinct_id")?;
-        let count_email = row.get_by_name::<Option<i64>>("count_email")?;
-        let count_distinct_email = row
-            .get_by_name::<Option<i64>>("count_distinct_email")?;
-        let count_name = row.get_by_name::<Option<i64>>("count_name")?;
-        let count_distinct_name = row.get_by_name::<Option<i64>>("count_distinct_name")?;
+        let sum_id = row.get_by_name::<Option<i64>>("sum_id")?;
+        let avg_id = row.get_by_name::<Option<f64>>("avg_id")?;
+        let min_id = row.get_by_name::<Option<i32>>("min_id")?;
+        let max_id = row.get_by_name::<Option<i32>>("max_id")?;
         Ok(Self {
             count_id,
             count_distinct_id,
-            count_email,
-            count_distinct_email,
-            count_name,
-            count_distinct_name,
+            sum_id,
+            avg_id,
+            min_id,
+            max_id,
         })
     }
 }
 #[cfg(feature = "postgres-tokio-postgres")]
-impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for UserAggregate {
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for TagAggregate {
     fn from_tokio_postgres_row(
         row: &::ruprizzle::tokio_postgres::Row,
     ) -> Result<Self, ::ruprizzle::Error> {
@@ -337,46 +313,30 @@ impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for UserAggregate {
             }
             None => None,
         };
-        let count_email = match row
-            .columns()
-            .iter()
-            .position(|c| c.name() == "count_email")
-        {
+        let sum_id = match row.columns().iter().position(|c| c.name() == "sum_id") {
             Some(idx) => {
                 row.try_get::<usize, Option<i64>>(idx)
                     .map_err(::ruprizzle::Error::TokioPostgres)?
             }
             None => None,
         };
-        let count_distinct_email = match row
-            .columns()
-            .iter()
-            .position(|c| c.name() == "count_distinct_email")
-        {
+        let avg_id = match row.columns().iter().position(|c| c.name() == "avg_id") {
             Some(idx) => {
-                row.try_get::<usize, Option<i64>>(idx)
+                row.try_get::<usize, Option<f64>>(idx)
                     .map_err(::ruprizzle::Error::TokioPostgres)?
             }
             None => None,
         };
-        let count_name = match row
-            .columns()
-            .iter()
-            .position(|c| c.name() == "count_name")
-        {
+        let min_id = match row.columns().iter().position(|c| c.name() == "min_id") {
             Some(idx) => {
-                row.try_get::<usize, Option<i64>>(idx)
+                row.try_get::<usize, Option<i32>>(idx)
                     .map_err(::ruprizzle::Error::TokioPostgres)?
             }
             None => None,
         };
-        let count_distinct_name = match row
-            .columns()
-            .iter()
-            .position(|c| c.name() == "count_distinct_name")
-        {
+        let max_id = match row.columns().iter().position(|c| c.name() == "max_id") {
             Some(idx) => {
-                row.try_get::<usize, Option<i64>>(idx)
+                row.try_get::<usize, Option<i32>>(idx)
                     .map_err(::ruprizzle::Error::TokioPostgres)?
             }
             None => None,
@@ -384,67 +344,68 @@ impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for UserAggregate {
         Ok(Self {
             count_id,
             count_distinct_id,
-            count_email,
-            count_distinct_email,
-            count_name,
-            count_distinct_name,
+            sum_id,
+            avg_id,
+            min_id,
+            max_id,
         })
     }
 }
-impl ::ruprizzle::Model for User {
-    const TABLE: &'static str = "users";
+impl ::ruprizzle::Model for Tag {
+    const TABLE: &'static str = "tags";
     const PRIMARY_KEY: &'static str = "id";
-    const COLUMNS: &'static [&'static str] = &["id", "email", "name"];
+    const COLUMNS: &'static [&'static str] = &["id"];
 }
 /// Table name for this model.
-pub const TABLE: &str = "users";
-pub const ID: Column<User, Uuid> = Column::new("users", "id");
-pub const EMAIL: Column<User, String> = Column::new("users", "email");
-pub const NAME: Column<User, String> = Column::new("users", "name");
+pub const TABLE: &str = "tags";
+pub const ID: Column<Tag, i32> = Column::new("tags", "id");
+///Returns a query for the `posts` many-to-many relation.
+pub fn posts<'__a>(
+    __exec: &'__a dyn ::ruprizzle::Executor,
+    id: i32,
+) -> ::ruprizzle::SelectQuery<'__a, super::tag::Tag> {
+    let __subquery = ::ruprizzle::SelectQuery::new(__exec)
+        .filter(super::post_tag::POST_ID.eq(id))
+        .columns(super::post_tag::TAG_ID);
+    ::ruprizzle::SelectQuery::new(__exec).filter(super::tag::ID.in_subquery(__subquery))
+}
 /// Prisma-flavoured repository for `#model_name`.
 #[derive(Debug, Clone, Copy)]
-pub struct UserRepo<'a> {
+pub struct TagRepo<'a> {
     db: &'a super::Db,
 }
-impl<'a> UserRepo<'a> {
+impl<'a> TagRepo<'a> {
     /// Creates a new repository handle.
     pub(crate) fn new(db: &'a super::Db) -> Self {
         Self { db }
     }
     /// Start a `find_many` query.
-    pub fn find_many(&self) -> ::ruprizzle::SelectQuery<'a, User> {
+    pub fn find_many(&self) -> ::ruprizzle::SelectQuery<'a, Tag> {
         ::ruprizzle::SelectQuery::new(self.db.raw_pool())
     }
     /// Start an `insert` query.
-    pub fn create(&self, _data: UserInsert) -> ::ruprizzle::InsertQuery<'a, User> {
+    pub fn create(&self, _data: TagInsert) -> ::ruprizzle::InsertQuery<'a, Tag> {
         let mut insert = ::ruprizzle::InsertQuery::new(self.db.raw_pool());
-        insert = insert.set_optional(ID, _data.id);
-        insert = insert.set(EMAIL, _data.email);
-        insert = insert.set_optional(NAME, _data.name);
+        insert = insert.set(ID, _data.id);
         insert
     }
     /// Start a multi-row `insert` query.
     pub fn create_many(
         &self,
-        _data: Vec<UserInsert>,
-    ) -> ::ruprizzle::InsertManyQuery<'a, User> {
+        _data: Vec<TagInsert>,
+    ) -> ::ruprizzle::InsertManyQuery<'a, Tag> {
         let mut q = ::ruprizzle::InsertManyQuery::new(self.db.raw_pool());
         for _row in _data {
-            q = q
-                .row([
-                    ("id", ::ruprizzle::Encodable::to_value(&_row.id)),
-                    ("email", ::ruprizzle::Encodable::to_value(&_row.email)),
-                    ("name", ::ruprizzle::Encodable::to_value(&_row.name)),
-                ]);
+            q = q.row([("id", ::ruprizzle::Encodable::to_value(&_row.id))]);
         }
         q
     }
     /// Start an `update` query.
-    pub fn update(&self) -> ::ruprizzle::UpdateQuery<'a, User> {
+    pub fn update(&self) -> ::ruprizzle::UpdateQuery<'a, Tag> {
         ::ruprizzle::UpdateQuery::new(self.db.raw_pool())
     }
     /// Start a `delete` query.
-    pub fn delete(&self) -> ::ruprizzle::DeleteQuery<'a, User> {
+    pub fn delete(&self) -> ::ruprizzle::DeleteQuery<'a, Tag> {
         ::ruprizzle::DeleteQuery::new(self.db.raw_pool())
     }
 }

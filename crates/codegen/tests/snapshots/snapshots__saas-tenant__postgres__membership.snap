@@ -85,6 +85,86 @@ for Membership {
         })
     }
 }
+impl ::ruprizzle::JoinSide<AnyRow> for Membership {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, AnyRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            org_id: ::ruprizzle::decode::text_idx(row, 1 + __offset)?,
+            organisation: ::ruprizzle::Related::default(),
+            account_id: ::ruprizzle::decode::text_idx(row, 2 + __offset)?,
+            account: ::ruprizzle::Related::default(),
+            is_owner: ::ruprizzle::decode::boolean_idx(row, 3 + __offset)?,
+            updated_at: ::ruprizzle::decode::text_idx(row, 4 + __offset)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::postgres::PgRow> for Membership {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::postgres::PgRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            org_id: ::ruprizzle::decode::text_idx(row, 1 + __offset)?,
+            organisation: ::ruprizzle::Related::default(),
+            account_id: ::ruprizzle::decode::text_idx(row, 2 + __offset)?,
+            account: ::ruprizzle::Related::default(),
+            is_owner: ::ruprizzle::decode::boolean_idx(row, 3 + __offset)?,
+            updated_at: ::ruprizzle::decode::text_idx(row, 4 + __offset)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::sqlite::SqliteRow> for Membership {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            org_id: ::ruprizzle::decode::text_idx(row, 1 + __offset)?,
+            organisation: ::ruprizzle::Related::default(),
+            account_id: ::ruprizzle::decode::text_idx(row, 2 + __offset)?,
+            account: ::ruprizzle::Related::default(),
+            is_owner: ::ruprizzle::decode::boolean_idx(row, 3 + __offset)?,
+            updated_at: ::ruprizzle::decode::text_idx(row, 4 + __offset)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::mysql::MySqlRow> for Membership {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            org_id: ::ruprizzle::decode::text_idx(row, 1 + __offset)?,
+            organisation: ::ruprizzle::Related::default(),
+            account_id: ::ruprizzle::decode::text_idx(row, 2 + __offset)?,
+            account: ::ruprizzle::Related::default(),
+            is_owner: ::ruprizzle::decode::boolean_idx(row, 3 + __offset)?,
+            updated_at: ::ruprizzle::decode::text_idx(row, 4 + __offset)?,
+        })
+    }
+}
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for Membership {
     fn from_rusqlite_row(

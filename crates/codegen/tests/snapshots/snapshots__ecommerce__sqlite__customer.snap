@@ -73,6 +73,78 @@ for Customer {
         })
     }
 }
+impl ::ruprizzle::JoinSide<AnyRow> for Customer {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, AnyRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            email: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2 + __offset)?,
+            orders: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 3 + __offset)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::postgres::PgRow> for Customer {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::postgres::PgRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            email: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2 + __offset)?,
+            orders: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 3 + __offset)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::sqlite::SqliteRow> for Customer {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            email: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2 + __offset)?,
+            orders: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 3 + __offset)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::mysql::MySqlRow> for Customer {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            email: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2 + __offset)?,
+            orders: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 3 + __offset)?,
+        })
+    }
+}
 #[cfg(feature = "sqlite-rusqlite")]
 impl ::ruprizzle::rusqlite::FromRusqliteRow for Customer {
     fn from_rusqlite_row(

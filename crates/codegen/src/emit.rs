@@ -4,7 +4,9 @@ use std::collections::BTreeMap;
 
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
-use ruprizzle_core::ir::{EnumDef, Field, FieldKind, Model, Provider, ScalarType, Schema};
+use ruprizzle_core::ir::{
+    EnumDef, Field, FieldKind, Model, Provider, RelationKind, ResolvedRelation, ScalarType, Schema,
+};
 use ruprizzle_parser::naming;
 
 /// Generate all source files for a schema.
@@ -1598,6 +1600,10 @@ fn emit_relation_helper(schema: &Schema, model: &Model, field: &Field) -> Option
     let is_list = matches!(field.kind, FieldKind::List(_));
     let is_owner = model.name == rel.owner;
 
+    if rel.kind == RelationKind::ManyToMany {
+        return emit_many_to_many_query_helper(schema, model, field, rel);
+    }
+
     let (parent_name, child_name, parent_key_col, child_key_col) = if is_owner {
         (
             &rel.owner,
@@ -1697,6 +1703,79 @@ fn emit_relation_helper(schema: &Schema, model: &Model, field: &Field) -> Option
     })
 }
 
+fn emit_many_to_many_query_helper(
+    schema: &Schema,
+    _model: &Model,
+    field: &Field,
+    rel: &ResolvedRelation,
+) -> Option<TokenStream> {
+    let join_model = schema.models.get(rel.join_model.as_ref()?.as_str())?;
+    let owner_fk_field = join_model.fields.get(rel.join_owner_field.as_ref()?.as_str())?;
+    let target_fk_field = join_model.fields.get(rel.join_target_field.as_ref()?.as_str())?;
+
+    let owner_fk_rel = owner_fk_field.relation()?;
+    let target_fk_rel = target_fk_field.relation()?;
+
+    let owner_pk_name = owner_fk_rel.references.first()?;
+    let target_pk_name = target_fk_rel.references.first()?;
+
+    let owner_model = schema.models.get(rel.owner.as_str())?;
+    let target_model = schema.models.get(rel.target.as_str())?;
+
+    let owner_pk_field = owner_model.fields.get(owner_pk_name.as_str())?;
+    let target_pk_field = target_model.fields.get(target_pk_name.as_str())?;
+
+    if owner_pk_field.optional || target_pk_field.optional {
+        return None;
+    }
+
+    let owner_fk_col_field = join_model.fields.get(owner_fk_rel.fields.first()?.as_str())?;
+    let target_fk_col_field = join_model.fields.get(target_fk_rel.fields.first()?.as_str())?;
+
+    let key_type = rust_type_tokens(
+        schema,
+        rel.owner.as_str(),
+        owner_pk_field,
+        false,
+        true,
+    );
+
+    let helper_name = safe_field_ident(field.name.as_str());
+    let param_name = safe_field_ident(owner_pk_field.name.as_str());
+
+    let join_module = safe_module_name(join_model.name.as_str());
+    let join_module_ident = format_ident!("{}", join_module);
+    let target_module = safe_module_name(target_model.name.as_str());
+    let target_module_ident = format_ident!("{}", target_module);
+    let target_type = format_ident!("{}", target_model.name.as_str());
+
+    let owner_join_const = format_ident!(
+        "{}",
+        shouty_snake(owner_fk_col_field.name.as_str())
+    );
+    let target_join_const = format_ident!(
+        "{}",
+        shouty_snake(target_fk_col_field.name.as_str())
+    );
+    let target_pk_const = format_ident!("{}", shouty_snake(target_pk_field.name.as_str()));
+
+    let doc = format!("Returns a query for the `{}` many-to-many relation.", helper_name);
+
+    Some(quote! {
+        #[doc = #doc]
+        pub fn #helper_name<'__a>(
+            __exec: &'__a dyn ::ruprizzle::Executor,
+            #param_name: #key_type,
+        ) -> ::ruprizzle::SelectQuery<'__a, super::#target_module_ident::#target_type> {
+            let __subquery = ::ruprizzle::SelectQuery::new(__exec)
+                .filter(super::#join_module_ident::#owner_join_const.eq(#param_name))
+                .columns(super::#join_module_ident::#target_join_const);
+            ::ruprizzle::SelectQuery::new(__exec)
+                .filter(super::#target_module_ident::#target_pk_const.in_subquery(__subquery))
+        }
+    })
+}
+
 fn emit_relation_filter_helpers(
     schema: &Schema,
     model: &Model,
@@ -1714,6 +1793,9 @@ fn emit_relation_filter_helpers(
 
     let rel_index = rel_ref.resolved?;
     let rel = schema.relations.get(rel_index)?;
+    if rel.kind == RelationKind::ManyToMany {
+        return None;
+    }
     let is_owner = model.name == rel.owner;
 
     let (parent_table, parent_col, child, child_col) = if is_owner {
