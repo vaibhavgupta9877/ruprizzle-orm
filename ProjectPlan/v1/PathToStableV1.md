@@ -320,20 +320,26 @@ None of these exist. They are what "SQL-like typed builder" means to a Drizzle u
 
 - [x] **Step 1.** Postgres: `->`, `->>`, `#>`, `#>>`, `@>`, `?`, `jsonb_set`, exposed as
       typed methods on `Column<M, Json>`.
-- [ ] **Step 2.** SQLite: `json_extract` and friends. `KnownLimitations.md` says SQLite
-      `Json` is stored as text and cannot be queried — SQLite's JSON1 extension makes this
-      addressable, so either implement it or restate the limitation accurately.
+- [x] **Step 2.** SQLite/MySQL JSON operators: `json_extract`, `json_set`,
+      `json_type` on SQLite and `JSON_EXTRACT`, `JSON_UNQUOTE`,
+      `JSON_CONTAINS`, `JSON_CONTAINS_PATH`, `JSON_SET` on MySQL. SQLite
+      JSON containment is a partial key-existence approximation because JSON1
+      has no containment operator.
 - [ ] **Step 3.** Path-based filtering and ordering on JSON fields.
 - [ ] **Step 4.** Update `KnownLimitations.md` and the comparison table.
 
-> **Current status (2026-08-15):** W2-04 Step 1 is complete. `JsonPath`,
-> `JsonPathSegment`, `JsonColumn`, `JsonFilterOp`, and `JsonSet` are implemented in
-> `crates/runtime/src/json.rs`. `Column<M, serde_json::Value>` gains `get`,
-> `get_text`, `contains`, `has_key`, and `jsonb_set`. `JsonColumn` supports `eq`,
-> `ne`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `asc`, and `desc`. SQL
-> generation emits Postgres JSON/JSONB operators and `jsonb_set` in
-> `crates/runtime/src/compile.rs`. Unit tests pass for all operators and the
-> update helper. Steps 2–4 remain open.
+> **Current status (2026-08-15):** W2-04 Step 1 and Step 2 are complete.
+> `JsonPath`, `JsonPathSegment`, `JsonColumn`, `JsonFilterOp`, and `JsonSet`
+> are implemented in `crates/runtime/src/json.rs`. `Column<M, serde_json::Value>`
+> gains `get`, `get_text`, `contains`, `has_key`, and `jsonb_set`. `JsonColumn`
+> supports `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `asc`, and
+> `desc`. SQL generation in `crates/runtime/src/compile.rs` now emits
+> dialect-aware JSON: Postgres operators (`->`, `->>`, `#>`, `#>>`, `@>`, `?`,
+> `jsonb_set`), SQLite JSON1 (`json_extract`, `->>`, `json_type`, `json_set`),
+> and MySQL JSON (`JSON_EXTRACT`, `JSON_UNQUOTE`, `JSON_CONTAINS`,
+> `JSON_CONTAINS_PATH`, `JSON_SET`). `SetExpr::JsonbSet` was renamed to
+> `SetExpr::JsonSet`. Unit tests cover all three dialects. Steps 3–4 remain
+> open.
 
 ### W2-05 · Full many-to-many
 

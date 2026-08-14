@@ -719,8 +719,8 @@ pub(crate) enum SetExpr {
         /// The bound value.
         value: Value,
     },
-    /// Set a JSONB path with `jsonb_set`.
-    JsonbSet {
+    /// Set a JSON path with the dialect's JSON set function.
+    JsonSet {
         /// The column name.
         column: &'static str,
         /// The JSON path.
@@ -773,21 +773,41 @@ pub(crate) fn update_with_sets(
                 c.push_str(" = ");
                 c.push_bind(value.clone());
             }
-            SetExpr::JsonbSet { column, path, value } => {
+            SetExpr::JsonSet {
+                column,
+                path,
+                value,
+            } => {
                 c.push_quoted(column);
-                c.push_str(" = jsonb_set(");
-                c.push_quoted(column);
-                c.push_str(", ");
-                c.push_json_path_array(path);
-                if dialect.name() == "postgres" {
-                    c.push_str("::text[]");
+                match dialect.name() {
+                    "postgres" => {
+                        c.push_str(" = jsonb_set(");
+                        c.push_quoted(column);
+                        c.push_str(", ");
+                        c.push_json_path_array(path);
+                        c.push_str("::text[], ");
+                        c.push_bind(value.clone());
+                        c.push_str("::jsonb)");
+                    }
+                    "sqlite" => {
+                        c.push_str(" = json_set(");
+                        c.push_quoted(column);
+                        c.push_str(", '");
+                        c.push_json_path_sqlite_mysql(path);
+                        c.push_str("', ");
+                        c.push_bind(value.clone());
+                        c.push(')');
+                    }
+                    _ => {
+                        c.push_str(" = JSON_SET(");
+                        c.push_quoted(column);
+                        c.push_str(", '");
+                        c.push_json_path_sqlite_mysql(path);
+                        c.push_str("', ");
+                        c.push_bind(value.clone());
+                        c.push(')');
+                    }
                 }
-                c.push_str(", ");
-                c.push_bind(value.clone());
-                if dialect.name() == "postgres" {
-                    c.push_str("::jsonb");
-                }
-                c.push(')');
             }
         }
     }
@@ -952,7 +972,17 @@ impl<'d> Compiler<'d> {
         }
     }
 
+    /// Emit a JSON extraction expression for the current dialect.
     fn push_json_expr(&mut self, table: &str, column: &str, path: &JsonPath, text: bool) {
+        match self.dialect.name() {
+            "sqlite" => self.push_json_expr_sqlite(table, column, path, text),
+            "mysql" => self.push_json_expr_mysql(table, column, path, text),
+            _ => self.push_json_expr_postgres(table, column, path, text),
+        }
+    }
+
+    /// PostgreSQL JSON/JSONB operators: `->`, `->>`, `#>`, `#>>`.
+    fn push_json_expr_postgres(&mut self, table: &str, column: &str, path: &JsonPath, text: bool) {
         self.push_quoted(table);
         self.push('.');
         self.push_quoted(column);
@@ -990,20 +1020,198 @@ impl<'d> Compiler<'d> {
         self.push_json_path_array(path);
     }
 
-    fn push_json_path_array(&mut self, path: &JsonPath) {
+    /// SQLite JSON1: `json_extract(...)` for JSON, `column->>'$.path'` for text.
+    fn push_json_expr_sqlite(&mut self, table: &str, column: &str, path: &JsonPath, text: bool) {
+        if path.0.is_empty() {
+            self.push_quoted(table);
+            self.push('.');
+            self.push_quoted(column);
+            return;
+        }
+        if text {
+            self.push_quoted(table);
+            self.push('.');
+            self.push_quoted(column);
+            self.push_str("->>'");
+            self.push_json_path_sqlite_mysql(path);
+            self.push('\'');
+        } else {
+            self.push_str("json_extract(");
+            self.push_quoted(table);
+            self.push('.');
+            self.push_quoted(column);
+            self.push_str(", '");
+            self.push_json_path_sqlite_mysql(path);
+            self.push_str("')");
+        }
+    }
+
+    /// MySQL JSON functions: `JSON_EXTRACT(...)` for JSON,
+    /// `JSON_UNQUOTE(JSON_EXTRACT(...))` for text.
+    fn push_json_expr_mysql(&mut self, table: &str, column: &str, path: &JsonPath, text: bool) {
+        if path.0.is_empty() {
+            self.push_quoted(table);
+            self.push('.');
+            self.push_quoted(column);
+            return;
+        }
+        if text {
+            self.push_str("JSON_UNQUOTE(JSON_EXTRACT(");
+        } else {
+            self.push_str("JSON_EXTRACT(");
+        }
+        self.push_quoted(table);
+        self.push('.');
+        self.push_quoted(column);
+        self.push_str(", '");
+        self.push_json_path_sqlite_mysql(path);
         self.push('\'');
-        self.push('{');
-        for (i, seg) in path.0.iter().enumerate() {
-            if i > 0 {
-                self.push(',');
-            }
+        if text {
+            self.push_str("))");
+        } else {
+            self.push(')');
+        }
+    }
+
+    /// Emit a JSON path in SQLite/MySQL dot/bracket notation: `$.a.b[0]`.
+    fn push_json_path_sqlite_mysql(&mut self, path: &JsonPath) {
+        self.push_json_path_sqlite_mysql_with_key(path, None);
+    }
+
+    /// Emit a JSON path in dot/bracket notation with an optional extra key.
+    fn push_json_path_sqlite_mysql_with_key(&mut self, path: &JsonPath, extra: Option<&str>) {
+        self.push('$');
+        for seg in &path.0 {
             match seg {
-                JsonPathSegment::Key(k) => self.push_json_array_key(k),
-                JsonPathSegment::Index(n) => self.push_str(&n.to_string()),
+                JsonPathSegment::Key(k) => {
+                    self.push('.');
+                    self.push_json_path_key(k);
+                }
+                JsonPathSegment::Index(n) => {
+                    self.push('[');
+                    self.push_str(&n.to_string());
+                    self.push(']');
+                }
             }
         }
-        self.push('}');
-        self.push('\'');
+        if let Some(k) = extra {
+            self.push('.');
+            self.push_json_path_key(k);
+        }
+    }
+
+    /// Emit a JSON object key, quoting with double quotes when necessary.
+    fn push_json_path_key(&mut self, k: &str) {
+        let needs_quote = k.is_empty()
+            || !k
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            || !k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if needs_quote {
+            self.push('"');
+            for c in k.chars() {
+                if c == '\\' || c == '"' {
+                    self.push('\\');
+                }
+                self.push(c);
+            }
+            self.push('"');
+        } else {
+            self.push_str(k);
+        }
+    }
+
+    /// Emit a JSON containment predicate for the current dialect.
+    ///
+    /// SQLite JSON1 has no containment operator. For object candidates we fall
+    /// back to checking the existence of each top-level key; for other values we
+    /// check path existence. This is a partial, documented approximation.
+    fn push_json_contains(&mut self, table: &str, column: &str, path: &JsonPath, value: &Value) {
+        match self.dialect.name() {
+            "postgres" => {
+                self.push_json_expr(table, column, path, false);
+                self.push_str(" @> ");
+                self.push_bind(value.clone());
+                self.push_str("::jsonb");
+            }
+            "mysql" => {
+                self.push_str("JSON_CONTAINS(");
+                self.push_quoted(table);
+                self.push('.');
+                self.push_quoted(column);
+                self.push_str(", ");
+                self.push_bind(value.clone());
+                self.push_str(", '");
+                self.push_json_path_sqlite_mysql(path);
+                self.push_str("')");
+            }
+            _ => {
+                if let Value::Json(serde_json::Value::Object(map)) = value {
+                    if !map.is_empty() {
+                        self.push('(');
+                        for (i, (k, _)) in map.iter().enumerate() {
+                            if i > 0 {
+                                self.push_str(" AND ");
+                            }
+                            self.push_str("json_type(");
+                            self.push_quoted(table);
+                            self.push('.');
+                            self.push_quoted(column);
+                            self.push_str(", '");
+                            self.push_json_path_sqlite_mysql_with_key(path, Some(k.as_str()));
+                            self.push_str("') IS NOT NULL");
+                        }
+                        self.push(')');
+                        return;
+                    }
+                }
+                self.push_str("json_type(");
+                self.push_quoted(table);
+                self.push('.');
+                self.push_quoted(column);
+                self.push_str(", '");
+                self.push_json_path_sqlite_mysql(path);
+                self.push_str("') IS NOT NULL");
+            }
+        }
+    }
+
+    /// Emit a JSON key-existence predicate for the current dialect.
+    fn push_json_has_key(&mut self, table: &str, column: &str, path: &JsonPath, value: &Value) {
+        match self.dialect.name() {
+            "postgres" => {
+                self.push_json_expr(table, column, &JsonPath::default(), false);
+                self.push_str(" ? ");
+                self.push_bind(value.clone());
+            }
+            "mysql" => {
+                self.push_str("JSON_CONTAINS_PATH(");
+                self.push_quoted(table);
+                self.push('.');
+                self.push_quoted(column);
+                self.push_str(", 'one', '");
+                if let Value::Str(k) = value {
+                    self.push_json_path_sqlite_mysql_with_key(path, Some(k.as_ref()));
+                } else {
+                    self.push_json_path_sqlite_mysql(path);
+                }
+                self.push_str("')");
+            }
+            _ => {
+                self.push_str("json_type(");
+                self.push_quoted(table);
+                self.push('.');
+                self.push_quoted(column);
+                self.push_str(", '");
+                if let Value::Str(k) = value {
+                    self.push_json_path_sqlite_mysql_with_key(path, Some(k.as_ref()));
+                } else {
+                    self.push_json_path_sqlite_mysql(path);
+                }
+                self.push_str("') IS NOT NULL");
+            }
+        }
     }
 
     fn push_json_string_literal(&mut self, s: &str) {
@@ -1024,6 +1232,22 @@ impl<'d> Compiler<'d> {
             self.push(c);
         }
         self.push('"');
+    }
+
+    fn push_json_path_array(&mut self, path: &JsonPath) {
+        self.push('\'');
+        self.push('{');
+        for (i, seg) in path.0.iter().enumerate() {
+            if i > 0 {
+                self.push(',');
+            }
+            match seg {
+                JsonPathSegment::Key(k) => self.push_json_array_key(k),
+                JsonPathSegment::Index(n) => self.push_str(&n.to_string()),
+            }
+        }
+        self.push('}');
+        self.push('\'');
     }
 
     fn push_bind(&mut self, value: Value) {
@@ -1259,28 +1483,21 @@ impl<'d> Compiler<'d> {
                 text,
                 op,
                 value,
-            } => {
-                self.push_json_expr(table, column, path, *text);
-                match op {
-                    JsonFilterOp::Cmp(cmp) => {
-                        self.push(' ');
-                        self.push_op(*cmp);
-                        self.push(' ');
-                        self.push_bind(value.clone());
-                    }
-                    JsonFilterOp::Contains => {
-                        self.push_str(" @> ");
-                        self.push_bind(value.clone());
-                        if self.dialect.name() == "postgres" {
-                            self.push_str("::jsonb");
-                        }
-                    }
-                    JsonFilterOp::HasKey => {
-                        self.push_str(" ? ");
-                        self.push_bind(value.clone());
-                    }
+            } => match op {
+                JsonFilterOp::Cmp(cmp) => {
+                    self.push_json_expr(table, column, path, *text);
+                    self.push(' ');
+                    self.push_op(*cmp);
+                    self.push(' ');
+                    self.push_bind(value.clone());
                 }
-            }
+                JsonFilterOp::Contains => {
+                    self.push_json_contains(table, column, path, value);
+                }
+                JsonFilterOp::HasKey => {
+                    self.push_json_has_key(table, column, path, value);
+                }
+            },
         }
     }
 
@@ -2263,10 +2480,7 @@ mod tests {
     fn json_has_key_postgres() {
         let f = DATA.has_key("a");
         let c = select::<User>(pg(), "docs", &[], &f.node, &[], None, None, false);
-        assert_eq!(
-            c.sql,
-            r##"SELECT * FROM "docs" WHERE "docs"."data" ? $1"##
-        );
+        assert_eq!(c.sql, r##"SELECT * FROM "docs" WHERE "docs"."data" ? $1"##);
         assert_eq!(c.binds, vec![Value::Str("a".into())]);
     }
 
@@ -2278,7 +2492,10 @@ mod tests {
             c.sql,
             r##"SELECT * FROM "docs" WHERE "docs"."data"#>'{"a","b"}' = $1"##
         );
-        assert_eq!(c.binds, vec![Value::Json(serde_json::Value::Number(1.into()))]);
+        assert_eq!(
+            c.binds,
+            vec![Value::Json(serde_json::Value::Number(1.into()))]
+        );
     }
 
     #[test]
@@ -2300,23 +2517,150 @@ mod tests {
     }
 
     #[test]
-    fn jsonb_set_postgres() {
+    fn json_set_postgres() {
         let c = update_with_sets(
             pg(),
             "docs",
-            &[
-                SetExpr::JsonbSet {
-                    column: "data",
-                    path: JsonPath(vec![JsonPathSegment::Key("title")]),
-                    value: Value::Json(serde_json::Value::String("hello".into())),
-                },
-            ],
+            &[SetExpr::JsonSet {
+                column: "data",
+                path: JsonPath(vec![JsonPathSegment::Key("title")]),
+                value: Value::Json(serde_json::Value::String("hello".into())),
+            }],
             &FilterNode::And(vec![]),
             &[],
         );
         assert_eq!(
             c.sql,
             r##"UPDATE "docs" SET "data" = jsonb_set("data", '{"title"}'::text[], $1::jsonb)"##
+        );
+        assert_eq!(
+            c.binds,
+            vec![Value::Json(serde_json::Value::String("hello".into()))]
+        );
+    }
+
+    #[test]
+    fn json_get_sqlite() {
+        let f = DATA.get("title").eq("hello");
+        let c = select::<User>(sqlite(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM `docs` WHERE json_extract(`docs`.`data`, '$.title') = ?"##
+        );
+        assert_eq!(
+            c.binds,
+            vec![Value::Json(serde_json::Value::String("hello".into()))]
+        );
+    }
+
+    #[test]
+    fn json_get_text_sqlite() {
+        let f = DATA.get_text("title").eq("hello");
+        let c = select::<User>(sqlite(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM `docs` WHERE `docs`.`data`->>'$.title' = ?"##
+        );
+        assert_eq!(c.binds, vec![Value::Str("hello".into())]);
+    }
+
+    #[test]
+    fn json_get_mysql() {
+        let f = DATA.get("title").eq("hello");
+        let c = select::<User>(mysql(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM `docs` WHERE JSON_EXTRACT(`docs`.`data`, '$.title') = ?"##
+        );
+        assert_eq!(
+            c.binds,
+            vec![Value::Json(serde_json::Value::String("hello".into()))]
+        );
+    }
+
+    #[test]
+    fn json_get_text_mysql() {
+        let f = DATA.get_text("title").eq("hello");
+        let c = select::<User>(mysql(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM `docs` WHERE JSON_UNQUOTE(JSON_EXTRACT(`docs`.`data`, '$.title')) = ?"##
+        );
+        assert_eq!(c.binds, vec![Value::Str("hello".into())]);
+    }
+
+    #[test]
+    fn json_has_key_sqlite() {
+        let f = DATA.has_key("tags");
+        let c = select::<User>(sqlite(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM `docs` WHERE json_type(`docs`.`data`, '$.tags') IS NOT NULL"##
+        );
+        assert!(c.binds.is_empty());
+    }
+
+    #[test]
+    fn json_has_key_mysql() {
+        let f = DATA.has_key("tags");
+        let c = select::<User>(mysql(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM `docs` WHERE JSON_CONTAINS_PATH(`docs`.`data`, 'one', '$.tags')"##
+        );
+        assert!(c.binds.is_empty());
+    }
+
+    #[test]
+    fn json_contains_mysql() {
+        let f = DATA.contains(serde_json::json!({"a": 1}));
+        let c = select::<User>(mysql(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM `docs` WHERE JSON_CONTAINS(`docs`.`data`, ?, '$')"##
+        );
+        assert_eq!(c.binds, vec![Value::Json(serde_json::json!({"a": 1}))]);
+    }
+
+    #[test]
+    fn json_set_sqlite() {
+        let c = update_with_sets(
+            sqlite(),
+            "docs",
+            &[SetExpr::JsonSet {
+                column: "data",
+                path: JsonPath(vec![JsonPathSegment::Key("title")]),
+                value: Value::Json(serde_json::Value::String("hello".into())),
+            }],
+            &FilterNode::And(vec![]),
+            &[],
+        );
+        assert_eq!(
+            c.sql,
+            r##"UPDATE `docs` SET `data` = json_set(`data`, '$.title', ?)"##
+        );
+        assert_eq!(
+            c.binds,
+            vec![Value::Json(serde_json::Value::String("hello".into()))]
+        );
+    }
+
+    #[test]
+    fn json_set_mysql() {
+        let c = update_with_sets(
+            mysql(),
+            "docs",
+            &[SetExpr::JsonSet {
+                column: "data",
+                path: JsonPath(vec![JsonPathSegment::Key("title")]),
+                value: Value::Json(serde_json::Value::String("hello".into())),
+            }],
+            &FilterNode::And(vec![]),
+            &[],
+        );
+        assert_eq!(
+            c.sql,
+            r##"UPDATE `docs` SET `data` = JSON_SET(`data`, '$.title', ?)"##
         );
         assert_eq!(
             c.binds,

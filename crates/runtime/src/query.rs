@@ -13,8 +13,8 @@ use crate::compile::{
 use crate::executor::Executor;
 use crate::filter::{Cte, CteQuery, Filter, FilterNode};
 use crate::include::IncludeSet;
-use crate::json::JsonSet;
 use crate::join::{Join2, JoinKind, JoinOn, JoinSpec, LeftJoin2, Maybe};
+use crate::json::JsonSet;
 use crate::model::{Model, RowDecode};
 use crate::order::OrderBy;
 use crate::page::Page;
@@ -1486,9 +1486,9 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
         self
     }
 
-    /// Applies a `jsonb_set` expression.
+    /// Applies a JSON set expression.
     pub fn json_set(mut self, set: JsonSet) -> Self {
-        self.sets.push(SetExpr::JsonbSet {
+        self.sets.push(SetExpr::JsonSet {
             column: set.column,
             path: set.path,
             value: set.value,
@@ -1496,14 +1496,14 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
         self
     }
 
-    /// Convenience: set a single key inside a `jsonb` column.
+    /// Convenience: set a single key inside a JSON column.
     pub fn jsonb_set(
         self,
         col: Column<M, serde_json::Value>,
         key: &'static str,
         value: serde_json::Value,
     ) -> Self {
-        self.json_set(col.jsonb_set(key, value))
+        self.json_set(col.json_set(key, value))
     }
 
     /// Allows updating all rows. Without this, `exec` returns an error if no

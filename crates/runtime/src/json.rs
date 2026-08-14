@@ -260,7 +260,7 @@ impl<M, T> JsonColumn<M, T> {
     }
 }
 
-/// A `jsonb_set` update expression.
+/// A JSON set update expression.
 #[derive(Debug, Clone, PartialEq)]
 pub struct JsonSet {
     pub(crate) column: &'static str,

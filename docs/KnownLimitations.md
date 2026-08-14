@@ -14,8 +14,10 @@ whether the tool is right for your project.
 - **No LSP** yet; syntax highlighting is available as a TextMate grammar.
 - **`Decimal` on SQLite** is stored as text. If you need real decimal math on
   SQLite, use `String` and parse in application code.
-- **SQLite `Json`** is stored as text and cannot be queried with JSON
-  operators.
+- **SQLite `Json`** is stored as text, but the JSON1 extension is used for
+  `json_extract`, `json_type`, and `json_set`. JSON containment (`@>`) is only
+  a partial key-existence approximation because SQLite JSON1 has no containment
+  operator.
 - **Postgres arrays** cannot be used as bind values. `Value::Array` is rejected
   at runtime.
 - **Rich types through `sqlx::Any` are limited.** On SQLite, `Uuid`,

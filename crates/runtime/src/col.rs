@@ -342,13 +342,20 @@ impl<M> Column<M, serde_json::Value> {
         })
     }
 
-    /// Build a `jsonb_set` expression for this column and key.
-    pub fn jsonb_set(self, key: &'static str, value: serde_json::Value) -> JsonSet {
+    /// Build a JSON set expression for this column and key.
+    #[must_use]
+    pub fn json_set(self, key: &'static str, value: serde_json::Value) -> JsonSet {
         JsonSet {
             column: self.column,
             path: JsonPath(vec![JsonPathSegment::Key(key)]),
             value: value.to_value(),
         }
+    }
+
+    /// Build a JSON set expression for this column and key (Postgres naming).
+    #[must_use]
+    pub fn jsonb_set(self, key: &'static str, value: serde_json::Value) -> JsonSet {
+        self.json_set(key, value)
     }
 }
 
