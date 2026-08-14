@@ -51,3 +51,5 @@ on non-relation keys, and self-joins all need an explicit JOIN in the SQL.
 - Compile-time type safety for outer-join nullability (left/right/full).
 - SQLite users get a helpful error for right/full joins unless they target a
   backend that supports them.
+- See `docs/design/JoinResultDecoding.md` for the concrete decoding plan for
+  joined result sets.
