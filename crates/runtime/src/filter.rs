@@ -97,6 +97,47 @@ where
     }
 }
 
+/// A compiled subquery used by `EXISTS` / `NOT EXISTS` filters.
+///
+/// Unlike [`Subquery`], `EXISTS` does not care about the projection shape,
+/// so any [`SelectQuery`](crate::query::SelectQuery) can be converted into an `ExistsSubquery`.
+pub struct ExistsSubquery {
+    pub(crate) compiled: CompiledSql,
+}
+
+impl Clone for ExistsSubquery {
+    fn clone(&self) -> Self {
+        Self {
+            compiled: self.compiled.clone(),
+        }
+    }
+}
+
+impl std::fmt::Debug for ExistsSubquery {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExistsSubquery")
+            .field("compiled", &self.compiled)
+            .finish()
+    }
+}
+
+impl PartialEq for ExistsSubquery {
+    fn eq(&self, other: &Self) -> bool {
+        self.compiled == other.compiled
+    }
+}
+
+impl<'db, M, Out, I> From<SelectQuery<'db, M, Out, I>> for ExistsSubquery
+where
+    M: Model,
+{
+    fn from(query: SelectQuery<'db, M, Out, I>) -> Self {
+        Self {
+            compiled: query.to_sql(),
+        }
+    }
+}
+
 /// A predicate that is tied to a model `M`.
 pub struct Filter<M> {
     /// The root filter node.
@@ -151,6 +192,24 @@ impl<M> Filter<M> {
     #[must_use]
     pub fn raw(fragment: RawFragment) -> Self {
         Self::new(FilterNode::Raw(fragment))
+    }
+
+    /// `EXISTS (subquery)`.
+    #[must_use]
+    pub fn exists(subquery: impl Into<ExistsSubquery>) -> Self {
+        Self::new(FilterNode::ExistsSubquery {
+            subquery: subquery.into().compiled,
+            negated: false,
+        })
+    }
+
+    /// `NOT EXISTS (subquery)`.
+    #[must_use]
+    pub fn not_exists(subquery: impl Into<ExistsSubquery>) -> Self {
+        Self::new(FilterNode::ExistsSubquery {
+            subquery: subquery.into().compiled,
+            negated: true,
+        })
     }
 }
 
@@ -211,6 +270,11 @@ pub enum FilterNode {
         parent_table: &'static str,
         parent_col: &'static str,
         filter: Box<FilterNode>,
+        negated: bool,
+    },
+    /// Correlated `[NOT] EXISTS (<subquery>)`.
+    ExistsSubquery {
+        subquery: CompiledSql,
         negated: bool,
     },
     And(Vec<FilterNode>),

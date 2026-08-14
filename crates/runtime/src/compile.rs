@@ -965,6 +965,14 @@ impl<'d> Compiler<'d> {
                 }
                 self.push(')');
             }
+            FilterNode::ExistsSubquery { subquery, negated } => {
+                if *negated {
+                    self.push_str("NOT ");
+                }
+                self.push_str("EXISTS (");
+                self.push_subquery(subquery);
+                self.push(')');
+            }
             FilterNode::Raw(raw) => {
                 for (i, part) in raw.parts.iter().enumerate() {
                     self.push_str(part);
@@ -1000,6 +1008,7 @@ mod tests {
     use crate::value::Value;
     use ruprizzle_core::ir::Provider;
     use ruprizzle_dialect::dialect_for;
+    use std::borrow::Cow;
 
     macro_rules! unit_row_decode {
         ($t:ty) => {
@@ -1599,5 +1608,73 @@ mod tests {
                 Value::Str("First".into())
             ]
         );
+    }
+
+    #[test]
+    fn exists_subquery_postgres() {
+        let subquery = CompiledSql {
+            sql: Cow::Borrowed(
+                r#"SELECT "posts"."id" FROM "posts" WHERE "posts"."author_id" = "users"."id""#,
+            ),
+            binds: vec![],
+        };
+        let f = Filter::<User>::new(FilterNode::ExistsSubquery {
+            subquery,
+            negated: false,
+        });
+        let c = select::<User>(pg(), "users", &["id", "name"], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r#"SELECT "users"."id", "users"."name" FROM "users" WHERE EXISTS (SELECT "posts"."id" FROM "posts" WHERE "posts"."author_id" = "users"."id")"#
+        );
+        assert!(c.binds.is_empty());
+    }
+
+    #[test]
+    fn not_exists_subquery_sqlite() {
+        let subquery = CompiledSql {
+            sql: Cow::Borrowed(
+                r#"SELECT `posts`.`id` FROM `posts` WHERE `posts`.`author_id` = `users`.`id`"#,
+            ),
+            binds: vec![],
+        };
+        let f = Filter::<User>::new(FilterNode::ExistsSubquery {
+            subquery,
+            negated: true,
+        });
+        let c = select::<User>(sqlite(), "users", &["id", "name"], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r#"SELECT `users`.`id`, `users`.`name` FROM `users` WHERE NOT EXISTS (SELECT `posts`.`id` FROM `posts` WHERE `posts`.`author_id` = `users`.`id`)"#
+        );
+        assert!(c.binds.is_empty());
+    }
+
+    #[test]
+    fn exists_subquery_postgres_with_outer_binds() {
+        let subquery = CompiledSql {
+            sql: Cow::Borrowed(
+                r#"SELECT "posts"."id" FROM "posts" WHERE "posts"."author_id" = "users"."id" AND "posts"."published" = $1"#,
+            ),
+            binds: vec![Value::Bool(true)],
+        };
+        let f = Filter::<User>::new(FilterNode::And(vec![
+            FilterNode::Cmp {
+                table: "users",
+                column: "age",
+                op: CmpOp::Gt,
+                value: Value::I32(30),
+            },
+            FilterNode::ExistsSubquery {
+                subquery,
+                negated: false,
+            },
+        ]));
+        let c = select::<User>(pg(), "users", &["id", "name"], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r#"SELECT "users"."id", "users"."name" FROM "users" WHERE ("users"."age" > $1 AND EXISTS (SELECT "posts"."id" FROM "posts" WHERE "posts"."author_id" = "users"."id" AND "posts"."published" = $2))"#
+        );
+        assert_eq!(c.binds, vec![Value::I32(30), Value::Bool(true)]);
     }
 }

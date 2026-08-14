@@ -289,7 +289,7 @@ None of these exist. They are what "SQL-like typed builder" means to a Drizzle u
 `FeaturesMasterComparison.md` rates our query style as exactly that.
 
 - [x] **Step 1.** Subqueries in filters: `User::id.in_subquery(Post::query().columns(Post::author_id))`.
-- [ ] **Step 2.** Correlated `EXISTS` / `NOT EXISTS` subqueries.
+- [x] **Step 2.** Correlated `EXISTS` / `NOT EXISTS` subqueries.
 - [ ] **Step 3.** CTEs: `Query::with("name", subquery)` emitting `WITH … AS (…)`, including
       the `RECURSIVE` form — recursive CTEs are the standard answer to tree/hierarchy
       queries and self-referential relations are already a supported feature.
@@ -300,10 +300,12 @@ None of these exist. They are what "SQL-like typed builder" means to a Drizzle u
       return a clear compile-time or construction-time error rather than emitting SQL that
       fails at the server. Document in `docs/DialectNotes.md`.
 
-> **Current status (2026-08-14):** W2-03 Step 1 is complete. `Subquery<T>`,
-> `Column::in_subquery` / `not_in_subquery`, and `FilterNode::InSubquery` are implemented
-> with dialect-aware placeholder offset for Postgres and `?` passthrough for SQLite/MySQL.
-> Unit tests in `compile.rs` and `both_dbs!` integration tests in `subqueries.rs` pass.
+> **Current status (2026-08-14):** W2-03 Step 1 and Step 2 are complete. `Subquery<T>`,
+> `Column::in_subquery` / `not_in_subquery`, `FilterNode::InSubquery`, `ExistsSubquery`,
+> `Column::correlated_to`, `Filter::exists` / `not_exists`, and `FilterNode::ExistsSubquery`
+> are implemented with dialect-aware placeholder offset for Postgres and `?` passthrough
+> for SQLite/MySQL. Unit tests in `compile.rs` and `both_dbs!` integration tests in
+> `subqueries.rs` and `exists.rs` pass.
 
 ### W2-04 · JSON operators
 

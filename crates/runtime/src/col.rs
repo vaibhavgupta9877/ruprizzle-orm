@@ -95,6 +95,18 @@ impl<M, T> Column<M, T> {
             negated: true,
         })
     }
+
+    /// Correlate this column to an outer query's column (`inner_col = outer_col`).
+    #[must_use]
+    pub fn correlated_to<J>(self, other: Column<J, T>) -> Filter<M> {
+        Filter::new(FilterNode::ColumnCmp {
+            left_table: self.table,
+            left_col: self.column,
+            op: CmpOp::Eq,
+            right_table: other.table,
+            right_col: other.column,
+        })
+    }
 }
 
 impl<M, T: Encodable> Column<M, T> {
