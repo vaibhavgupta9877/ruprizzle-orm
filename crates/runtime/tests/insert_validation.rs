@@ -19,6 +19,20 @@ impl Model for Task {
     const TABLE: &'static str = "tasks";
 }
 
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Task {
+    fn from_rusqlite_row(_: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
+        Ok(Task::default())
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Task {
+    fn from_owned_row(_: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Task::default())
+    }
+}
+
 const NAME: Column<Task, String> = Column::new("tasks", "name");
 
 struct SetChildren;

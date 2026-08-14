@@ -86,6 +86,18 @@ impl Pool {
         }
     }
 
+    /// Connections currently waiting for a checkout.
+    ///
+    /// `sqlx` pools do not expose this count; they report `0`.
+    #[must_use]
+    pub fn num_waiters(&self) -> usize {
+        match self {
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(p) => p.num_waiters(),
+            _ => 0,
+        }
+    }
+
     /// Returns the pool's connection options, if this is the `Any` backend.
     ///
     /// This is exposed for tests that verify `PoolConfig` propagation.
@@ -180,6 +192,7 @@ impl Pool {
 
     /// Closes the pool and waits for all connections to finish.
     pub async fn close(&self) {
+        tracing::info!(target: "ruprizzle::connection", event = "disconnect", "pool closing");
         match self {
             Pool::Any(p) => p.close().await,
             Pool::Postgres(p) => p.close().await,
@@ -317,6 +330,11 @@ pub struct PoolConfig {
     /// table. `None` disables fast-path include loading entirely and always uses
     /// chunked `IN`. Defaults to `100_000`.
     pub full_table_include_limit: Option<u64>,
+    /// Duration above which a query emits a `WARN` event with the SQL shape and
+    /// bind count. `None` disables slow-query warnings.
+    ///
+    /// This is a process-wide setting; the last `connect_with` call wins.
+    pub slow_query_threshold: Option<Duration>,
 }
 
 impl Default for PoolConfig {
@@ -331,6 +349,7 @@ impl Default for PoolConfig {
             reset_on_recycle: false,
             row_buffer_size: 1024,
             full_table_include_limit: Some(100_000),
+            slow_query_threshold: None,
         }
     }
 }
@@ -355,9 +374,17 @@ pub async fn connect(url: &str) -> Result<Pool, crate::Error> {
 /// Returns an error if the URL cannot be parsed or the connection fails.
 pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate::Error> {
     crate::executor::set_full_table_include_limit(config.full_table_include_limit);
+    crate::executor::set_slow_query_threshold(config.slow_query_threshold);
     sqlx::any::install_default_drivers();
 
     let scheme = url.split(':').next().unwrap_or("");
+
+    tracing::info!(
+        target: "ruprizzle::connection",
+        event = "connect",
+        scheme,
+        "connecting to database"
+    );
     match scheme {
         "postgres" | "postgresql" => {
             #[cfg(feature = "postgres-tokio-postgres")]
@@ -376,6 +403,17 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
                 .idle_timeout(config.idle_timeout)
                 .max_lifetime(config.max_lifetime)
                 .test_before_acquire(config.test_before_acquire)
+                .after_connect(|_conn, _meta| {
+                    Box::pin(async move {
+                        tracing::info!(
+                            target: "ruprizzle::connection",
+                            event = "connect",
+                            backend = "postgres",
+                            "sqlx connection opened"
+                        );
+                        Ok(())
+                    })
+                })
                 .connect(url)
                 .await
                 .map_err(crate::Error::Sqlx)?;
@@ -409,6 +447,17 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
                 .idle_timeout(config.idle_timeout)
                 .max_lifetime(config.max_lifetime)
                 .test_before_acquire(config.test_before_acquire)
+                .after_connect(|_conn, _meta| {
+                    Box::pin(async move {
+                        tracing::info!(
+                            target: "ruprizzle::connection",
+                            event = "connect",
+                            backend = "sqlite",
+                            "sqlx connection opened"
+                        );
+                        Ok(())
+                    })
+                })
                 .connect_with(connect_opts)
                 .await
                 .map_err(crate::Error::Sqlx)?;
@@ -422,6 +471,17 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
                 .idle_timeout(config.idle_timeout)
                 .max_lifetime(config.max_lifetime)
                 .test_before_acquire(config.test_before_acquire)
+                .after_connect(|_conn, _meta| {
+                    Box::pin(async move {
+                        tracing::info!(
+                            target: "ruprizzle::connection",
+                            event = "connect",
+                            backend = "any",
+                            "sqlx connection opened"
+                        );
+                        Ok(())
+                    })
+                })
                 .connect(url)
                 .await
                 .map_err(crate::Error::Sqlx)?;
@@ -440,6 +500,8 @@ pub struct PoolStats {
     pub idle: usize,
     /// Connections currently checked out.
     pub in_use: usize,
+    /// Connections waiting to be checked out.
+    pub waiters: usize,
 }
 
 /// Samples the current pool saturation.
@@ -447,11 +509,32 @@ pub struct PoolStats {
 pub fn stats(pool: &Pool) -> PoolStats {
     let size = pool.size();
     let idle = pool.num_idle();
+    let waiters = pool.num_waiters();
     PoolStats {
         size,
         idle,
         in_use: (size as usize).saturating_sub(idle),
+        waiters,
     }
+}
+
+/// Emits pool saturation as `metrics` gauges.
+///
+/// This can be called by users with a `metrics` recorder installed to update
+/// the current pool snapshot. When the `metrics` feature is disabled it is a
+/// no-op and simply returns the sampled stats.
+#[must_use]
+pub fn report_metrics(pool: &Pool) -> PoolStats {
+    let s = stats(pool);
+    #[cfg(feature = "metrics")]
+    {
+        use crate::metrics::{POOL_IDLE, POOL_IN_USE, POOL_SIZE, POOL_WAITERS, gauge};
+        gauge(POOL_SIZE, s.size as f64);
+        gauge(POOL_IDLE, s.idle as f64);
+        gauge(POOL_IN_USE, s.in_use as f64);
+        gauge(POOL_WAITERS, s.waiters as f64);
+    }
+    s
 }
 
 /// Checks database reachability for readiness probes.

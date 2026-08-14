@@ -15,6 +15,7 @@ categories  = ["database"]
 
 [features]
 sqlite-rusqlite = ["ruprizzle/sqlite-rusqlite"]
+metrics = ["ruprizzle/metrics"]
 
 [dependencies]
 ruprizzle         = { workspace = true }

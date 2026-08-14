@@ -60,6 +60,13 @@ impl TokioPostgresPool {
                 reason: e.to_string(),
             })?;
 
+        tracing::info!(
+            target: "ruprizzle::connection",
+            event = "connect",
+            backend = "tokio-postgres",
+            "tokio-postgres pool opened"
+        );
+
         // Apply the ruprizzle pool settings to the manager.
         //
         // `Clean` is the only method that scrubs session state, and it is not
@@ -109,6 +116,12 @@ impl TokioPostgresPool {
     #[must_use]
     pub fn num_idle(&self) -> usize {
         self.inner.status().available
+    }
+
+    /// Connections currently waiting for a checkout.
+    #[must_use]
+    pub fn num_waiters(&self) -> usize {
+        self.inner.status().waiting
     }
 
     /// Fetch all rows from `sql` with `binds`.
@@ -456,6 +469,9 @@ fn strip_driver_param(url: &str) -> (bool, String) {
 fn tokio_postgres_pool_error(e: deadpool_postgres::PoolError) -> Error {
     match e {
         deadpool_postgres::PoolError::Backend(e) => Error::from(e),
+        deadpool_postgres::PoolError::Timeout(_) => Error::AcquireTimeout {
+            reason: e.to_string(),
+        },
         _ => Error::ConnectionFailure {
             reason: e.to_string(),
         },

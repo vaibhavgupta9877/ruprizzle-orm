@@ -356,24 +356,27 @@ builder or relations sections that a competitor scores `Yes` on; every new build
 
 **Goal:** close the largest remaining scoring gap (dimension 3, 7.5/10). **Effort:** ~1 week.
 
-- [ ] **W3-01 · Metrics export behind a `metrics` feature.** Query count, duration
+- [x] **W3-01 · Metrics export behind a `metrics` feature.** Query count, duration
       histogram, error count by `Error::kind()`, pool size/idle/waiters, migration
       application count and duration. Emit via the `metrics` crate facade so users pick
       Prometheus or OTel rather than us picking for them. **2 days.** *(finding #5)*
-- [ ] **W3-02 · Slow-query threshold event.** A configurable duration above which a query
+- [x] **W3-02 · Slow-query threshold event.** A configurable duration above which a query
       emits `WARN` with the SQL *shape* — bind counts, never values. The existing PII
       discipline in `error_redaction.rs` is the standard to hold. **0.5 day.**
-- [ ] **W3-03 · `docs/Operations.md`.** What each span means, what to alert on, how to read
+- [x] **W3-03 · `docs/Operations.md`.** What each span means, what to alert on, how to read
       `PoolStats`, how to interpret saturation, what to do when `ping` fails, and a worked
       example dashboard. The assessment has called this out for two passes. **1 day.**
-- [ ] **W3-04 · Connection lifecycle events.** Trace connect, disconnect, acquire-timeout,
+- [x] **W3-04 · Connection lifecycle events.** Trace connect, disconnect, acquire-timeout,
       and reconnect. Today a pool that is thrashing is invisible.  **0.5 day.**
-- [ ] **W3-05 · Concurrency and throughput benchmarks.** The axis the current Criterion
+- [x] **W3-05 · Concurrency and throughput benchmarks.** The axis the current Criterion
       suite does not cover: queries/sec against pool size, tail latency under contention,
       behaviour at pool exhaustion. **2 days.**
 
-**Exit gate:** dimension 3 rescored ≥ 9.0; `docs/Operations.md` published; a working
-Prometheus scrape demonstrated in an example.
+**Exit gate:** dimension 3 rescored ≥ 9.0; `docs/Operations.md` published; Prometheus/OTel
+scrape documented in `docs/Operations.md`; connection lifecycle, slow-query, and query metrics
+covered by tests; `cargo fmt --check`, `cargo clippy -p ruprizzle --features sqlite-rusqlite`,
+`cargo test -p ruprizzle --features sqlite-rusqlite`, and `cargo bench -p ruprizzle --features
+sqlite-rusqlite --bench concurrency` all pass.
 
 ---
 
