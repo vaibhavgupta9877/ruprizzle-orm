@@ -1,5 +1,6 @@
 //! Query builders.
 
+use std::borrow::Cow;
 use std::marker::PhantomData;
 
 use crate::Error;
@@ -10,7 +11,7 @@ use crate::compile::{
     update, upsert,
 };
 use crate::executor::Executor;
-use crate::filter::{Filter, FilterNode};
+use crate::filter::{Cte, CteQuery, Filter, FilterNode};
 use crate::include::IncludeSet;
 use crate::join::{Join2, JoinKind, JoinOn, JoinSpec, LeftJoin2, Maybe};
 use crate::model::{Model, RowDecode};
@@ -35,6 +36,7 @@ pub struct SelectQuery<'db, M: Model, Out = M, I = ()> {
     limit: Option<u64>,
     offset: Option<u64>,
     distinct: bool,
+    ctes: Vec<Cte>,
     includes: I,
     join: Option<JoinSpec>,
     _out: PhantomData<fn() -> Out>,
@@ -58,6 +60,7 @@ where
             limit: None,
             offset: None,
             distinct: false,
+            ctes: Vec::new(),
             includes: (),
             join: None,
             _out: PhantomData,
@@ -126,8 +129,53 @@ where
         }
     }
 
+    /// Adds a non-recursive common table expression (CTE).
+    ///
+    /// `query` can be any [`SelectQuery`]; it is compiled and emitted as
+    /// `WITH <name> AS (...)`.
+    #[must_use]
+    pub fn with<Q: Into<CteQuery>>(mut self, name: &'static str, query: Q) -> Self {
+        self.ctes.push(Cte::new(name, query.into().compiled));
+        self
+    }
+
+    /// Adds a recursive common table expression (CTE).
+    ///
+    /// The body is `(anchor) UNION ALL (recursive)`, with placeholders
+    /// renumbered across the union. The CTE is emitted as
+    /// `WITH RECURSIVE <name> AS (...)`.
+    #[must_use]
+    pub fn with_recursive<A: Into<CteQuery>, R: Into<CteQuery>>(
+        mut self,
+        name: &'static str,
+        anchor: A,
+        recursive: R,
+    ) -> Self {
+        let anchor = anchor.into().compiled;
+        let recursive = recursive.into().compiled.renumbered(anchor.binds.len());
+        let mut binds = anchor.binds.clone();
+        binds.extend(recursive.binds.clone());
+        let sql = format!(
+            "({}) UNION ALL ({})",
+            anchor.sql.as_ref(),
+            recursive.sql.as_ref()
+        );
+        self.ctes.push(Cte {
+            name,
+            compiled: CompiledSql {
+                sql: Cow::Owned(sql),
+                binds,
+            },
+            recursive: true,
+        });
+        self
+    }
+
     /// Adds an inner join to another model.
-    pub fn inner_join<J: Model>(self, on: impl Into<JoinOn>) -> SelectQuery<'db, M, Join2<M, J>, I> {
+    pub fn inner_join<J: Model>(
+        self,
+        on: impl Into<JoinOn>,
+    ) -> SelectQuery<'db, M, Join2<M, J>, I> {
         self.join_with::<J, Join2<M, J>>(JoinKind::Inner, None, on)
     }
 
@@ -212,6 +260,7 @@ where
             limit: self.limit,
             offset: self.offset,
             distinct: self.distinct,
+            ctes: self.ctes,
             includes: self.includes,
             join: Some(JoinSpec {
                 kind,
@@ -245,6 +294,7 @@ where
             order: self.order,
             limit: self.limit,
             offset: self.offset,
+            ctes: self.ctes,
             _out: PhantomData,
         }
     }
@@ -272,6 +322,7 @@ where
             limit: self.limit,
             offset: self.offset,
             distinct: self.distinct,
+            ctes: self.ctes,
             includes: include,
             join: self.join,
             _out: PhantomData,
@@ -288,6 +339,7 @@ where
             limit: self.limit,
             offset: self.offset,
             distinct: self.distinct,
+            ctes: self.ctes,
             includes: (),
             join: None,
             _out: PhantomData,
@@ -297,7 +349,8 @@ where
     /// Returns `true` when this query is known to load every row of the model's
     /// table with no filter, limit, offset or distinct.
     pub(crate) fn is_full_table(&self) -> bool {
-        self.limit.is_none()
+        self.ctes.is_empty()
+            && self.limit.is_none()
             && self.offset.is_none()
             && !self.distinct
             && matches!(
@@ -309,7 +362,7 @@ where
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> CompiledSql {
         let dialect = self.exec.dialect();
-        if let Some(ref join) = self.join {
+        let main = if let Some(ref join) = self.join {
             join_select_with_columns::<M>(
                 dialect,
                 M::TABLE,
@@ -336,7 +389,8 @@ where
                 self.offset,
                 self.distinct,
             )
-        }
+        };
+        crate::compile::with_cte_prefix(dialect, &self.ctes, main)
     }
 
     /// Returns the number of rows the query would return.
@@ -350,6 +404,7 @@ where
     pub async fn count(self) -> Result<i64, Error> {
         let dialect = self.exec.dialect();
         let compiled = crate::compile::count::<M>(dialect, M::TABLE, &self.filter.node);
+        let compiled = crate::compile::with_cte_prefix(dialect, &self.ctes, compiled);
 
         #[cfg(feature = "sqlite-rusqlite")]
         let mut counts: Vec<(i64,)> = if let Some(pool) = self.exec.as_rusqlite() {
@@ -390,6 +445,7 @@ where
     pub async fn exists(self) -> Result<bool, Error> {
         let dialect = self.exec.dialect();
         let compiled = crate::compile::exists::<M>(dialect, M::TABLE, &self.filter.node);
+        let compiled = crate::compile::with_cte_prefix(dialect, &self.ctes, compiled);
 
         #[cfg(feature = "sqlite-rusqlite")]
         {
@@ -1311,6 +1367,7 @@ where
             order: self.inner.order,
             limit: self.inner.limit,
             offset: self.inner.offset,
+            ctes: self.inner.ctes,
             _out: PhantomData,
         }
     }
@@ -1332,6 +1389,7 @@ pub struct AggregateQuery<'db, M: Model, R: RowDecode> {
     order: Vec<OrderBy<M>>,
     limit: Option<u64>,
     offset: Option<u64>,
+    ctes: Vec<Cte>,
     _out: PhantomData<fn() -> R>,
 }
 
@@ -1382,7 +1440,7 @@ where
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> CompiledSql {
         let dialect = self.exec.dialect();
-        crate::compile::aggregate_select::<M>(
+        let main = crate::compile::aggregate_select::<M>(
             dialect,
             M::TABLE,
             &self.aggregates,
@@ -1392,7 +1450,8 @@ where
             &self.order,
             self.limit,
             self.offset,
-        )
+        );
+        crate::compile::with_cte_prefix(dialect, &self.ctes, main)
     }
 
     /// Executes the query and returns all matching aggregate rows.

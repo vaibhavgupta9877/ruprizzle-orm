@@ -138,6 +138,59 @@ where
     }
 }
 
+/// A compiled common table expression (CTE).
+///
+/// Stored inside a [`SelectQuery`](crate::query::SelectQuery) and emitted as
+/// `WITH ... AS (...)` or `WITH RECURSIVE ... AS (...)` when the query is
+/// compiled.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Cte {
+    /// The CTE name.
+    pub name: &'static str,
+    /// The compiled body.
+    pub compiled: CompiledSql,
+    /// Whether this CTE is recursive.
+    pub recursive: bool,
+}
+
+impl Cte {
+    /// Creates a new non-recursive CTE.
+    #[must_use]
+    pub fn new(name: &'static str, compiled: CompiledSql) -> Self {
+        Self {
+            name,
+            compiled,
+            recursive: false,
+        }
+    }
+}
+
+/// A compiled query that can be used as the body of a CTE.
+///
+/// This is a thin wrapper around [`CompiledSql`] so that
+/// [`SelectQuery::with`](crate::query::SelectQuery::with) and
+/// [`SelectQuery::with_recursive`](crate::query::SelectQuery::with_recursive)
+/// can accept anything that converts into it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CteQuery {
+    pub(crate) compiled: CompiledSql,
+}
+
+impl CteQuery {
+    pub(crate) fn new(compiled: CompiledSql) -> Self {
+        Self { compiled }
+    }
+}
+
+impl<'db, M, Out, I> From<SelectQuery<'db, M, Out, I>> for CteQuery
+where
+    M: Model,
+{
+    fn from(query: SelectQuery<'db, M, Out, I>) -> Self {
+        Self::new(query.to_sql())
+    }
+}
+
 /// A predicate that is tied to a model `M`.
 pub struct Filter<M> {
     /// The root filter node.

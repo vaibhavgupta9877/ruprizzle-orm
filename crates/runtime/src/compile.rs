@@ -5,11 +5,12 @@
 //! identifiers and produce the correct parameter markers.
 
 use std::borrow::Cow;
+use std::fmt::Write as _;
 
 use ruprizzle_dialect::{DbDialect, dialect_for};
 
 use crate::aggregate::{AggregateEntry, AggregateKind};
-use crate::filter::{CmpOp, FilterNode};
+use crate::filter::{CmpOp, Cte, FilterNode};
 use crate::join::JoinKind;
 use crate::model::Model;
 use crate::order::OrderBy;
@@ -22,6 +23,46 @@ pub struct CompiledSql {
     pub sql: Cow<'static, str>,
     /// The values bound to the placeholders, in order.
     pub binds: Vec<Value>,
+}
+
+impl CompiledSql {
+    /// Returns a copy of this SQL with every `$n` placeholder shifted by `offset`.
+    ///
+    /// This is used when a compiled subquery is embedded in a larger statement
+    /// and its placeholders must continue the outer statement's numbering.
+    /// `?`-style placeholders are left unchanged because they are not numbered.
+    #[must_use]
+    pub fn renumbered(&self, offset: usize) -> Self {
+        if offset == 0 || self.binds.is_empty() || !self.sql.contains('$') {
+            return self.clone();
+        }
+        let mut sql = String::with_capacity(self.sql.len());
+        let bytes = self.sql.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'$' {
+                let mut j = i + 1;
+                while j < bytes.len() && bytes[j].is_ascii_digit() {
+                    j += 1;
+                }
+                if j > i + 1 {
+                    let n = std::str::from_utf8(&bytes[i + 1..j])
+                        .unwrap()
+                        .parse::<usize>()
+                        .unwrap();
+                    let _ = write!(sql, "${}", n + offset);
+                    i = j;
+                    continue;
+                }
+            }
+            sql.push(bytes[i] as char);
+            i += 1;
+        }
+        Self {
+            sql: Cow::Owned(sql),
+            binds: self.binds.clone(),
+        }
+    }
 }
 
 /// Compile a `SELECT` for `M`.
@@ -89,6 +130,52 @@ pub fn select<M: Model>(
     }
 
     c.finish()
+}
+
+/// Prepends a `WITH` (or `WITH RECURSIVE`) clause to `main` using `ctes`.
+///
+/// Placeholders are renumbered so that the CTE binds come first and the main
+/// query's placeholders follow. For `?`-style dialects the SQL is concatenated
+/// unchanged and the binds are appended in order.
+pub(crate) fn with_cte_prefix(
+    dialect: &dyn DbDialect,
+    ctes: &[Cte],
+    main: CompiledSql,
+) -> CompiledSql {
+    if ctes.is_empty() {
+        return main;
+    }
+    let recursive = ctes.iter().any(|c| c.recursive);
+    let mut binds = Vec::with_capacity(
+        ctes.iter().map(|c| c.compiled.binds.len()).sum::<usize>() + main.binds.len(),
+    );
+    let mut parts = Vec::with_capacity(ctes.len());
+    for cte in ctes {
+        let shifted = cte.compiled.renumbered(binds.len());
+        binds.extend(shifted.binds);
+        parts.push(format!(
+            "{} AS ({})",
+            dialect.quote_ident(cte.name),
+            shifted.sql.as_ref()
+        ));
+    }
+    let main_shifted = main.renumbered(binds.len());
+    binds.extend(main_shifted.binds);
+    let keyword = if recursive {
+        "WITH RECURSIVE "
+    } else {
+        "WITH "
+    };
+    let sql = format!(
+        "{}{} {}",
+        keyword,
+        parts.join(", "),
+        main_shifted.sql.as_ref()
+    );
+    CompiledSql {
+        sql: Cow::Owned(sql),
+        binds,
+    }
 }
 
 /// Compile a `SELECT` for a join between `M` and `J`.
@@ -1003,8 +1090,11 @@ impl<'d> Compiler<'d> {
 mod tests {
     use super::*;
     use crate::col::Column;
+    use crate::error::Error;
+    use crate::executor::{BoxRowStream, Executor, RawRow, RowBatch};
     use crate::filter::{Filter, RawFragment, all, any};
     use crate::order::OrderBy;
+    use crate::query::SelectQuery;
     use crate::value::Value;
     use ruprizzle_core::ir::Provider;
     use ruprizzle_dialect::dialect_for;
@@ -1107,7 +1197,22 @@ mod tests {
 
     const EMPLOYEE_ID: Column<SelfJoinUser, i64> = Column::new("employees", "id");
     const MANAGER_ID: Column<SelfJoinUser, i64> = Column::new("employees", "manager_id");
+    const EMPLOYEE_NAME: Column<SelfJoinUser, String> = Column::new("employees", "name");
     const MANAGER_ID_AS_M: Column<SelfJoinUser, i64> = EMPLOYEE_ID.aliased("m");
+
+    #[derive(Default)]
+    struct Reports;
+    impl Model for Reports {
+        const TABLE: &'static str = "reports";
+        const PRIMARY_KEY: &'static str = "id";
+        const COLUMNS: &'static [&'static str] = &["id", "name", "manager_id"];
+    }
+    unit_row_decode!(Reports);
+
+    const REPORTS_MANAGER_ID: Column<Reports, i64> = Column::new("reports", "manager_id");
+
+    const NAME: Column<User, String> = Column::new("users", "name");
+    const ROLE: Column<User, String> = Column::new("users", "role");
 
     fn pg() -> &'static dyn DbDialect {
         dialect_for(Provider::Postgres)
@@ -1622,7 +1727,16 @@ mod tests {
             subquery,
             negated: false,
         });
-        let c = select::<User>(pg(), "users", &["id", "name"], &f.node, &[], None, None, false);
+        let c = select::<User>(
+            pg(),
+            "users",
+            &["id", "name"],
+            &f.node,
+            &[],
+            None,
+            None,
+            false,
+        );
         assert_eq!(
             c.sql,
             r#"SELECT "users"."id", "users"."name" FROM "users" WHERE EXISTS (SELECT "posts"."id" FROM "posts" WHERE "posts"."author_id" = "users"."id")"#
@@ -1642,7 +1756,16 @@ mod tests {
             subquery,
             negated: true,
         });
-        let c = select::<User>(sqlite(), "users", &["id", "name"], &f.node, &[], None, None, false);
+        let c = select::<User>(
+            sqlite(),
+            "users",
+            &["id", "name"],
+            &f.node,
+            &[],
+            None,
+            None,
+            false,
+        );
         assert_eq!(
             c.sql,
             r#"SELECT `users`.`id`, `users`.`name` FROM `users` WHERE NOT EXISTS (SELECT `posts`.`id` FROM `posts` WHERE `posts`.`author_id` = `users`.`id`)"#
@@ -1670,11 +1793,103 @@ mod tests {
                 negated: false,
             },
         ]));
-        let c = select::<User>(pg(), "users", &["id", "name"], &f.node, &[], None, None, false);
+        let c = select::<User>(
+            pg(),
+            "users",
+            &["id", "name"],
+            &f.node,
+            &[],
+            None,
+            None,
+            false,
+        );
         assert_eq!(
             c.sql,
             r#"SELECT "users"."id", "users"."name" FROM "users" WHERE ("users"."age" > $1 AND EXISTS (SELECT "posts"."id" FROM "posts" WHERE "posts"."author_id" = "users"."id" AND "posts"."published" = $2))"#
         );
         assert_eq!(c.binds, vec![Value::I32(30), Value::Bool(true)]);
+    }
+
+    struct NoopExecutor(&'static dyn DbDialect);
+
+    impl Executor for NoopExecutor {
+        fn dialect(&self) -> &dyn DbDialect {
+            self.0
+        }
+
+        fn fetch_all_raw(
+            &self,
+            _sql: Cow<'static, str>,
+            _binds: Vec<Value>,
+        ) -> crate::BoxFuture<'_, Result<RowBatch, Error>> {
+            Box::pin(async { Ok(RowBatch::Any(Vec::new())) })
+        }
+
+        fn execute_raw(
+            &self,
+            _sql: Cow<'static, str>,
+            _binds: Vec<Value>,
+        ) -> crate::BoxFuture<'_, Result<u64, Error>> {
+            Box::pin(async { Ok(0) })
+        }
+
+        fn stream_raw(&self, _sql: Cow<'static, str>, _binds: Vec<Value>) -> BoxRowStream<'_> {
+            Box::pin(futures_util::stream::empty::<Result<RawRow, Error>>())
+        }
+    }
+
+    #[test]
+    fn cte_postgres() {
+        let exec = NoopExecutor(pg());
+        let body = SelectQuery::<User>::new(&exec)
+            .filter(ROLE.eq("manager"))
+            .columns(ID);
+        let q = SelectQuery::<User>::new(&exec)
+            .with("managers", body)
+            .columns((ID, NAME));
+        let c = q.to_sql();
+        assert_eq!(
+            c.sql,
+            r#"WITH "managers" AS (SELECT "users"."id" FROM "users" WHERE "users"."role" = $1) SELECT "users"."id", "users"."name" FROM "users""#
+        );
+        assert_eq!(c.binds, vec![Value::Str("manager".into())]);
+    }
+
+    #[test]
+    fn cte_sqlite() {
+        let exec = NoopExecutor(sqlite());
+        let body = SelectQuery::<User>::new(&exec)
+            .filter(ROLE.eq("manager"))
+            .columns(ID);
+        let q = SelectQuery::<User>::new(&exec)
+            .with("managers", body)
+            .columns((ID, NAME));
+        let c = q.to_sql();
+        assert_eq!(
+            c.sql,
+            r#"WITH `managers` AS (SELECT `users`.`id` FROM `users` WHERE `users`.`role` = ?) SELECT `users`.`id`, `users`.`name` FROM `users`"#
+        );
+        assert_eq!(c.binds, vec![Value::Str("manager".into())]);
+    }
+
+    #[test]
+    fn recursive_cte_postgres() {
+        let exec = NoopExecutor(pg());
+        let anchor = SelectQuery::<SelfJoinUser>::new(&exec).filter(MANAGER_ID.eq(1));
+        let recursive = SelectQuery::<SelfJoinUser>::new(&exec).filter(
+            Filter::<SelfJoinUser>::exists(
+                SelectQuery::<Reports>::new(&exec)
+                    .filter(REPORTS_MANAGER_ID.correlated_to(EMPLOYEE_ID)),
+            )
+            .and(EMPLOYEE_NAME.eq("x")),
+        );
+        let q = SelectQuery::<Reports>::new(&exec).with_recursive("reports", anchor, recursive);
+        let c = q.to_sql();
+        assert!(c.sql.starts_with(r#"WITH RECURSIVE "reports" AS ("#));
+        assert!(c.sql.contains("UNION ALL"));
+        assert!(c.sql.ends_with(
+            r#"SELECT "reports"."id", "reports"."name", "reports"."manager_id" FROM "reports""#
+        ));
+        assert_eq!(c.binds, vec![Value::I64(1), Value::Str("x".into())]);
     }
 }

@@ -290,7 +290,7 @@ None of these exist. They are what "SQL-like typed builder" means to a Drizzle u
 
 - [x] **Step 1.** Subqueries in filters: `User::id.in_subquery(Post::query().columns(Post::author_id))`.
 - [x] **Step 2.** Correlated `EXISTS` / `NOT EXISTS` subqueries.
-- [ ] **Step 3.** CTEs: `Query::with("name", subquery)` emitting `WITH … AS (…)`, including
+- [x] **Step 3.** CTEs: `Query::with("name", subquery)` emitting `WITH … AS (…)`, including
       the `RECURSIVE` form — recursive CTEs are the standard answer to tree/hierarchy
       queries and self-referential relations are already a supported feature.
 - [ ] **Step 4.** Set operations: `union`, `union_all`, `intersect`, `except`, with
@@ -300,12 +300,16 @@ None of these exist. They are what "SQL-like typed builder" means to a Drizzle u
       return a clear compile-time or construction-time error rather than emitting SQL that
       fails at the server. Document in `docs/DialectNotes.md`.
 
-> **Current status (2026-08-14):** W2-03 Step 1 and Step 2 are complete. `Subquery<T>`,
+> **Current status (2026-08-14):** W2-03 Step 1, Step 2 and Step 3 are complete. `Subquery<T>`,
 > `Column::in_subquery` / `not_in_subquery`, `FilterNode::InSubquery`, `ExistsSubquery`,
-> `Column::correlated_to`, `Filter::exists` / `not_exists`, and `FilterNode::ExistsSubquery`
-> are implemented with dialect-aware placeholder offset for Postgres and `?` passthrough
-> for SQLite/MySQL. Unit tests in `compile.rs` and `both_dbs!` integration tests in
-> `subqueries.rs` and `exists.rs` pass.
+> `Column::correlated_to`, `Filter::exists` / `not_exists`, `FilterNode::ExistsSubquery`,
+> `Cte`, `CteQuery`, `SelectQuery::with`, and `SelectQuery::with_recursive` are implemented
+> with dialect-aware placeholder offset for Postgres and `?` passthrough for SQLite/MySQL.
+> Unit tests in `compile.rs` and `both_dbs!` integration tests in `subqueries.rs`,
+> `exists.rs`, and `ctes.rs` pass. Recursive CTE SQL generation and renumbering are
+> implemented and tested; a full `WITH RECURSIVE ... SELECT` fetch with the current builder
+> would need the join/CTE body to select the same shape as the anchor, which is left for
+> the next refinement.
 
 ### W2-04 · JSON operators
 

@@ -66,23 +66,25 @@ pub mod decode;
 /// Common imports for application code.
 pub mod prelude {
     pub use crate::{
-        Aggregate, AggregateQuery, AggregateScalar, Column, Encodable, Error, Executor, Filter,
-        GroupBy, GroupedQuery, InsertQuery, IsolationLevel, Join2, JoinKind, JoinOn, LeftJoin2,
-        Maybe, Model, Numeric, OrderBy, Page, Pool, RawFragment, Related, SelectQuery, Tx, Value,
-        raw,
+        Aggregate, AggregateQuery, AggregateScalar, Column, Cte, CteQuery, Encodable, Error,
+        Executor, Filter, GroupBy, GroupedQuery, InsertQuery, IsolationLevel, Join2, JoinKind,
+        JoinOn, LeftJoin2, Maybe, Model, Numeric, OrderBy, Page, Pool, RawFragment, Related,
+        SelectQuery, Tx, Value, raw,
     };
 }
 
 pub use aggregate::{
-    Aggregate, AggregateEntry, AggregateKind, AggregateScalar, AggregateSet, GroupBy, IntoAggregate,
-    Numeric,
+    Aggregate, AggregateEntry, AggregateKind, AggregateScalar, AggregateSet, GroupBy,
+    IntoAggregate, Numeric,
 };
 pub use col::{Column, Projection};
 pub use compile::{CompiledSql, delete, dialect_for_pool, insert, insert_many, select, update};
 pub use counting::CountingExecutor;
 pub use error::Error;
 pub use executor::{Executor, RowBatch, decode_rows};
-pub use filter::{ExistsSubquery, Filter, FilterNode, RawFragment, Subquery, all, any};
+pub use filter::{
+    Cte, CteQuery, ExistsSubquery, Filter, FilterNode, RawFragment, Subquery, all, any,
+};
 pub use include::{IncludeList, IncludeOne, IncludeSet};
 pub use join::{Join2, JoinKind, JoinOn, JoinSide, LeftJoin2, Maybe};
 pub use model::Model;
