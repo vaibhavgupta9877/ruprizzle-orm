@@ -87,7 +87,7 @@ pub use filter::{
     Cte, CteQuery, ExistsSubquery, Filter, FilterNode, JsonFilterOp, RawFragment, Subquery, all,
     any,
 };
-pub use include::{IncludeList, IncludeOne, IncludeSet};
+pub use include::{IncludeList, IncludeMany, IncludeOne, IncludeSet};
 pub use json::{JsonColumn, JsonPath, JsonSet};
 pub use join::{Join2, JoinKind, JoinOn, JoinSide, LeftJoin2, Maybe};
 pub use model::Model;

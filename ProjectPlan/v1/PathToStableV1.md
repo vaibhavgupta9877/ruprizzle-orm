@@ -363,8 +363,14 @@ in two hops" is why the table says `Partial`.
       Prisma's ergonomics. `emit_relation_helper` now emits a `SelectQuery` helper for
       `ManyToMany` list relations that translates `Tag.id IN (SELECT tag_id FROM post_tags
       WHERE post_id = ?)`, and `emit_relation_filter_helpers` skips them for now.
-- [ ] **Step 3.** `include` support through the relation, preserving the bounded
-      one-query-per-level batching guarantee.
+- [x] **Step 3.** `include` support through the relation, preserving the bounded
+      one-query-per-level batching guarantee. Added `IncludeMany` to the runtime,
+      which loads join rows and target rows in two batched queries, then
+      distributes target rows back to each parent. Codegen now emits both a
+      `tags_query` `SelectQuery` helper and a `tags` `IncludeMany` helper for
+      many-to-many list fields; fixed the parser so each endpoint gets its own
+      oriented `ResolvedRelation`. New `both_dbs!` integration test passes on
+      Postgres, SQLite and MySQL.
 - [ ] **Step 4.** Nested writes: attach/detach/set semantics on the join rows.
 - [ ] **Step 5.** Upgrade the comparison table entry to `Yes` with a footnote naming the
       explicit-join-model design.

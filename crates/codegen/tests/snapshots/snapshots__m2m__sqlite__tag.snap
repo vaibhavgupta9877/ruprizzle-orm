@@ -360,14 +360,37 @@ impl ::ruprizzle::Model for Tag {
 pub const TABLE: &str = "tags";
 pub const ID: Column<Tag, i32> = Column::new("tags", "id");
 ///Returns a query for the `posts` many-to-many relation.
-pub fn posts<'__a>(
+pub fn posts_query<'__a>(
     __exec: &'__a dyn ::ruprizzle::Executor,
     id: i32,
-) -> ::ruprizzle::SelectQuery<'__a, super::tag::Tag> {
+) -> ::ruprizzle::SelectQuery<'__a, super::post::Post> {
     let __subquery = ::ruprizzle::SelectQuery::new(__exec)
-        .filter(super::post_tag::POST_ID.eq(id))
-        .columns(super::post_tag::TAG_ID);
-    ::ruprizzle::SelectQuery::new(__exec).filter(super::tag::ID.in_subquery(__subquery))
+        .filter(super::post_tag::TAG_ID.eq(id))
+        .columns(super::post_tag::POST_ID);
+    ::ruprizzle::SelectQuery::new(__exec).filter(super::post::ID.in_subquery(__subquery))
+}
+///Returns an `IncludeMany` for the `posts` many-to-many relation.
+pub fn posts() -> ::ruprizzle::IncludeMany<
+    'static,
+    Tag,
+    super::post::Post,
+    super::post_tag::PostTag,
+    i32,
+    i32,
+    (),
+> {
+    ::ruprizzle::IncludeMany::new(
+        |__row: &Tag| __row.id,
+        |__row: &mut Tag, __loaded: ::ruprizzle::Related<Vec<super::post::Post>>| {
+            __row.posts = __loaded;
+        },
+        |__row: &super::post_tag::PostTag| __row.tag_id,
+        |__row: &super::post_tag::PostTag| __row.post_id,
+        |__child: &super::post::Post| __child.id,
+        super::post_tag::TAG_ID,
+        super::post_tag::POST_ID,
+        super::post::ID,
+    )
 }
 /// Prisma-flavoured repository for `#model_name`.
 #[derive(Debug, Clone, Copy)]

@@ -1601,7 +1601,7 @@ fn emit_relation_helper(schema: &Schema, model: &Model, field: &Field) -> Option
     let is_owner = model.name == rel.owner;
 
     if rel.kind == RelationKind::ManyToMany {
-        return emit_many_to_many_query_helper(schema, model, field, rel);
+        return emit_many_to_many_helpers(schema, model, field, rel);
     }
 
     let (parent_name, child_name, parent_key_col, child_key_col) = if is_owner {
@@ -1703,9 +1703,9 @@ fn emit_relation_helper(schema: &Schema, model: &Model, field: &Field) -> Option
     })
 }
 
-fn emit_many_to_many_query_helper(
+fn emit_many_to_many_helpers(
     schema: &Schema,
-    _model: &Model,
+    model: &Model,
     field: &Field,
     rel: &ResolvedRelation,
 ) -> Option<TokenStream> {
@@ -1732,38 +1732,43 @@ fn emit_many_to_many_query_helper(
     let owner_fk_col_field = join_model.fields.get(owner_fk_rel.fields.first()?.as_str())?;
     let target_fk_col_field = join_model.fields.get(target_fk_rel.fields.first()?.as_str())?;
 
-    let key_type = rust_type_tokens(
-        schema,
-        rel.owner.as_str(),
-        owner_pk_field,
-        false,
-        true,
-    );
+    let key_type = rust_type_tokens(schema, rel.owner.as_str(), owner_pk_field, false, true);
+    let ckey_type = rust_type_tokens(schema, rel.target.as_str(), target_pk_field, false, true);
 
-    let helper_name = safe_field_ident(field.name.as_str());
+    let include_helper_name = safe_field_ident(field.name.as_str());
+    let query_helper_name = format_ident!("{}_query", include_helper_name);
     let param_name = safe_field_ident(owner_pk_field.name.as_str());
+    let field_ident = safe_field_ident(field.name.as_str());
 
+    let model_name = format_ident!("{}", model.name.as_str());
     let join_module = safe_module_name(join_model.name.as_str());
     let join_module_ident = format_ident!("{}", join_module);
+    let join_type = format_ident!("{}", join_model.name.as_str());
     let target_module = safe_module_name(target_model.name.as_str());
     let target_module_ident = format_ident!("{}", target_module);
     let target_type = format_ident!("{}", target_model.name.as_str());
 
-    let owner_join_const = format_ident!(
-        "{}",
-        shouty_snake(owner_fk_col_field.name.as_str())
-    );
-    let target_join_const = format_ident!(
-        "{}",
-        shouty_snake(target_fk_col_field.name.as_str())
-    );
+    let owner_fk_field_ident = safe_field_ident(owner_fk_col_field.name.as_str());
+    let target_fk_field_ident = safe_field_ident(target_fk_col_field.name.as_str());
+    let target_pk_field_ident = safe_field_ident(target_pk_field.name.as_str());
+    let owner_pk_field_ident = safe_field_ident(owner_pk_field.name.as_str());
+
+    let owner_join_const = format_ident!("{}", shouty_snake(owner_fk_col_field.name.as_str()));
+    let target_join_const = format_ident!("{}", shouty_snake(target_fk_col_field.name.as_str()));
     let target_pk_const = format_ident!("{}", shouty_snake(target_pk_field.name.as_str()));
 
-    let doc = format!("Returns a query for the `{}` many-to-many relation.", helper_name);
+    let query_doc = format!(
+        "Returns a query for the `{}` many-to-many relation.",
+        include_helper_name
+    );
+    let include_doc = format!(
+        "Returns an `IncludeMany` for the `{}` many-to-many relation.",
+        include_helper_name
+    );
 
     Some(quote! {
-        #[doc = #doc]
-        pub fn #helper_name<'__a>(
+        #[doc = #query_doc]
+        pub fn #query_helper_name<'__a>(
             __exec: &'__a dyn ::ruprizzle::Executor,
             #param_name: #key_type,
         ) -> ::ruprizzle::SelectQuery<'__a, super::#target_module_ident::#target_type> {
@@ -1772,6 +1777,30 @@ fn emit_many_to_many_query_helper(
                 .columns(super::#join_module_ident::#target_join_const);
             ::ruprizzle::SelectQuery::new(__exec)
                 .filter(super::#target_module_ident::#target_pk_const.in_subquery(__subquery))
+        }
+
+        #[doc = #include_doc]
+        pub fn #include_helper_name() -> ::ruprizzle::IncludeMany<
+            'static,
+            #model_name,
+            super::#target_module_ident::#target_type,
+            super::#join_module_ident::#join_type,
+            #key_type,
+            #ckey_type,
+            (),
+        > {
+            ::ruprizzle::IncludeMany::new(
+                |__row: &#model_name| __row.#owner_pk_field_ident,
+                |__row: &mut #model_name, __loaded: ::ruprizzle::Related<Vec<super::#target_module_ident::#target_type>>| {
+                    __row.#field_ident = __loaded;
+                },
+                |__row: &super::#join_module_ident::#join_type| __row.#owner_fk_field_ident,
+                |__row: &super::#join_module_ident::#join_type| __row.#target_fk_field_ident,
+                |__child: &super::#target_module_ident::#target_type| __child.#target_pk_field_ident,
+                super::#join_module_ident::#owner_join_const,
+                super::#join_module_ident::#target_join_const,
+                super::#target_module_ident::#target_pk_const,
+            )
         }
     })
 }

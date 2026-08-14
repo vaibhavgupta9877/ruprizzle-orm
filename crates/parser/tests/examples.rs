@@ -221,11 +221,18 @@ fn many_to_many_through_is_resolved() {
     assert_eq!(m2m.owner_cols, vec!["post_id".to_owned()]);
     assert_eq!(m2m.target_cols, vec!["tag_id".to_owned()]);
 
-    // Both list sides resolve to the same many-to-many relation.
+    // Each list side resolves to its own oriented many-to-many relation.
+    let m2m_relations: Vec<_> = schema
+        .relations
+        .iter()
+        .filter(|r| r.kind == RelationKind::ManyToMany)
+        .collect();
+    assert_eq!(m2m_relations.len(), 2);
+
     let post_tags = schema.model("Post").unwrap().field("tags").unwrap();
     let tag_posts = schema.model("Tag").unwrap().field("posts").unwrap();
     assert_eq!(post_tags.relation().unwrap().resolved, Some(2));
-    assert_eq!(tag_posts.relation().unwrap().resolved, Some(2));
+    assert_eq!(tag_posts.relation().unwrap().resolved, Some(3));
 
     // The join model holds the two real FK relations.
     let post_tag = schema.model("PostTag").unwrap();

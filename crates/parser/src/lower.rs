@@ -1104,10 +1104,17 @@ fn resolve_through_relations(
             }
         }
 
+        // A many-to-many is a pair of list fields that point at each other.
+        // Each endpoint needs its own `ResolvedRelation` so the owner/target
+        // orientation matches the field being resolved.
         if let Some(resolved) = build_many_to_many_relation(a, b, &fks, models, diags) {
             let index = relations.len();
             relations.push(resolved);
             mark_resolved(models, &a.model, &a.field, index);
+        }
+        if let Some(resolved) = build_many_to_many_relation(b, a, &fks, models, diags) {
+            let index = relations.len();
+            relations.push(resolved);
             mark_resolved(models, &b.model, &b.field, index);
         }
     }
