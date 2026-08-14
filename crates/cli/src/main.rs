@@ -25,6 +25,7 @@ use ruprizzle_codegen::generate_all;
 use ruprizzle_core::SchemaError;
 use ruprizzle_core::ir::{DatasourceUrl, Provider, Schema};
 use ruprizzle_dialect::{check_schema_capabilities, dialect_for};
+use ruprizzle_migrate::rename::suggest_renames;
 use ruprizzle_migrate::runner::{compute_checksum, split_statements};
 use ruprizzle_migrate::{Change, MigrationMeta, Migrator, diff, down_sql, up_sql};
 
@@ -657,6 +658,12 @@ async fn migrate_dev(
     let prev = load_snapshot(&snapshot, &schema)?;
 
     let changes = diff(&prev, &schema);
+    for suggestion in suggest_renames(&prev, &schema, &changes) {
+        eprintln!(
+            "Possible rename in {}: `{}` -> `{}`. Add `@renamedFrom(\"{}\")` to the new field to confirm; no rename was inferred.",
+            suggestion.model, suggestion.from_column, suggestion.to_column, suggestion.from
+        );
+    }
     let destructive = destructive_descriptions(&changes);
     if !destructive.is_empty() && !accept_data_loss {
         return Err(format!(

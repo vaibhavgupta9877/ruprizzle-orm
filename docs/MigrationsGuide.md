@@ -79,5 +79,29 @@ The migration engine is tested against all common schema changes:
 9. Add / drop foreign key
 10. Add / drop enum variant
 
-SQLite handles some of these (notably type changes and `NOT NULL` transitions)
-by rebuilding the table. Postgres uses direct `ALTER` statements where possible.
+## Mutual foreign-key cycles
+
+If two or more models reference each other in a closed loop, the migration
+planner will:
+
+- add `DEFERRABLE INITIALLY IMMEDIATE` to the generated foreign key constraints;
+- wrap the `up.sql` with a backend-specific command that defers enforcement until
+  the end of the migration transaction;
+- add the matching re-enable command before `COMMIT`.
+
+The generated SQL is:
+
+| Dialect | Preamble | Postamble | `down.sql` behaviour |
+|---|---|---|---|
+| Postgres | `SET CONSTRAINTS ALL DEFERRED;` | `SET CONSTRAINTS ALL IMMEDIATE;` | `DROP TABLE ... CASCADE` for cycle tables |
+| SQLite | `PRAGMA defer_foreign_keys = ON;` | `PRAGMA defer_foreign_keys = OFF;` | `PRAGMA foreign_keys = OFF;` before drops, then `PRAGMA foreign_key_check;` and `PRAGMA foreign_keys = ON;` |
+| MySQL | `SET FOREIGN_KEY_CHECKS = 0;` | `SET FOREIGN_KEY_CHECKS = 1;` | `SET FOREIGN_KEY_CHECKS = 0/1` around drops |
+
+This lets you create, populate, and roll back schemas with cyclic foreign keys
+without having to split them across multiple migrations by hand.
+
+## SQLite migration notes
+
+SQLite handles some of the change classes (notably type changes and `NOT NULL`
+transitions) by rebuilding the table. Postgres uses direct `ALTER` statements
+where possible.

@@ -67,8 +67,7 @@ See the [quickstart](Quickstart.md) for the full five-minute walkthrough.
 
 See [known-limitations](KnownLimitations.md) for the full list. Highlights:
 
-- Migrations do not handle mutual foreign-key cycles automatically.
-- Heuristic renames are not implemented; use `@renamedFrom`.
+- Heuristic renames are suggested automatically; use `@renamedFrom` to confirm.
 - `db push` does not write migration files and is only for prototyping.
 - Compile-time query checking (`sqlx-data.json` / offline mode) is not implemented.
 - No LSP yet.

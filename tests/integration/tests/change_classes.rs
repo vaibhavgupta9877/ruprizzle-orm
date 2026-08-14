@@ -597,3 +597,80 @@ model User {
     )
     .await;
 }
+
+both_dbs! {
+    async fn mutual_foreign_key_cycle(db: TestDb) {
+        let provider = db.backend().as_str();
+
+        let body = r#"
+model User {
+    id        Int     @id
+    profileId Int?    @map("profile_id")
+    profile   Profile? @relation("UserHasProfile", fields: [profileId], references: [id])
+    profileOf Profile? @relation("ProfileHasUser")
+}
+
+model Profile {
+    id     Int    @id
+    userId Int?   @map("user_id")
+    user   User?  @relation("ProfileHasUser", fields: [userId], references: [id])
+    userOf User?  @relation("UserHasProfile")
+}
+"#;
+
+        let prev = ruprizzle_parser::parse("prev", &schema_template(provider, ""))
+            .expect("empty prev parses");
+        let next = ruprizzle_parser::parse("next", &schema_template(provider, body))
+            .expect("cycle next parses");
+        let dialect = ruprizzle_dialect::dialect_for(next.datasource.provider);
+
+        let init_sql = ruprizzle_migrate::up_sql(&empty_like(&prev), &prev, dialect);
+        let change_up = ruprizzle_migrate::up_sql(&prev, &next, dialect);
+        let change_down = ruprizzle_migrate::down_sql(&prev, &next, dialect);
+
+        let dir = tempfile::tempdir().unwrap();
+        write_migration(dir.path(), "000_init", &init_sql, "").unwrap();
+        write_migration(dir.path(), "001_cycle", &change_up, &change_down).unwrap();
+
+        let migrator = Migrator::new(dir.path());
+        migrator.apply_all(db.pool(), false).await.unwrap();
+
+        // Inserting a cycle requires deferring the foreign-key checks until
+        // both rows are present in the transaction.
+        let seed = match db.backend() {
+            ruprizzle_testkit::Backend::Sqlite => {
+                "BEGIN;\n\
+                 PRAGMA defer_foreign_keys = ON;\n\
+                 INSERT INTO users (id, profile_id) VALUES (1, 2);\n\
+                 INSERT INTO profiles (id, user_id) VALUES (2, 1);\n\
+                 COMMIT;"
+            }
+            ruprizzle_testkit::Backend::MySql => {
+                "SET FOREIGN_KEY_CHECKS = 0;\n\
+                 INSERT INTO users (id, profile_id) VALUES (1, 2);\n\
+                 INSERT INTO profiles (id, user_id) VALUES (2, 1);\n\
+                 SET FOREIGN_KEY_CHECKS = 1;"
+            }
+            _ => {
+                "BEGIN;\n\
+                 SET CONSTRAINTS ALL DEFERRED;\n\
+                 INSERT INTO users (id, profile_id) VALUES (1, 2);\n\
+                 INSERT INTO profiles (id, user_id) VALUES (2, 1);\n\
+                 COMMIT;"
+            }
+        };
+        db.execute(seed).await.unwrap();
+
+        let users = db.fetch_i64("SELECT count(*) FROM users").await.unwrap();
+        let profiles = db.fetch_i64("SELECT count(*) FROM profiles").await.unwrap();
+        assert_eq!(users, 1);
+        assert_eq!(profiles, 1);
+
+        // Make sure the migration is reversible as well.
+        migrator.rollback(db.pool(), 1).await.unwrap();
+        assert!(
+            db.fetch_i64("SELECT count(*) FROM users").await.is_err(),
+            "tables should be dropped after rollback"
+        );
+    }
+}

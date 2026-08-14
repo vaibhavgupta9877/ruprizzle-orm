@@ -1,6 +1,6 @@
 # Path to Stable v1.0
 
-> **Status:** ACTIVE — W5-01 through W5-04 complete; W5-05 is next. W1, W2, and W5-06–W5-07 remain pending.
+> **Status:** ACTIVE — W5-01 through W5-06 complete; W5-07 is next.
 
 **From:** `0.1.1-beta.1` (published to crates.io 2026-08-13, 84/100 production readiness)
 **To:** `1.0.0` — a version whose API we commit to under semver and whose capability surface
@@ -422,12 +422,13 @@ May run in parallel with W2 — different crates.
 - [x] **W5-02 · Introspection (`ruprizzle db pull`).** Added provider-aware table, column, key, index, and foreign-key introspection for SQLite, PostgreSQL, and MySQL/MariaDB, plus deterministic schema rendering that preserves datasource/generator settings and round-trips through the parser. **4 days.**
 - [x] **W5-03 · Seeding.** `ruprizzle db seed` now accepts declarative `seeds/main.json`, maps values through the schema's scalar types, upserts by primary key for idempotence, and applies the complete document in one transaction across SQLite, PostgreSQL, and MySQL/MariaDB. Legacy `seeds/main.sql` remains supported. **2 days.**
 - [x] **W5-04 · Migration squashing.** Added `ruprizzle migrate squash --force`, which requires a fully applied and checksum-valid history, writes a current-schema baseline, archives old migration directories under `migrations/.archive/`, and rewrites tracking metadata without touching user tables. **2 days.**
-- [ ] **W5-05 · Heuristic rename detection.** Currently requires `@renamedFrom`. Detect
-      likely renames from the diff and *prompt* — never guess silently, since a wrong guess
-      is data loss. **2 days.**
-- [ ] **W5-06 · Mutual foreign-key cycles in migrations.** Currently must be broken by
-      hand. Emit deferred constraints on Postgres and a documented two-phase apply on
-      SQLite. **2 days.**
+- [x] **W5-05 · Heuristic rename detection.** Added conservative drop/add pairing by model, scalar type, nullability, default, and field-name similarity. `migrate dev` prints a confirmation prompt with the exact `@renamedFrom` hint; the diff and SQL never infer a rename. **2 days.**
+- [x] **W5-06 · Mutual foreign-key cycles in migrations.** The planner detects strongly
+      connected components in the relation graph and emits deferrable constraints with
+      backend-specific transaction-level deferral: `SET CONSTRAINTS` on Postgres,
+      `PRAGMA defer_foreign_keys` on SQLite, and `FOREIGN_KEY_CHECKS` on MySQL. Down
+      migrations drop cycle tables with `CASCADE` (Postgres), `PRAGMA foreign_keys=OFF`
+      (SQLite), or `FOREIGN_KEY_CHECKS=0` (MySQL). **2 days.**
 - [ ] **W5-07 · LSP.** Completion, diagnostics, go-to-definition for `schema.ruprizzle`.
       Deferred to 0.2; the TextMate grammar covers highlighting only. Prisma's LSP is a
       major part of why its schema DSL feels good. **5 days — the one item safe to slip past

@@ -6,11 +6,8 @@ whether the tool is right for your project.
 
 ## Current beta
 
-- **Migrations** do not handle mutual foreign-key cycles automatically. Cycles
-  must be broken by hand across migrations.
-- **Heuristic renames** (detecting a column was renamed rather than dropped +
-  added) are not implemented. Use `@renamedFrom` to give the diff an explicit
-  hint.
+- **Heuristic renames** are suggested automatically. Add `@renamedFrom` to
+  confirm or ignore the prompt; the diff never renames silently.
 - **`db push`** does not write migration files and is only for prototyping.
 - **Compile-time query checking** (`sqlx-data.json` / `offline` mode) is not
   implemented.

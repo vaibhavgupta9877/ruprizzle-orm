@@ -27,6 +27,7 @@ pub mod drift;
 pub mod error;
 pub mod introspect;
 pub mod plan;
+pub mod rename;
 pub mod runner;
 
 pub use change::{Change, ColumnAspect};

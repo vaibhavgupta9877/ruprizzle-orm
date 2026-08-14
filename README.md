@@ -510,8 +510,7 @@ See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md) and 
 
 This is an honest alpha. The boundaries are documented so you can decide whether ruprizzle is right for your project today.
 
-- **Migrations** do not handle mutual foreign-key cycles automatically. Cycles must be broken by hand across migrations.
-- **Heuristic renames** (detecting a column was renamed rather than dropped + added) are not implemented. Use `@renamedFrom` to give the diff an explicit hint.
+- **Heuristic renames** are suggested automatically; add `@renamedFrom` to confirm a data-preserving rename. The diff never guesses silently.
 - **`db push`** does not write migration files and is only for prototyping.
 - **Compile-time query checking** (`sqlx-data.json` / offline mode) is not implemented.
 - **No LSP** yet; syntax highlighting is available as a TextMate grammar.
