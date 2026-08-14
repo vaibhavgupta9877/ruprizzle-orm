@@ -235,7 +235,7 @@ does not have.
 Today only `count()` and `exists()`. There is no `sum`, `avg`, `min`, `max`, and no
 `GROUP BY` at all — `grep` for `group_by` across `crates/runtime/src` returns one comment.
 
-- [ ] **Step 1.** `Aggregate<M>` expression type over typed `Column<M, V>` tokens:
+- [x] **Step 1.** `Aggregate<M>` expression type over typed `Column<M, V>` tokens:
       `sum`, `avg`, `min`, `max`, `count`, `count_distinct`. Numeric aggregates must be
       constrained to numeric column types at compile time — that type safety is the reason
       to prefer this over raw SQL.

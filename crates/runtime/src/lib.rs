@@ -28,6 +28,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs, clippy::all)]
 
+pub mod aggregate;
 pub mod col;
 pub mod compile;
 pub mod counting;
@@ -61,11 +62,12 @@ pub mod decode;
 /// Common imports for application code.
 pub mod prelude {
     pub use crate::{
-        Column, Encodable, Error, Executor, Filter, InsertQuery, IsolationLevel, Model, OrderBy,
-        Page, Pool, RawFragment, Related, SelectQuery, Tx, Value, raw,
+        Aggregate, Column, Encodable, Error, Executor, Filter, InsertQuery, IsolationLevel, Model,
+        Numeric, OrderBy, Page, Pool, RawFragment, Related, SelectQuery, Tx, Value, raw,
     };
 }
 
+pub use aggregate::{Aggregate, AggregateKind, Numeric};
 pub use col::{Column, Projection};
 pub use compile::{CompiledSql, delete, dialect_for_pool, insert, insert_many, select, update};
 pub use counting::CountingExecutor;
