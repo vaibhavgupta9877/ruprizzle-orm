@@ -82,8 +82,8 @@ variants.
 | Upsert / on-conflict | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | Bulk insert many | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | Window functions / row numbering | Yes | Yes | Yes | Partial | Yes | Yes | Yes |
-| Aggregates | Partial | Partial | Yes | Yes | Yes | Yes | Yes |
-| JSON operators | Partial | Partial | Partial | Partial | Partial | Yes | Partial |
+| Aggregates | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| JSON operators | Yes* | Yes* | Partial | Partial | Partial | Yes | Partial |
 | Streaming / cursors | Buffered | Buffered | Yes | Yes | Yes | Yes | Yes |
 
 ## Relations & advanced loading
@@ -173,3 +173,8 @@ Numbers are from the latest `local/cross-orm-bench/BENCHMARKS.log`
    Driver choice dominates simple queries, and the relative ordering can change on
    Postgres or with network latency. See `docs/BenchmarkResults.md` for the full
    methodology.
+
+8. **ruprizzle JSON operators** are supported on Postgres (`jsonb`), MySQL (`JSON`),
+   and SQLite (JSON1). Postgres and MySQL support full JSON containment (`@>`);
+   SQLite approximates containment with a key-existence check because JSON1 has no
+   containment operator. See `KnownLimitations.md`.
