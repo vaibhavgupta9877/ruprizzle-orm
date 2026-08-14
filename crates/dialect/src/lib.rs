@@ -297,4 +297,14 @@ pub trait DbDialect: Send + Sync {
 
     /// The capabilities of this dialect.
     fn capabilities(&self) -> Capabilities;
+
+    /// Whether `RIGHT JOIN` is supported.
+    fn supports_right_join(&self) -> bool {
+        true
+    }
+
+    /// Whether `FULL OUTER JOIN` is supported.
+    fn supports_full_join(&self) -> bool {
+        true
+    }
 }

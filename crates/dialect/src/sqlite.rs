@@ -199,6 +199,14 @@ impl DbDialect for SqliteDialect {
             window_functions: true,
         }
     }
+
+    fn supports_right_join(&self) -> bool {
+        false
+    }
+
+    fn supports_full_join(&self) -> bool {
+        false
+    }
 }
 
 fn sqlite_type_name(ty: ScalarType) -> &'static str {

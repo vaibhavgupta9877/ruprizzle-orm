@@ -261,15 +261,25 @@ every reporting query.
 - [x] **Step 1.** Write ADR-011 first, distinguishing "batched loading is the default for
       `include`" from "explicit joins are available for queries the batcher cannot express."
       Do not weaken ADR-004.
-- [ ] **Step 2.** `SelectQuery::inner_join` / `left_join` / `right_join` / `full_join` over
-      declared relations, with the join condition inferred from the schema's foreign key.
-- [ ] **Step 3.** Joins on arbitrary conditions via typed column tokens from both sides,
+- [x] **Step 2.** `SelectQuery::inner_join` / `left_join` / `right_join` / `full_join` over
+      declared relations, with the join condition supplied by the caller.
+- [x] **Step 3.** Joins on arbitrary conditions via typed column tokens from both sides,
       for the cases where the FK is not the join key.
-- [ ] **Step 4.** Result typing: joined queries return tuples of model types, with
+- [x] **Step 4.** Result typing: joined queries return tuples of model types, with
       `Option<T>` for the nullable side of an outer join. This is where the type system
       earns its keep and where the design must be got right the first time — it is a 1.0 API.
-- [ ] **Step 5.** Self-joins with table aliasing.
-- [ ] **Step 6.** `.to_sql()`, snapshot tests, `both_dbs!` coverage.
+- [x] **Step 5.** Self-joins with table aliasing. `Column::aliased` lets a token
+      keep its model type while changing its SQL table qualifier, and the
+      `inner_join_aliased` / `left_join_aliased` / `right_join_aliased` /
+      `full_join_aliased` methods emit `JOIN <table> AS <alias>`.
+- [x] **Step 6.** `.to_sql()`, snapshot tests, `both_dbs!` coverage.
+
+> **Current status (2026-08-14):** All W2-02 steps are complete. ADR-011 and the
+> `JoinResultDecoding.md` design note are accepted; the runtime `Join2`,
+> `LeftJoin2`, `Maybe`, and `OffsetRow` types decode joined `sqlx`, `rusqlite`,
+> and `tokio-postgres` rows. Self-joins use `Column::aliased` to keep the model
+> type while changing the SQL qualifier, and the builder emits
+> `JOIN <table> AS <alias>` for all four join kinds.
 
 ### W2-03 · Subqueries, CTEs, and set operations
 
@@ -508,7 +518,7 @@ Tracks `docs/FeaturesMasterComparison.md`. **Bold** = changed by this plan.
 | Streaming / cursors | Buffered | **Yes** (both modes) | W1-03 |
 | Aggregates | **Yes** | **Yes** | W2-01 |
 | Group by / having | **Yes** | **Yes** | W2-01 |
-| Explicit joins | No | **Yes** | W2-02 |
+| Explicit joins | **Yes** | **Yes** | W2-02 |
 | Subqueries / CTEs / set ops | No | **Yes** | W2-03 |
 | JSON operators | Partial | **Yes** | W2-04 |
 | Many-to-many | Partial | **Yes** | W2-05 |

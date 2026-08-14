@@ -496,7 +496,7 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         .map(|f| f.column.as_str())
         .collect();
 
-    let row_fields = |native_json: bool| {
+    let row_fields = |native_json: bool, is_join_side: bool| {
         let mut next_index = 0;
         model
             .fields
@@ -509,14 +509,36 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
                 } else {
                     None
                 };
-                emit_from_row_field(schema, model.name.as_str(), f, idx, native_json)
+                let row_expr = quote! { row };
+                let idx_expr = if let Some(i) = idx {
+                    let idx = syn::Index::from(i);
+                    if is_join_side {
+                        quote! { #idx + __offset }
+                    } else {
+                        quote! { #idx }
+                    }
+                } else {
+                    quote! { 0 }
+                };
+                emit_from_row_field(
+                    schema,
+                    model.name.as_str(),
+                    f,
+                    &row_expr,
+                    &idx_expr,
+                    native_json,
+                )
             })
             .collect::<Vec<_>>()
     };
-    let any_from_row_fields = row_fields(false);
-    let postgres_from_row_fields = row_fields(true);
-    let sqlite_from_row_fields = row_fields(true);
-    let mysql_from_row_fields = row_fields(true);
+    let any_from_row_fields = row_fields(false, false);
+    let any_join_side_fields = row_fields(false, true);
+    let postgres_from_row_fields = row_fields(true, false);
+    let postgres_join_side_fields = row_fields(true, true);
+    let sqlite_from_row_fields = row_fields(true, false);
+    let sqlite_join_side_fields = row_fields(true, true);
+    let mysql_from_row_fields = row_fields(true, false);
+    let mysql_join_side_fields = row_fields(true, true);
 
     let mut next_rusqlite_index = 0;
     let rusqlite_from_row_fields: Vec<_> = model
@@ -615,6 +637,58 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
             fn from_row(row: &'r ::ruprizzle::sqlx::mysql::MySqlRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
                 Ok(Self {
                     #( #mysql_from_row_fields )*
+                })
+            }
+        }
+
+        impl ::ruprizzle::JoinSide<AnyRow> for #model_name {
+            fn from_offset_row<'r>(__offset_row: &::ruprizzle::OffsetRow<'r, AnyRow>) -> Result<Self, ::ruprizzle::sqlx::Error>
+            where
+                Self: Sized,
+            {
+                let row = __offset_row.as_raw();
+                let __offset = __offset_row.offset();
+                Ok(Self {
+                    #( #any_join_side_fields )*
+                })
+            }
+        }
+
+        impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::postgres::PgRow> for #model_name {
+            fn from_offset_row<'r>(__offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::postgres::PgRow>) -> Result<Self, ::ruprizzle::sqlx::Error>
+            where
+                Self: Sized,
+            {
+                let row = __offset_row.as_raw();
+                let __offset = __offset_row.offset();
+                Ok(Self {
+                    #( #postgres_join_side_fields )*
+                })
+            }
+        }
+
+        impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::sqlite::SqliteRow> for #model_name {
+            fn from_offset_row<'r>(__offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>) -> Result<Self, ::ruprizzle::sqlx::Error>
+            where
+                Self: Sized,
+            {
+                let row = __offset_row.as_raw();
+                let __offset = __offset_row.offset();
+                Ok(Self {
+                    #( #sqlite_join_side_fields )*
+                })
+            }
+        }
+
+        impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::mysql::MySqlRow> for #model_name {
+            fn from_offset_row<'r>(__offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>) -> Result<Self, ::ruprizzle::sqlx::Error>
+            where
+                Self: Sized,
+            {
+                let row = __offset_row.as_raw();
+                let __offset = __offset_row.offset();
+                Ok(Self {
+                    #( #mysql_join_side_fields )*
                 })
             }
         }
@@ -751,7 +825,8 @@ fn emit_from_row_field(
     schema: &Schema,
     owner: &str,
     field: &Field,
-    idx: Option<usize>,
+    row_expr: &TokenStream,
+    idx_expr: &TokenStream,
     native_json: bool,
 ) -> TokenStream {
     let name = safe_field_ident(field.name.as_str());
@@ -762,7 +837,6 @@ fn emit_from_row_field(
 
     let optional = field.optional;
     let _inner = rust_type_tokens(schema, owner, field, false, true);
-    let idx = syn::Index::from(idx.unwrap_or(0));
 
     let expr = match &field.kind {
         ruprizzle_core::ir::FieldKind::Scalar(st) => match st {
@@ -778,7 +852,7 @@ fn emit_from_row_field(
                         "direct_idx"
                     }
                 );
-                quote! { ::ruprizzle::decode::#helper(row, #idx)? }
+                quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
             }
             ruprizzle_core::ir::ScalarType::Boolean => {
                 let helper = format_ident!(
@@ -789,7 +863,7 @@ fn emit_from_row_field(
                         "boolean_idx"
                     }
                 );
-                quote! { ::ruprizzle::decode::#helper(row, #idx)? }
+                quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
             }
             ruprizzle_core::ir::ScalarType::Decimal
             | ruprizzle_core::ir::ScalarType::DateTime
@@ -798,7 +872,7 @@ fn emit_from_row_field(
             | ruprizzle_core::ir::ScalarType::Uuid => {
                 let helper =
                     format_ident!("{}", if optional { "text_opt_idx" } else { "text_idx" });
-                quote! { ::ruprizzle::decode::#helper(row, #idx)? }
+                quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
             }
             ruprizzle_core::ir::ScalarType::Json => {
                 let helper = if native_json {
@@ -813,7 +887,7 @@ fn emit_from_row_field(
                         }
                     )
                 };
-                quote! { ::ruprizzle::decode::#helper(row, #idx)? }
+                quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
             }
             ruprizzle_core::ir::ScalarType::Bytes => {
                 let helper = format_ident!(
@@ -824,12 +898,12 @@ fn emit_from_row_field(
                         "bytes_idx"
                     }
                 );
-                quote! { ::ruprizzle::decode::#helper(row, #idx)? }
+                quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
             }
         },
         ruprizzle_core::ir::FieldKind::Enum(_) => {
             let helper = format_ident!("{}", if optional { "text_opt_idx" } else { "text_idx" });
-            quote! { ::ruprizzle::decode::#helper(row, #idx)? }
+            quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
         }
         _ => {
             let helper = format_ident!(
@@ -840,7 +914,7 @@ fn emit_from_row_field(
                     "direct_idx"
                 }
             );
-            quote! { ::ruprizzle::decode::#helper(row, #idx)? }
+            quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
         }
     };
 

@@ -6,11 +6,13 @@ use crate::Error;
 use crate::aggregate::{AggregateEntry, AggregateSet, GroupBy};
 use crate::col::{Column, Projection};
 use crate::compile::{
-    CompiledSql, delete, dialect_for_pool, insert, insert_many, select, update, upsert,
+    CompiledSql, delete, dialect_for_pool, insert, insert_many, join_select_with_columns, select,
+    update, upsert,
 };
 use crate::executor::Executor;
 use crate::filter::{Filter, FilterNode};
 use crate::include::IncludeSet;
+use crate::join::{Join2, JoinKind, JoinOn, JoinSpec, LeftJoin2, Maybe};
 use crate::model::{Model, RowDecode};
 use crate::order::OrderBy;
 use crate::page::Page;
@@ -34,6 +36,7 @@ pub struct SelectQuery<'db, M: Model, Out = M, I = ()> {
     offset: Option<u64>,
     distinct: bool,
     includes: I,
+    join: Option<JoinSpec>,
     _out: PhantomData<fn() -> Out>,
 }
 
@@ -56,6 +59,7 @@ where
             offset: None,
             distinct: false,
             includes: (),
+            join: None,
             _out: PhantomData,
         }
     }
@@ -122,6 +126,104 @@ where
         }
     }
 
+    /// Adds an inner join to another model.
+    pub fn inner_join<J: Model>(self, on: impl Into<JoinOn>) -> SelectQuery<'db, M, Join2<M, J>, I> {
+        self.join_with::<J, Join2<M, J>>(JoinKind::Inner, None, on)
+    }
+
+    /// Adds a left join to another model.
+    pub fn left_join<J: Model>(
+        self,
+        on: impl Into<JoinOn>,
+    ) -> SelectQuery<'db, M, LeftJoin2<M, J>, I> {
+        self.join_with::<J, LeftJoin2<M, J>>(JoinKind::Left, None, on)
+    }
+
+    /// Adds a right join to another model.
+    pub fn right_join<J: Model>(
+        self,
+        on: impl Into<JoinOn>,
+    ) -> SelectQuery<'db, M, Join2<Maybe<M>, J>, I> {
+        self.join_with::<J, Join2<Maybe<M>, J>>(JoinKind::Right, None, on)
+    }
+
+    /// Adds a full join to another model.
+    pub fn full_join<J: Model>(
+        self,
+        on: impl Into<JoinOn>,
+    ) -> SelectQuery<'db, M, Join2<Maybe<M>, Maybe<J>>, I> {
+        self.join_with::<J, Join2<Maybe<M>, Maybe<J>>>(JoinKind::Full, None, on)
+    }
+
+    /// Adds an aliased inner join to another model.
+    ///
+    /// Use `Column::aliased` in the `ON` condition so the right-hand side is
+    /// qualified by the alias. This is the fully-typed way to write self-joins:
+    ///
+    /// ```ignore
+    /// User::query().inner_join_aliased::<User>("u2", User::id.on(User::manager_id.aliased("u2")))
+    /// ```
+    pub fn inner_join_aliased<J: Model>(
+        self,
+        alias: &'static str,
+        on: impl Into<JoinOn>,
+    ) -> SelectQuery<'db, M, Join2<M, J>, I> {
+        self.join_with::<J, Join2<M, J>>(JoinKind::Inner, Some(alias), on)
+    }
+
+    /// Adds an aliased left join to another model.
+    pub fn left_join_aliased<J: Model>(
+        self,
+        alias: &'static str,
+        on: impl Into<JoinOn>,
+    ) -> SelectQuery<'db, M, LeftJoin2<M, J>, I> {
+        self.join_with::<J, LeftJoin2<M, J>>(JoinKind::Left, Some(alias), on)
+    }
+
+    /// Adds an aliased right join to another model.
+    pub fn right_join_aliased<J: Model>(
+        self,
+        alias: &'static str,
+        on: impl Into<JoinOn>,
+    ) -> SelectQuery<'db, M, Join2<Maybe<M>, J>, I> {
+        self.join_with::<J, Join2<Maybe<M>, J>>(JoinKind::Right, Some(alias), on)
+    }
+
+    /// Adds an aliased full join to another model.
+    pub fn full_join_aliased<J: Model>(
+        self,
+        alias: &'static str,
+        on: impl Into<JoinOn>,
+    ) -> SelectQuery<'db, M, Join2<Maybe<M>, Maybe<J>>, I> {
+        self.join_with::<J, Join2<Maybe<M>, Maybe<J>>>(JoinKind::Full, Some(alias), on)
+    }
+
+    fn join_with<J: Model, O>(
+        self,
+        kind: JoinKind,
+        right_alias: Option<&'static str>,
+        on: impl Into<JoinOn>,
+    ) -> SelectQuery<'db, M, O, I> {
+        SelectQuery {
+            exec: self.exec,
+            filter: self.filter,
+            projection: Vec::new(),
+            order: self.order,
+            limit: self.limit,
+            offset: self.offset,
+            distinct: self.distinct,
+            includes: self.includes,
+            join: Some(JoinSpec {
+                kind,
+                right_table: J::TABLE,
+                right_columns: J::COLUMNS,
+                right_alias,
+                on: on.into(),
+            }),
+            _out: PhantomData,
+        }
+    }
+
     /// Switches the query to return aggregate results rather than rows.
     ///
     /// The output type is a tuple, e.g. `(Option<i64>, i64)` for
@@ -171,6 +273,7 @@ where
             offset: self.offset,
             distinct: self.distinct,
             includes: include,
+            join: self.join,
             _out: PhantomData,
         }
     }
@@ -186,6 +289,7 @@ where
             offset: self.offset,
             distinct: self.distinct,
             includes: (),
+            join: None,
             _out: PhantomData,
         }
     }
@@ -205,16 +309,34 @@ where
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> CompiledSql {
         let dialect = self.exec.dialect();
-        select::<M>(
-            dialect,
-            M::TABLE,
-            &self.projection,
-            &self.filter.node,
-            &self.order,
-            self.limit,
-            self.offset,
-            self.distinct,
-        )
+        if let Some(ref join) = self.join {
+            join_select_with_columns::<M>(
+                dialect,
+                M::TABLE,
+                M::COLUMNS,
+                join.right_table,
+                join.right_columns,
+                join.right_alias,
+                join.kind,
+                &join.on.node,
+                &self.filter.node,
+                &self.order,
+                self.limit,
+                self.offset,
+                self.distinct,
+            )
+        } else {
+            select::<M>(
+                dialect,
+                M::TABLE,
+                &self.projection,
+                &self.filter.node,
+                &self.order,
+                self.limit,
+                self.offset,
+                self.distinct,
+            )
+        }
     }
 
     /// Returns the number of rows the query would return.

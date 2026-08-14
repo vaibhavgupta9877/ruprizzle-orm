@@ -141,6 +141,14 @@ pub enum FilterNode {
         values: Vec<Value>,
         negated: bool,
     },
+    /// A comparison between two columns, used for join `ON` clauses.
+    ColumnCmp {
+        left_table: &'static str,
+        left_col: &'static str,
+        op: CmpOp,
+        right_table: &'static str,
+        right_col: &'static str,
+    },
     /// Correlated `EXISTS (SELECT 1 FROM child_table WHERE child_fk = parent_pk AND filter)`.
     Exists {
         child_table: &'static str,

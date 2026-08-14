@@ -3,6 +3,7 @@
 use std::marker::PhantomData;
 
 use crate::filter::{CmpOp, Filter, FilterNode};
+use crate::join::JoinOn;
 use crate::order::OrderBy;
 use crate::value::{Encodable, Ordered, Value};
 
@@ -50,6 +51,25 @@ impl<M, T> Column<M, T> {
         Self {
             table,
             column,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Reference the same column in a join condition on the right side of another model.
+    pub fn on<J>(self, other: Column<J, T>) -> JoinOn {
+        JoinOn::new(self, other)
+    }
+
+    /// Use this column token with a different table name, typically a self-join alias.
+    ///
+    /// The model marker `M` is preserved, so the resulting column still has the
+    /// same Rust type; only the SQL qualifier changes. This makes self-joins
+    /// type-safe without needing a separate alias type.
+    #[must_use]
+    pub const fn aliased(self, table: &'static str) -> Self {
+        Self {
+            table,
+            column: self.column,
             _marker: PhantomData,
         }
     }

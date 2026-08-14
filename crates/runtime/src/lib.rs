@@ -36,8 +36,12 @@ pub mod error;
 pub mod executor;
 pub mod filter;
 pub mod include;
+pub mod join;
 pub mod metrics;
 pub mod model;
+#[doc(hidden)]
+pub mod offset_row;
+pub use offset_row::OffsetRow;
 pub mod order;
 pub mod page;
 pub mod pool;
@@ -63,8 +67,9 @@ pub mod decode;
 pub mod prelude {
     pub use crate::{
         Aggregate, AggregateQuery, AggregateScalar, Column, Encodable, Error, Executor, Filter,
-        GroupBy, GroupedQuery, InsertQuery, IsolationLevel, Model, Numeric, OrderBy, Page, Pool,
-        RawFragment, Related, SelectQuery, Tx, Value, raw,
+        GroupBy, GroupedQuery, InsertQuery, IsolationLevel, Join2, JoinKind, JoinOn, LeftJoin2,
+        Maybe, Model, Numeric, OrderBy, Page, Pool, RawFragment, Related, SelectQuery, Tx, Value,
+        raw,
     };
 }
 
@@ -79,6 +84,7 @@ pub use error::Error;
 pub use executor::{Executor, RowBatch, decode_rows};
 pub use filter::{Filter, FilterNode, RawFragment, all, any};
 pub use include::{IncludeList, IncludeOne, IncludeSet};
+pub use join::{Join2, JoinKind, JoinOn, JoinSide, LeftJoin2, Maybe};
 pub use model::Model;
 pub use order::OrderBy;
 pub use page::Page;

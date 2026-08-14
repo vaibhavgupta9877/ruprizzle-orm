@@ -10,6 +10,7 @@ use ruprizzle_dialect::{DbDialect, dialect_for};
 
 use crate::aggregate::{AggregateEntry, AggregateKind};
 use crate::filter::{CmpOp, FilterNode};
+use crate::join::JoinKind;
 use crate::model::Model;
 use crate::order::OrderBy;
 use crate::value::Value;
@@ -88,6 +89,154 @@ pub fn select<M: Model>(
     }
 
     c.finish()
+}
+
+/// Compile a `SELECT` for a join between `M` and `J`.
+///
+/// This is the public, typed entry point; the query builder uses
+/// [`join_select_with_columns`] so it does not need to keep `J` in the
+/// `SelectQuery` type.
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn join_select<M: Model, J: Model>(
+    dialect: &dyn DbDialect,
+    left_table: &str,
+    right_table: &str,
+    right_alias: Option<&str>,
+    join_kind: JoinKind,
+    on: &FilterNode,
+    filter: &FilterNode,
+    order: &[OrderBy<M>],
+    limit: Option<u64>,
+    offset: Option<u64>,
+    distinct: bool,
+) -> CompiledSql {
+    join_select_with_columns(
+        dialect,
+        left_table,
+        M::COLUMNS,
+        right_table,
+        J::COLUMNS,
+        right_alias,
+        join_kind,
+        on,
+        filter,
+        order,
+        limit,
+        offset,
+        distinct,
+    )
+}
+
+/// Compile a `SELECT` for a join with the right-hand columns supplied as a slice.
+///
+/// This is the internal entry point used by the query builder, which does not
+/// have the right-hand model type available at the call site.
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn join_select_with_columns<M: Model>(
+    dialect: &dyn DbDialect,
+    left_table: &str,
+    left_columns: &[&str],
+    right_table: &str,
+    right_columns: &[&str],
+    right_alias: Option<&str>,
+    join_kind: JoinKind,
+    on: &FilterNode,
+    filter: &FilterNode,
+    order: &[OrderBy<M>],
+    limit: Option<u64>,
+    offset: Option<u64>,
+    distinct: bool,
+) -> CompiledSql {
+    let mut c = Compiler::new(dialect);
+
+    c.push_str("SELECT ");
+    if distinct {
+        c.push_str("DISTINCT ");
+    }
+
+    let right_qualifier = right_alias.unwrap_or(right_table);
+
+    if left_columns.is_empty() {
+        c.push_quoted(left_table);
+        c.push_str(".*");
+    } else {
+        for (i, col) in left_columns.iter().enumerate() {
+            if i > 0 {
+                c.push_str(", ");
+            }
+            c.push_quoted(left_table);
+            c.push('.');
+            c.push_quoted(col);
+        }
+    }
+
+    if right_columns.is_empty() {
+        c.push_str(", ");
+        c.push_quoted(right_qualifier);
+        c.push_str(".*");
+    } else {
+        for col in right_columns {
+            c.push_str(", ");
+            c.push_quoted(right_qualifier);
+            c.push('.');
+            c.push_quoted(col);
+        }
+    }
+
+    c.push_str(" FROM ");
+    c.push_quoted(left_table);
+
+    c.push(' ');
+    c.push_str(join_kind_sql(dialect, join_kind));
+    c.push(' ');
+    c.push_quoted(right_table);
+
+    if let Some(alias) = right_alias {
+        c.push_str(" AS ");
+        c.push_quoted(alias);
+    }
+
+    c.push_str(" ON ");
+    c.push_filter(on);
+
+    if !matches!(filter, FilterNode::And(v) if v.is_empty()) {
+        c.push_str(" WHERE ");
+        c.push_filter(filter);
+    }
+
+    if !order.is_empty() {
+        c.push_str(" ORDER BY ");
+        c.push_order(order);
+    }
+
+    if let Some(n) = limit {
+        c.push_str(" LIMIT ");
+        c.push_str(&n.to_string());
+    }
+
+    if let Some(n) = offset {
+        c.push_str(" OFFSET ");
+        c.push_str(&n.to_string());
+    }
+
+    c.finish()
+}
+
+fn join_kind_sql(dialect: &dyn DbDialect, kind: JoinKind) -> &'static str {
+    match kind {
+        JoinKind::Inner => "INNER JOIN",
+        JoinKind::Left => "LEFT JOIN",
+        JoinKind::Right => "RIGHT JOIN",
+        JoinKind::Full => {
+            if dialect.name() == "postgres" {
+                "FULL OUTER JOIN"
+            } else {
+                "FULL JOIN"
+            }
+        }
+    }
 }
 
 /// Compile an aggregate `SELECT` for `M`.
@@ -685,6 +834,23 @@ impl<'d> Compiler<'d> {
                 }
                 self.push(')');
             }
+            FilterNode::ColumnCmp {
+                left_table,
+                left_col,
+                op,
+                right_table,
+                right_col,
+            } => {
+                self.push_quoted(left_table);
+                self.push('.');
+                self.push_quoted(left_col);
+                self.push(' ');
+                self.push_op(*op);
+                self.push(' ');
+                self.push_quoted(right_table);
+                self.push('.');
+                self.push_quoted(right_col);
+            }
             FilterNode::And(nodes) => {
                 if nodes.is_empty() {
                     self.push_str("TRUE");
@@ -842,9 +1008,43 @@ mod tests {
     }
     unit_row_decode!(User);
 
+    #[derive(Default)]
+    struct JoinUser;
+    impl Model for JoinUser {
+        const TABLE: &'static str = "users";
+        const PRIMARY_KEY: &'static str = "id";
+        const COLUMNS: &'static [&'static str] = &["id", "name"];
+    }
+    unit_row_decode!(JoinUser);
+
+    #[derive(Default)]
+    struct JoinPost;
+    impl Model for JoinPost {
+        const TABLE: &'static str = "posts";
+        const PRIMARY_KEY: &'static str = "id";
+        const COLUMNS: &'static [&'static str] = &["id", "title", "user_id"];
+    }
+    unit_row_decode!(JoinPost);
+
+    #[derive(Default)]
+    struct SelfJoinUser;
+    impl Model for SelfJoinUser {
+        const TABLE: &'static str = "employees";
+        const PRIMARY_KEY: &'static str = "id";
+        const COLUMNS: &'static [&'static str] = &["id", "name", "manager_id"];
+    }
+    unit_row_decode!(SelfJoinUser);
+
     const ID: Column<User, i64> = Column::new("users", "id");
     const EMAIL: Column<User, Option<String>> = Column::new("users", "email");
     const AGE: Column<User, i32> = Column::new("users", "age");
+
+    const USER_ID: Column<JoinUser, i64> = Column::new("users", "id");
+    const POST_USER_ID: Column<JoinPost, i64> = Column::new("posts", "user_id");
+
+    const EMPLOYEE_ID: Column<SelfJoinUser, i64> = Column::new("employees", "id");
+    const MANAGER_ID: Column<SelfJoinUser, i64> = Column::new("employees", "manager_id");
+    const MANAGER_ID_AS_M: Column<SelfJoinUser, i64> = EMPLOYEE_ID.aliased("m");
 
     fn pg() -> &'static dyn DbDialect {
         dialect_for(Provider::Postgres)
@@ -1127,5 +1327,115 @@ mod tests {
             r#"SELECT 1 FROM "users" WHERE "users"."age" > $1 LIMIT 1"#
         );
         assert_eq!(c.binds, vec![Value::I32(0)]);
+    }
+
+    #[test]
+    fn inner_join_sql_postgres() {
+        let c = join_select::<JoinUser, JoinPost>(
+            pg(),
+            "users",
+            "posts",
+            None,
+            JoinKind::Inner,
+            &USER_ID.on(POST_USER_ID).node,
+            &FilterNode::And(vec![]),
+            &[],
+            None,
+            None,
+            false,
+        );
+        assert_eq!(
+            c.sql,
+            r#"SELECT "users"."id", "users"."name", "posts"."id", "posts"."title", "posts"."user_id" FROM "users" INNER JOIN "posts" ON "users"."id" = "posts"."user_id""#
+        );
+        assert!(c.binds.is_empty());
+    }
+
+    #[test]
+    fn right_join_sql_postgres() {
+        let c = join_select::<JoinUser, JoinPost>(
+            pg(),
+            "users",
+            "posts",
+            None,
+            JoinKind::Right,
+            &USER_ID.on(POST_USER_ID).node,
+            &FilterNode::And(vec![]),
+            &[],
+            None,
+            None,
+            false,
+        );
+        assert_eq!(
+            c.sql,
+            r#"SELECT "users"."id", "users"."name", "posts"."id", "posts"."title", "posts"."user_id" FROM "users" RIGHT JOIN "posts" ON "users"."id" = "posts"."user_id""#
+        );
+        assert!(c.binds.is_empty());
+    }
+
+    #[test]
+    fn full_join_sql_postgres() {
+        let c = join_select::<JoinUser, JoinPost>(
+            pg(),
+            "users",
+            "posts",
+            None,
+            JoinKind::Full,
+            &USER_ID.on(POST_USER_ID).node,
+            &FilterNode::And(vec![]),
+            &[],
+            None,
+            None,
+            false,
+        );
+        assert_eq!(
+            c.sql,
+            r#"SELECT "users"."id", "users"."name", "posts"."id", "posts"."title", "posts"."user_id" FROM "users" FULL OUTER JOIN "posts" ON "users"."id" = "posts"."user_id""#
+        );
+        assert!(c.binds.is_empty());
+    }
+
+    #[test]
+    fn left_join_sql_sqlite() {
+        let c = join_select::<JoinUser, JoinPost>(
+            sqlite(),
+            "users",
+            "posts",
+            None,
+            JoinKind::Left,
+            &USER_ID.on(POST_USER_ID).node,
+            &FilterNode::And(vec![]),
+            &[],
+            None,
+            None,
+            false,
+        );
+        assert_eq!(
+            c.sql,
+            r#"SELECT `users`.`id`, `users`.`name`, `posts`.`id`, `posts`.`title`, `posts`.`user_id` FROM `users` LEFT JOIN `posts` ON `users`.`id` = `posts`.`user_id`"#
+        );
+        assert!(c.binds.is_empty());
+    }
+
+    #[test]
+    fn self_join_sql_postgres() {
+        let c = join_select::<SelfJoinUser, SelfJoinUser>(
+            pg(),
+            "employees",
+            "employees",
+            Some("m"),
+            JoinKind::Inner,
+            &MANAGER_ID.on(MANAGER_ID_AS_M).node,
+            &FilterNode::And(vec![]),
+            &[],
+            None,
+            None,
+            false,
+        );
+        assert_eq!(
+            c.sql,
+            r#"SELECT "employees"."id", "employees"."name", "employees"."manager_id", "m"."id", "m"."name", "m"."manager_id" FROM "employees" INNER JOIN "employees" AS "m" ON "employees"."manager_id" = "m"."id""#
+        );
+        assert!(c.binds.is_empty());
     }
 }

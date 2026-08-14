@@ -238,6 +238,10 @@ impl DbDialect for MySqlDialect {
             window_functions: true,
         }
     }
+
+    fn supports_full_join(&self) -> bool {
+        false
+    }
 }
 
 fn mysql_type_name(ty: ScalarType) -> &'static str {
