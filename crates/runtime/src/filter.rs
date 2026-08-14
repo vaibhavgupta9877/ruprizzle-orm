@@ -3,6 +3,7 @@
 use std::marker::PhantomData;
 
 use crate::compile::CompiledSql;
+use crate::json::JsonPath;
 use crate::model::Model;
 use crate::query::SelectQuery;
 use crate::value::Value;
@@ -343,6 +344,32 @@ pub enum FilterNode {
     Not(Box<FilterNode>),
     /// A raw SQL fragment with bound parameters.
     Raw(RawFragment),
+    /// A JSON column operation.
+    Json {
+        /// The SQL table name.
+        table: &'static str,
+        /// The SQL column name.
+        column: &'static str,
+        /// The JSON path inside the column.
+        path: JsonPath,
+        /// `true` for text extraction, `false` for JSON.
+        text: bool,
+        /// The JSON-specific operator.
+        op: JsonFilterOp,
+        /// The bound value.
+        value: Value,
+    },
+}
+
+/// JSON-specific filter operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JsonFilterOp {
+    /// A scalar comparison (`=`, `<>`, `>`, ...).
+    Cmp(CmpOp),
+    /// JSON containment (`@>`).
+    Contains,
+    /// Top-level or nested key existence (`?`).
+    HasKey,
 }
 
 /// Comparison operators.

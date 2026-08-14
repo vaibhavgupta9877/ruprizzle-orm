@@ -318,13 +318,22 @@ None of these exist. They are what "SQL-like typed builder" means to a Drizzle u
 
 *Currently `Partial` for us, `Yes` for Prisma. 3 days.*
 
-- [ ] **Step 1.** Postgres: `->`, `->>`, `#>`, `#>>`, `@>`, `?`, `jsonb_set`, exposed as
+- [x] **Step 1.** Postgres: `->`, `->>`, `#>`, `#>>`, `@>`, `?`, `jsonb_set`, exposed as
       typed methods on `Column<M, Json>`.
 - [ ] **Step 2.** SQLite: `json_extract` and friends. `KnownLimitations.md` says SQLite
       `Json` is stored as text and cannot be queried — SQLite's JSON1 extension makes this
       addressable, so either implement it or restate the limitation accurately.
 - [ ] **Step 3.** Path-based filtering and ordering on JSON fields.
 - [ ] **Step 4.** Update `KnownLimitations.md` and the comparison table.
+
+> **Current status (2026-08-15):** W2-04 Step 1 is complete. `JsonPath`,
+> `JsonPathSegment`, `JsonColumn`, `JsonFilterOp`, and `JsonSet` are implemented in
+> `crates/runtime/src/json.rs`. `Column<M, serde_json::Value>` gains `get`,
+> `get_text`, `contains`, `has_key`, and `jsonb_set`. `JsonColumn` supports `eq`,
+> `ne`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `asc`, and `desc`. SQL
+> generation emits Postgres JSON/JSONB operators and `jsonb_set` in
+> `crates/runtime/src/compile.rs`. Unit tests pass for all operators and the
+> update helper. Steps 2–4 remain open.
 
 ### W2-05 · Full many-to-many
 

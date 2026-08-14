@@ -104,7 +104,7 @@ where
             q = q.filter(filter.clone());
         }
         for o in order {
-            q = q.order_by(*o);
+            q = q.order_by(o.clone());
         }
         all.extend(q.fetch_all().await?);
     }
@@ -134,7 +134,7 @@ where
             q = q.filter(filter.clone());
         }
         for o in order {
-            q = q.order_by(*o);
+            q = q.order_by(o.clone());
         }
         all.extend(q.limit(limit).fetch_all().await?);
     }

@@ -1,9 +1,11 @@
 //! Typed column tokens.
 
 use std::marker::PhantomData;
+use std::sync::Arc;
 
-use crate::filter::{CmpOp, Filter, FilterNode, Subquery};
+use crate::filter::{CmpOp, Filter, FilterNode, JsonFilterOp, Subquery};
 use crate::join::JoinOn;
+use crate::json::{JsonColumn, JsonPath, JsonPathSegment, JsonSet};
 use crate::order::OrderBy;
 use crate::value::{Encodable, Ordered, Value};
 
@@ -288,6 +290,65 @@ impl<M, T> Column<M, Option<T>> {
             column: self.column,
             negated: true,
         })
+    }
+}
+
+impl<M> Column<M, serde_json::Value> {
+    /// Extract a JSON field by key (`column->'key'` or `column#>'{...}'`).
+    #[must_use]
+    pub fn get(self, key: &'static str) -> JsonColumn<M, serde_json::Value> {
+        JsonColumn {
+            table: self.table,
+            column: self.column,
+            path: JsonPath(vec![JsonPathSegment::Key(key)]),
+            text: false,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Extract a JSON field by key as text (`column->>'key'` or `column#>>'{...}'`).
+    #[must_use]
+    pub fn get_text(self, key: &'static str) -> JsonColumn<M, String> {
+        JsonColumn {
+            table: self.table,
+            column: self.column,
+            path: JsonPath(vec![JsonPathSegment::Key(key)]),
+            text: true,
+            _marker: PhantomData,
+        }
+    }
+
+    /// `column @> value` (JSON containment).
+    pub fn contains(self, value: serde_json::Value) -> Filter<M> {
+        Filter::new(FilterNode::Json {
+            table: self.table,
+            column: self.column,
+            path: JsonPath::default(),
+            text: false,
+            op: JsonFilterOp::Contains,
+            value: value.to_value(),
+        })
+    }
+
+    /// `column ? key` (top-level key existence).
+    pub fn has_key(self, key: impl Into<String>) -> Filter<M> {
+        Filter::new(FilterNode::Json {
+            table: self.table,
+            column: self.column,
+            path: JsonPath::default(),
+            text: false,
+            op: JsonFilterOp::HasKey,
+            value: Value::Str(Arc::from(key.into())),
+        })
+    }
+
+    /// Build a `jsonb_set` expression for this column and key.
+    pub fn jsonb_set(self, key: &'static str, value: serde_json::Value) -> JsonSet {
+        JsonSet {
+            column: self.column,
+            path: JsonPath(vec![JsonPathSegment::Key(key)]),
+            value: value.to_value(),
+        }
     }
 }
 

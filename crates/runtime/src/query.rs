@@ -7,12 +7,13 @@ use crate::Error;
 use crate::aggregate::{AggregateEntry, AggregateSet, GroupBy};
 use crate::col::{Column, Projection};
 use crate::compile::{
-    CompiledSql, delete, dialect_for_pool, insert, insert_many, join_select_with_columns, select,
-    update, upsert,
+    CompiledSql, SetExpr, delete, dialect_for_pool, insert, insert_many, join_select_with_columns,
+    select, update_with_sets, upsert,
 };
 use crate::executor::Executor;
 use crate::filter::{Cte, CteQuery, Filter, FilterNode};
 use crate::include::IncludeSet;
+use crate::json::JsonSet;
 use crate::join::{Join2, JoinKind, JoinOn, JoinSpec, LeftJoin2, Maybe};
 use crate::model::{Model, RowDecode};
 use crate::order::OrderBy;
@@ -1440,7 +1441,7 @@ fn validate_row_shape(rows: &[Vec<(&'static str, Value)>]) -> Result<(), Error> 
 #[allow(dead_code)]
 pub struct UpdateQuery<'db, M: Model> {
     pool: &'db Pool,
-    sets: Vec<(&'static str, Value)>,
+    sets: Vec<SetExpr>,
     filter: Filter<M>,
     all_rows: bool,
     _marker: PhantomData<fn() -> M>,
@@ -1469,14 +1470,40 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
 
     /// Sets an explicit value.
     pub fn set<V: Encodable>(mut self, col: Column<M, V>, value: impl Into<V>) -> Self {
-        self.sets.push((col.column, value.into().to_value()));
+        self.sets.push(SetExpr::Column {
+            column: col.column,
+            value: value.into().to_value(),
+        });
         self
     }
 
     /// Sets a column to `NULL`.
     pub fn set_null<V: Encodable>(mut self, col: Column<M, V>) -> Self {
-        self.sets.push((col.column, Value::Null));
+        self.sets.push(SetExpr::Column {
+            column: col.column,
+            value: Value::Null,
+        });
         self
+    }
+
+    /// Applies a `jsonb_set` expression.
+    pub fn json_set(mut self, set: JsonSet) -> Self {
+        self.sets.push(SetExpr::JsonbSet {
+            column: set.column,
+            path: set.path,
+            value: set.value,
+        });
+        self
+    }
+
+    /// Convenience: set a single key inside a `jsonb` column.
+    pub fn jsonb_set(
+        self,
+        col: Column<M, serde_json::Value>,
+        key: &'static str,
+        value: serde_json::Value,
+    ) -> Self {
+        self.json_set(col.jsonb_set(key, value))
     }
 
     /// Allows updating all rows. Without this, `exec` returns an error if no
@@ -1497,7 +1524,7 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
             return Err(Error::Message("update has no columns to set".into()));
         }
         let dialect = dialect_for_pool(self.pool);
-        Ok(update::<M>(
+        Ok(update_with_sets(
             dialect,
             M::TABLE,
             &self.sets,

@@ -37,6 +37,7 @@ pub mod executor;
 pub mod filter;
 pub mod include;
 pub mod join;
+pub mod json;
 pub mod metrics;
 pub mod model;
 #[doc(hidden)]
@@ -68,8 +69,8 @@ pub mod prelude {
     pub use crate::{
         Aggregate, AggregateQuery, AggregateScalar, Column, Cte, CteQuery, Encodable, Error,
         Executor, Filter, GroupBy, GroupedQuery, InsertQuery, IsolationLevel, Join2, JoinKind,
-        JoinOn, LeftJoin2, Maybe, Model, Numeric, OrderBy, Page, Pool, RawFragment, Related,
-        SelectQuery, SetOp, SetOpQuery, Tx, Value, raw,
+        JoinOn, JsonColumn, LeftJoin2, Maybe, Model, Numeric, OrderBy, Page, Pool, RawFragment,
+        Related, SelectQuery, SetOp, SetOpQuery, Tx, Value, raw,
     };
 }
 
@@ -83,9 +84,11 @@ pub use counting::CountingExecutor;
 pub use error::Error;
 pub use executor::{Executor, RowBatch, decode_rows};
 pub use filter::{
-    Cte, CteQuery, ExistsSubquery, Filter, FilterNode, RawFragment, Subquery, all, any,
+    Cte, CteQuery, ExistsSubquery, Filter, FilterNode, JsonFilterOp, RawFragment, Subquery, all,
+    any,
 };
 pub use include::{IncludeList, IncludeOne, IncludeSet};
+pub use json::{JsonColumn, JsonPath, JsonSet};
 pub use join::{Join2, JoinKind, JoinOn, JoinSide, LeftJoin2, Maybe};
 pub use model::Model;
 pub use order::OrderBy;

@@ -10,8 +10,9 @@ use std::fmt::Write as _;
 use ruprizzle_dialect::{DbDialect, dialect_for};
 
 use crate::aggregate::{AggregateEntry, AggregateKind};
-use crate::filter::{CmpOp, Cte, FilterNode};
+use crate::filter::{CmpOp, Cte, FilterNode, JsonFilterOp};
 use crate::join::JoinKind;
+use crate::json::{JsonPath, JsonPathSegment};
 use crate::model::Model;
 use crate::order::OrderBy;
 use crate::query::SetOp;
@@ -708,6 +709,27 @@ pub fn upsert<M: Model>(
     c.finish()
 }
 
+/// A single `UPDATE` set clause.
+#[derive(Debug, Clone)]
+pub(crate) enum SetExpr {
+    /// Set a column to a bound value.
+    Column {
+        /// The column name.
+        column: &'static str,
+        /// The bound value.
+        value: Value,
+    },
+    /// Set a JSONB path with `jsonb_set`.
+    JsonbSet {
+        /// The column name.
+        column: &'static str,
+        /// The JSON path.
+        path: JsonPath,
+        /// The bound value.
+        value: Value,
+    },
+}
+
 /// Compile an `UPDATE` for `M`.
 #[must_use]
 pub fn update<M: Model>(
@@ -717,18 +739,57 @@ pub fn update<M: Model>(
     filter: &FilterNode,
     returning: &[&str],
 ) -> CompiledSql {
+    let sets: Vec<SetExpr> = sets
+        .iter()
+        .map(|(col, val)| SetExpr::Column {
+            column: col,
+            value: val.clone(),
+        })
+        .collect();
+    update_with_sets(dialect, table, &sets, filter, returning)
+}
+
+/// Compile an `UPDATE` with support for JSONB set clauses.
+#[must_use]
+pub(crate) fn update_with_sets(
+    dialect: &dyn DbDialect,
+    table: &str,
+    sets: &[SetExpr],
+    filter: &FilterNode,
+    returning: &[&str],
+) -> CompiledSql {
     let mut c = Compiler::new(dialect);
 
     c.push_str("UPDATE ");
     c.push_quoted(table);
     c.push_str(" SET ");
-    for (i, (col, val)) in sets.iter().enumerate() {
+    for (i, set) in sets.iter().enumerate() {
         if i > 0 {
             c.push_str(", ");
         }
-        c.push_quoted(col);
-        c.push_str(" = ");
-        c.push_bind(val.clone());
+        match set {
+            SetExpr::Column { column, value } => {
+                c.push_quoted(column);
+                c.push_str(" = ");
+                c.push_bind(value.clone());
+            }
+            SetExpr::JsonbSet { column, path, value } => {
+                c.push_quoted(column);
+                c.push_str(" = jsonb_set(");
+                c.push_quoted(column);
+                c.push_str(", ");
+                c.push_json_path_array(path);
+                if dialect.name() == "postgres" {
+                    c.push_str("::text[]");
+                }
+                c.push_str(", ");
+                c.push_bind(value.clone());
+                if dialect.name() == "postgres" {
+                    c.push_str("::jsonb");
+                }
+                c.push(')');
+            }
+        }
     }
 
     if !matches!(filter, FilterNode::And(v) if v.is_empty()) {
@@ -876,15 +937,93 @@ impl<'d> Compiler<'d> {
             if i > 0 {
                 self.push_str(", ");
             }
-            self.push_quoted(o.table);
-            self.push('.');
-            self.push_quoted(o.column);
+            if let Some(path) = &o.json_path {
+                self.push_json_expr(o.table, o.column, path, o.text);
+            } else {
+                self.push_quoted(o.table);
+                self.push('.');
+                self.push_quoted(o.column);
+            }
             if o.desc {
                 self.push_str(" DESC");
             } else {
                 self.push_str(" ASC");
             }
         }
+    }
+
+    fn push_json_expr(&mut self, table: &str, column: &str, path: &JsonPath, text: bool) {
+        self.push_quoted(table);
+        self.push('.');
+        self.push_quoted(column);
+        if path.0.is_empty() {
+            return;
+        }
+        if path.0.len() == 1 {
+            match path.0[0] {
+                JsonPathSegment::Key(k) => {
+                    if text {
+                        self.push_str("->>'");
+                    } else {
+                        self.push_str("->'");
+                    }
+                    self.push_json_string_literal(k);
+                    self.push('\'');
+                    return;
+                }
+                JsonPathSegment::Index(i) => {
+                    if text {
+                        self.push_str("->>");
+                    } else {
+                        self.push_str("->");
+                    }
+                    self.push_str(&i.to_string());
+                    return;
+                }
+            }
+        }
+        if text {
+            self.push_str("#>>");
+        } else {
+            self.push_str("#>");
+        }
+        self.push_json_path_array(path);
+    }
+
+    fn push_json_path_array(&mut self, path: &JsonPath) {
+        self.push('\'');
+        self.push('{');
+        for (i, seg) in path.0.iter().enumerate() {
+            if i > 0 {
+                self.push(',');
+            }
+            match seg {
+                JsonPathSegment::Key(k) => self.push_json_array_key(k),
+                JsonPathSegment::Index(n) => self.push_str(&n.to_string()),
+            }
+        }
+        self.push('}');
+        self.push('\'');
+    }
+
+    fn push_json_string_literal(&mut self, s: &str) {
+        for c in s.chars() {
+            if c == '\'' {
+                self.push('\'');
+            }
+            self.push(c);
+        }
+    }
+
+    fn push_json_array_key(&mut self, k: &str) {
+        self.push('"');
+        for c in k.chars() {
+            if c == '\\' || c == '"' {
+                self.push('\\');
+            }
+            self.push(c);
+        }
+        self.push('"');
     }
 
     fn push_bind(&mut self, value: Value) {
@@ -1113,6 +1252,35 @@ impl<'d> Compiler<'d> {
                     }
                 }
             }
+            FilterNode::Json {
+                table,
+                column,
+                path,
+                text,
+                op,
+                value,
+            } => {
+                self.push_json_expr(table, column, path, *text);
+                match op {
+                    JsonFilterOp::Cmp(cmp) => {
+                        self.push(' ');
+                        self.push_op(*cmp);
+                        self.push(' ');
+                        self.push_bind(value.clone());
+                    }
+                    JsonFilterOp::Contains => {
+                        self.push_str(" @> ");
+                        self.push_bind(value.clone());
+                        if self.dialect.name() == "postgres" {
+                            self.push_str("::jsonb");
+                        }
+                    }
+                    JsonFilterOp::HasKey => {
+                        self.push_str(" ? ");
+                        self.push_bind(value.clone());
+                    }
+                }
+            }
         }
     }
 
@@ -1138,6 +1306,7 @@ mod tests {
     use crate::error::Error;
     use crate::executor::{BoxRowStream, Executor, RawRow, RowBatch};
     use crate::filter::{Filter, RawFragment, all, any};
+    use crate::json::{JsonPath, JsonPathSegment};
     use crate::order::OrderBy;
     use crate::query::{SelectQuery, SetOp, SetOpQuery};
     use crate::value::Value;
@@ -1258,6 +1427,7 @@ mod tests {
 
     const NAME: Column<User, String> = Column::new("users", "name");
     const ROLE: Column<User, String> = Column::new("users", "role");
+    const DATA: Column<User, serde_json::Value> = Column::new("docs", "data");
 
     fn pg() -> &'static dyn DbDialect {
         dialect_for(Provider::Postgres)
@@ -2051,5 +2221,106 @@ mod tests {
         let right = SelectQuery::<JoinPost>::new(&exec).columns(POST_USER_ID);
         let q = SetOpQuery::new(&exec, SetOp::Except, left, right);
         assert!(q.to_sql().is_err());
+    }
+
+    #[test]
+    fn json_get_postgres() {
+        let f = DATA.get("title").eq("hello");
+        let c = select::<User>(pg(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM "docs" WHERE "docs"."data"->'title' = $1"##
+        );
+        assert_eq!(
+            c.binds,
+            vec![Value::Json(serde_json::Value::String("hello".into()))]
+        );
+    }
+
+    #[test]
+    fn json_get_text_postgres() {
+        let f = DATA.get_text("title").eq("hello");
+        let c = select::<User>(pg(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM "docs" WHERE "docs"."data"->>'title' = $1"##
+        );
+        assert_eq!(c.binds, vec![Value::Str("hello".into())]);
+    }
+
+    #[test]
+    fn json_contains_postgres() {
+        let f = DATA.contains(serde_json::json!({"a": 1}));
+        let c = select::<User>(pg(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM "docs" WHERE "docs"."data" @> $1::jsonb"##
+        );
+        assert_eq!(c.binds, vec![Value::Json(serde_json::json!({"a": 1}))]);
+    }
+
+    #[test]
+    fn json_has_key_postgres() {
+        let f = DATA.has_key("a");
+        let c = select::<User>(pg(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM "docs" WHERE "docs"."data" ? $1"##
+        );
+        assert_eq!(c.binds, vec![Value::Str("a".into())]);
+    }
+
+    #[test]
+    fn json_multi_path_postgres() {
+        let f = DATA.get("a").get("b").eq(1);
+        let c = select::<User>(pg(), "docs", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM "docs" WHERE "docs"."data"#>'{"a","b"}' = $1"##
+        );
+        assert_eq!(c.binds, vec![Value::Json(serde_json::Value::Number(1.into()))]);
+    }
+
+    #[test]
+    fn json_order_by_postgres() {
+        let c = select::<User>(
+            pg(),
+            "docs",
+            &[],
+            &FilterNode::And(vec![]),
+            &[DATA.get("title").desc()],
+            None,
+            None,
+            false,
+        );
+        assert_eq!(
+            c.sql,
+            r##"SELECT * FROM "docs" ORDER BY "docs"."data"->'title' DESC"##
+        );
+    }
+
+    #[test]
+    fn jsonb_set_postgres() {
+        let c = update_with_sets(
+            pg(),
+            "docs",
+            &[
+                SetExpr::JsonbSet {
+                    column: "data",
+                    path: JsonPath(vec![JsonPathSegment::Key("title")]),
+                    value: Value::Json(serde_json::Value::String("hello".into())),
+                },
+            ],
+            &FilterNode::And(vec![]),
+            &[],
+        );
+        assert_eq!(
+            c.sql,
+            r##"UPDATE "docs" SET "data" = jsonb_set("data", '{"title"}'::text[], $1::jsonb)"##
+        );
+        assert_eq!(
+            c.binds,
+            vec![Value::Json(serde_json::Value::String("hello".into()))]
+        );
     }
 }

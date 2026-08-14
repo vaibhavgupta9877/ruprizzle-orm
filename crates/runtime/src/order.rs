@@ -3,6 +3,8 @@
 use std::fmt;
 use std::marker::PhantomData;
 
+use crate::json::JsonPath;
+
 /// A typed order-by clause.
 #[derive(PartialEq, Eq)]
 pub struct OrderBy<M> {
@@ -12,7 +14,11 @@ pub struct OrderBy<M> {
     pub column: &'static str,
     /// `true` for `DESC`, `false` for `ASC`.
     pub desc: bool,
-    _marker: PhantomData<fn() -> M>,
+    /// Optional JSON path for ordering inside a JSON column.
+    pub json_path: Option<JsonPath>,
+    /// `true` for text extraction, `false` for JSON.
+    pub text: bool,
+    pub(crate) _marker: PhantomData<fn() -> M>,
 }
 
 impl<M> fmt::Debug for OrderBy<M> {
@@ -21,14 +27,22 @@ impl<M> fmt::Debug for OrderBy<M> {
             .field("table", &self.table)
             .field("column", &self.column)
             .field("desc", &self.desc)
+            .field("json_path", &self.json_path)
+            .field("text", &self.text)
             .finish()
     }
 }
 
-impl<M> Copy for OrderBy<M> {}
 impl<M> Clone for OrderBy<M> {
     fn clone(&self) -> Self {
-        *self
+        Self {
+            table: self.table,
+            column: self.column,
+            desc: self.desc,
+            json_path: self.json_path.clone(),
+            text: self.text,
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -40,6 +54,8 @@ impl<M> OrderBy<M> {
             table,
             column,
             desc,
+            json_path: None,
+            text: false,
             _marker: PhantomData,
         }
     }
