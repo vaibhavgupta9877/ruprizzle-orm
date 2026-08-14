@@ -118,7 +118,7 @@ both_dbs! {
     async fn self_inner_join_to_sql_and_fetch(db: TestDb) {
         let q = SelectQuery::<Employee>::new(db.pool())
             .inner_join_aliased::<Employee>("m", MANAGER_ID.on(EMPLOYEE_ID.aliased("m")));
-        let compiled = q.to_sql();
+        let compiled = q.to_sql().unwrap();
         assert_eq!(compiled.sql, expected_self_join_sql(db.backend().as_str()));
 
         let rows = q.fetch_all().await?;

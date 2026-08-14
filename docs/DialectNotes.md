@@ -48,3 +48,23 @@ assert!(cap.drop_column);         // SQLite 3.35+
 
 `ruprizzle validate` prints warnings when you use a construct that the active
 provider handles poorly, e.g. `Decimal` on SQLite.
+
+## Query builder
+
+The runtime query builder compiles to SQL per dialect. If a construct cannot be
+expressed on the target database, `to_sql()` returns `Error::Message(...)`
+instead of emitting unsupported SQL:
+
+| Construct | Postgres | MySQL / MariaDB | SQLite |
+|---|---|---|---|
+| `INNER JOIN` | yes | yes | yes |
+| `LEFT JOIN` | yes | yes | yes |
+| `RIGHT JOIN` | yes | yes | no |
+| `FULL OUTER JOIN` | yes | no | no |
+| `UNION` / `UNION ALL` | yes | yes | yes |
+| `INTERSECT` | yes | no | yes |
+| `EXCEPT` | yes | no | yes |
+
+MySQL does not support `INTERSECT` or `EXCEPT`; MariaDB does not support
+`INTERSECT` or `EXCEPT` either. SQLite supports both but does not support
+`RIGHT JOIN` or `FULL OUTER JOIN`.

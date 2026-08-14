@@ -307,4 +307,14 @@ pub trait DbDialect: Send + Sync {
     fn supports_full_join(&self) -> bool {
         true
     }
+
+    /// Whether `INTERSECT` is supported.
+    fn supports_intersect(&self) -> bool {
+        true
+    }
+
+    /// Whether `EXCEPT` is supported.
+    fn supports_except(&self) -> bool {
+        true
+    }
 }

@@ -312,7 +312,7 @@ both_dbs! {
                     .filter(MANAGER_ID.correlated_to(USER_ID)),
             ));
 
-        let compiled = q.to_sql();
+        let compiled = q.to_sql().unwrap();
         assert_eq!(compiled.sql, expected_cte_sql(db.backend().as_str()));
         assert_eq!(compiled.binds, vec![Value::Str("manager".into())]);
 
@@ -349,7 +349,7 @@ both_dbs! {
         let q = SelectQuery::<Reports>::new(db.pool())
             .with_recursive("reports", anchor, recursive);
 
-        let compiled = q.to_sql();
+        let compiled = q.to_sql().unwrap();
         assert!(compiled.sql.starts_with(expected_recursive_prefix(db.backend().as_str())));
         assert!(compiled.sql.contains("UNION ALL"));
         assert_eq!(compiled.binds, vec![Value::I64(2)]);

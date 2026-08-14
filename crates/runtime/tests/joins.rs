@@ -208,7 +208,7 @@ both_dbs! {
     async fn inner_join_to_sql_and_fetch(db: TestDb) {
         let q = SelectQuery::<User>::new(db.pool())
             .inner_join::<Post>(USER_ID.on(POST_USER_ID));
-        let compiled = q.to_sql();
+        let compiled = q.to_sql().unwrap();
         assert_eq!(compiled.sql, expected_inner_join_sql(db.backend().as_str()));
 
         let rows = q.fetch_all().await?;
@@ -230,7 +230,7 @@ both_dbs! {
     async fn left_join_to_sql_and_fetch(db: TestDb) {
         let q = SelectQuery::<User>::new(db.pool())
             .left_join::<Post>(USER_ID.on(POST_USER_ID));
-        let compiled = q.to_sql();
+        let compiled = q.to_sql().unwrap();
         assert_eq!(compiled.sql, expected_left_join_sql(db.backend().as_str()));
 
         let rows = q.fetch_all().await?;

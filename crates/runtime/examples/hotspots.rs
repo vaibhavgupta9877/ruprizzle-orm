@@ -77,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n--- 1. fetch_one / fetch_optional emit no LIMIT 1 ---");
     let q = SelectQuery::<User>::new(&any).filter(USER_AGE.gt(0i64));
     println!("  SQL for .filter(age > 0).fetch_optional():");
-    println!("    {}", q.to_sql().sql);
+    println!("    {}", q.to_sql().unwrap().sql);
 
     let iters = 100;
     let start = Instant::now();
@@ -117,7 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter(USER_AGE.gt(0i64))
         .order_by(USER_AGE.desc())
         .limit(10);
-    println!("  base SQL: {}", q.to_sql().sql);
+    println!("  base SQL: {}", q.to_sql().unwrap().sql);
     let r = SelectQuery::<User>::new(&any)
         .filter(USER_AGE.gt(0i64))
         .order_by(USER_AGE.desc())
@@ -144,14 +144,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let q = SelectQuery::<User>::new(&any).filter(USER_ID.eq(1i64));
     let start = Instant::now();
     for _ in 0..iters {
-        std::hint::black_box(q.to_sql());
+        std::hint::black_box(q.to_sql().unwrap());
     }
     let total = us(start, iters);
     println!("  full to_sql() for select-by-pk             {total:>7.3} us/call");
 
     // ---- 4. SELECT * vs explicit projection ----
     println!("\n--- 4. default projection ---");
-    println!("  {}", SelectQuery::<User>::new(&any).to_sql().sql);
+    println!("  {}", SelectQuery::<User>::new(&any).to_sql().unwrap().sql);
     println!("  -> `SELECT *`: column set is whatever the table has, not what the model needs,");
     println!("     and the ordinals are unknown, which forces name-based decoding.");
 

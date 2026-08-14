@@ -108,7 +108,7 @@ fn query_construction(c: &mut Criterion) {
                 .filter(ID.eq(500i64))
                 .limit(1)
                 .offset(0);
-            let _ = q.to_sql();
+            let _ = q.to_sql().unwrap();
         })
     });
 
@@ -120,7 +120,7 @@ fn query_construction(c: &mut Criterion) {
                 .order_by(EMAIL.asc())
                 .limit(1000)
                 .offset(0);
-            let _ = q.to_sql();
+            let _ = q.to_sql().unwrap();
         })
     });
 
@@ -131,7 +131,7 @@ fn query_construction(c: &mut Criterion) {
                 .filter(ID.in_set(ids.clone()))
                 .order_by(ID.asc())
                 .limit(50);
-            let _ = q.to_sql();
+            let _ = q.to_sql().unwrap();
         })
     });
 
@@ -146,7 +146,7 @@ fn query_construction(c: &mut Criterion) {
                 .order_by(AGE.asc())
                 .order_by(EMAIL.asc())
                 .limit(100);
-            let _ = q.to_sql();
+            let _ = q.to_sql().unwrap();
         })
     });
 
@@ -158,7 +158,7 @@ fn query_construction(c: &mut Criterion) {
                 .order_by(EMAIL.asc())
                 .limit(20)
                 .offset(500);
-            let _ = q.to_sql();
+            let _ = q.to_sql().unwrap();
         })
     });
 }

@@ -1267,6 +1267,10 @@ mod tests {
         dialect_for(Provider::Sqlite)
     }
 
+    fn mysql() -> &'static dyn DbDialect {
+        dialect_for(Provider::Mysql)
+    }
+
     #[test]
     fn select_no_filter() {
         let c = select::<User>(
@@ -1892,7 +1896,7 @@ mod tests {
         let q = SelectQuery::<User>::new(&exec)
             .with("managers", body)
             .columns((ID, NAME));
-        let c = q.to_sql();
+        let c = q.to_sql().unwrap();
         assert_eq!(
             c.sql,
             r#"WITH "managers" AS (SELECT "users"."id" FROM "users" WHERE "users"."role" = $1) SELECT "users"."id", "users"."name" FROM "users""#
@@ -1909,7 +1913,7 @@ mod tests {
         let q = SelectQuery::<User>::new(&exec)
             .with("managers", body)
             .columns((ID, NAME));
-        let c = q.to_sql();
+        let c = q.to_sql().unwrap();
         assert_eq!(
             c.sql,
             r#"WITH `managers` AS (SELECT `users`.`id` FROM `users` WHERE `users`.`role` = ?) SELECT `users`.`id`, `users`.`name` FROM `users`"#
@@ -1929,7 +1933,7 @@ mod tests {
             .and(EMPLOYEE_NAME.eq("x")),
         );
         let q = SelectQuery::<Reports>::new(&exec).with_recursive("reports", anchor, recursive);
-        let c = q.to_sql();
+        let c = q.to_sql().unwrap();
         assert!(c.sql.starts_with(r#"WITH RECURSIVE "reports" AS ("#));
         assert!(c.sql.contains("UNION ALL"));
         assert!(c.sql.ends_with(
@@ -1944,7 +1948,7 @@ mod tests {
         let left = SelectQuery::<JoinUser>::new(&exec).columns(USER_ID);
         let right = SelectQuery::<JoinPost>::new(&exec).columns(POST_USER_ID);
         let q = SetOpQuery::new(&exec, SetOp::Union, left, right);
-        let c = q.to_sql();
+        let c = q.to_sql().unwrap();
         assert_eq!(
             c.sql,
             r#"(SELECT "users"."id" FROM "users") UNION (SELECT "posts"."user_id" FROM "posts")"#
@@ -1962,7 +1966,7 @@ mod tests {
             .filter(POST_USER_ID.eq(2))
             .columns(POST_USER_ID);
         let q = SetOpQuery::new(&exec, SetOp::UnionAll, left, right);
-        let c = q.to_sql();
+        let c = q.to_sql().unwrap();
         assert_eq!(
             c.sql,
             r#"SELECT * FROM (SELECT `users`.`id` FROM `users` WHERE `users`.`id` = ?) AS __rz_l UNION ALL SELECT * FROM (SELECT `posts`.`user_id` FROM `posts` WHERE `posts`.`user_id` = ?) AS __rz_r"#
@@ -1980,7 +1984,7 @@ mod tests {
             .filter(POST_USER_ID.in_(vec![2_i64, 3_i64]))
             .columns(POST_USER_ID);
         let q = SetOpQuery::new(&exec, SetOp::Union, left, right);
-        let c = q.to_sql();
+        let c = q.to_sql().unwrap();
         assert_eq!(
             c.sql,
             r#"(SELECT "users"."id" FROM "users" WHERE "users"."id" = $1) UNION (SELECT "posts"."user_id" FROM "posts" WHERE "posts"."user_id" IN ($2, $3))"#
@@ -1994,7 +1998,7 @@ mod tests {
         let left = SelectQuery::<JoinUser>::new(&exec).columns(USER_ID);
         let right = SelectQuery::<JoinPost>::new(&exec).columns(POST_USER_ID);
         let q = SetOpQuery::new(&exec, SetOp::Intersect, left, right);
-        let c = q.to_sql();
+        let c = q.to_sql().unwrap();
         assert_eq!(
             c.sql,
             r#"(SELECT "users"."id" FROM "users") INTERSECT (SELECT "posts"."user_id" FROM "posts")"#
@@ -2008,11 +2012,44 @@ mod tests {
         let left = SelectQuery::<JoinUser>::new(&exec).columns(USER_ID);
         let right = SelectQuery::<JoinPost>::new(&exec).columns(POST_USER_ID);
         let q = SetOpQuery::new(&exec, SetOp::Except, left, right);
-        let c = q.to_sql();
+        let c = q.to_sql().unwrap();
         assert_eq!(
             c.sql,
             r#"(SELECT "users"."id" FROM "users") EXCEPT (SELECT "posts"."user_id" FROM "posts")"#
         );
         assert!(c.binds.is_empty());
+    }
+
+    #[test]
+    fn right_join_sqlite_errors() {
+        let exec = NoopExecutor(sqlite());
+        let q =
+            SelectQuery::<JoinUser>::new(&exec).right_join::<JoinPost>(USER_ID.on(POST_USER_ID));
+        assert!(q.to_sql().is_err());
+    }
+
+    #[test]
+    fn full_join_sqlite_errors() {
+        let exec = NoopExecutor(sqlite());
+        let q = SelectQuery::<JoinUser>::new(&exec).full_join::<JoinPost>(USER_ID.on(POST_USER_ID));
+        assert!(q.to_sql().is_err());
+    }
+
+    #[test]
+    fn intersect_mysql_errors() {
+        let exec = NoopExecutor(mysql());
+        let left = SelectQuery::<JoinUser>::new(&exec).columns(USER_ID);
+        let right = SelectQuery::<JoinPost>::new(&exec).columns(POST_USER_ID);
+        let q = SetOpQuery::new(&exec, SetOp::Intersect, left, right);
+        assert!(q.to_sql().is_err());
+    }
+
+    #[test]
+    fn except_mysql_errors() {
+        let exec = NoopExecutor(mysql());
+        let left = SelectQuery::<JoinUser>::new(&exec).columns(USER_ID);
+        let right = SelectQuery::<JoinPost>::new(&exec).columns(POST_USER_ID);
+        let q = SetOpQuery::new(&exec, SetOp::Except, left, right);
+        assert!(q.to_sql().is_err());
     }
 }

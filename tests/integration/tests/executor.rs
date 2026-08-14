@@ -87,7 +87,7 @@ both_dbs! {
 
         // `exists` must not be a disguised count: it caps the result at one row.
         let (sql, _) = {
-            let c = SelectQuery::<Task>::new(pool).to_sql();
+            let c = SelectQuery::<Task>::new(pool).to_sql().unwrap();
             (c.sql, c.binds)
         };
         assert!(sql.contains("SELECT"), "unexpected select shape: {sql}");
@@ -140,7 +140,7 @@ both_dbs! {
                 .map(|_: Task| ())?;
         }
 
-        let rows: Vec<Task> = collect(SelectQuery::<Task>::new(pool).stream()).await;
+        let rows: Vec<Task> = collect(SelectQuery::<Task>::new(pool).stream()?).await;
         assert_eq!(rows.len(), 4);
         let mut ids: Vec<i64> = rows.iter().map(|t| t.id).collect();
         ids.sort_unstable();
@@ -148,7 +148,7 @@ both_dbs! {
 
         // Filters apply to streams too.
         let rows: Vec<Task> =
-            collect(SelectQuery::<Task>::new(pool).filter(ID.gt(2)).stream()).await;
+            collect(SelectQuery::<Task>::new(pool).filter(ID.gt(2)).stream()?).await;
         assert_eq!(rows.len(), 2);
     }
 }

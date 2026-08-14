@@ -285,7 +285,8 @@ async fn projection_distinct_count_exists_stream() {
     let mut stream = SelectQuery::<Item>::new(&pool)
         .filter(ACTIVE.eq(1))
         .order_by(ID.asc())
-        .stream();
+        .stream()
+        .unwrap();
     let mut ids = Vec::new();
     while let Some(row) = stream.next().await {
         ids.push(row.unwrap().id);

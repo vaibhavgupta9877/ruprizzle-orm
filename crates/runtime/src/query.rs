@@ -359,11 +359,40 @@ where
             )
     }
 
-    /// Compiles the main query (without the CTE `WITH` prefix) to SQL and binds.
-    pub(crate) fn to_sql_without_cte(&self) -> CompiledSql {
+    /// Returns an error if the query's join is not supported by the dialect.
+    fn check_join_support(&self) -> Result<(), Error> {
         let dialect = self.exec.dialect();
         if let Some(ref join) = self.join {
-            join_select_with_columns::<M>(
+            match join.kind {
+                JoinKind::Right if !dialect.supports_right_join() => {
+                    return Err(Error::Message(format!(
+                        "RIGHT JOIN is not supported by {}",
+                        dialect.name()
+                    )));
+                }
+                JoinKind::Full if !dialect.supports_full_join() => {
+                    return Err(Error::Message(format!(
+                        "FULL OUTER JOIN is not supported by {}",
+                        dialect.name()
+                    )));
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// Compiles the main query (without the CTE `WITH` prefix) to SQL and binds.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Message`] if the query uses a `RIGHT JOIN` or
+    /// `FULL OUTER JOIN` that the target dialect does not support.
+    pub(crate) fn to_sql_without_cte(&self) -> Result<CompiledSql, Error> {
+        self.check_join_support()?;
+        let dialect = self.exec.dialect();
+        if let Some(ref join) = self.join {
+            Ok(join_select_with_columns::<M>(
                 dialect,
                 M::TABLE,
                 M::COLUMNS,
@@ -377,9 +406,9 @@ where
                 self.limit,
                 self.offset,
                 self.distinct,
-            )
+            ))
         } else {
-            select::<M>(
+            Ok(select::<M>(
                 dialect,
                 M::TABLE,
                 &self.projection,
@@ -388,15 +417,20 @@ where
                 self.limit,
                 self.offset,
                 self.distinct,
-            )
+            ))
         }
     }
 
     /// Compiles the query to SQL and binds.
-    pub fn to_sql(&self) -> CompiledSql {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Message`] if the query uses a `RIGHT JOIN` or
+    /// `FULL OUTER JOIN` that the target dialect does not support.
+    pub fn to_sql(&self) -> Result<CompiledSql, Error> {
         let dialect = self.exec.dialect();
-        let main = self.to_sql_without_cte();
-        crate::compile::with_cte_prefix(dialect, &self.ctes, main)
+        let main = self.to_sql_without_cte()?;
+        Ok(crate::compile::with_cte_prefix(dialect, &self.ctes, main))
     }
 
     /// Combines this query with another using `UNION`.
@@ -443,6 +477,7 @@ where
     ///
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn count(self) -> Result<i64, Error> {
+        self.check_join_support()?;
         let dialect = self.exec.dialect();
         let compiled = crate::compile::count::<M>(dialect, M::TABLE, &self.filter.node);
         let compiled = crate::compile::with_cte_prefix(dialect, &self.ctes, compiled);
@@ -484,6 +519,7 @@ where
     ///
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exists(self) -> Result<bool, Error> {
+        self.check_join_support()?;
         let dialect = self.exec.dialect();
         let compiled = crate::compile::exists::<M>(dialect, M::TABLE, &self.filter.node);
         let compiled = crate::compile::with_cte_prefix(dialect, &self.ctes, compiled);
@@ -557,7 +593,7 @@ where
     where
         Out: Send + Unpin + RowDecode,
     {
-        let compiled = self.to_sql();
+        let compiled = self.to_sql()?;
 
         #[cfg(feature = "sqlite-rusqlite")]
         if let Some(pool) = self.exec.as_rusqlite() {
@@ -583,16 +619,15 @@ where
     /// [`Executor::stream_raw`]), so this bounds decode cost rather than peak
     /// memory; the buffering lives behind the executor so it can be replaced
     /// with a true cursor without touching this API.
-    #[must_use]
-    pub fn stream(self) -> RowStream<'db, Out>
+    pub fn stream(self) -> Result<RowStream<'db, Out>, Error>
     where
         Out: Send + Unpin + RowDecode,
     {
-        let compiled = self.to_sql();
-        RowStream {
+        let compiled = self.to_sql()?;
+        Ok(RowStream {
             inner: self.exec.stream_raw(compiled.sql, compiled.binds),
             _out: PhantomData,
-        }
+        })
     }
 
     /// Fetches one page, reporting whether another page follows.
@@ -639,7 +674,7 @@ where
         // database from materialising and ruprizzle from decoding a larger
         // result set when the caller set a higher limit.
         self.limit = Some(1);
-        let compiled = self.to_sql();
+        let compiled = self.to_sql()?;
 
         #[cfg(feature = "sqlite-rusqlite")]
         let v: Vec<Out> = if let Some(pool) = self.exec.as_rusqlite() {
@@ -720,6 +755,7 @@ pub struct SetOpQuery<'db, Out> {
     ctes: Vec<Cte>,
     limit: Option<u64>,
     offset: Option<u64>,
+    compile_error: Option<String>,
     _out: PhantomData<fn() -> Out>,
 }
 
@@ -734,8 +770,29 @@ impl<'db, Out> SetOpQuery<'db, Out> {
         M: Model,
         M2: Model,
     {
-        let left_sql = left.to_sql_without_cte();
-        let right_sql = right.to_sql_without_cte();
+        let mut compile_error = None;
+        let left_sql = match left.to_sql_without_cte() {
+            Ok(c) => c,
+            Err(e) => {
+                compile_error = Some(e.to_string());
+                CompiledSql {
+                    sql: Cow::Borrowed(""),
+                    binds: Vec::new(),
+                }
+            }
+        };
+        let right_sql = match right.to_sql_without_cte() {
+            Ok(c) => c,
+            Err(e) => {
+                if compile_error.is_none() {
+                    compile_error = Some(e.to_string());
+                }
+                CompiledSql {
+                    sql: Cow::Borrowed(""),
+                    binds: Vec::new(),
+                }
+            }
+        };
         let mut ctes = left.ctes;
         ctes.extend(right.ctes);
         Self {
@@ -746,6 +803,7 @@ impl<'db, Out> SetOpQuery<'db, Out> {
             ctes,
             limit: None,
             offset: None,
+            compile_error,
             _out: PhantomData,
         }
     }
@@ -763,8 +821,32 @@ impl<'db, Out> SetOpQuery<'db, Out> {
     }
 
     /// Compiles the query to SQL and binds.
-    pub fn to_sql(&self) -> CompiledSql {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Message`] if either side could not be compiled, or if
+    /// the target dialect does not support the set operation (`INTERSECT` or
+    /// `EXCEPT` on MySQL).
+    pub fn to_sql(&self) -> Result<CompiledSql, Error> {
+        if let Some(ref e) = self.compile_error {
+            return Err(Error::Message(e.clone()));
+        }
         let dialect = self.exec.dialect();
+        match self.op {
+            SetOp::Intersect if !dialect.supports_intersect() => {
+                return Err(Error::Message(format!(
+                    "INTERSECT is not supported by {}",
+                    dialect.name()
+                )));
+            }
+            SetOp::Except if !dialect.supports_except() => {
+                return Err(Error::Message(format!(
+                    "EXCEPT is not supported by {}",
+                    dialect.name()
+                )));
+            }
+            _ => {}
+        }
         let mut compiled = crate::compile::set_op(
             dialect,
             self.op,
@@ -778,7 +860,7 @@ impl<'db, Out> SetOpQuery<'db, Out> {
         if let Some(n) = self.offset {
             compiled.sql = Cow::Owned(format!("{} OFFSET {}", compiled.sql, n));
         }
-        compiled
+        Ok(compiled)
     }
 }
 
@@ -795,7 +877,7 @@ where
     where
         Out: Send + Unpin,
     {
-        let compiled = self.to_sql();
+        let compiled = self.to_sql()?;
 
         #[cfg(feature = "sqlite-rusqlite")]
         if let Some(pool) = self.exec.as_rusqlite() {
@@ -811,16 +893,15 @@ where
     }
 
     /// Streams matching rows instead of collecting them.
-    #[must_use]
-    pub fn stream(self) -> RowStream<'db, Out>
+    pub fn stream(self) -> Result<RowStream<'db, Out>, Error>
     where
         Out: Send + Unpin,
     {
-        let compiled = self.to_sql();
-        RowStream {
+        let compiled = self.to_sql()?;
+        Ok(RowStream {
             inner: self.exec.stream_raw(compiled.sql, compiled.binds),
             _out: PhantomData,
-        }
+        })
     }
 
     /// Executes the query and returns the first row, if any.
@@ -865,7 +946,7 @@ where
     ///
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exec(self) -> Result<Vec<M>, Error> {
-        let compiled = self.to_sql();
+        let compiled = self.to_sql()?;
 
         #[cfg(feature = "sqlite-rusqlite")]
         let mut rows: Vec<M> = if let Some(pool) = self.exec.as_rusqlite() {
@@ -905,7 +986,7 @@ where
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exec_optional(mut self) -> Result<Option<M>, Error> {
         self.limit = Some(1);
-        let compiled = self.to_sql();
+        let compiled = self.to_sql()?;
 
         #[cfg(feature = "sqlite-rusqlite")]
         let mut rows: Vec<M> = if let Some(pool) = self.exec.as_rusqlite() {

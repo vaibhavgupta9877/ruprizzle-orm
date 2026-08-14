@@ -295,21 +295,24 @@ None of these exist. They are what "SQL-like typed builder" means to a Drizzle u
       queries and self-referential relations are already a supported feature.
 - [x] **Step 4.** Set operations: `union`, `union_all`, `intersect`, `except`, with
       compile-time enforcement that both sides project the same shape.
-- [ ] **Step 5.** Dialect differences: SQLite lacks `FULL OUTER JOIN` before 3.39 and
+- [x] **Step 5.** Dialect differences: SQLite lacks `FULL OUTER JOIN` before 3.39 and
       differs on `RIGHT JOIN`. `DbDialect` must report capability and the builder must
       return a clear compile-time or construction-time error rather than emitting SQL that
       fails at the server. Document in `docs/DialectNotes.md`.
 
-> **Current status (2026-08-14):** W2-03 Step 1, Step 2, Step 3, and Step 4 are complete.
-> `Subquery<T>`, `Column::in_subquery` / `not_in_subquery`, `FilterNode::InSubquery`,
+> **Current status (2026-08-14):** W2-03 Step 1, Step 2, Step 3, Step 4, and Step 5 are
+> complete. `Subquery<T>`, `Column::in_subquery` / `not_in_subquery`, `FilterNode::InSubquery`,
 > `ExistsSubquery`, `Column::correlated_to`, `Filter::exists` / `not_exists`,
 > `FilterNode::ExistsSubquery`, `Cte`, `CteQuery`, `SelectQuery::with`,
 > `SelectQuery::with_recursive`, `SetOp`, `SetOpQuery`, and `SelectQuery::union` /
 > `union_all` / `intersect` / `except` are implemented with dialect-aware placeholder
-> offset for Postgres and `?` passthrough for SQLite/MySQL. Both sides of a set operation
-> must share the same output type, enforced at compile time. Unit tests in `compile.rs` and
-> `both_dbs!` integration tests in `subqueries.rs`, `exists.rs`, `ctes.rs`, and `setops.rs`
-> pass.
+> offset for Postgres and `?` passthrough for SQLite/MySQL. `DbDialect` exposes
+> `supports_right_join`, `supports_full_join`, `supports_intersect`, and `supports_except`;
+> `SelectQuery::to_sql` and `SetOpQuery::to_sql` return `Error::Message` when asked to
+> emit unsupported `RIGHT JOIN` / `FULL OUTER JOIN` on SQLite or `INTERSECT` / `EXCEPT` on
+> MySQL. Both sides of a set operation must share the same output type, enforced at compile
+> time. Unit tests in `compile.rs` and `both_dbs!` integration tests in `subqueries.rs`,
+> `exists.rs`, `ctes.rs`, `setops.rs`, and the new dialect-guard tests pass.
 
 ### W2-04 · JSON operators
 

@@ -89,7 +89,8 @@ async fn exact_match_survives_injection_strings() {
         // Compiled SQL must still use a placeholder, not the literal.
         let compiled = SelectQuery::<Note>::new(&pool)
             .filter(BODY.eq(*body))
-            .to_sql();
+            .to_sql()
+            .unwrap();
         assert!(
             compiled.sql.contains('?'),
             "SQL must use a placeholder: {}",
@@ -191,7 +192,8 @@ async fn raw_fragment_with_binds_is_safe() {
     );
     let compiled = SelectQuery::<Note>::new(&pool)
         .filter(ruprizzle::Filter::<Note>::raw(raw.clone()))
-        .to_sql();
+        .to_sql()
+        .unwrap();
     assert!(compiled.sql.contains('?'));
     assert!(!compiled.sql.contains("safe'"));
 

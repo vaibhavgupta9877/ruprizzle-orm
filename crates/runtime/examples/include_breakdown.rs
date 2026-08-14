@@ -271,14 +271,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sq = SelectQuery::<Post>::new(&any).filter(POST_AUTHOR_ID.in_set(keys.clone()));
     let start = Instant::now();
     for _ in 0..1000 {
-        std::hint::black_box(sq.to_sql());
+        std::hint::black_box(sq.to_sql().unwrap());
     }
     println!(
         "  compile IN(1000) to SQL            {:>8.2} us",
         start.elapsed().as_secs_f64() * 1e6 / 1000.0
     );
 
-    let compiled = sq.to_sql();
+    let compiled = sq.to_sql().unwrap();
     println!(
         "  -> sql len {} bytes, {} binds",
         compiled.sql.len(),

@@ -195,7 +195,7 @@ both_dbs! {
         let q = SelectQuery::<User>::new(db.pool())
             .filter(Filter::exists(sub));
 
-        let compiled = q.to_sql();
+        let compiled = q.to_sql().unwrap();
         assert_eq!(compiled.sql, expected_exists_sql(db.backend().as_str()));
         assert!(compiled.binds.is_empty());
 
@@ -220,7 +220,7 @@ both_dbs! {
         let q = SelectQuery::<User>::new(db.pool())
             .filter(Filter::not_exists(sub));
 
-        let compiled = q.to_sql();
+        let compiled = q.to_sql().unwrap();
         assert_eq!(compiled.sql, expected_not_exists_sql(db.backend().as_str()));
 
         let rows = q.fetch_all().await?;

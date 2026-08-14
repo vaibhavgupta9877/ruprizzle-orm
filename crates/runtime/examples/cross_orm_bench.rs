@@ -606,7 +606,7 @@ async fn main() -> Result<(), ruprizzle::Error> {
             .filter(USER_ID.eq(500i64))
             .limit(1)
             .offset(0);
-        std::hint::black_box(q.to_sql());
+        std::hint::black_box(q.to_sql().unwrap());
         BenchOutcome::default()
     }));
 
@@ -617,7 +617,7 @@ async fn main() -> Result<(), ruprizzle::Error> {
             .order_by(USER_EMAIL.asc())
             .limit(1000)
             .offset(0);
-        std::hint::black_box(q.to_sql());
+        std::hint::black_box(q.to_sql().unwrap());
         BenchOutcome::default()
     }));
 
@@ -627,7 +627,7 @@ async fn main() -> Result<(), ruprizzle::Error> {
             .filter(USER_ID.in_set(ids))
             .order_by(USER_ID.asc())
             .limit(50);
-        std::hint::black_box(q.to_sql());
+        std::hint::black_box(q.to_sql().unwrap());
         BenchOutcome::default()
     }));
 
@@ -642,7 +642,7 @@ async fn main() -> Result<(), ruprizzle::Error> {
             .order_by(USER_AGE.asc())
             .order_by(USER_EMAIL.asc())
             .limit(100);
-        std::hint::black_box(q.to_sql());
+        std::hint::black_box(q.to_sql().unwrap());
         BenchOutcome::default()
     }));
 
@@ -653,7 +653,7 @@ async fn main() -> Result<(), ruprizzle::Error> {
             .order_by(USER_EMAIL.asc())
             .limit(20)
             .offset(4000);
-        std::hint::black_box(q.to_sql());
+        std::hint::black_box(q.to_sql().unwrap());
         BenchOutcome::default()
     }));
 

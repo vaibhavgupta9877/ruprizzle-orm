@@ -189,7 +189,7 @@ both_dbs! {
             .columns((USER_ID,))
             .union(SelectQuery::<Post>::new(db.pool()).columns((POST_AUTHOR_ID,)));
 
-        let compiled = q.to_sql();
+        let compiled = q.to_sql().unwrap();
         assert_eq!(compiled.sql, expected_union_sql(db.backend().as_str()));
         assert!(compiled.binds.is_empty());
 
@@ -206,7 +206,7 @@ both_dbs! {
             .columns((USER_ID,))
             .union_all(SelectQuery::<Post>::new(db.pool()).columns((POST_AUTHOR_ID,)));
 
-        let compiled = q.to_sql();
+        let compiled = q.to_sql().unwrap();
         assert_eq!(compiled.sql, expected_union_all_sql(db.backend().as_str()));
         assert!(compiled.binds.is_empty());
 

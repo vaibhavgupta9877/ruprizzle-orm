@@ -195,7 +195,7 @@ both_dbs! {
         let q = SelectQuery::<User>::new(db.pool())
             .filter(USER_ID.in_subquery(sub));
 
-        let compiled = q.to_sql();
+        let compiled = q.to_sql().unwrap();
         assert_eq!(compiled.sql, expected_in_subquery_sql(db.backend().as_str()));
         assert_eq!(compiled.binds, vec![Value::Bool(true)]);
 
@@ -220,7 +220,7 @@ both_dbs! {
         let q = SelectQuery::<User>::new(db.pool())
             .filter(USER_ID.not_in_subquery(sub));
 
-        let compiled = q.to_sql();
+        let compiled = q.to_sql().unwrap();
         assert_eq!(compiled.sql, expected_not_in_subquery_sql(db.backend().as_str()));
 
         let rows = q.fetch_all().await?;
