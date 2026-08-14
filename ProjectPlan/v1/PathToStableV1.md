@@ -293,23 +293,23 @@ None of these exist. They are what "SQL-like typed builder" means to a Drizzle u
 - [x] **Step 3.** CTEs: `Query::with("name", subquery)` emitting `WITH … AS (…)`, including
       the `RECURSIVE` form — recursive CTEs are the standard answer to tree/hierarchy
       queries and self-referential relations are already a supported feature.
-- [ ] **Step 4.** Set operations: `union`, `union_all`, `intersect`, `except`, with
+- [x] **Step 4.** Set operations: `union`, `union_all`, `intersect`, `except`, with
       compile-time enforcement that both sides project the same shape.
 - [ ] **Step 5.** Dialect differences: SQLite lacks `FULL OUTER JOIN` before 3.39 and
       differs on `RIGHT JOIN`. `DbDialect` must report capability and the builder must
       return a clear compile-time or construction-time error rather than emitting SQL that
       fails at the server. Document in `docs/DialectNotes.md`.
 
-> **Current status (2026-08-14):** W2-03 Step 1, Step 2 and Step 3 are complete. `Subquery<T>`,
-> `Column::in_subquery` / `not_in_subquery`, `FilterNode::InSubquery`, `ExistsSubquery`,
-> `Column::correlated_to`, `Filter::exists` / `not_exists`, `FilterNode::ExistsSubquery`,
-> `Cte`, `CteQuery`, `SelectQuery::with`, and `SelectQuery::with_recursive` are implemented
-> with dialect-aware placeholder offset for Postgres and `?` passthrough for SQLite/MySQL.
-> Unit tests in `compile.rs` and `both_dbs!` integration tests in `subqueries.rs`,
-> `exists.rs`, and `ctes.rs` pass. Recursive CTE SQL generation and renumbering are
-> implemented and tested; a full `WITH RECURSIVE ... SELECT` fetch with the current builder
-> would need the join/CTE body to select the same shape as the anchor, which is left for
-> the next refinement.
+> **Current status (2026-08-14):** W2-03 Step 1, Step 2, Step 3, and Step 4 are complete.
+> `Subquery<T>`, `Column::in_subquery` / `not_in_subquery`, `FilterNode::InSubquery`,
+> `ExistsSubquery`, `Column::correlated_to`, `Filter::exists` / `not_exists`,
+> `FilterNode::ExistsSubquery`, `Cte`, `CteQuery`, `SelectQuery::with`,
+> `SelectQuery::with_recursive`, `SetOp`, `SetOpQuery`, and `SelectQuery::union` /
+> `union_all` / `intersect` / `except` are implemented with dialect-aware placeholder
+> offset for Postgres and `?` passthrough for SQLite/MySQL. Both sides of a set operation
+> must share the same output type, enforced at compile time. Unit tests in `compile.rs` and
+> `both_dbs!` integration tests in `subqueries.rs`, `exists.rs`, `ctes.rs`, and `setops.rs`
+> pass.
 
 ### W2-04 · JSON operators
 

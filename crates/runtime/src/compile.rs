@@ -14,6 +14,7 @@ use crate::filter::{CmpOp, Cte, FilterNode};
 use crate::join::JoinKind;
 use crate::model::Model;
 use crate::order::OrderBy;
+use crate::query::SetOp;
 use crate::value::Value;
 
 /// A compiled SQL statement and its bound values.
@@ -176,6 +177,50 @@ pub(crate) fn with_cte_prefix(
         sql: Cow::Owned(sql),
         binds,
     }
+}
+
+/// Combines two compiled `SELECT`s with a set operation and prepends CTEs.
+///
+/// Right-hand placeholders are renumbered so that the combined statement uses
+/// one contiguous parameter sequence. For `?`-style dialects the placeholders
+/// are left unchanged and the binds are concatenated in order.
+#[must_use]
+pub fn set_op(
+    dialect: &dyn DbDialect,
+    op: SetOp,
+    ctes: &[Cte],
+    left: CompiledSql,
+    right: CompiledSql,
+) -> CompiledSql {
+    let right = right.renumbered(left.binds.len());
+    let mut binds = left.binds;
+    binds.extend(right.binds);
+
+    // SQLite does not accept a parenthesized SELECT as a top-level compound
+    // operand, so wrap each side in a derived table instead.
+    let sql = if dialect.name() == "sqlite" {
+        format!(
+            "SELECT * FROM ({}) AS __rz_l {} SELECT * FROM ({}) AS __rz_r",
+            left.sql.as_ref(),
+            op.sql(),
+            right.sql.as_ref()
+        )
+    } else {
+        format!(
+            "({}) {} ({})",
+            left.sql.as_ref(),
+            op.sql(),
+            right.sql.as_ref()
+        )
+    };
+    with_cte_prefix(
+        dialect,
+        ctes,
+        CompiledSql {
+            sql: Cow::Owned(sql),
+            binds,
+        },
+    )
 }
 
 /// Compile a `SELECT` for a join between `M` and `J`.
@@ -1094,7 +1139,7 @@ mod tests {
     use crate::executor::{BoxRowStream, Executor, RawRow, RowBatch};
     use crate::filter::{Filter, RawFragment, all, any};
     use crate::order::OrderBy;
-    use crate::query::SelectQuery;
+    use crate::query::{SelectQuery, SetOp, SetOpQuery};
     use crate::value::Value;
     use ruprizzle_core::ir::Provider;
     use ruprizzle_dialect::dialect_for;
@@ -1891,5 +1936,83 @@ mod tests {
             r#"SELECT "reports"."id", "reports"."name", "reports"."manager_id" FROM "reports""#
         ));
         assert_eq!(c.binds, vec![Value::I64(1), Value::Str("x".into())]);
+    }
+
+    #[test]
+    fn union_sql_postgres() {
+        let exec = NoopExecutor(pg());
+        let left = SelectQuery::<JoinUser>::new(&exec).columns(USER_ID);
+        let right = SelectQuery::<JoinPost>::new(&exec).columns(POST_USER_ID);
+        let q = SetOpQuery::new(&exec, SetOp::Union, left, right);
+        let c = q.to_sql();
+        assert_eq!(
+            c.sql,
+            r#"(SELECT "users"."id" FROM "users") UNION (SELECT "posts"."user_id" FROM "posts")"#
+        );
+        assert!(c.binds.is_empty());
+    }
+
+    #[test]
+    fn union_all_sqlite() {
+        let exec = NoopExecutor(sqlite());
+        let left = SelectQuery::<JoinUser>::new(&exec)
+            .filter(USER_ID.eq(1))
+            .columns(USER_ID);
+        let right = SelectQuery::<JoinPost>::new(&exec)
+            .filter(POST_USER_ID.eq(2))
+            .columns(POST_USER_ID);
+        let q = SetOpQuery::new(&exec, SetOp::UnionAll, left, right);
+        let c = q.to_sql();
+        assert_eq!(
+            c.sql,
+            r#"SELECT * FROM (SELECT `users`.`id` FROM `users` WHERE `users`.`id` = ?) AS __rz_l UNION ALL SELECT * FROM (SELECT `posts`.`user_id` FROM `posts` WHERE `posts`.`user_id` = ?) AS __rz_r"#
+        );
+        assert_eq!(c.binds, vec![Value::I64(1), Value::I64(2)]);
+    }
+
+    #[test]
+    fn set_op_with_binds_postgres() {
+        let exec = NoopExecutor(pg());
+        let left = SelectQuery::<JoinUser>::new(&exec)
+            .filter(USER_ID.eq(1))
+            .columns(USER_ID);
+        let right = SelectQuery::<JoinPost>::new(&exec)
+            .filter(POST_USER_ID.in_(vec![2_i64, 3_i64]))
+            .columns(POST_USER_ID);
+        let q = SetOpQuery::new(&exec, SetOp::Union, left, right);
+        let c = q.to_sql();
+        assert_eq!(
+            c.sql,
+            r#"(SELECT "users"."id" FROM "users" WHERE "users"."id" = $1) UNION (SELECT "posts"."user_id" FROM "posts" WHERE "posts"."user_id" IN ($2, $3))"#
+        );
+        assert_eq!(c.binds, vec![Value::I64(1), Value::I64(2), Value::I64(3)]);
+    }
+
+    #[test]
+    fn intersect_sql_postgres() {
+        let exec = NoopExecutor(pg());
+        let left = SelectQuery::<JoinUser>::new(&exec).columns(USER_ID);
+        let right = SelectQuery::<JoinPost>::new(&exec).columns(POST_USER_ID);
+        let q = SetOpQuery::new(&exec, SetOp::Intersect, left, right);
+        let c = q.to_sql();
+        assert_eq!(
+            c.sql,
+            r#"(SELECT "users"."id" FROM "users") INTERSECT (SELECT "posts"."user_id" FROM "posts")"#
+        );
+        assert!(c.binds.is_empty());
+    }
+
+    #[test]
+    fn except_sql_postgres() {
+        let exec = NoopExecutor(pg());
+        let left = SelectQuery::<JoinUser>::new(&exec).columns(USER_ID);
+        let right = SelectQuery::<JoinPost>::new(&exec).columns(POST_USER_ID);
+        let q = SetOpQuery::new(&exec, SetOp::Except, left, right);
+        let c = q.to_sql();
+        assert_eq!(
+            c.sql,
+            r#"(SELECT "users"."id" FROM "users") EXCEPT (SELECT "posts"."user_id" FROM "posts")"#
+        );
+        assert!(c.binds.is_empty());
     }
 }

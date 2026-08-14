@@ -69,7 +69,7 @@ pub mod prelude {
         Aggregate, AggregateQuery, AggregateScalar, Column, Cte, CteQuery, Encodable, Error,
         Executor, Filter, GroupBy, GroupedQuery, InsertQuery, IsolationLevel, Join2, JoinKind,
         JoinOn, LeftJoin2, Maybe, Model, Numeric, OrderBy, Page, Pool, RawFragment, Related,
-        SelectQuery, Tx, Value, raw,
+        SelectQuery, SetOp, SetOpQuery, Tx, Value, raw,
     };
 }
 
@@ -93,7 +93,7 @@ pub use page::Page;
 pub use pool::{Pool, PoolConfig, PoolStats, connect, connect_with, ping, stats};
 pub use query::{
     AggregateQuery, DeleteQuery, GroupedQuery, InsertManyQuery, InsertQuery, NestedSetter,
-    SelectQuery, UpdateQuery,
+    SelectQuery, SetOp, SetOpQuery, UpdateQuery,
 };
 pub use related::Related;
 pub use ruprizzle_macros::raw;

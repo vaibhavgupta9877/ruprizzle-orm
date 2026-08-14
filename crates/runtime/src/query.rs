@@ -359,10 +359,10 @@ where
             )
     }
 
-    /// Compiles the query to SQL and binds.
-    pub fn to_sql(&self) -> CompiledSql {
+    /// Compiles the main query (without the CTE `WITH` prefix) to SQL and binds.
+    pub(crate) fn to_sql_without_cte(&self) -> CompiledSql {
         let dialect = self.exec.dialect();
-        let main = if let Some(ref join) = self.join {
+        if let Some(ref join) = self.join {
             join_select_with_columns::<M>(
                 dialect,
                 M::TABLE,
@@ -389,8 +389,49 @@ where
                 self.offset,
                 self.distinct,
             )
-        };
+        }
+    }
+
+    /// Compiles the query to SQL and binds.
+    pub fn to_sql(&self) -> CompiledSql {
+        let dialect = self.exec.dialect();
+        let main = self.to_sql_without_cte();
         crate::compile::with_cte_prefix(dialect, &self.ctes, main)
+    }
+
+    /// Combines this query with another using `UNION`.
+    ///
+    /// The output shape of both sides must match exactly; this is enforced at
+    /// compile time by the shared `Out` type parameter.
+    pub fn union<M2, I2>(self, other: SelectQuery<'db, M2, Out, I2>) -> SetOpQuery<'db, Out>
+    where
+        M2: Model,
+    {
+        SetOpQuery::new(self.exec, SetOp::Union, self, other)
+    }
+
+    /// Combines this query with another using `UNION ALL`.
+    pub fn union_all<M2, I2>(self, other: SelectQuery<'db, M2, Out, I2>) -> SetOpQuery<'db, Out>
+    where
+        M2: Model,
+    {
+        SetOpQuery::new(self.exec, SetOp::UnionAll, self, other)
+    }
+
+    /// Combines this query with another using `INTERSECT`.
+    pub fn intersect<M2, I2>(self, other: SelectQuery<'db, M2, Out, I2>) -> SetOpQuery<'db, Out>
+    where
+        M2: Model,
+    {
+        SetOpQuery::new(self.exec, SetOp::Intersect, self, other)
+    }
+
+    /// Combines this query with another using `EXCEPT`.
+    pub fn except<M2, I2>(self, other: SelectQuery<'db, M2, Out, I2>) -> SetOpQuery<'db, Out>
+    where
+        M2: Model,
+    {
+        SetOpQuery::new(self.exec, SetOp::Except, self, other)
     }
 
     /// Returns the number of rows the query would return.
@@ -636,6 +677,176 @@ where
     pub async fn fetch_one(self) -> Result<Out, Error>
     where
         Out: Send + Unpin + RowDecode,
+    {
+        self.fetch_optional()
+            .await?
+            .ok_or_else(|| Error::Message("no row found for query".into()))
+    }
+}
+
+/// A SQL set operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetOp {
+    /// `UNION` (deduplicating).
+    Union,
+    /// `UNION ALL` (preserves duplicates).
+    UnionAll,
+    /// `INTERSECT`.
+    Intersect,
+    /// `EXCEPT`.
+    Except,
+}
+
+impl SetOp {
+    /// Returns the SQL keyword for this operation.
+    pub(crate) fn sql(self) -> &'static str {
+        match self {
+            SetOp::Union => "UNION",
+            SetOp::UnionAll => "UNION ALL",
+            SetOp::Intersect => "INTERSECT",
+            SetOp::Except => "EXCEPT",
+        }
+    }
+}
+
+/// A query built from two `SELECT`s combined by a set operation.
+#[derive(Clone)]
+#[allow(dead_code)]
+pub struct SetOpQuery<'db, Out> {
+    exec: &'db dyn Executor,
+    op: SetOp,
+    left: CompiledSql,
+    right: CompiledSql,
+    ctes: Vec<Cte>,
+    limit: Option<u64>,
+    offset: Option<u64>,
+    _out: PhantomData<fn() -> Out>,
+}
+
+impl<'db, Out> SetOpQuery<'db, Out> {
+    pub(crate) fn new<M, M2, I, I2>(
+        exec: &'db dyn Executor,
+        op: SetOp,
+        left: SelectQuery<'db, M, Out, I>,
+        right: SelectQuery<'db, M2, Out, I2>,
+    ) -> Self
+    where
+        M: Model,
+        M2: Model,
+    {
+        let left_sql = left.to_sql_without_cte();
+        let right_sql = right.to_sql_without_cte();
+        let mut ctes = left.ctes;
+        ctes.extend(right.ctes);
+        Self {
+            exec,
+            op,
+            left: left_sql,
+            right: right_sql,
+            ctes,
+            limit: None,
+            offset: None,
+            _out: PhantomData,
+        }
+    }
+
+    /// Sets the limit on the combined result.
+    pub fn limit(mut self, n: u64) -> Self {
+        self.limit = Some(n);
+        self
+    }
+
+    /// Sets the offset on the combined result.
+    pub fn offset(mut self, n: u64) -> Self {
+        self.offset = Some(n);
+        self
+    }
+
+    /// Compiles the query to SQL and binds.
+    pub fn to_sql(&self) -> CompiledSql {
+        let dialect = self.exec.dialect();
+        let mut compiled = crate::compile::set_op(
+            dialect,
+            self.op,
+            &self.ctes,
+            self.left.clone(),
+            self.right.clone(),
+        );
+        if let Some(n) = self.limit {
+            compiled.sql = Cow::Owned(format!("{} LIMIT {}", compiled.sql, n));
+        }
+        if let Some(n) = self.offset {
+            compiled.sql = Cow::Owned(format!("{} OFFSET {}", compiled.sql, n));
+        }
+        compiled
+    }
+}
+
+impl<'db, Out> SetOpQuery<'db, Out>
+where
+    Out: RowDecode,
+{
+    /// Executes the query and returns all matching rows.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors.
+    pub async fn fetch_all(self) -> Result<Vec<Out>, Error>
+    where
+        Out: Send + Unpin,
+    {
+        let compiled = self.to_sql();
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        if let Some(pool) = self.exec.as_rusqlite() {
+            self.exec.on_query();
+            return pool.fetch_all_sync_decoded::<Out>(compiled.sql, compiled.binds);
+        }
+
+        let batch = self
+            .exec
+            .fetch_all_raw(compiled.sql, compiled.binds)
+            .await?;
+        crate::executor::decode_rows(batch)
+    }
+
+    /// Streams matching rows instead of collecting them.
+    #[must_use]
+    pub fn stream(self) -> RowStream<'db, Out>
+    where
+        Out: Send + Unpin,
+    {
+        let compiled = self.to_sql();
+        RowStream {
+            inner: self.exec.stream_raw(compiled.sql, compiled.binds),
+            _out: PhantomData,
+        }
+    }
+
+    /// Executes the query and returns the first row, if any.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors.
+    pub async fn fetch_optional(self) -> Result<Option<Out>, Error>
+    where
+        Out: Send + Unpin,
+    {
+        self.limit(1)
+            .fetch_all()
+            .await
+            .map(|rows| rows.into_iter().next())
+    }
+
+    /// Executes the query and returns exactly one row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Sqlx`] for database errors, including the case where no
+    /// row matches.
+    pub async fn fetch_one(self) -> Result<Out, Error>
+    where
+        Out: Send + Unpin,
     {
         self.fetch_optional()
             .await?
