@@ -8,8 +8,12 @@ pub mod enums;
 pub mod user;
 pub mod post;
 pub use _generated::{RUPRIZZLE_VERSION, SCHEMA_HASH};
-pub use self::user::{UserInsert, User, UserRepo, UserUpdate};
-pub use self::post::{PostInsert, Post, PostRepo, PostUpdate};
+pub use self::user::{
+    UserAggregate, UserAggregateInput, UserInsert, User, UserRepo, UserUpdate,
+};
+pub use self::post::{
+    PostAggregate, PostAggregateInput, PostInsert, Post, PostRepo, PostUpdate,
+};
 /// The generated `Db` client root.
 #[derive(Debug, Clone)]
 pub struct Db {
@@ -147,8 +151,9 @@ impl Db {
 /// Common imports for this generated module.
 pub mod prelude {
     pub use super::{
-        Db, RUPRIZZLE_VERSION, SCHEMA_HASH, User, UserInsert, UserUpdate, UserRepo, user,
-        Post, PostInsert, PostUpdate, PostRepo, post,
+        Db, RUPRIZZLE_VERSION, SCHEMA_HASH, User, UserInsert, UserUpdate, UserAggregate,
+        UserAggregateInput, UserRepo, user, Post, PostInsert, PostUpdate, PostAggregate,
+        PostAggregateInput, PostRepo, post,
     };
     pub use ::ruprizzle::prelude::*;
 }

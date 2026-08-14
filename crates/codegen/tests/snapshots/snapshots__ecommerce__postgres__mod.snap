@@ -10,10 +10,21 @@ pub mod product;
 pub mod order;
 pub mod order_item;
 pub use _generated::{RUPRIZZLE_VERSION, SCHEMA_HASH};
-pub use self::customer::{CustomerInsert, Customer, CustomerRepo, CustomerUpdate};
-pub use self::product::{ProductInsert, Product, ProductRepo, ProductUpdate};
-pub use self::order::{OrderInsert, Order, OrderRepo, OrderUpdate};
-pub use self::order_item::{OrderItemInsert, OrderItem, OrderItemRepo, OrderItemUpdate};
+pub use self::customer::{
+    CustomerAggregate, CustomerAggregateInput, CustomerInsert, Customer, CustomerRepo,
+    CustomerUpdate,
+};
+pub use self::product::{
+    ProductAggregate, ProductAggregateInput, ProductInsert, Product, ProductRepo,
+    ProductUpdate,
+};
+pub use self::order::{
+    OrderAggregate, OrderAggregateInput, OrderInsert, Order, OrderRepo, OrderUpdate,
+};
+pub use self::order_item::{
+    OrderItemAggregate, OrderItemAggregateInput, OrderItemInsert, OrderItem,
+    OrderItemRepo, OrderItemUpdate,
+};
 /// The generated `Db` client root.
 #[derive(Debug, Clone)]
 pub struct Db {
@@ -160,9 +171,12 @@ impl Db {
 pub mod prelude {
     pub use super::{
         Db, RUPRIZZLE_VERSION, SCHEMA_HASH, Customer, CustomerInsert, CustomerUpdate,
-        CustomerRepo, customer, Product, ProductInsert, ProductUpdate, ProductRepo,
-        product, Order, OrderInsert, OrderUpdate, OrderRepo, order, OrderItem,
-        OrderItemInsert, OrderItemUpdate, OrderItemRepo, order_item,
+        CustomerAggregate, CustomerAggregateInput, CustomerRepo, customer, Product,
+        ProductInsert, ProductUpdate, ProductAggregate, ProductAggregateInput,
+        ProductRepo, product, Order, OrderInsert, OrderUpdate, OrderAggregate,
+        OrderAggregateInput, OrderRepo, order, OrderItem, OrderItemInsert,
+        OrderItemUpdate, OrderItemAggregate, OrderItemAggregateInput, OrderItemRepo,
+        order_item,
     };
     pub use ::ruprizzle::prelude::*;
 }

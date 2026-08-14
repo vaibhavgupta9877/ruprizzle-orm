@@ -243,11 +243,11 @@ Today only `count()` and `exists()`. There is no `sum`, `avg`, `min`, `max`, and
       struct output is Step 4).
 - [x] **Step 3.** `SelectQuery::group_by(cols)` yielding a `GroupedQuery<M>`, with
       `having(Filter)` on the aggregate.
-- [ ] **Step 4.** Codegen: generated per-model aggregate result structs so
+- [x] **Step 4.** Codegen: generated per-model aggregate result structs so
       `User::query(&db).group_by(User::role).aggregate(...)` returns named fields.
 - [x] **Step 5.** `.to_sql()` must work on grouped and aggregate queries — SQL transparency
       on every builder is a stated product promise and cannot have holes.
-- [ ] **Step 6.** Tests via `both_dbs!` plus snapshot tests of emitted SQL.
+- [~] **Step 6.** Tests via `both_dbs!` plus snapshot tests of emitted SQL.
 
 ### W2-02 · Explicit joins
 

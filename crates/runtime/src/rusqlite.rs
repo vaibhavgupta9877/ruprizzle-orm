@@ -30,9 +30,15 @@ pub use ::rusqlite::{Row as RusqliteRow, types, types::Value as RusqliteValue};
 ///
 /// Columns are stored in result-set order as `rusqlite::types::Value` so that
 /// decoding can be implemented without holding a borrow of the live
-/// `rusqlite::Row`.
+/// `rusqlite::Row`. Column names are stored alongside the values so aggregate
+/// result structs can decode by alias.
 #[derive(Debug, Clone)]
-pub struct Row(pub Vec<RusqliteValue>);
+pub struct Row {
+    /// Column values in result-set order.
+    pub values: Vec<RusqliteValue>,
+    /// Column names in result-set order.
+    pub names: Vec<String>,
+}
 
 /// A pool of synchronous `rusqlite` connections.
 ///
@@ -332,6 +338,8 @@ impl RusqliteTransaction {
             .map_err(|e| Error::Message(e.to_string()))?;
 
         let column_count = stmt.column_count();
+        let column_names: Vec<String> =
+            stmt.column_names().into_iter().map(|s| s.to_string()).collect();
 
         let rows = stmt
             .query_map(rusqlite::params_from_iter(binds), |row| {
@@ -339,7 +347,10 @@ impl RusqliteTransaction {
                 for i in 0..column_count {
                     values.push(row.get::<_, RusqliteValue>(i)?);
                 }
-                Ok(Row(values))
+                Ok(Row {
+                    values,
+                    names: column_names.clone(),
+                })
             })
             .map_err(|e| Error::Message(e.to_string()))?
             .collect::<Result<Vec<_>, _>>()
@@ -525,6 +536,8 @@ fn fetch_all(
         .map_err(|e| Error::Message(e.to_string()))?;
 
     let column_count = stmt.column_count();
+    let column_names: Vec<String> =
+        stmt.column_names().into_iter().map(|s| s.to_string()).collect();
 
     let rows = stmt
         .query_map(rusqlite::params_from_iter(&binds), |row| {
@@ -532,7 +545,10 @@ fn fetch_all(
             for i in 0..column_count {
                 values.push(row.get::<_, RusqliteValue>(i)?);
             }
-            Ok(Row(values))
+            Ok(Row {
+                values,
+                names: column_names.clone(),
+            })
         })
         .map_err(|e| Error::Message(e.to_string()))?
         .collect::<Result<Vec<_>, _>>()
@@ -575,13 +591,13 @@ impl Row {
     /// Number of columns in the row.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.values.len()
     }
 
     /// Returns `true` if the row has no columns.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.values.is_empty()
     }
 
     /// Decode the column at `idx` into `T`.
@@ -592,10 +608,22 @@ impl Row {
     /// cannot be decoded into `T`.
     pub fn get<T: FromValue>(&self, idx: usize) -> Result<T, Error> {
         let value = self
-            .0
+            .values
             .get(idx)
             .ok_or_else(|| Error::Message(format!("column index {idx} out of bounds")))?;
         T::from_value(value)
+    }
+
+    /// Decode the column named `name` into `T`, or return the default if the
+    /// column is not present.
+    ///
+    /// This is used by aggregate result structs where the selected columns are a
+    /// subset of the generated struct's fields.
+    pub fn get_by_name<T: FromValue>(&self, name: &str) -> Result<T, Error> {
+        match self.names.iter().position(|n| n == name) {
+            Some(idx) => self.get::<T>(idx),
+            None => T::from_value(&RusqliteValue::Null),
+        }
     }
 }
 
@@ -936,7 +964,7 @@ macro_rules! tuple_from_value {
             fn from_owned_row(row: &Row) -> Result<Self, Error> {
                 Ok((
                     $(
-                        $T::from_value(&row.0[$idx])?
+                        $T::from_value(&row.values[$idx])?
                     ,)+
                 ))
             }

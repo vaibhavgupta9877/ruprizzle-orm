@@ -164,6 +164,378 @@ pub struct OrderItemUpdate {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unit_price: Option<Decimal>,
 }
+#[derive(
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    ::ruprizzle::sqlx::FromRow
+)]
+#[serde(crate = "::ruprizzle::serde", default)]
+pub struct OrderItemAggregate {
+    #[sqlx(default)]
+    pub count_order_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_order_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_product_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_product_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_quantity: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_quantity: Option<i64>,
+    #[sqlx(default)]
+    pub sum_quantity: Option<i64>,
+    #[sqlx(default)]
+    pub avg_quantity: Option<f64>,
+    #[sqlx(default)]
+    pub min_quantity: Option<i32>,
+    #[sqlx(default)]
+    pub max_quantity: Option<i32>,
+    #[sqlx(default)]
+    pub count_unit_price: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_unit_price: Option<i64>,
+}
+#[derive(Debug, Clone, Default)]
+pub struct OrderItemAggregateInput {
+    pub count_order_id: Option<::ruprizzle::Aggregate<OrderItem, i64>>,
+    pub count_distinct_order_id: Option<::ruprizzle::Aggregate<OrderItem, i64>>,
+    pub count_product_id: Option<::ruprizzle::Aggregate<OrderItem, i64>>,
+    pub count_distinct_product_id: Option<::ruprizzle::Aggregate<OrderItem, i64>>,
+    pub count_quantity: Option<::ruprizzle::Aggregate<OrderItem, i64>>,
+    pub count_distinct_quantity: Option<::ruprizzle::Aggregate<OrderItem, i64>>,
+    pub sum_quantity: Option<::ruprizzle::Aggregate<OrderItem, Option<i64>>>,
+    pub avg_quantity: Option<::ruprizzle::Aggregate<OrderItem, Option<f64>>>,
+    pub min_quantity: Option<::ruprizzle::Aggregate<OrderItem, Option<i32>>>,
+    pub max_quantity: Option<::ruprizzle::Aggregate<OrderItem, Option<i32>>>,
+    pub count_unit_price: Option<::ruprizzle::Aggregate<OrderItem, i64>>,
+    pub count_distinct_unit_price: Option<::ruprizzle::Aggregate<OrderItem, i64>>,
+}
+impl ::ruprizzle::AggregateSet<OrderItem, OrderItemAggregate>
+for OrderItemAggregateInput {
+    fn push_entries(&self, out: &mut Vec<::ruprizzle::AggregateEntry>) {
+        use ::ruprizzle::IntoAggregate;
+        if let Some(a) = &self.count_order_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_order_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_product_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_product_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_quantity {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_quantity {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.sum_quantity {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.avg_quantity {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.min_quantity {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.max_quantity {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_unit_price {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_unit_price {
+            a.push_entry(out);
+        }
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromRusqliteRow for OrderItemAggregate {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::RusqliteRow,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_order_id = match row.get::<_, Option<i64>>("count_order_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_order_id = match row
+            .get::<_, Option<i64>>("count_distinct_order_id")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_product_id = match row.get::<_, Option<i64>>("count_product_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_product_id = match row
+            .get::<_, Option<i64>>("count_distinct_product_id")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_quantity = match row.get::<_, Option<i64>>("count_quantity") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_quantity = match row
+            .get::<_, Option<i64>>("count_distinct_quantity")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let sum_quantity = match row.get::<_, Option<i64>>("sum_quantity") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let avg_quantity = match row.get::<_, Option<f64>>("avg_quantity") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let min_quantity = match row.get::<_, Option<i32>>("min_quantity") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let max_quantity = match row.get::<_, Option<i32>>("max_quantity") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_unit_price = match row.get::<_, Option<i64>>("count_unit_price") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_unit_price = match row
+            .get::<_, Option<i64>>("count_distinct_unit_price")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        Ok(Self {
+            count_order_id,
+            count_distinct_order_id,
+            count_product_id,
+            count_distinct_product_id,
+            count_quantity,
+            count_distinct_quantity,
+            sum_quantity,
+            avg_quantity,
+            min_quantity,
+            max_quantity,
+            count_unit_price,
+            count_distinct_unit_price,
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for OrderItemAggregate {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_order_id = row.get_by_name::<Option<i64>>("count_order_id")?;
+        let count_distinct_order_id = row
+            .get_by_name::<Option<i64>>("count_distinct_order_id")?;
+        let count_product_id = row.get_by_name::<Option<i64>>("count_product_id")?;
+        let count_distinct_product_id = row
+            .get_by_name::<Option<i64>>("count_distinct_product_id")?;
+        let count_quantity = row.get_by_name::<Option<i64>>("count_quantity")?;
+        let count_distinct_quantity = row
+            .get_by_name::<Option<i64>>("count_distinct_quantity")?;
+        let sum_quantity = row.get_by_name::<Option<i64>>("sum_quantity")?;
+        let avg_quantity = row.get_by_name::<Option<f64>>("avg_quantity")?;
+        let min_quantity = row.get_by_name::<Option<i32>>("min_quantity")?;
+        let max_quantity = row.get_by_name::<Option<i32>>("max_quantity")?;
+        let count_unit_price = row.get_by_name::<Option<i64>>("count_unit_price")?;
+        let count_distinct_unit_price = row
+            .get_by_name::<Option<i64>>("count_distinct_unit_price")?;
+        Ok(Self {
+            count_order_id,
+            count_distinct_order_id,
+            count_product_id,
+            count_distinct_product_id,
+            count_quantity,
+            count_distinct_quantity,
+            sum_quantity,
+            avg_quantity,
+            min_quantity,
+            max_quantity,
+            count_unit_price,
+            count_distinct_unit_price,
+        })
+    }
+}
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for OrderItemAggregate {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_order_id = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_order_id")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_order_id = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_order_id")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_product_id = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_product_id")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_product_id = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_product_id")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_quantity = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_quantity")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_quantity = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_quantity")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let sum_quantity = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "sum_quantity")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let avg_quantity = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "avg_quantity")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<f64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let min_quantity = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "min_quantity")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i32>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let max_quantity = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "max_quantity")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i32>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_unit_price = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_unit_price")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_unit_price = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_unit_price")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        Ok(Self {
+            count_order_id,
+            count_distinct_order_id,
+            count_product_id,
+            count_distinct_product_id,
+            count_quantity,
+            count_distinct_quantity,
+            sum_quantity,
+            avg_quantity,
+            min_quantity,
+            max_quantity,
+            count_unit_price,
+            count_distinct_unit_price,
+        })
+    }
+}
 impl ::ruprizzle::Model for OrderItem {
     const TABLE: &'static str = "order_items";
     const PRIMARY_KEY: &'static str = "order_id";

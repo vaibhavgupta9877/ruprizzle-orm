@@ -10,11 +10,16 @@ pub mod account;
 pub mod membership;
 pub use _generated::{RUPRIZZLE_VERSION, SCHEMA_HASH};
 pub use self::organisation::{
-    OrganisationInsert, Organisation, OrganisationRepo, OrganisationUpdate,
+    OrganisationAggregate, OrganisationAggregateInput, OrganisationInsert, Organisation,
+    OrganisationRepo, OrganisationUpdate,
 };
-pub use self::account::{AccountInsert, Account, AccountRepo, AccountUpdate};
+pub use self::account::{
+    AccountAggregate, AccountAggregateInput, AccountInsert, Account, AccountRepo,
+    AccountUpdate,
+};
 pub use self::membership::{
-    MembershipInsert, Membership, MembershipRepo, MembershipUpdate,
+    MembershipAggregate, MembershipAggregateInput, MembershipInsert, Membership,
+    MembershipRepo, MembershipUpdate,
 };
 /// The generated `Db` client root.
 #[derive(Debug, Clone)]
@@ -158,9 +163,11 @@ impl Db {
 pub mod prelude {
     pub use super::{
         Db, RUPRIZZLE_VERSION, SCHEMA_HASH, Organisation, OrganisationInsert,
-        OrganisationUpdate, OrganisationRepo, organisation, Account, AccountInsert,
-        AccountUpdate, AccountRepo, account, Membership, MembershipInsert,
-        MembershipUpdate, MembershipRepo, membership,
+        OrganisationUpdate, OrganisationAggregate, OrganisationAggregateInput,
+        OrganisationRepo, organisation, Account, AccountInsert, AccountUpdate,
+        AccountAggregate, AccountAggregateInput, AccountRepo, account, Membership,
+        MembershipInsert, MembershipUpdate, MembershipAggregate,
+        MembershipAggregateInput, MembershipRepo, membership,
     };
     pub use ::ruprizzle::prelude::*;
 }

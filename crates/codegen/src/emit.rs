@@ -214,10 +214,12 @@ fn mod_rs(schema: &Schema) -> String {
             let model = format_ident!("{}", m.name.as_str());
             let insert = format_ident!("{}Insert", m.name.as_str());
             let update = format_ident!("{}Update", m.name.as_str());
+            let aggregate = format_ident!("{}Aggregate", m.name.as_str());
+            let aggregate_input = format_ident!("{}AggregateInput", m.name.as_str());
             let repo = format_ident!("{}Repo", m.name.as_str());
             quote! {
                 pub use self::#module::{
-                    #insert, #model, #repo, #update,
+                    #aggregate, #aggregate_input, #insert, #model, #repo, #update,
                 };
             }
         })
@@ -245,9 +247,11 @@ fn mod_rs(schema: &Schema) -> String {
             let model = format_ident!("{}", m.name.as_str());
             let insert = format_ident!("{}Insert", m.name.as_str());
             let update = format_ident!("{}Update", m.name.as_str());
+            let aggregate = format_ident!("{}Aggregate", m.name.as_str());
+            let aggregate_input = format_ident!("{}AggregateInput", m.name.as_str());
             let repo = format_ident!("{}Repo", m.name.as_str());
             let module = format_ident!("{}", safe_module_name(m.name.as_str()));
-            quote! { #model, #insert, #update, #repo, #module, }
+            quote! { #model, #insert, #update, #aggregate, #aggregate_input, #repo, #module, }
         })
         .collect();
 
@@ -562,6 +566,8 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         })
         .collect();
 
+    let aggregate_tokens = emit_aggregate_structs(schema, model);
+
     let header = header();
     let tokens = quote! {
         #header
@@ -654,6 +660,8 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         pub struct #update_name {
             #( #update_fields )*
         }
+
+        #aggregate_tokens
 
         impl ::ruprizzle::Model for #model_name {
             const TABLE: &'static str = #table;
@@ -1174,6 +1182,211 @@ fn scalar_type_tokens(st: ScalarType) -> TokenStream {
         ScalarType::Uuid => quote! { Uuid },
         ScalarType::Json => quote! { JsonValue },
         ScalarType::Bytes => quote! { Vec<u8> },
+    }
+}
+
+#[derive(Debug)]
+struct AggregateField {
+    name: Ident,
+    alias: String,
+    input_r: TokenStream,
+    output_inner: TokenStream,
+}
+
+fn numeric_aggregate_types(
+    st: ScalarType,
+) -> Option<(TokenStream, TokenStream, TokenStream)> {
+    match st {
+        ScalarType::Int => Some((quote! { i64 }, quote! { f64 }, quote! { i32 })),
+        ScalarType::BigInt => Some((quote! { i64 }, quote! { f64 }, quote! { i64 })),
+        ScalarType::Float => Some((quote! { f64 }, quote! { f64 }, quote! { f64 })),
+        _ => None,
+    }
+}
+
+fn emit_aggregate_structs(_schema: &Schema, model: &Model) -> TokenStream {
+    let model_name = format_ident!("{}", model.name.as_str());
+    let aggregate_name = format_ident!("{}Aggregate", model.name.as_str());
+    let input_name = format_ident!("{}AggregateInput", model.name.as_str());
+
+    let mut fields: Vec<AggregateField> = Vec::new();
+
+    for field in model.fields.values().filter(|f| f.has_column()) {
+        let column_suffix = naming::snake_case(&field.column);
+        let optional = field.optional;
+
+        let mut add = |kind: &'static str, input_r: TokenStream, output_inner: TokenStream| {
+            let alias = format!("{}_{}", kind, column_suffix);
+            let name = safe_field_ident(&alias);
+            fields.push(AggregateField {
+                name,
+                alias,
+                input_r,
+                output_inner,
+            });
+        };
+
+        // COUNT / COUNT DISTINCT are valid for every column-bearing field.
+        add("count", quote! { i64 }, quote! { i64 });
+        add("count_distinct", quote! { i64 }, quote! { i64 });
+
+        // SUM / AVG / MIN / MAX are only valid for numeric scalar columns.
+        if let FieldKind::Scalar(st) = &field.kind {
+            if let Some((sum_ty, avg_ty, minmax_ty)) = numeric_aggregate_types(*st) {
+                let sum_r = if optional {
+                    quote! { Option<Option<#sum_ty>> }
+                } else {
+                    quote! { Option<#sum_ty> }
+                };
+                let avg_r = if optional {
+                    quote! { Option<Option<#avg_ty>> }
+                } else {
+                    quote! { Option<#avg_ty> }
+                };
+                let minmax_r = if optional {
+                    quote! { Option<Option<#minmax_ty>> }
+                } else {
+                    quote! { Option<#minmax_ty> }
+                };
+
+                add("sum", sum_r, sum_ty);
+                add("avg", avg_r, avg_ty);
+                add("min", minmax_r.clone(), minmax_ty.clone());
+                add("max", minmax_r, minmax_ty);
+            }
+        }
+    }
+
+    let out_fields: Vec<_> = fields
+        .iter()
+        .map(|af| {
+            let name = &af.name;
+            let inner = &af.output_inner;
+            quote! {
+                #[sqlx(default)]
+                pub #name: Option<#inner>,
+            }
+        })
+        .collect();
+
+    let input_fields: Vec<_> = fields
+        .iter()
+        .map(|af| {
+            let name = &af.name;
+            let r = &af.input_r;
+            quote! {
+                pub #name: Option<::ruprizzle::Aggregate<#model_name, #r>>,
+            }
+        })
+        .collect();
+
+    let push_arms: Vec<_> = fields
+        .iter()
+        .map(|af| {
+            let name = &af.name;
+            quote! {
+                if let Some(a) = &self.#name {
+                    a.push_entry(out);
+                }
+            }
+        })
+        .collect();
+
+    let from_rusqlite_fields: Vec<_> = fields
+        .iter()
+        .map(|af| {
+            let name = &af.name;
+            let alias = &af.alias;
+            let inner = &af.output_inner;
+            quote! {
+                let #name = match row.get::<_, Option<#inner>>(#alias) {
+                    Ok(v) => v,
+                    Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+                    Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+                };
+            }
+        })
+        .collect();
+
+    let from_owned_fields: Vec<_> = fields
+        .iter()
+        .map(|af| {
+            let name = &af.name;
+            let alias = &af.alias;
+            let inner = &af.output_inner;
+            quote! {
+                let #name = row.get_by_name::<Option<#inner>>(#alias)?;
+            }
+        })
+        .collect();
+
+    let from_tokio_postgres_fields: Vec<_> = fields
+        .iter()
+        .map(|af| {
+            let name = &af.name;
+            let alias = &af.alias;
+            let inner = &af.output_inner;
+            quote! {
+                let #name = match row.columns().iter().position(|c| c.name() == #alias) {
+                    Some(idx) => row
+                        .try_get::<usize, Option<#inner>>(idx)
+                        .map_err(::ruprizzle::Error::TokioPostgres)?,
+                    None => None,
+                };
+            }
+        })
+        .collect();
+
+    let field_names: Vec<_> = fields.iter().map(|af| &af.name).collect();
+
+    quote! {
+        #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ::ruprizzle::sqlx::FromRow)]
+        #[serde(crate = "::ruprizzle::serde", default)]
+        pub struct #aggregate_name {
+            #( #out_fields )*
+        }
+
+        #[derive(Debug, Clone, Default)]
+        pub struct #input_name {
+            #( #input_fields )*
+        }
+
+        impl ::ruprizzle::AggregateSet<#model_name, #aggregate_name> for #input_name {
+            fn push_entries(&self, out: &mut Vec<::ruprizzle::AggregateEntry>) {
+                use ::ruprizzle::IntoAggregate;
+                #( #push_arms )*
+            }
+        }
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        impl ::ruprizzle::rusqlite::FromRusqliteRow for #aggregate_name {
+            fn from_rusqlite_row(row: &::ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ::ruprizzle::Error> {
+                #( #from_rusqlite_fields )*
+                Ok(Self {
+                    #( #field_names ),*
+                })
+            }
+        }
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        impl ::ruprizzle::rusqlite::FromOwnedRow for #aggregate_name {
+            fn from_owned_row(row: &::ruprizzle::rusqlite::Row) -> Result<Self, ::ruprizzle::Error> {
+                #( #from_owned_fields )*
+                Ok(Self {
+                    #( #field_names ),*
+                })
+            }
+        }
+
+        #[cfg(feature = "postgres-tokio-postgres")]
+        impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for #aggregate_name {
+            fn from_tokio_postgres_row(row: &::ruprizzle::tokio_postgres::Row) -> Result<Self, ::ruprizzle::Error> {
+                #( #from_tokio_postgres_fields )*
+                Ok(Self {
+                    #( #field_names ),*
+                })
+            }
+        }
     }
 }
 

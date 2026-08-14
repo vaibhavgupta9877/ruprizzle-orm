@@ -9,6 +9,9 @@ use std::marker::PhantomData;
 use crate::col::Column;
 use crate::model::RowDecode;
 
+#[cfg(feature = "postgres-tokio-postgres")]
+use tokio_postgres::types::FromSqlOwned;
+
 /// A typed aggregate expression for a model `M` with return type `R`.
 ///
 /// `R` is encoded in the phantom data so the compiler can check aggregate
@@ -174,7 +177,61 @@ impl<M, T> Column<M, T> {
 ///
 /// This is the output-side counterpart of `Numeric`: the result set produced by
 /// `SUM`, `AVG`, etc. contains one value per aggregate, and that value must be
-/// decodable by `sqlx`.
+/// decodable by every active backend driver.
+
+#[cfg(all(feature = "sqlite-rusqlite", not(feature = "postgres-tokio-postgres")))]
+pub trait AggregateScalar:
+    Send + Sync + 'static
+    + for<'r> sqlx::Decode<'r, sqlx::Any>
+    + sqlx::Type<sqlx::Any>
+    + for<'r> sqlx::Decode<'r, sqlx::Postgres>
+    + sqlx::Type<sqlx::Postgres>
+    + for<'r> sqlx::Decode<'r, sqlx::Sqlite>
+    + sqlx::Type<sqlx::Sqlite>
+    + for<'r> sqlx::Decode<'r, sqlx::MySql>
+    + sqlx::Type<sqlx::MySql>
+    + crate::rusqlite::FromValue
+{
+}
+
+/// Scalar types that can be decoded from an aggregate result column when the
+/// native `tokio-postgres` backend is enabled.
+#[cfg(all(not(feature = "sqlite-rusqlite"), feature = "postgres-tokio-postgres"))]
+pub trait AggregateScalar:
+    Send + Sync + 'static
+    + for<'r> sqlx::Decode<'r, sqlx::Any>
+    + sqlx::Type<sqlx::Any>
+    + for<'r> sqlx::Decode<'r, sqlx::Postgres>
+    + sqlx::Type<sqlx::Postgres>
+    + for<'r> sqlx::Decode<'r, sqlx::Sqlite>
+    + sqlx::Type<sqlx::Sqlite>
+    + for<'r> sqlx::Decode<'r, sqlx::MySql>
+    + sqlx::Type<sqlx::MySql>
+    + FromSqlOwned
+{
+}
+
+/// Scalar types that can be decoded from an aggregate result column when both
+/// native backends are enabled.
+#[cfg(all(feature = "sqlite-rusqlite", feature = "postgres-tokio-postgres"))]
+pub trait AggregateScalar:
+    Send + Sync + 'static
+    + for<'r> sqlx::Decode<'r, sqlx::Any>
+    + sqlx::Type<sqlx::Any>
+    + for<'r> sqlx::Decode<'r, sqlx::Postgres>
+    + sqlx::Type<sqlx::Postgres>
+    + for<'r> sqlx::Decode<'r, sqlx::Sqlite>
+    + sqlx::Type<sqlx::Sqlite>
+    + for<'r> sqlx::Decode<'r, sqlx::MySql>
+    + sqlx::Type<sqlx::MySql>
+    + crate::rusqlite::FromValue
+    + FromSqlOwned
+{
+}
+
+/// Scalar types that can be decoded from an aggregate result column when no
+/// native backend is enabled.
+#[cfg(all(not(feature = "sqlite-rusqlite"), not(feature = "postgres-tokio-postgres")))]
 pub trait AggregateScalar:
     Send + Sync + 'static
     + for<'r> sqlx::Decode<'r, sqlx::Any>

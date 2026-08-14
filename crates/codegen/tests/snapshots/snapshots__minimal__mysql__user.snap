@@ -124,6 +124,209 @@ pub struct UserUpdate {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<Option<String>>,
 }
+#[derive(
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    ::ruprizzle::sqlx::FromRow
+)]
+#[serde(crate = "::ruprizzle::serde", default)]
+pub struct UserAggregate {
+    #[sqlx(default)]
+    pub count_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_email: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_email: Option<i64>,
+    #[sqlx(default)]
+    pub count_name: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_name: Option<i64>,
+}
+#[derive(Debug, Clone, Default)]
+pub struct UserAggregateInput {
+    pub count_id: Option<::ruprizzle::Aggregate<User, i64>>,
+    pub count_distinct_id: Option<::ruprizzle::Aggregate<User, i64>>,
+    pub count_email: Option<::ruprizzle::Aggregate<User, i64>>,
+    pub count_distinct_email: Option<::ruprizzle::Aggregate<User, i64>>,
+    pub count_name: Option<::ruprizzle::Aggregate<User, i64>>,
+    pub count_distinct_name: Option<::ruprizzle::Aggregate<User, i64>>,
+}
+impl ::ruprizzle::AggregateSet<User, UserAggregate> for UserAggregateInput {
+    fn push_entries(&self, out: &mut Vec<::ruprizzle::AggregateEntry>) {
+        use ::ruprizzle::IntoAggregate;
+        if let Some(a) = &self.count_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_email {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_email {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_name {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_name {
+            a.push_entry(out);
+        }
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromRusqliteRow for UserAggregate {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::RusqliteRow,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_id = match row.get::<_, Option<i64>>("count_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_id = match row.get::<_, Option<i64>>("count_distinct_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_email = match row.get::<_, Option<i64>>("count_email") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_email = match row
+            .get::<_, Option<i64>>("count_distinct_email")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_name = match row.get::<_, Option<i64>>("count_name") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_name = match row.get::<_, Option<i64>>("count_distinct_name")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        Ok(Self {
+            count_id,
+            count_distinct_id,
+            count_email,
+            count_distinct_email,
+            count_name,
+            count_distinct_name,
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for UserAggregate {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_id = row.get_by_name::<Option<i64>>("count_id")?;
+        let count_distinct_id = row.get_by_name::<Option<i64>>("count_distinct_id")?;
+        let count_email = row.get_by_name::<Option<i64>>("count_email")?;
+        let count_distinct_email = row
+            .get_by_name::<Option<i64>>("count_distinct_email")?;
+        let count_name = row.get_by_name::<Option<i64>>("count_name")?;
+        let count_distinct_name = row.get_by_name::<Option<i64>>("count_distinct_name")?;
+        Ok(Self {
+            count_id,
+            count_distinct_id,
+            count_email,
+            count_distinct_email,
+            count_name,
+            count_distinct_name,
+        })
+    }
+}
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for UserAggregate {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_id = match row.columns().iter().position(|c| c.name() == "count_id") {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_id = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_id")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_email = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_email")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_email = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_email")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_name = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_name")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_name = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_name")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        Ok(Self {
+            count_id,
+            count_distinct_id,
+            count_email,
+            count_distinct_email,
+            count_name,
+            count_distinct_name,
+        })
+    }
+}
 impl ::ruprizzle::Model for User {
     const TABLE: &'static str = "users";
     const PRIMARY_KEY: &'static str = "id";
