@@ -667,6 +667,10 @@ pub struct RelationRef {
     /// Explicit `@relation("name")`, required when two relations connect the same
     /// pair of models.
     pub name: Option<String>,
+    /// Join model for an explicit many-to-many (`@relation(through: PostTag)`).
+    /// Only valid on list-valued relation fields.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub through: Option<ModelName>,
     /// FK fields on *this* model. Non-empty only on the owning side.
     pub fields: Vec<FieldName>,
     /// Referenced fields on the target model.
@@ -715,6 +719,15 @@ pub struct ResolvedRelation {
     pub constraint_name: String,
     /// Source location of the owning side's relation attribute.
     pub span: Span,
+    /// Join model for many-to-many relations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_model: Option<ModelName>,
+    /// Field in the join model that references the owner endpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_owner_field: Option<FieldName>,
+    /// Field in the join model that references the target endpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_target_field: Option<FieldName>,
 }
 
 /// The cardinality of a relation, from the owner's point of view.
@@ -724,6 +737,8 @@ pub enum RelationKind {
     OneToOne,
     /// Owner holds a non-unique FK: many owner rows per target row.
     ManyToOne,
+    /// Both sides are lists, joined by an explicit model in between.
+    ManyToMany,
 }
 
 /// `onDelete` / `onUpdate` behaviour.

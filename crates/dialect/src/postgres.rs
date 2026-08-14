@@ -1,7 +1,8 @@
 //! PostgreSQL dialect.
 
 use ruprizzle_core::ir::{
-    EnumDef, Field, FieldKind, IndexDef, Model, ResolvedRelation, ScalarType, Schema, UniqueDef,
+    EnumDef, Field, FieldKind, IndexDef, Model, RelationKind, ResolvedRelation, ScalarType, Schema,
+    UniqueDef,
 };
 
 use crate::common::{
@@ -193,12 +194,18 @@ impl DbDialect for PostgresDialect {
     }
 
     fn add_foreign_key(&self, m: &Model, r: &ResolvedRelation) -> Vec<Stmt> {
+        if r.kind == RelationKind::ManyToMany {
+            return Vec::new();
+        }
         let table = self.quote_ident(&m.table);
         let constraint = fk_constraint_sql(self, r);
         vec![Stmt::new(format!("ALTER TABLE {table} ADD {constraint};"))]
     }
 
     fn drop_foreign_key(&self, m: &Model, r: &ResolvedRelation) -> Vec<Stmt> {
+        if r.kind == RelationKind::ManyToMany {
+            return Vec::new();
+        }
         let table = self.quote_ident(&m.table);
         let name = self.quote_ident(&r.constraint_name);
         vec![Stmt::new(format!(

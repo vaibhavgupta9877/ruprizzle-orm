@@ -1,7 +1,8 @@
 //! SQLite dialect.
 
 use ruprizzle_core::ir::{
-    EnumDef, Field, FieldKind, IndexDef, Model, ResolvedRelation, ScalarType, Schema, UniqueDef,
+    EnumDef, Field, FieldKind, IndexDef, Model, RelationKind, ResolvedRelation, ScalarType, Schema,
+    UniqueDef,
 };
 
 use crate::common::{
@@ -124,6 +125,9 @@ impl DbDialect for SqliteDialect {
     fn add_foreign_key(&self, m: &Model, r: &ResolvedRelation) -> Vec<Stmt> {
         // SQLite cannot add a foreign key with ALTER TABLE. Return the inline
         // constraint so `full_create_table` can embed it in CREATE TABLE.
+        if r.kind == RelationKind::ManyToMany {
+            return Vec::new();
+        }
         let _ = m;
         vec![Stmt::new(fk_constraint_sql(self, r))]
     }
@@ -269,7 +273,7 @@ pub(crate) fn rebuild_table(
     let owned: Vec<&ResolvedRelation> = schema
         .relations
         .iter()
-        .filter(|r| r.owner == new_model.name)
+        .filter(|r| r.owner == new_model.name && r.kind != RelationKind::ManyToMany)
         .collect();
     if let Some(last) = stmts.last_mut() {
         let body = last

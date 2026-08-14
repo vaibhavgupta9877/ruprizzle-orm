@@ -89,6 +89,7 @@ fn blog_schema() -> Schema {
             FieldKind::List(Box::new(FieldKind::Relation(RelationRef {
                 target: ModelName::new("Post"),
                 name: None,
+                through: None,
                 fields: vec![],
                 references: vec![],
                 on_delete: None,
@@ -121,6 +122,7 @@ fn blog_schema() -> Schema {
             FieldKind::Relation(RelationRef {
                 target: ModelName::new("User"),
                 name: None,
+                through: None,
                 fields: vec![FieldName::new("authorId")],
                 references: vec![FieldName::new("id")],
                 on_delete: Some(ReferentialAction::Cascade),
@@ -200,6 +202,9 @@ fn blog_schema() -> Schema {
             optional: false,
             constraint_name: "posts_author_id_fkey".to_owned(),
             span: Span::new(120, 160),
+            join_model: None,
+            join_owner_field: None,
+            join_target_field: None,
         }],
     }
 }

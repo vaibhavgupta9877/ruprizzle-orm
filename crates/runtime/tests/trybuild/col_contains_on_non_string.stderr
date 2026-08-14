@@ -5,6 +5,7 @@ error[E0599]: no method named `contains` found for struct `ruprizzle::Column<Use
    |                ^^^^^^^^ method not found in `ruprizzle::Column<User, i64>`
    |
    = note: the method was found for
+           - `ruprizzle::Column<M, JsonValue>`
            - `ruprizzle::Column<M, std::string::String>`
 help: some of the expressions' fields have a method of the same name
    |

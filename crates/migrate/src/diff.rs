@@ -1,6 +1,6 @@
 //! Schema diffing: turn two [`Schema`]s into a [`Vec<Change>`].
 
-use ruprizzle_core::ir::{Field, FieldKind, Model, ResolvedRelation, Schema};
+use ruprizzle_core::ir::{Field, FieldKind, Model, RelationKind, ResolvedRelation, Schema};
 use ruprizzle_core::names::{FieldName, ModelName};
 
 use crate::change::{Change, ColumnAspect};
@@ -244,12 +244,18 @@ fn diff_relations(prev: &Schema, next: &Schema, changes: &mut Vec<Change>) {
     let mut prev_map: std::collections::HashMap<String, &ResolvedRelation> =
         std::collections::HashMap::new();
     for r in &prev.relations {
+        if r.kind == RelationKind::ManyToMany {
+            continue;
+        }
         prev_map.insert(by_name(r), r);
     }
 
     let mut next_map: std::collections::HashMap<String, &ResolvedRelation> =
         std::collections::HashMap::new();
     for r in &next.relations {
+        if r.kind == RelationKind::ManyToMany {
+            continue;
+        }
         next_map.insert(by_name(r), r);
     }
 

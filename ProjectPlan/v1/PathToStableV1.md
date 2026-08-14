@@ -352,8 +352,12 @@ ADR-006 chose explicit join models. That is a defensible, arguably better design
 Prisma's implicit join tables — but "you must model the join table yourself and traverse it
 in two hops" is why the table says `Partial`.
 
-- [ ] **Step 1.** `@relation(through: PostTag)` in the schema DSL, declaring a many-to-many
-      that traverses an explicit join model.
+- [x] **Step 1.** `@relation(through: PostTag)` in the schema DSL, declaring a many-to-many
+      that traverses an explicit join model. Added `RelationRef::through`, `RelationKind::ManyToMany`,
+      `ResolvedRelation::join_model`/`join_owner_field`/`join_target_field`, and the parser resolver
+      that pairs the two list sides and the two join-model foreign keys. Dialect/migrate ignore
+      `ManyToMany` for FK constraint generation; parser snapshot and example tests cover valid and
+      invalid schemas.
 - [ ] **Step 2.** Codegen a direct `post.tags` accessor that hides the two-hop traversal
       while the join model stays visible and queryable — keeping ADR-006's honesty and
       Prisma's ergonomics.

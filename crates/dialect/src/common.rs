@@ -2,7 +2,7 @@
 
 use ruprizzle_core::SchemaError;
 use ruprizzle_core::ir::{
-    DefaultFn, DefaultValue, Field, FieldKind, IndexDef, Literal, Model, Provider,
+    DefaultFn, DefaultValue, Field, FieldKind, IndexDef, Literal, Model, Provider, RelationKind,
     ResolvedRelation, ScalarType, Schema, SortOrder,
 };
 
@@ -40,7 +40,7 @@ pub fn full_create_table(dialect: &dyn DbDialect, schema: &Schema, m: &Model) ->
     let owned: Vec<&ResolvedRelation> = schema
         .relations
         .iter()
-        .filter(|r| r.owner == m.name)
+        .filter(|r| r.owner == m.name && r.kind != RelationKind::ManyToMany)
         .collect();
 
     if owned.is_empty() {
