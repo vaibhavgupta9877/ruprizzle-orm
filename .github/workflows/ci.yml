@@ -216,6 +216,22 @@ jobs:
         with:
           command: check advisories licenses bans sources
 
+  semver-checks:
+    name: semver
+    runs-on: ubuntu-latest
+    # Mechanical enforcement of docs/Stability.md (W6-03): compares each published,
+    # semver-covered crate's current public API against the latest version on
+    # crates.io and fails if a breaking change isn't matched by an appropriate
+    # version bump. ruprizzle-testkit and xtask are `publish = false` and are
+    # skipped — they are explicitly out of scope for semver, per docs/Stability.md.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          package: ruprizzle-core, ruprizzle-dialect, ruprizzle-parser, ruprizzle-codegen, ruprizzle-migrate, ruprizzle-macros, ruprizzle
+
   harden:
     name: pre-release hardening
     runs-on: ubuntu-latest

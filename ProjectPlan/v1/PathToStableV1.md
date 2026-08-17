@@ -1,6 +1,6 @@
 # Path to Stable v1.0
 
-> **Status:** ACTIVE — W2-05 complete. W1-02, W1-03, and W2-07 (prepared statements and conditional/dynamic building) are complete. W0-01 rustfmt regressed and was re-applied 2026-08-14. Remaining before 1.0: W2-06 (nested writes beyond insert), W5-07 (LSP), and all of W6.
+> **Status:** ACTIVE — W2-05 complete. W1-02, W1-03, and W2-07 (prepared statements and conditional/dynamic building) are complete. W0-01 rustfmt regressed and was re-applied 2026-08-14. W6-01, W6-02, W6-03, and W6-06 are complete (public API review, stability policy, `cargo-semver-checks` CI gate, migration guide); W6-04 (RC cut) and W6-05 (rescoring against the RC) remain, as calendar/process items. Remaining before 1.0: W2-06 (nested writes beyond insert), W5-07 (LSP), and W6-04/W6-05.
 
 **From:** `0.1.1-beta.1` (published to crates.io 2026-08-13, 84/100 production readiness)
 **To:** `1.0.0` — a version whose API we commit to under semver and whose capability surface
@@ -525,25 +525,37 @@ alone or emptied.
 
 **Goal:** make the semver promise real. **Effort:** ~1 week.
 
-> **Current status (2026-08-14):** Not started. No public-api review, stability policy, `cargo-semver-checks` wiring, release candidates, final assessment, or migration guide exists yet.
+> **Current status (2026-08-17):** W6-01 through W6-03 and W6-06 are done: `docs/PublicApiReview.md`
+> documents a `cargo-public-api` review of every workspace crate (no internal leakage found, no
+> code changes needed), `docs/Stability.md` states the semver/MSRV/deprecation policy plus the
+> RC process, a `semver-checks` CI job runs `cargo-semver-checks` on every PR, and
+> `docs/MigrationGuideToV1.md` covers every breaking change since `0.1.1-beta.1` with
+> before/after snippets. W6-04 (cutting `1.0.0-rc.1`) and W6-05 (rescoring against a live RC)
+> are calendar/process items that are now documented (the RC process is written up in
+> `docs/Stability.md`) but not yet executed — W6-05 is explicitly blocked on W6-04 and not
+> actionable until an actual `1.0.0-rc.1` exists to score.
 
-- [ ] **W6-01 · Public API review.** Enumerate the full public surface of every crate with
+- [x] **W6-01 · Public API review.** Enumerate the full public surface of every crate with
       `cargo-public-api`. Everything we are not prepared to support for years gets
       feature-gated, `#[doc(hidden)]`, marked unstable, or removed. **This is the last
       cheap moment to remove anything.** **2 days.**
-- [ ] **W6-02 · API stability policy.** `docs/Stability.md`: what is covered by semver, what
+- [x] **W6-02 · API stability policy.** `docs/Stability.md`: what is covered by semver, what
       is explicitly not (generated code internals, `xtask`, benchmark harnesses), MSRV
       policy, and the deprecation process. Dimension 8 stays below 8 until this exists.
       **0.5 day.**
-- [ ] **W6-03 · `cargo-semver-checks` in CI.** Mechanical enforcement of W6-02, so semver
+- [x] **W6-03 · `cargo-semver-checks` in CI.** Mechanical enforcement of W6-02, so semver
       is a gate rather than a habit. **0.5 day.**
 - [ ] **W6-04 · Release candidates.** `1.0.0-rc.1` with a real feedback window before
       `1.0.0`. The current 43 downloads across four versions is not enough exposure to
-      freeze an API on. **Do not skip this.** **Calendar time, not effort.**
+      freeze an API on. **Do not skip this.** **Calendar time, not effort.** Process documented
+      in `docs/Stability.md`'s "Release candidates" section; not yet executed — no `1.0.0-rc.1`
+      has been tagged or published.
 - [ ] **W6-05 · Final production readiness assessment.** Re-run against `1.0.0-rc.1`,
       targeting **≥ 92/100**, with dimension 1 (correctness) ≥ 9.0 on the back of fuzzing and
-      soak, and dimension 3 (operability) ≥ 9.0 on the back of W3. **1 day.**
-- [ ] **W6-06 · Migration guide from beta.** Every breaking change between `0.1.1-beta.1`
+      soak, and dimension 3 (operability) ≥ 9.0 on the back of W3. **1 day.** Blocked on W6-04:
+      there is no `1.0.0-rc.1` to score yet, so this has not been run and no score should be
+      fabricated against `dev-v0-2` HEAD in its place.
+- [x] **W6-06 · Migration guide from beta.** Every breaking change between `0.1.1-beta.1`
       and `1.0.0`, with before/after code. **1 day.**
 
 ---
