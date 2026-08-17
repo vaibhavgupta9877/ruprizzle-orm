@@ -143,18 +143,18 @@ The table below cross-checks every limitation/priority in
 - Consumes: `ruprizzle_parser::parse_with_warnings`, `ruprizzle_core::ir::Schema`.
 - Produces: a `LanguageServer` type and a `ruprizzle lsp` subcommand.
 
-- [ ] **Step 1: Add `tower-lsp` to the workspace**
+- [x] **Step 1: Add `tower-lsp` to the workspace**
   - In `Cargo.toml` `[workspace.dependencies]`, add:
     `tower-lsp = { version = "0.20", default-features = false, features = ["runtime-tokio"] }`
   - This version is older than 7 days and has a stable LSP 3.17 implementation.
 
-- [ ] **Step 2: Create `crates/lsp/Cargo.toml`**
+- [x] **Step 2: Create `crates/lsp/Cargo.toml`**
   - Set `name = "ruprizzle-lsp"`, `publish = true`, version `0.4.0-beta.2`.
   - Depend on `ruprizzle-parser`, `ruprizzle-core`, `ruprizzle-codegen`,
     `tower-lsp`, `tokio`, `serde_json`, `lsp-types` (re-exported by
     `tower-lsp`).
 
-- [ ] **Step 3: Implement `Backend` state**
+- [x] **Step 3: Implement `Backend` state**
   - In `crates/lsp/src/lib.rs`, define:
     ```rust
     pub struct Backend {
@@ -165,17 +165,17 @@ The table below cross-checks every limitation/priority in
   - Implement `tower_lsp::LanguageServer` with `initialize`,
     `initialized`, `shutdown`, `did_open`, `did_change`, `did_close`.
 
-- [ ] **Step 4: Wire the CLI**
+- [x] **Step 4: Wire the CLI**
   - In `crates/cli/src/main.rs`, add `Command::Lsp { stdio: bool }`.
   - In `crates/cli/src/main.rs`, add a `run_lsp` function that calls
     `ruprizzle_lsp::run_stdio().await`.
 
-- [ ] **Step 5: Add to workspace and verify it builds**
+- [x] **Step 5: Add to workspace and verify it builds**
   - Add `"crates/lsp"` to the workspace `members` in `Cargo.toml`.
   - Run: `cargo clippy -p ruprizzle-lsp`
   - Expected: no warnings.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   - `git add Cargo.toml crates/lsp crates/cli`
   - `git commit -m "feat(lsp): scaffold ruprizzle-lsp crate and ruprizzle lsp command"`
 
@@ -189,7 +189,7 @@ The table below cross-checks every limitation/priority in
 - Consumes: `SchemaError` from `ruprizzle_core::diagnostic`, `miette::Diagnostic`.
 - Produces: `Vec<lsp_types::Diagnostic>`.
 
-- [ ] **Step 1: Write the converter**
+- [x] **Step 1: Write the converter**
   - In `crates/lsp/src/diagnostics.rs`:
     ```rust
     use lsp_types::{Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range};
@@ -234,17 +234,17 @@ The table below cross-checks every limitation/priority in
     }
     ```
 
-- [ ] **Step 2: Trigger validation on open/change**
+- [x] **Step 2: Trigger validation on open/change**
   - In `Backend::did_open` and `Backend::did_change`, call
     `ruprizzle_parser::parse_with_warnings(file, text)`.
   - Convert errors to diagnostics and call `client.publish_diagnostics(uri, diagnostics, version).await`.
 
-- [ ] **Step 3: Add a test**
+- [x] **Step 3: Add a test**
   - Create `crates/lsp/tests/diagnostics.rs` with an invalid schema
     (`model User { id String }` — no `@id`) and assert the diagnostic
     message contains "primary key".
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
   - Run: `cargo test -p ruprizzle-lsp`
   - Expected: PASS.
   - `git commit -m "feat(lsp): publish diagnostics from parser/validator"`
@@ -259,29 +259,29 @@ The table below cross-checks every limitation/priority in
 - Consumes: `Schema` IR, AST source text, cursor position.
 - Produces: `CompletionResponse`.
 
-- [ ] **Step 1: Determine context from source text**
+- [x] **Step 1: Determine context from source text**
   - Parse the source with `parse_ast` (non-fatal) and find the token nearest the
     cursor.
   - Recognise contexts: top-level block keyword (`datasource`/`model`/`enum`),
     inside a model (field type/attributes), inside `@@index([...])` or
     `@@unique([...])`, inside attribute arguments.
 
-- [ ] **Step 2: Build completion lists**
+- [x] **Step 2: Build completion lists**
   - Top-level: keywords, model/enum names.
   - Field type: scalar types, user models, user enums, with `[]`/`?` suffix hints.
   - Attributes: `@id`, `@default`, `@unique`, `@relation`, `@db.*`, `@map`,
     `@updatedAt` and argument names.
   - Index/unique: field names of the current model.
 
-- [ ] **Step 3: Implement `completion` request**
+- [x] **Step 3: Implement `completion` request**
   - In `Backend::completion`, call `crates/lsp/src/completion.rs::complete(schema, text, position)`.
   - Return `CompletionList { is_incomplete: false, items }`.
 
-- [ ] **Step 4: Test**
+- [x] **Step 4: Test**
   - Add `crates/lsp/tests/completion.rs` that places the cursor after a field
     type and expects `"@unique"` in the completion items.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   - `git commit -m "feat(lsp): completion for schema DSL keywords, types and attributes"`
 
 ### Task B.4: Go-to-definition and hover
@@ -296,18 +296,18 @@ The table below cross-checks every limitation/priority in
   `ast::EnumDecl::name_span`), `Schema` IR.
 - Produces: `GotoDefinitionResponse`, `Hover`.
 
-- [ ] **Step 1: Map cursor to a token**
+- [x] **Step 1: Map cursor to a token**
   - Use the byte offset of the cursor to find the AST node whose span contains it.
 
-- [ ] **Step 2: Resolve model/enum references**
+- [x] **Step 2: Resolve model/enum references**
   - For a `FieldDecl::type_span` that names a model or enum, look up the target
     declaration and return its `Location` (URI + range from `name_span`).
 
-- [ ] **Step 3: Hover**
+- [x] **Step 3: Hover**
   - For a field token, show `field_name: Type` plus any `///` doc comment.
   - For a model token, show the model name and first paragraph of its docs.
 
-- [ ] **Step 4: Test and commit**
+- [x] **Step 4: Test and commit**
   - Add `crates/lsp/tests/goto.rs`.
   - `git commit -m "feat(lsp): go-to-definition and hover for models, enums and fields"`
 
@@ -322,16 +322,16 @@ The table below cross-checks every limitation/priority in
 - Consumes: `ruprizzle-lsp` binary.
 - Produces: VS Code extension and editor docs.
 
-- [ ] **Step 1: Minimal VS Code extension**
+- [x] **Step 1: Minimal VS Code extension**
   - `package.json` registers `*.ruprizzle` and a server that starts
     `ruprizzle lsp --stdio`.
   - `src/extension.ts` is the Node/Electron adapter.
 
-- [ ] **Step 2: Update `editor/README.md`**
+- [x] **Step 2: Update `editor/README.md`**
   - Document the VS Code extension and how to run the stdio server in other
     editors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   - `git commit -m "feat(lsp): minimal VS Code extension and editor docs"`
 
 ---
