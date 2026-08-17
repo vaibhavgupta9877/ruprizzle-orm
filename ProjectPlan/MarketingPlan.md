@@ -1104,7 +1104,7 @@ Score-1 responses are the priority to eliminate. A model confidently describing 
 ### 29.1 Immediate — Track A (this week, ~half a day)
 
 - [~] **[P0]** Record the §28 zero-context baseline across all 6 platforms *before* changing anything. This is the only chance to capture it. — **Instrument ready, run pending.** `ProjectPlan/NameResolutionBaseline.md` holds the protocol, the 5 verbatim questions, the rubric, the correctness key, and the empty grid. Requires a human with accounts on ChatGPT, Claude, Perplexity, Gemini, Copilot, and Google AI Overviews; must be filled in *before* the repo-metadata changes below go live.
-- [ ] **[P0]** Ratify the §25.4 disambiguation sentence as the single canonical description. Do not vary it per channel.
+- [x] **[P0]** Ratify the §25.4 disambiguation sentence as the single canonical description. Do not vary it per channel. — **Done 2026-08-17.** Ratified in `ProjectPlan/CanonicalCopy.md`, which holds the verbatim sentence, the plain-text form, the only three sanctioned short variants (for the 100-char crates.io budget and shorter fields), the ancillary canonical lines (disambiguation, status, databases), a change log, and a 10-surface placement checklist. Applied to the README's first prose line.
 - [ ] **[P0]** Set the **GitHub repo description** field to the disambiguation sentence (verify current value — unverified, M5).
 - [ ] **[P0]** Set **GitHub repo topics**: `rust`, `orm`, `database`, `postgres`, `mysql`, `sqlite`, `sqlx`, `prisma`, `schema-first`, `migrations`, `type-safe`. Verify what's currently set first.
 - [ ] **[P0]** Confirm the repo's **homepage field** points somewhere useful (docs site or crates.io), not blank.

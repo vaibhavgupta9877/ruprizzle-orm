@@ -6,7 +6,9 @@
 [![License](https://img.shields.io/crates/l/ruprizzle.svg)](./LICENSE-MIT)
 [![CI](https://img.shields.io/badge/CI-cargo%20xtask%20ci-success)](./xtask/src/main.rs)
 
-A **schema-first ORM for Rust** that combines the best parts of Prisma and Drizzle:
+**ruprizzle is a schema-first ORM for Rust — a Prisma-style schema file that generates a typed client, with Drizzle-style SQL transparency and no sidecar binary.**
+
+It combines the best parts of Prisma and Drizzle:
 
 - **Prisma's** declarative schema as the single source of truth, with a generated typed client, automatic migration diffing, and nested relation loading.
 - **Drizzle's** SQL transparency — no hidden query engine, no sidecar binary, and `.to_sql()` on every builder so you always know what is being sent to the database.
