@@ -12,12 +12,26 @@ use std::time::Instant;
 
 use ruprizzle::serde::Serialize;
 use ruprizzle::serde_json;
+use futures_util::StreamExt;
 use ruprizzle::{
-    Column, CountingExecutor, Encodable, Executor, IncludeList, IncludeOne, InsertManyQuery, Model,
-    Related, SelectQuery,
+    Column, CountingExecutor, Encodable, Executor, Filter, IncludeList, IncludeOne, InsertManyQuery,
+    InsertQuery, Model, NestedSetter, Related, RowBatch, SelectQuery, UpdateQuery, Value,
+    decode_rows,
 };
 use simple_process_stats::ProcessStats;
 use sqlx::FromRow;
+
+fn user_id_value(u: &User) -> Value {
+    u.id.to_value()
+}
+
+struct SetPosts;
+
+impl NestedSetter<User> for SetPosts {
+    fn set(&self, parent: &mut User, batch: RowBatch) {
+        parent.posts = Related::Loaded(decode_rows::<Post>(batch).unwrap());
+    }
+}
 
 fn db_path() -> String {
     std::env::var("BENCH_SQLITE_PATH")
@@ -657,6 +671,118 @@ async fn main() -> Result<(), ruprizzle::Error> {
         BenchOutcome::default()
     }));
 
+    // New query-construction micro-benchmarks for recent ruprizzle enhancements.
+
+    results.push(bench_sync("to_sql_prepared_select_by_pk", 100_000, || {
+        let q = SelectQuery::<User>::new(&pool)
+            .filter(USER_ID.eq(500i64))
+            .limit(1)
+            .offset(0);
+        std::hint::black_box(q.prepare().unwrap());
+        BenchOutcome::default()
+    }));
+
+    {
+        let mut prepared = SelectQuery::<User>::new(&pool)
+            .filter(USER_ID.eq(500i64))
+            .limit(1)
+            .offset(0)
+            .prepare()
+            .unwrap();
+        results.push(bench_sync("prepared_rebind_select_by_pk", 100_000, || {
+            std::hint::black_box(prepared.bind(0, 123i64));
+            BenchOutcome::default()
+        }));
+    }
+
+    results.push(bench_sync("to_sql_conditional_filter", 100_000, || {
+        let maybe_age = Some(USER_AGE.gt(18i64));
+        let maybe_order = Some(USER_AGE.asc());
+        let maybe_limit = Some(100u64);
+        let q = SelectQuery::<User>::new(&pool)
+            .filter_if(maybe_age)
+            .order_by_if(maybe_order)
+            .limit_if(maybe_limit);
+        std::hint::black_box(q.to_sql().unwrap());
+        BenchOutcome::default()
+    }));
+
+    results.push(bench_sync("to_sql_select_with_cte", 100_000, || {
+        let q = SelectQuery::<User>::new(&pool)
+            .with("active", SelectQuery::<User>::new(&pool).filter(USER_AGE.gt(18i64)))
+            .filter(USER_ID.gt(0i64));
+        std::hint::black_box(q.to_sql().unwrap());
+        BenchOutcome::default()
+    }));
+
+    results.push(bench_sync("to_sql_select_with_recursive_cte", 100_000, || {
+        let anchor = SelectQuery::<User>::new(&pool).filter(USER_ID.eq(1i64));
+        let recursive = SelectQuery::<User>::new(&pool).filter(USER_ID.eq(2i64));
+        let q = SelectQuery::<User>::new(&pool)
+            .with_recursive("nums", anchor, recursive)
+            .filter(USER_ID.gt(0i64));
+        std::hint::black_box(q.to_sql().unwrap());
+        BenchOutcome::default()
+    }));
+
+    results.push(bench_sync("to_sql_set_union", 100_000, || {
+        let left = SelectQuery::<User>::new(&pool).filter(USER_AGE.gt(18i64));
+        let right = SelectQuery::<User>::new(&pool).filter(USER_AGE.lte(18i64));
+        let q = left.union_all(right);
+        std::hint::black_box(q.to_sql().unwrap());
+        BenchOutcome::default()
+    }));
+
+    results.push(bench_sync("to_sql_select_with_join", 100_000, || {
+        let q = SelectQuery::<Post>::new(&pool).inner_join::<User>(POST_AUTHOR_ID.on(USER_ID));
+        std::hint::black_box(q.to_sql().unwrap());
+        BenchOutcome::default()
+    }));
+
+    results.push(bench_sync("to_sql_select_exists_subquery", 100_000, || {
+        let sub = SelectQuery::<Post>::new(&pool).filter(POST_AUTHOR_ID.correlated_to(USER_ID));
+        let q = SelectQuery::<User>::new(&pool).filter(Filter::exists(sub));
+        std::hint::black_box(q.to_sql().unwrap());
+        BenchOutcome::default()
+    }));
+
+    results.push(bench_sync("to_sql_select_in_subquery", 100_000, || {
+        let sub = SelectQuery::<Post>::new(&pool)
+            .columns(POST_AUTHOR_ID)
+            .filter(POST_AUTHOR_ID.gt(0i64));
+        let q = SelectQuery::<User>::new(&pool).filter(USER_ID.in_subquery(sub));
+        std::hint::black_box(q.to_sql().unwrap());
+        BenchOutcome::default()
+    }));
+
+    results.push(bench_sync("to_sql_nested_insert", 100_000, || {
+        let children = InsertManyQuery::<Post>::new(&pool).row([
+            ("id", 10_001i64.to_value()),
+            ("category_id", 1i64.to_value()),
+            ("title", "nested post".to_string().to_value()),
+            ("published_at", 0i64.to_value()),
+            ("views", 0i64.to_value()),
+        ]);
+        let q = InsertQuery::<User>::new(&pool)
+            .set(USER_ID, 9999i64)
+            .set(USER_EMAIL, "nested@example.com")
+            .set(USER_AGE, 30i64)
+            .set(USER_NAME, "Nested")
+            .set(USER_CREATED_AT, 0i64)
+            .with_related(user_id_value, "author_id", children, SetPosts);
+        std::hint::black_box(q.to_sql());
+        BenchOutcome::default()
+    }));
+
+    results.push(bench_sync("to_sql_nested_update", 100_000, || {
+        let q = UpdateQuery::<User>::new(&pool)
+            .filter(USER_ID.eq(1i64))
+            .set(USER_NAME, "updated".to_string())
+            .set_related::<Post, Vec<i64>, i64>(user_id_value, "author_id", "id", vec![10_001i64, 10_002i64]);
+        std::hint::black_box(q.to_sql().unwrap());
+        BenchOutcome::default()
+    }));
+
     // End-to-end: select by PK.
     let pool2 = pool.clone();
     results.push(
@@ -1018,6 +1144,50 @@ async fn main() -> Result<(), ruprizzle::Error> {
                 assert_eq!(rows.len(), 100);
                 BenchOutcome {
                     rows: rows.len(),
+                    queries: counter.count(),
+                }
+            }
+        })
+        .await,
+    );
+
+    // End-to-end: reusable prepared statement for single-row PK lookup.
+    let prepared = SelectQuery::<User>::new(&pool)
+        .filter(USER_ID.eq(500i64))
+        .limit(1)
+        .offset(0)
+        .prepare()
+        .unwrap();
+    results.push(
+        bench_async("prepared_select_by_pk", 1000, || {
+            let mut p = prepared.clone();
+            async move {
+                p.bind(0, 500i64);
+                let row = p.fetch_one().await.expect("fetch prepared user");
+                assert_eq!(row.id, 500);
+                BenchOutcome { rows: 1, queries: 1 }
+            }
+        })
+        .await,
+    );
+
+    // End-to-end: unbuffered streaming of all users.
+    let pool2 = pool.clone();
+    results.push(
+        bench_async("stream_find_many_1000", 50, move || {
+            let pool = pool2.clone();
+            async move {
+                let counter = CountingExecutor::new(&pool);
+                let mut stream = SelectQuery::<User>::new(&counter)
+                    .stream_unbuffered()
+                    .expect("create stream");
+                let mut rows = 0;
+                while let Some(_row) = stream.next().await {
+                    rows += 1;
+                }
+                assert_eq!(rows, 1000);
+                BenchOutcome {
+                    rows,
                     queries: counter.count(),
                 }
             }

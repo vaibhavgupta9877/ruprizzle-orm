@@ -290,6 +290,8 @@ def write_log(
         "include_posts_and_comments",
         "include_posts_with_tags",
         "find_popular_posts",
+        "prepared_select_by_pk",
+        "stream_find_many_1000",
         "bulk_insert_1000",
     ]
     query_construction_ops = [
@@ -298,6 +300,17 @@ def write_log(
         "to_sql_select_in_list",
         "to_sql_select_complex_filter",
         "to_sql_select_paginated",
+        "to_sql_prepared_select_by_pk",
+        "prepared_rebind_select_by_pk",
+        "to_sql_conditional_filter",
+        "to_sql_select_with_cte",
+        "to_sql_select_with_recursive_cte",
+        "to_sql_set_union",
+        "to_sql_select_with_join",
+        "to_sql_select_exists_subquery",
+        "to_sql_select_in_subquery",
+        "to_sql_nested_insert",
+        "to_sql_nested_update",
     ]
 
     # End-to-end table
@@ -376,6 +389,8 @@ def write_markdown(
         "include_posts_and_comments",
         "include_posts_with_tags",
         "find_popular_posts",
+        "prepared_select_by_pk",
+        "stream_find_many_1000",
         "bulk_insert_1000",
     ]
     query_construction_ops = [
@@ -384,6 +399,17 @@ def write_markdown(
         "to_sql_select_in_list",
         "to_sql_select_complex_filter",
         "to_sql_select_paginated",
+        "to_sql_prepared_select_by_pk",
+        "prepared_rebind_select_by_pk",
+        "to_sql_conditional_filter",
+        "to_sql_select_with_cte",
+        "to_sql_select_with_recursive_cte",
+        "to_sql_set_union",
+        "to_sql_select_with_join",
+        "to_sql_select_exists_subquery",
+        "to_sql_select_in_subquery",
+        "to_sql_nested_insert",
+        "to_sql_nested_update",
     ]
 
     header = "| Operation | " + " | ".join(DRIVER_ORDER) + " |"
@@ -457,6 +483,8 @@ def write_median_trial(
         "include_posts_and_comments",
         "include_posts_with_tags",
         "find_popular_posts",
+        "prepared_select_by_pk",
+        "stream_find_many_1000",
         "bulk_insert_1000",
     }
     totals = [
