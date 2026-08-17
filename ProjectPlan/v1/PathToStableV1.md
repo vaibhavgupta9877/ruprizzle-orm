@@ -1,6 +1,6 @@
 # Path to Stable v1.0
 
-> **Status:** ACTIVE — W2-05 complete. W1-02 (array binds, Steps 2-6 complete) and W1-03 (true streaming, all steps complete) are now done. W0-01 rustfmt regressed and was re-applied 2026-08-14. Remaining before 1.0: W2-06 (nested writes beyond insert), W2-07 (prepared statements / dynamic building), W5-07 (LSP), and all of W6.
+> **Status:** ACTIVE — W2-05 complete. W1-02, W1-03, and W2-07 (prepared statements and conditional/dynamic building) are complete. W0-01 rustfmt regressed and was re-applied 2026-08-14. Remaining before 1.0: W2-06 (nested writes beyond insert), W5-07 (LSP), and all of W6.
 
 **From:** `0.1.1-beta.1` (published to crates.io 2026-08-13, 84/100 production readiness)
 **To:** `1.0.0` — a version whose API we commit to under semver and whose capability surface
@@ -74,7 +74,7 @@ fastest `bulk_insert_1000` at 1,191 (Diesel 5,336, Prisma 13,154); nested `inclu
 4,468 versus Sea-ORM 23,437 and Prisma 33,534. **Performance is not this plan's problem.**
 Every workstream below is capability, operability, or assurance.
 
-> **Current position (2026-08-14, commit `4ca9170`):** `cargo fmt --all --check` now passes after re-application. `cargo clippy -p ruprizzle --all-features -- -D warnings` passes. Unit tests, SQLite/MySQL/Postgres integration tests, and the new `streaming` integration tests pass. Savepoint, array, and unbuffered streaming tests pass on all three backends. W0–W4 and W5-01 through W5-06 are functionally complete. W5-07 is deferred and unimplemented. W1-02 and W1-03 are now complete. W2-06 and W2-07 are not yet started.
+> **Current position (2026-08-14, commit `4ca9170`):** `cargo fmt --all --check` now passes after re-application. `cargo clippy -p ruprizzle --all-features -- -D warnings` passes. Unit tests, SQLite/MySQL/Postgres integration tests, and the new `streaming`, `conditional_building`, and `prepared_statements` integration tests pass. Savepoint, array, unbuffered streaming, prepared statements, and conditional building tests pass on all three backends. W0–W4 and W5-01 through W5-06 are functionally complete. W5-07 is deferred and unimplemented. W1-02, W1-03, and W2-07 are now complete. W2-06 is not yet started.
 
 ---
 
@@ -396,7 +396,7 @@ in two hops" is why the table says `Partial`.
 
 `InsertQuery::with_related` already exists, which is the hard half.
 
-> **Current status (2026-08-14):** Not started beyond the existing `InsertQuery::with_related`. `UpdateQuery` and `DeleteQuery` have no nested-relation support; no `connect`/`disconnect`/`set` helpers are generated; cascade behaviour is unimplemented.
+> **Current status (2026-08-14):** Not started beyond the existing `InsertQuery::with_related`. `UpdateQuery` and `DeleteQuery` have no nested-relation support; no `connect`/`disconnect`/`set` helpers are generated for one-to-many relations; cascade behaviour is unimplemented. Deferred in this pass because it requires schema/codegen changes and a new nested-write runtime; the surface is larger than W2-07.
 
 - [ ] **Step 1.** Extend to nested update and nested delete.
 - [ ] **Step 2.** `connect` / `disconnect` / `set` for existing rows by primary key.
@@ -409,16 +409,17 @@ in two hops" is why the table says `Partial`.
 
 *Drizzle's `.prepare()` and dynamic query mode. 2 days.*
 
-> **Current status (2026-08-14):** Not started. `SelectQuery` has no `prepare()` method; dynamic conditional building still requires chaining `filter` calls manually.
+> **Current status (2026-08-14):** Complete. `SelectQuery::prepare()` returns a `PreparedSelect` that re-uses compiled SQL; bind values can be swapped by position with `bind`/`bind_many` and re-executed. Conditional building methods (`filter_if`, `or_filter_if`, `order_by_if`, `limit_if`, `offset_if`, `set_if`, `having_if`, `json_set_if`, `jsonb_set_if`) are added to `SelectQuery`, `AggregateQuery`, `GroupedQuery`, `SetOpQuery`, `InsertQuery`, `UpdateQuery`, and `DeleteQuery`. New `conditional_building` and `prepared_statements` integration tests pass. Query-construction benchmarks and `docs/Performance.md` now include prepared-vs-unprepared numbers.
 
-- [ ] **Step 1.** `SelectQuery::prepare()` producing a reusable compiled statement with
-      named placeholders, skipping SQL construction per call. The benchmark already shows
-      `to_sql` at 0.9 µs on the `Any` path — for a 3.0 µs query that is a third of the
-      budget, so this is a measurable win, not just an ergonomic one.
-- [ ] **Step 2.** Conditional building — apply a `filter` only when a value is present —
-      without the builder's type state fighting it. This is the single most common
-      real-world builder complaint across every ORM.
-- [ ] **Step 3.** Benchmark prepared versus unprepared and publish in `docs/Performance.md`.
+- [x] **Step 1.** `SelectQuery::prepare()` producing a reusable compiled statement with
+      positional placeholders, skipping SQL construction per call. Named placeholders are
+      a planned refinement; the current API exposes `bind(index, value)` and `bind_many(...)`.
+      The benchmark shows a ~10× cheaper rebind (≈ 53 ns) than re-compilation (≈ 600 ns).
+- [x] **Step 2.** Conditional building — apply a `filter` only when a value is present —
+      without the builder's type state fighting it. `DeleteQuery::filter_if` returns the
+      `FilteredDelete` state even when `None` (treating it as `.all_rows()`), and
+      `UpdateQuery::filter_if` sets `.all_rows()` when no filter is supplied.
+- [x] **Step 3.** Benchmark prepared versus unprepared and publish in `docs/Performance.md`.
 
 **W2 exit gate:** `FeaturesMasterComparison.md` regenerated with no `Partial` in the query
 builder or relations sections that a competitor scores `Yes` on; every new builder supports

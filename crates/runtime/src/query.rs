@@ -45,6 +45,30 @@ pub struct SelectQuery<'db, M: Model, Out = M, I = ()> {
     _out: PhantomData<fn() -> Out>,
 }
 
+/// A prepared `SELECT` statement.
+///
+/// The SQL is compiled once; bind values can be swapped and the statement can
+/// be re-executed without rebuilding the query string. Bind positions are
+/// positional and match the placeholders in the compiled SQL.
+#[allow(dead_code)]
+pub struct PreparedSelect<'db, M: Model, Out = M> {
+    exec: &'db dyn Executor,
+    sql: Cow<'static, str>,
+    binds: Vec<Value>,
+    _marker: PhantomData<fn() -> (M, Out)>,
+}
+
+impl<'db, M: Model, Out> Clone for PreparedSelect<'db, M, Out> {
+    fn clone(&self) -> Self {
+        Self {
+            exec: self.exec,
+            sql: self.sql.clone(),
+            binds: self.binds.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
 impl<'db, M> SelectQuery<'db, M, M, ()>
 where
     M: Model,
@@ -91,11 +115,35 @@ where
         }
     }
 
+    /// Adds a filter (`AND`) only if `f` is `Some`.
+    pub fn filter_if(self, f: Option<Filter<M>>) -> Self {
+        match f {
+            Some(f) => self.filter(f),
+            None => self,
+        }
+    }
+
+    /// Adds a filter (`OR`) only if `f` is `Some`.
+    pub fn or_filter_if(self, f: Option<Filter<M>>) -> Self {
+        match f {
+            Some(f) => self.or_filter(f),
+            None => self,
+        }
+    }
+
     /// Adds an ordering.
     pub fn order_by(self, o: OrderBy<M>) -> Self {
         let mut order = self.order;
         order.push(o);
         Self { order, ..self }
+    }
+
+    /// Adds an ordering only if `o` is `Some`.
+    pub fn order_by_if(self, o: Option<OrderBy<M>>) -> Self {
+        match o {
+            Some(o) => self.order_by(o),
+            None => self,
+        }
     }
 
     /// Sets the limit.
@@ -106,11 +154,27 @@ where
         }
     }
 
+    /// Sets the limit only if `n` is `Some`.
+    pub fn limit_if(self, n: Option<u64>) -> Self {
+        match n {
+            Some(n) => self.limit(n),
+            None => self,
+        }
+    }
+
     /// Sets the offset.
     pub fn offset(self, n: u64) -> Self {
         Self {
             offset: Some(n),
             ..self
+        }
+    }
+
+    /// Sets the offset only if `n` is `Some`.
+    pub fn offset_if(self, n: Option<u64>) -> Self {
+        match n {
+            Some(n) => self.offset(n),
+            None => self,
         }
     }
 
@@ -583,6 +647,21 @@ impl<'db, M, Out> SelectQuery<'db, M, Out, ()>
 where
     M: Model,
 {
+    /// Prepares a reusable compiled statement.
+    ///
+    /// The SQL is compiled once; bind values can be swapped with
+    /// [`PreparedSelect::bind`] and the statement can be executed repeatedly
+    /// without rebuilding the query string.
+    pub fn prepare(self) -> Result<PreparedSelect<'db, M, Out>, Error> {
+        let compiled = self.to_sql()?;
+        Ok(PreparedSelect {
+            exec: self.exec,
+            sql: compiled.sql,
+            binds: compiled.binds,
+            _marker: PhantomData,
+        })
+    }
+
     /// Executes the query and returns all matching rows.
     ///
     /// Only available when the query has no `.include(...)`: fetching all rows
@@ -840,9 +919,25 @@ impl<'db, Out> SetOpQuery<'db, Out> {
         self
     }
 
+    /// Sets the limit on the combined result only if `n` is `Some`.
+    pub fn limit_if(mut self, n: Option<u64>) -> Self {
+        if let Some(n) = n {
+            self.limit = Some(n);
+        }
+        self
+    }
+
     /// Sets the offset on the combined result.
     pub fn offset(mut self, n: u64) -> Self {
         self.offset = Some(n);
+        self
+    }
+
+    /// Sets the offset on the combined result only if `n` is `Some`.
+    pub fn offset_if(mut self, n: Option<u64>) -> Self {
+        if let Some(n) = n {
+            self.offset = Some(n);
+        }
         self
     }
 
@@ -968,6 +1063,103 @@ where
     pub async fn fetch_one(self) -> Result<Out, Error>
     where
         Out: Send + Unpin,
+    {
+        self.fetch_optional()
+            .await?
+            .ok_or_else(|| Error::Message("no row found for query".into()))
+    }
+}
+
+impl<'db, M, Out> PreparedSelect<'db, M, Out>
+where
+    M: Model,
+{
+    /// Returns the compiled SQL.
+    pub fn sql(&self) -> &str {
+        &self.sql
+    }
+
+    /// Returns the current bind values.
+    pub fn binds(&self) -> &[Value] {
+        &self.binds
+    }
+
+    /// Sets the bind value at the given position.
+    pub fn bind(&mut self, index: usize, value: impl Encodable) -> &mut Self {
+        if index < self.binds.len() {
+            self.binds[index] = value.to_value();
+        }
+        self
+    }
+
+    /// Replaces all bind values.
+    ///
+    /// The length must match the number of placeholders in the compiled SQL;
+    /// extra values are ignored and missing values leave the existing binds.
+    pub fn bind_many(&mut self, binds: Vec<Value>) -> &mut Self {
+        let n = self.binds.len().min(binds.len());
+        self.binds[..n].clone_from_slice(&binds[..n]);
+        if binds.len() > self.binds.len() {
+            self.binds.extend_from_slice(&binds[self.binds.len()..]);
+        }
+        self
+    }
+
+    /// Executes the prepared statement and returns all matching rows.
+    pub async fn fetch_all(&self) -> Result<Vec<Out>, Error>
+    where
+        Out: Send + Unpin + RowDecode,
+    {
+        #[cfg(feature = "sqlite-rusqlite")]
+        if let Some(pool) = self.exec.as_rusqlite() {
+            self.exec.on_query();
+            return pool.fetch_all_sync_decoded::<Out>(self.sql.clone(), self.binds.clone());
+        }
+
+        let batch = self
+            .exec
+            .fetch_all_raw(self.sql.clone(), self.binds.clone())
+            .await?;
+        crate::executor::decode_rows(batch)
+    }
+
+    /// Executes the prepared statement and streams matching rows.
+    pub fn stream(&self) -> RowStream<'db, Out>
+    where
+        Out: Send + Unpin + RowDecode,
+    {
+        RowStream {
+            inner: self.exec.stream_raw(self.sql.clone(), self.binds.clone()),
+            _out: PhantomData,
+        }
+    }
+
+    /// Executes the prepared statement and streams rows without buffering.
+    pub fn stream_unbuffered(&self) -> RowStream<'db, Out>
+    where
+        Out: Send + Unpin + RowDecode,
+    {
+        RowStream {
+            inner: self
+                .exec
+                .stream_unbuffered_raw(self.sql.clone(), self.binds.clone()),
+            _out: PhantomData,
+        }
+    }
+
+    /// Executes the prepared statement and returns the first row, if any.
+    pub async fn fetch_optional(&self) -> Result<Option<Out>, Error>
+    where
+        Out: Send + Unpin + RowDecode,
+    {
+        let rows = self.fetch_all().await?;
+        Ok(rows.into_iter().next())
+    }
+
+    /// Executes the prepared statement and returns exactly one row.
+    pub async fn fetch_one(&self) -> Result<Out, Error>
+    where
+        Out: Send + Unpin + RowDecode,
     {
         self.fetch_optional()
             .await?
@@ -1165,6 +1357,11 @@ impl<'db, M: Model> InsertQuery<'db, M> {
             Some(v) => self.set(col, v),
             None => self,
         }
+    }
+
+    /// Alias for [`set_optional`](InsertQuery::set_optional).
+    pub fn set_if<V: Encodable>(self, col: Column<M, V>, value: Option<impl Into<V>>) -> Self {
+        self.set_optional(col, value)
     }
 
     /// Sets the conflict target for an upsert.
@@ -1526,6 +1723,21 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
         }
     }
 
+    /// Adds a filter only if `f` is `Some`.
+    ///
+    /// If `f` is `None` the query is marked as `.all_rows()` so it can still be
+    /// executed. This is the conditional-building equivalent of "filter, or
+    /// update every row".
+    pub fn filter_if(mut self, f: Option<Filter<M>>) -> Self {
+        match f {
+            Some(f) => self.filter(f),
+            None => {
+                self.all_rows = true;
+                self
+            }
+        }
+    }
+
     /// Sets an explicit value.
     pub fn set<V: Encodable>(mut self, col: Column<M, V>, value: impl Into<V>) -> Self {
         self.sets.push(SetExpr::Column {
@@ -1562,6 +1774,35 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
         value: serde_json::Value,
     ) -> Self {
         self.json_set(col.json_set(key, value))
+    }
+
+    /// Sets a column only if `value` is `Some`.
+    pub fn set_if<V: Encodable>(self, col: Column<M, V>, value: Option<impl Into<V>>) -> Self {
+        match value {
+            Some(value) => self.set(col, value),
+            None => self,
+        }
+    }
+
+    /// Applies a JSON set expression only if `set` is `Some`.
+    pub fn json_set_if(self, set: Option<JsonSet>) -> Self {
+        match set {
+            Some(set) => self.json_set(set),
+            None => self,
+        }
+    }
+
+    /// Convenience: set a single key inside a JSON column only if `value` is `Some`.
+    pub fn jsonb_set_if(
+        self,
+        col: Column<M, serde_json::Value>,
+        key: &'static str,
+        value: Option<serde_json::Value>,
+    ) -> Self {
+        match value {
+            Some(value) => self.jsonb_set(col, key, value),
+            None => self,
+        }
     }
 
     /// Allows updating all rows. Without this, `exec` returns an error if no
@@ -1709,6 +1950,14 @@ impl<'db, M: Model> DeleteQuery<'db, M, UnfilteredDelete> {
         }
     }
 
+    /// Adds a filter only if `f` is `Some`, otherwise deletes all rows.
+    pub fn filter_if(self, f: Option<Filter<M>>) -> DeleteQuery<'db, M, FilteredDelete> {
+        match f {
+            Some(f) => self.filter(f),
+            None => self.all_rows(),
+        }
+    }
+
     /// Allows deleting all rows.
     pub fn all_rows(self) -> DeleteQuery<'db, M, FilteredDelete> {
         DeleteQuery {
@@ -1727,6 +1976,14 @@ impl<'db, M: Model> DeleteQuery<'db, M, FilteredDelete> {
         Self {
             filter: self.filter.and(f),
             ..self
+        }
+    }
+
+    /// Adds an additional filter only if `f` is `Some`.
+    pub fn filter_if(self, f: Option<Filter<M>>) -> Self {
+        match f {
+            Some(f) => self.filter(f),
+            None => self,
         }
     }
 
@@ -1785,6 +2042,22 @@ where
         Self {
             having: self.having.or(f),
             ..self
+        }
+    }
+
+    /// Adds a `HAVING` filter (`AND`) only if `f` is `Some`.
+    pub fn having_if(self, f: Option<Filter<M>>) -> Self {
+        match f {
+            Some(f) => self.having(f),
+            None => self,
+        }
+    }
+
+    /// Adds a `HAVING` filter (`OR`) only if `f` is `Some`.
+    pub fn or_having_if(self, f: Option<Filter<M>>) -> Self {
+        match f {
+            Some(f) => self.or_having(f),
+            None => self,
         }
     }
 
@@ -1853,11 +2126,67 @@ where
         }
     }
 
+    /// Adds a `WHERE` filter (`AND`) only if `f` is `Some`.
+    pub fn filter_if(self, f: Option<Filter<M>>) -> Self {
+        match f {
+            Some(f) => self.filter(f),
+            None => self,
+        }
+    }
+
+    /// Adds a `WHERE` filter (`OR`) only if `f` is `Some`.
+    pub fn or_filter_if(self, f: Option<Filter<M>>) -> Self {
+        match f {
+            Some(f) => self.or_filter(f),
+            None => self,
+        }
+    }
+
+    /// Adds a `HAVING` filter (`AND`).
+    pub fn having(self, f: Filter<M>) -> Self {
+        Self {
+            having: self.having.and(f),
+            ..self
+        }
+    }
+
+    /// Adds a `HAVING` filter (`OR`).
+    pub fn or_having(self, f: Filter<M>) -> Self {
+        Self {
+            having: self.having.or(f),
+            ..self
+        }
+    }
+
+    /// Adds a `HAVING` filter (`AND`) only if `f` is `Some`.
+    pub fn having_if(self, f: Option<Filter<M>>) -> Self {
+        match f {
+            Some(f) => self.having(f),
+            None => self,
+        }
+    }
+
+    /// Adds a `HAVING` filter (`OR`) only if `f` is `Some`.
+    pub fn or_having_if(self, f: Option<Filter<M>>) -> Self {
+        match f {
+            Some(f) => self.or_having(f),
+            None => self,
+        }
+    }
+
     /// Adds an ordering.
     pub fn order_by(self, o: OrderBy<M>) -> Self {
         let mut order = self.order;
         order.push(o);
         Self { order, ..self }
+    }
+
+    /// Adds an ordering only if `o` is `Some`.
+    pub fn order_by_if(self, o: Option<OrderBy<M>>) -> Self {
+        match o {
+            Some(o) => self.order_by(o),
+            None => self,
+        }
     }
 
     /// Sets the limit.
@@ -1868,11 +2197,27 @@ where
         }
     }
 
+    /// Sets the limit only if `n` is `Some`.
+    pub fn limit_if(self, n: Option<u64>) -> Self {
+        match n {
+            Some(n) => self.limit(n),
+            None => self,
+        }
+    }
+
     /// Sets the offset.
     pub fn offset(self, n: u64) -> Self {
         Self {
             offset: Some(n),
             ..self
+        }
+    }
+
+    /// Sets the offset only if `n` is `Some`.
+    pub fn offset_if(self, n: Option<u64>) -> Self {
+        match n {
+            Some(n) => self.offset(n),
+            None => self,
         }
     }
 

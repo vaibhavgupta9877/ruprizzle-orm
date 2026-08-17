@@ -49,6 +49,25 @@ has improved substantially. P8-02 measures this overhead against the thresholds;
 actually optimising the remaining per-row decode cost belongs to a separate work
 item.
 
+## Prepared statements
+
+`SelectQuery::prepare()` compiles a `SELECT` once and returns a `PreparedSelect` that
+re-uses the compiled SQL. Bind values can be swapped with `bind` or `bind_many` and
+the statement can be executed again without recompiling.
+
+Measured with `cargo bench -p ruprizzle --features sqlite-rusqlite --bench query_construction`
+on the same workstation:
+
+| Benchmark | Time |
+|---|---|
+| `to_sql_select_by_pk` | 614 ns |
+| `prepare_select_by_pk` | 553 ns |
+| `prepared_rebind_select_by_pk` | 53 ns |
+
+Compiling the SQL is ~600 ns; rebinding a prepared statement is an order of
+magnitude cheaper. For query shapes that are executed repeatedly with different
+parameters, `prepare()` removes that per-call compilation cost.
+
 ## Text-marshalling cost
 
 `sqlx::Any` serialises `Uuid`, `Decimal`, `DateTime`, `Date`, `Time` and `Json`

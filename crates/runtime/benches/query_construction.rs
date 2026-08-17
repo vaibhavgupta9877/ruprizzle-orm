@@ -161,6 +161,29 @@ fn query_construction(c: &mut Criterion) {
             let _ = q.to_sql().unwrap();
         })
     });
+
+    c.bench_function("prepare_select_by_pk", |b| {
+        b.iter(|| {
+            let q = SelectQuery::<User>::new(black_box(&exec))
+                .filter(ID.eq(500i64))
+                .limit(1)
+                .offset(0);
+            let _ = q.prepare().unwrap();
+        })
+    });
+
+    let prepared = SelectQuery::<User>::new(&exec)
+        .filter(ID.eq(500i64))
+        .limit(1)
+        .offset(0)
+        .prepare()
+        .unwrap();
+    c.bench_function("prepared_rebind_select_by_pk", |b| {
+        b.iter(|| {
+            let mut p = prepared.clone();
+            p.bind(0, black_box(123i64));
+        })
+    });
 }
 
 criterion_group!(benches, query_construction);
