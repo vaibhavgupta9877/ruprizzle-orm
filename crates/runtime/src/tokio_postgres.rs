@@ -20,6 +20,36 @@ use tokio_postgres::types::{IsNull, ToSql, Type};
 
 pub use tokio_postgres::Row;
 
+use crate::types::chrono::{DateTime, NaiveDate, NaiveTime, Utc};
+use crate::types::{Decimal, Uuid};
+
+// Helpers for homogeneous Postgres arrays in the native `tokio-postgres` path.
+macro_rules! pg_tokio_array_encode {
+    ($values:expr, $ty:expr, $out:expr, $check:pat, $variant:pat, $rust_ty:ty, $convert:expr) => {
+        if $values
+            .iter()
+            .find(|v| !v.is_null())
+            .map_or(false, |v| matches!(v, $check))
+        {
+            let vec: Vec<Option<$rust_ty>> = $values
+                .iter()
+                .map(|val| match val {
+                    Value::Null => Ok(None),
+                    $variant => Ok(Some($convert)),
+                    other => Err(format!(
+                        "array contains mixed or unsupported element: expected {}, found {:?}",
+                        std::any::type_name::<$rust_ty>(),
+                        other
+                    )
+                    .into()),
+                })
+                .collect::<Result<Vec<Option<$rust_ty>>, Box<dyn std::error::Error + Sync + Send>>>(
+                )?;
+            return <Vec<Option<$rust_ty>> as ToSql>::to_sql_checked(&vec, $ty, $out);
+        }
+    };
+}
+
 use crate::BoxFuture;
 use crate::Error;
 use crate::executor::{BoxRowStream, Executor, RowBatch};
@@ -435,7 +465,83 @@ impl ToSql for Value {
                 let bytes: &[u8] = b.as_ref();
                 <&[u8] as ToSql>::to_sql_checked(&bytes, ty, out)
             }
-            Value::Array(_) => Err("array bind values are not supported yet".into()),
+            Value::Array(values) => {
+                if values.iter().any(|v| matches!(v, Value::Array(_))) {
+                    return Err("nested arrays are not supported".into());
+                }
+                pg_tokio_array_encode!(values, ty, out, Value::Bool(_), Value::Bool(b), bool, *b);
+                pg_tokio_array_encode!(values, ty, out, Value::I32(_), Value::I32(i), i32, *i);
+                pg_tokio_array_encode!(values, ty, out, Value::I64(_), Value::I64(i), i64, *i);
+                pg_tokio_array_encode!(values, ty, out, Value::F64(_), Value::F64(f), f64, *f);
+                pg_tokio_array_encode!(
+                    values,
+                    ty,
+                    out,
+                    Value::Decimal(_),
+                    Value::Decimal(d),
+                    Decimal,
+                    *d
+                );
+                pg_tokio_array_encode!(
+                    values,
+                    ty,
+                    out,
+                    Value::Str(_),
+                    Value::Str(s),
+                    String,
+                    s.to_string()
+                );
+                pg_tokio_array_encode!(values, ty, out, Value::Uuid(_), Value::Uuid(u), Uuid, *u);
+                pg_tokio_array_encode!(
+                    values,
+                    ty,
+                    out,
+                    Value::DateTime(_),
+                    Value::DateTime(dt),
+                    DateTime<Utc>,
+                    *dt
+                );
+                pg_tokio_array_encode!(
+                    values,
+                    ty,
+                    out,
+                    Value::Date(_),
+                    Value::Date(d),
+                    NaiveDate,
+                    *d
+                );
+                pg_tokio_array_encode!(
+                    values,
+                    ty,
+                    out,
+                    Value::Time(_),
+                    Value::Time(t),
+                    NaiveTime,
+                    *t
+                );
+                pg_tokio_array_encode!(
+                    values,
+                    ty,
+                    out,
+                    Value::Json(_),
+                    Value::Json(v),
+                    serde_json::Value,
+                    v.clone()
+                );
+                pg_tokio_array_encode!(
+                    values,
+                    ty,
+                    out,
+                    Value::Bytes(_),
+                    Value::Bytes(b),
+                    Vec<u8>,
+                    b.to_vec()
+                );
+                // Empty or all-NULL: bind as an empty text array. This is a safe default
+                // because untyped placeholders are usually cast by the query.
+                let empty: Vec<Option<String>> = Vec::new();
+                <Vec<Option<String>> as ToSql>::to_sql_checked(&empty, ty, out)
+            }
         }
     }
 }
