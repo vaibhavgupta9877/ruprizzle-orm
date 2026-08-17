@@ -15,7 +15,7 @@ jobs:
     name: format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -25,7 +25,7 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -40,7 +40,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # Postgres is unavailable here on purpose: this job proves the suite is
@@ -87,7 +87,7 @@ jobs:
       # suite would pass green while silently testing nothing on Postgres/MySQL.
       RUPRIZZLE_REQUIRE_DB: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
@@ -140,7 +140,7 @@ jobs:
       RUPRIZZLE_TEST_MYSQL_URL: ${{ (matrix.db == 'mysql' || matrix.db == 'all') && 'mysql://ruprizzle:ruprizzle@localhost:3306/ruprizzle_test' || '' }}
       RUPRIZZLE_REQUIRE_DB: ${{ (matrix.db == 'postgres' || matrix.db == 'mysql' || matrix.db == 'all') && '1' || '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Clippy feature combination
@@ -164,7 +164,7 @@ jobs:
     name: generated code compiles clean
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -183,7 +183,7 @@ jobs:
     name: minimum supported rust version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Read rust-version from the workspace manifest
         id: msrv
         run: |
@@ -202,7 +202,7 @@ jobs:
     env:
       RUSTDOCFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --workspace --no-deps
@@ -211,7 +211,7 @@ jobs:
     name: advisories and licences
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2.1.1
         with:
           command: check advisories licenses bans sources
@@ -225,7 +225,7 @@ jobs:
     # version bump. ruprizzle-testkit and xtask are `publish = false` and are
     # skipped — they are explicitly out of scope for semver, per docs/Stability.md.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: obi1kenobi/cargo-semver-checks-action@v2
@@ -239,7 +239,7 @@ jobs:
     # demand rather than on every PR.
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
