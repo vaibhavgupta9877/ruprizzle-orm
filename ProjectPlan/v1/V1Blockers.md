@@ -31,7 +31,7 @@ After the build breaks and the advisory are fixed, the next sensible milestone i
 | # | Blocker | Status | Commit |
 |---|---------|--------|--------|
 | 1 | `cargo fmt --all --check` | **fixed** | TBD |
-| 2 | `tests/integration/tests/diagnostics_snapshot.rs` stale `SchemaError` | **not fixed** | — |
+| 2 | `tests/integration/tests/diagnostics_snapshot.rs` stale `SchemaError` | **fixed** | — |
 | 3 | `cargo clippy --workspace --all-targets` / `cargo xtask harden` | **not fixed** | — |
 | 4 | `cargo deny` `RUSTSEC-2023-0071` | **not fixed** | — |
 | 5 | rustdoc warnings | **not fixed** | — |

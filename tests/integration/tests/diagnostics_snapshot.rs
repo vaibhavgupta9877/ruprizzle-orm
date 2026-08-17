@@ -89,8 +89,8 @@ fn every_error_offers_a_fix() {
             name: "Role".into(),
             span: span_of("enum Role").into(),
         },
-        SchemaError::ScalarListUnsupported {
-            found: "String".into(),
+        SchemaError::ReservedKeyword {
+            field: "type".into(),
             span: span_of("title").into(),
         },
         SchemaError::UnknownProvider {
