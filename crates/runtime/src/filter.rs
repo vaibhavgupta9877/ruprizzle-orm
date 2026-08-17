@@ -2,6 +2,10 @@
 
 use std::marker::PhantomData;
 
+use crate::compile::CompiledSql;
+use crate::json::JsonPath;
+use crate::model::Model;
+use crate::query::SelectQuery;
 use crate::value::Value;
 
 /// An injection-safe raw SQL fragment with bound parameters.
@@ -46,6 +50,153 @@ impl RawFragment {
     #[must_use]
     pub fn binds(&self) -> &[Value] {
         &self.binds
+    }
+}
+
+/// A compiled `SELECT` subquery that returns a single column of type `T`.
+///
+/// It is typically produced by `SelectQuery::columns(...).into::<Subquery<T>>()`
+/// and consumed by [`Column::in_subquery`](crate::col::Column::in_subquery).
+pub struct Subquery<T> {
+    /// The compiled SQL of the subquery, including its bound values.
+    pub(crate) compiled: CompiledSql,
+    _marker: PhantomData<fn() -> T>,
+}
+
+impl<T> Clone for Subquery<T> {
+    fn clone(&self) -> Self {
+        Self {
+            compiled: self.compiled.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T> std::fmt::Debug for Subquery<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Subquery")
+            .field("compiled", &self.compiled)
+            .finish()
+    }
+}
+
+impl<T> PartialEq for Subquery<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.compiled == other.compiled
+    }
+}
+
+impl<'db, M, T, I> From<SelectQuery<'db, M, (T,), I>> for Subquery<T>
+where
+    M: Model,
+{
+    fn from(query: SelectQuery<'db, M, (T,), I>) -> Self {
+        Self {
+            compiled: query.to_sql().unwrap_or_else(|e| {
+                panic!("subquery SQL is not supported by the target dialect: {e}")
+            }),
+            _marker: PhantomData,
+        }
+    }
+}
+
+/// A compiled subquery used by `EXISTS` / `NOT EXISTS` filters.
+///
+/// Unlike [`Subquery`], `EXISTS` does not care about the projection shape,
+/// so any [`SelectQuery`] can be converted into an `ExistsSubquery`.
+pub struct ExistsSubquery {
+    pub(crate) compiled: CompiledSql,
+}
+
+impl Clone for ExistsSubquery {
+    fn clone(&self) -> Self {
+        Self {
+            compiled: self.compiled.clone(),
+        }
+    }
+}
+
+impl std::fmt::Debug for ExistsSubquery {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExistsSubquery")
+            .field("compiled", &self.compiled)
+            .finish()
+    }
+}
+
+impl PartialEq for ExistsSubquery {
+    fn eq(&self, other: &Self) -> bool {
+        self.compiled == other.compiled
+    }
+}
+
+impl<'db, M, Out, I> From<SelectQuery<'db, M, Out, I>> for ExistsSubquery
+where
+    M: Model,
+{
+    fn from(query: SelectQuery<'db, M, Out, I>) -> Self {
+        Self {
+            compiled: query.to_sql().unwrap_or_else(|e| {
+                panic!("EXISTS subquery SQL is not supported by the target dialect: {e}")
+            }),
+        }
+    }
+}
+
+/// A compiled common table expression (CTE).
+///
+/// Stored inside a [`SelectQuery`] and emitted as
+/// `WITH ... AS (...)` or `WITH RECURSIVE ... AS (...)` when the query is
+/// compiled.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Cte {
+    /// The CTE name.
+    pub name: &'static str,
+    /// The compiled body.
+    pub compiled: CompiledSql,
+    /// Whether this CTE is recursive.
+    pub recursive: bool,
+}
+
+impl Cte {
+    /// Creates a new non-recursive CTE.
+    #[must_use]
+    pub fn new(name: &'static str, compiled: CompiledSql) -> Self {
+        Self {
+            name,
+            compiled,
+            recursive: false,
+        }
+    }
+}
+
+/// A compiled query that can be used as the body of a CTE.
+///
+/// This is a thin wrapper around [`CompiledSql`] so that
+/// [`SelectQuery::with`](crate::query::SelectQuery::with) and
+/// [`SelectQuery::with_recursive`](crate::query::SelectQuery::with_recursive)
+/// can accept anything that converts into it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CteQuery {
+    pub(crate) compiled: CompiledSql,
+}
+
+impl CteQuery {
+    pub(crate) fn new(compiled: CompiledSql) -> Self {
+        Self { compiled }
+    }
+}
+
+impl<'db, M, Out, I> From<SelectQuery<'db, M, Out, I>> for CteQuery
+where
+    M: Model,
+{
+    fn from(query: SelectQuery<'db, M, Out, I>) -> Self {
+        Self::new(
+            query
+                .to_sql()
+                .unwrap_or_else(|e| panic!("CTE SQL is not supported by the target dialect: {e}")),
+        )
     }
 }
 
@@ -104,6 +255,24 @@ impl<M> Filter<M> {
     pub fn raw(fragment: RawFragment) -> Self {
         Self::new(FilterNode::Raw(fragment))
     }
+
+    /// `EXISTS (subquery)`.
+    #[must_use]
+    pub fn exists(subquery: impl Into<ExistsSubquery>) -> Self {
+        Self::new(FilterNode::ExistsSubquery {
+            subquery: subquery.into().compiled,
+            negated: false,
+        })
+    }
+
+    /// `NOT EXISTS (subquery)`.
+    #[must_use]
+    pub fn not_exists(subquery: impl Into<ExistsSubquery>) -> Self {
+        Self::new(FilterNode::ExistsSubquery {
+            subquery: subquery.into().compiled,
+            negated: true,
+        })
+    }
 }
 
 impl<M> std::ops::Not for Filter<M> {
@@ -141,6 +310,21 @@ pub enum FilterNode {
         values: Vec<Value>,
         negated: bool,
     },
+    /// `column [NOT] IN (subquery)`.
+    InSubquery {
+        table: &'static str,
+        column: &'static str,
+        subquery: CompiledSql,
+        negated: bool,
+    },
+    /// A comparison between two columns, used for join `ON` clauses.
+    ColumnCmp {
+        left_table: &'static str,
+        left_col: &'static str,
+        op: CmpOp,
+        right_table: &'static str,
+        right_col: &'static str,
+    },
     /// Correlated `EXISTS (SELECT 1 FROM child_table WHERE child_fk = parent_pk AND filter)`.
     Exists {
         child_table: &'static str,
@@ -150,11 +334,65 @@ pub enum FilterNode {
         filter: Box<FilterNode>,
         negated: bool,
     },
+    /// Correlated `[NOT] EXISTS (<subquery>)`.
+    ExistsSubquery {
+        subquery: CompiledSql,
+        negated: bool,
+    },
     And(Vec<FilterNode>),
     Or(Vec<FilterNode>),
     Not(Box<FilterNode>),
     /// A raw SQL fragment with bound parameters.
     Raw(RawFragment),
+    /// A JSON column operation.
+    Json {
+        /// The SQL table name.
+        table: &'static str,
+        /// The SQL column name.
+        column: &'static str,
+        /// The JSON path inside the column.
+        path: JsonPath,
+        /// `true` for text extraction, `false` for JSON.
+        text: bool,
+        /// The JSON-specific operator.
+        op: JsonFilterOp,
+        /// The bound value.
+        value: Value,
+    },
+    /// A scalar/enum array column operation.
+    Array {
+        /// The SQL table name.
+        table: &'static str,
+        /// The SQL column name.
+        column: &'static str,
+        /// The array-specific operator.
+        op: ArrayFilterOp,
+        /// The bound element values.
+        values: Vec<Value>,
+    },
+}
+
+/// JSON-specific filter operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JsonFilterOp {
+    /// A scalar comparison (`=`, `<>`, `>`, ...).
+    Cmp(CmpOp),
+    /// JSON containment (`@>`).
+    Contains,
+    /// Top-level or nested key existence (`?`).
+    HasKey,
+}
+
+/// Array-specific filter operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(missing_docs)]
+pub enum ArrayFilterOp {
+    /// The column contains all of the supplied values (`@>` / `JSON_CONTAINS`).
+    Contains,
+    /// The column is contained by the supplied set (`<@` / `JSON_CONTAINS` reversed).
+    ContainedBy,
+    /// The column and the supplied set share at least one element (`&&` / `JSON_OVERLAPS`).
+    Overlaps,
 }
 
 /// Comparison operators.

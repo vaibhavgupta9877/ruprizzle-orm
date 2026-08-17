@@ -173,3 +173,71 @@ fn the_fingerprint_is_stable_across_runs() {
     let b = ruprizzle_parser::parse(&name, &source).expect("valid");
     assert_eq!(a.fingerprint(), b.fingerprint());
 }
+
+#[test]
+fn many_to_many_through_is_resolved() {
+    let source = r#"
+        datasource db {
+            provider = "postgres"
+            url      = env("DATABASE_URL")
+        }
+
+        generator client {
+            output = "src/db"
+        }
+
+        model Post {
+            id   Int   @id
+            tags Tag[] @relation(through: PostTag)
+        }
+
+        model Tag {
+            id    Int     @id
+            posts Post[]  @relation(through: PostTag)
+        }
+
+        model PostTag {
+            postId Int
+            tagId  Int
+            post   Post @relation(fields: [postId], references: [id])
+            tag    Tag  @relation(fields: [tagId], references: [id])
+            @@id([postId, tagId])
+            @@map("post_tags")
+        }
+    "#;
+
+    let schema = ruprizzle_parser::parse("m2m.ruprizzle", source).expect("valid m2m");
+
+    let m2m = schema
+        .relations
+        .iter()
+        .find(|r| r.kind == RelationKind::ManyToMany)
+        .expect("m2m relation exists");
+    assert_eq!(m2m.owner.as_str(), "Post");
+    assert_eq!(m2m.target.as_str(), "Tag");
+    assert_eq!(m2m.join_model.as_ref().unwrap().as_str(), "PostTag");
+    assert_eq!(m2m.join_owner_field.as_ref().unwrap().as_str(), "post");
+    assert_eq!(m2m.join_target_field.as_ref().unwrap().as_str(), "tag");
+    assert_eq!(m2m.owner_cols, vec!["post_id".to_owned()]);
+    assert_eq!(m2m.target_cols, vec!["tag_id".to_owned()]);
+
+    // Each list side resolves to its own oriented many-to-many relation.
+    let m2m_relations: Vec<_> = schema
+        .relations
+        .iter()
+        .filter(|r| r.kind == RelationKind::ManyToMany)
+        .collect();
+    assert_eq!(m2m_relations.len(), 2);
+
+    let post_tags = schema.model("Post").unwrap().field("tags").unwrap();
+    let tag_posts = schema.model("Tag").unwrap().field("posts").unwrap();
+    assert_eq!(post_tags.relation().unwrap().resolved, Some(2));
+    assert_eq!(tag_posts.relation().unwrap().resolved, Some(3));
+
+    // The join model holds the two real FK relations.
+    let post_tag = schema.model("PostTag").unwrap();
+    let post = post_tag.field("post").unwrap().relation().unwrap();
+    let tag = post_tag.field("tag").unwrap().relation().unwrap();
+    assert!(post.resolved.is_some());
+    assert!(tag.resolved.is_some());
+}

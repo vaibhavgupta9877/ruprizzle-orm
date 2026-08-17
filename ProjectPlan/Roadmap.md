@@ -3,7 +3,7 @@
 **Start:** Monday, Week 1  
 **Ship:** Friday, Week 12  
 **Team:** Vaibhav Gupta (architecture, design docs) + Vaibhav Gupta (implementation)  
-**Status:** READY TO EXECUTE
+**Status:** P0–P7 and P2-4 shipped; the 12-week roadmap is superseded by `v1/PathToStableV1.md` for 1.0 work.
 
 ---
 

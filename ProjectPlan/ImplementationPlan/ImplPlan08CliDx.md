@@ -1,5 +1,6 @@
 # ImplPlan 08 — CLI & Developer Experience (Phase P7)
 
+**Status:** NEARLY COMPLETE — P7-01..P7-04 and P7-06 shipped; the timed walkthrough and the docs-samples CI step are still open.
 **Duration:** 3 days · **Owners:** Vaibhav Gupta (commands), Vaibhav Gupta (error UX review)
 **Exit gate:** a new user goes from empty directory to a working query in under
 five minutes, verified by an actual timed walkthrough.

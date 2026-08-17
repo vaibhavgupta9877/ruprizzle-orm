@@ -3,7 +3,7 @@ members = ["crates/*", "tests/integration", "local/deep-tests", "xtask"]
 resolver = "3"
 
 [workspace.package]
-version      = "0.1.0-alpha.3"
+version      = "0.4.0-beta.2"
 edition      = "2024"
 rust-version = "1.85"
 license      = "MIT OR Apache-2.0"
@@ -13,19 +13,19 @@ authors      = ["Vaibhav Gupta <vaibhavgupta9877@gmail.com>"]
 
 [workspace.dependencies]
 # --- internal ---
-ruprizzle-core    = { path = "crates/core",    version = "0.1.0-alpha.3" }
-ruprizzle-dialect = { path = "crates/dialect", version = "0.1.0-alpha.3" }
-ruprizzle-parser  = { path = "crates/parser",  version = "0.1.0-alpha.3" }
-ruprizzle-codegen = { path = "crates/codegen", version = "0.1.0-alpha.3" }
-ruprizzle-migrate = { path = "crates/migrate", version = "0.1.0-alpha.3" }
-ruprizzle-macros  = { path = "crates/macros",  version = "0.1.0-alpha.3" }
-ruprizzle         = { path = "crates/runtime", version = "0.1.0-alpha.3" }
-ruprizzle-testkit = { path = "crates/testkit", version = "0.1.0-alpha.3" }
+ruprizzle-core    = { path = "crates/core",    version = "0.4.0-beta.2" }
+ruprizzle-dialect = { path = "crates/dialect", version = "0.4.0-beta.2" }
+ruprizzle-parser  = { path = "crates/parser",  version = "0.4.0-beta.2" }
+ruprizzle-codegen = { path = "crates/codegen", version = "0.4.0-beta.2" }
+ruprizzle-migrate = { path = "crates/migrate", version = "0.4.0-beta.2" }
+ruprizzle-macros  = { path = "crates/macros",  version = "0.4.0-beta.2" }
+ruprizzle         = { path = "crates/runtime", version = "0.4.0-beta.2" }
+ruprizzle-testkit = { path = "crates/testkit", version = "0.4.0-beta.2" }
 
 # --- external ---
 pest         = "2.8"
 pest_derive  = "2.8"
-sqlx         = { version = "0.8", default-features = false, features = ["runtime-tokio", "any", "postgres", "sqlite", "macros", "uuid", "chrono", "json", "rust_decimal"] }
+sqlx         = { version = "0.8", default-features = false, features = ["runtime-tokio", "any", "postgres", "sqlite", "mysql", "macros", "uuid", "chrono", "json", "rust_decimal"] }
 chrono       = { version = "0.4", features = ["serde"] }
 rust_decimal = { version = "1", default-features = false, features = ["serde"] }
 thiserror    = "2"

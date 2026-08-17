@@ -95,7 +95,7 @@ fn successful_query_emits_a_query_event_with_safe_fields() {
         let pool = ruprizzle::connect("sqlite::memory:")
             .await
             .expect("connect");
-        pool.execute_raw("CREATE TABLE t (id INTEGER)".to_owned(), Vec::new())
+        pool.execute_raw("CREATE TABLE t (id INTEGER)".to_owned().into(), Vec::new())
             .await
             .expect("create table");
     });
@@ -118,7 +118,7 @@ fn failed_query_emits_a_warn_event_with_an_error_category() {
             .await
             .expect("connect");
         let _ = pool
-            .execute_raw("THIS IS NOT SQL".to_owned(), Vec::new())
+            .execute_raw("THIS IS NOT SQL".to_owned().into(), Vec::new())
             .await;
     });
 
@@ -139,7 +139,7 @@ fn transaction_execution_and_commit_emit_query_events() {
             .await
             .expect("connect");
         let tx = Tx::begin(&pool).await.expect("begin");
-        tx.execute_raw("CREATE TABLE t (id INTEGER)".to_owned(), Vec::new())
+        tx.execute_raw("CREATE TABLE t (id INTEGER)".to_owned().into(), Vec::new())
             .await
             .expect("create table");
         tx.commit().await.expect("commit");

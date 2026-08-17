@@ -13,7 +13,7 @@ A **schema-first ORM for Rust** that combines the best parts of Prisma and Drizz
 
 Postgres and SQLite are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver.
 
-> **Status:** `0.1.0-alpha.2` is published on crates.io. The core P0–P8 implementation is complete and the public API is now stabilising. See [Known limitations](#known-limitations) for the honest boundaries of the alpha.
+> **Status:** `0.1.1-beta.1` is ready for beta. P0–P7 are complete; P8 (tests, benchmarks, docs site, crates.io release) is mostly complete and the public API is now stabilising. See [Known limitations](#known-limitations) for the honest boundaries of the beta.
 
 ---
 
@@ -108,7 +108,7 @@ Wrong-typed and cross-model filters are compile errors, not runtime ones:
 
 ```rust
 user::EMAIL.eq(42)                              // error: expected String, found i32
-db.post().select().filter(user::EMAIL.eq(""))  // error: expected Filter<Post>, found Filter<User>
+db.post().find_many().filter(user::EMAIL.eq(""))  // error: expected Filter<Post>, found Filter<User>
 ```
 
 ---
@@ -179,26 +179,36 @@ ruprizzle tries to give you all three at once:
 
 ### CLI
 
-- `ruprizzle init --provider postgres|sqlite` — scaffold schema, `.env`, `.gitignore`, and `migrations/`.
+- `ruprizzle init --provider postgres|sqlite|mysql` — scaffold schema, `.env`, `.gitignore`, and `migrations/`.
 - `ruprizzle generate` and `ruprizzle generate --watch` — generate the typed client.
 - `ruprizzle validate` — CI-friendly schema validation.
 - `ruprizzle format` — canonicalise the schema file.
 - `ruprizzle migrate dev|deploy|status|resolve|reset` — see [CLI workflow](#cli-workflow).
-- `ruprizzle db push|seed` — direct schema push and seed scripts.
+- `ruprizzle db pull` — introspect an existing database into `schema.ruprizzle`.
+- `ruprizzle db seed` — transactionally apply idempotent `seeds/main.json` data (legacy `main.sql` remains supported).
+- `ruprizzle db push` — direct schema push without migration files.
+
+A declarative seed file maps model or table names to row arrays:
+
+```json
+{"User": [{"id": 1, "email": "alice@example.com"}]}
+```
+
+Rows must include their primary key; repeated runs update the existing row instead of inserting a duplicate.
 
 ### Dialects
 
-- **Postgres 17+** and **SQLite 3+** support from day one.
+- **Postgres 17+**, **MySQL/MariaDB**, and **SQLite 3+** are supported.
 - **Dialect capabilities model**: native enums, native UUID, `RETURNING`, `ALTER COLUMN`, window functions, JSON support, partial indexes, and max bind parameters are explicitly modelled.
-- **Additive dialect design**: adding MySQL/MariaDB means implementing `DbDialect` and a conformance suite; the runtime does not change.
+- **Portable MySQL DML**: inserts use a primary-key follow-up lookup because MySQL has no DML `RETURNING`; upserts use `ON DUPLICATE KEY UPDATE`.
 - **SQLite table rebuilds** for destructive column changes are handled automatically.
-- **UUID and JSON** are mapped idiomatically per dialect (`uuid`/`jsonb` on Postgres, text on SQLite where native storage is unavailable).
+- **UUID and JSON** are mapped idiomatically per dialect (`uuid`/`jsonb` on Postgres, `char(36)`/`json` on MySQL, and text on SQLite where native storage is unavailable).
 
 ### Transactions and escape hatches
 
-- **First-class transactions**: `db.begin().await?`, `tx.commit().await?`, `tx.rollback().await?`. All builders work unchanged against a transaction.
+- **First-class transactions**: `db.raw_pool().begin().await?`, `tx.commit().await?`, `tx.rollback().await?`. Builders take `&dyn Executor`, so the same query works against a pool or a transaction.
 - **Isolation levels**: `ReadUncommitted`, `ReadCommitted`, `RepeatableRead`, `Serializable`.
-- **Raw SQL execution**: `db.fetch_all_raw(sql, params).await?` and `db.execute_raw(sql, params).await?`.
+- **Raw SQL execution**: `db.raw_pool().fetch_all_raw(sql, params).await?` and `db.raw_pool().execute_raw(sql, params).await?`.
 - **Retry helpers**: `ruprizzle::is_retryable(&error)` for transient error handling.
 
 ---
@@ -264,7 +274,7 @@ async fn main() -> Result<(), ruprizzle::Error> {
         .create(db::UserInsert {
             id: None,
             email: "alice@example.com".into(),
-            name: "Alice".into(),
+            name: Some("Alice".into()),
         })
         .exec()
         .await?;
@@ -292,7 +302,7 @@ See the full [quickstart](docs/Quickstart.md) for a step-by-step walkthrough.
 ```rust
 let users = db
     .user()
-    .select()
+    .find_many()
     .filter(user::EMAIL.eq("alice@example.com"))
     .order_by(user::NAME.asc())
     .limit(10)
@@ -306,8 +316,8 @@ let users = db
 ```rust
 let names = db
     .user()
-    .select()
-    .project(user::NAME)
+    .find_many()
+    .columns(user::NAME)
     .fetch_all()
     .await?;
 ```
@@ -315,16 +325,25 @@ let names = db
 ### Insert and upsert
 
 ```rust
-db.user()
-    .insert()
+let user = db
+    .user()
+    .create(db::UserInsert {
+        id: None,
+        email: "alice@example.com".into(),
+        name: Some("Alice".into()),
+    })
+    .exec()
+    .await?;
+
+// Or build an insert directly:
+db.insert::<User>()
     .set(user::EMAIL, "alice@example.com")
-    .set(user::NAME, "Alice")
+    .set_optional(user::NAME, Some("Alice"))
     .exec()
     .await?;
 
 // Insert or update on conflict
-db.user()
-    .insert()
+db.insert::<User>()
     .set(user::EMAIL, "alice@example.com")
     .set(user::NAME, "Alice")
     .on_conflict(["email"])
@@ -336,24 +355,29 @@ db.user()
 ### Pagination
 
 ```rust
-use ruprizzle::Page;
-
 let page = db
     .user()
-    .select()
-    .paginate(Page::new(1, 20))
-    .fetch()
+    .find_many()
+    .order_by(user::ID.asc())
+    .page(20)
     .await?;
 
-println!("page {} of {}, total {}", page.number, page.total, page.total_rows);
+for user in &page.items {
+    println!("{}", user.email);
+}
 ```
 
 ### Transactions
 
 ```rust
-let mut tx = db.begin().await?;
+use ruprizzle::prelude::*;
 
-let id = tx.user().insert().set(user::EMAIL, "a@b.c").exec().await?;
+let mut tx = db.raw_pool().begin().await?;
+
+let user = InsertQuery::new(&tx)
+    .set(db::user::EMAIL, "a@b.c")
+    .exec()
+    .await?;
 
 if should_commit {
     tx.commit().await?;
@@ -365,10 +389,13 @@ if should_commit {
 ### Raw SQL
 
 ```rust
+use ruprizzle::prelude::*;
+
 let rows = db
+    .raw_pool()
     .fetch_all_raw(
-        "SELECT * FROM users WHERE email LIKE $1".to_owned(),
-        vec![Value::from("%@example.com")],
+        "SELECT * FROM users WHERE email LIKE ?".into(),
+        vec![Value::Str("%@example.com".into())],
     )
     .await?;
 ```
@@ -467,14 +494,13 @@ The end-to-end I/O benchmark is `cargo bench -p ruprizzle --bench end_to_end`; f
 
 ## Status and roadmap
 
-P0–P8 are complete and `0.1.0-alpha.2` is on crates.io. Remaining work before a stable 0.2:
+P0–P7 are complete, P8 is mostly complete (docs site / announcement pending), and `0.1.1-beta.1` is on crates.io. Remaining work before a stable 0.2:
 
-- MySQL / MariaDB dialect (additive via `DbDialect`).
 - Many-to-many implicit join tables (explicit join model works today).
 - Database introspection → schema (`db pull`).
 - Raw-SQL compile-time verification (`sqlx::query!` style).
 - Full LSP for the schema DSL.
-- Migration squashing and connection pool metrics.
+- Connection pool metrics.
 
 See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md) and [decisions log](ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md) for the full phase-by-phase state and ADRs.
 
@@ -484,8 +510,7 @@ See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md) and 
 
 This is an honest alpha. The boundaries are documented so you can decide whether ruprizzle is right for your project today.
 
-- **Migrations** do not handle mutual foreign-key cycles automatically. Cycles must be broken by hand across migrations.
-- **Heuristic renames** (detecting a column was renamed rather than dropped + added) are not implemented. Use `@renamedFrom` to give the diff an explicit hint.
+- **Heuristic renames** are suggested automatically; add `@renamedFrom` to confirm a data-preserving rename. The diff never guesses silently.
 - **`db push`** does not write migration files and is only for prototyping.
 - **Compile-time query checking** (`sqlx-data.json` / offline mode) is not implemented.
 - **No LSP** yet; syntax highlighting is available as a TextMate grammar.

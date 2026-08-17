@@ -17,7 +17,12 @@ categories  = ["database", "command-line-utilities"]
 name = "ruprizzle"
 path = "src/main.rs"
 
+[features]
+default = []
+sqlite-rusqlite = ["ruprizzle-migrate/sqlite-rusqlite"]
+
 [dependencies]
+ruprizzle         = { workspace = true }
 ruprizzle-core    = { workspace = true }
 ruprizzle-parser  = { workspace = true }
 ruprizzle-codegen = { workspace = true }
@@ -28,7 +33,6 @@ dotenvy           = { workspace = true }
 
 miette            = { workspace = true, features = ["fancy"] }
 notify            = { workspace = true }
-sqlx              = { workspace = true, features = ["any", "postgres", "sqlite"] }
 tokio             = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 serde_json        = { workspace = true }
 indexmap          = { workspace = true }

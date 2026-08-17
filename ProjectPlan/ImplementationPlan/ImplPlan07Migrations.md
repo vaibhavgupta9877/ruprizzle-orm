@@ -1,5 +1,6 @@
 # ImplPlan 07 — Migrations: Snapshot, Diff, Apply (Phase P6)
 
+**Status:** COMPLETE — diff engine, migration runner, drift detection, and CLI shipped; all P6 tasks below are treated as complete.
 **Duration:** 5 days · **Owners:** Vaibhav Gupta (diff engine), Vaibhav Gupta (runner, drift, CLI wiring)
 **Exit gate G6:** the 12 change classes below each produce correct migrations that
 apply cleanly and preserve data, on both dialects.

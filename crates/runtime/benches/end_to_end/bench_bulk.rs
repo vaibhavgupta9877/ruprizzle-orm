@@ -16,9 +16,83 @@ pub struct BenchBulk {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for BenchBulk {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::direct::<i64>(row, "id")?,
-            name: ::ruprizzle::decode::direct::<String>(row, "name")?,
-            n: ::ruprizzle::decode::direct::<i64>(row, "n")?,
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            name: ::ruprizzle::decode::direct_idx(row, 1)?,
+            n: ::ruprizzle::decode::direct_idx(row, 2)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow>
+for BenchBulk {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::postgres::PgRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            name: ::ruprizzle::decode::direct_idx(row, 1)?,
+            n: ::ruprizzle::decode::direct_idx(row, 2)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>
+for BenchBulk {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            name: ::ruprizzle::decode::direct_idx(row, 1)?,
+            n: ::ruprizzle::decode::direct_idx(row, 2)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>
+for BenchBulk {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::mysql::MySqlRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            name: ::ruprizzle::decode::direct_idx(row, 1)?,
+            n: ::ruprizzle::decode::direct_idx(row, 2)?,
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromRusqliteRow for BenchBulk {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::RusqliteRow,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::get_i64(row, 0)?,
+            name: ::ruprizzle::rusqlite::get_text(row, 1)?,
+            n: ::ruprizzle::rusqlite::get_i64(row, 2)?,
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for BenchBulk {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::Row::get::<i64>(row, 0)?,
+            name: ::ruprizzle::rusqlite::Row::get::<String>(row, 1)?,
+            n: ::ruprizzle::rusqlite::Row::get::<i64>(row, 2)?,
+        })
+    }
+}
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for BenchBulk {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: row.try_get::<usize, i64>(0).map_err(::ruprizzle::Error::TokioPostgres)?,
+            name: row
+                .try_get::<usize, String>(1)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            n: row.try_get::<usize, i64>(2).map_err(::ruprizzle::Error::TokioPostgres)?,
         })
     }
 }
@@ -45,6 +119,7 @@ pub struct BenchBulkUpdate {
 impl ::ruprizzle::Model for BenchBulk {
     const TABLE: &'static str = "bench_bulk";
     const PRIMARY_KEY: &'static str = "id";
+    const COLUMNS: &'static [&'static str] = &["id", "name", "n"];
 }
 /// Table name for this model.
 pub const TABLE: &str = "bench_bulk";

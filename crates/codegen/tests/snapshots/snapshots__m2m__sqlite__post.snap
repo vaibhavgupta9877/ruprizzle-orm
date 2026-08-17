@@ -1,0 +1,488 @@
+---
+source: crates/codegen/tests/snapshots.rs
+expression: content
+---
+#![allow(clippy::all, clippy::pedantic, unused_imports)]
+use ::ruprizzle::serde::{Deserialize, Serialize};
+use ::ruprizzle::sqlx::any::AnyRow;
+use ::ruprizzle::types::chrono::{DateTime, NaiveDate, NaiveTime, Utc};
+use ::ruprizzle::types::{Decimal, Uuid};
+use ::ruprizzle::serde_json::Value as JsonValue;
+use ::ruprizzle::Related;
+use ::ruprizzle::Column;
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(crate = "::ruprizzle::serde")]
+pub struct Post {
+    pub id: i32,
+    #[serde(skip_serializing_if = "::ruprizzle::Related::is_absent", default)]
+    pub tags: ::ruprizzle::Related<Vec<super::tag::Tag>>,
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Post {
+    fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            tags: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow> for Post {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::postgres::PgRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            tags: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow> for Post {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            tags: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow> for Post {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::mysql::MySqlRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            tags: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<AnyRow> for Post {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, AnyRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0 + __offset)?,
+            tags: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::postgres::PgRow> for Post {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::postgres::PgRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0 + __offset)?,
+            tags: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::sqlite::SqliteRow> for Post {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0 + __offset)?,
+            tags: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::mysql::MySqlRow> for Post {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0 + __offset)?,
+            tags: ::ruprizzle::Related::default(),
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromRusqliteRow for Post {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::RusqliteRow,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::get_i64(row, 0)?
+                .try_into()
+                .map_err(|e: std::num::TryFromIntError| {
+                    ::ruprizzle::Error::Message(
+                        format!("cannot decode i32 from column {}: {}", 0, e),
+                    )
+                })?,
+            tags: ::ruprizzle::Related::default(),
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for Post {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::Row::get::<i32>(row, 0)?,
+            tags: ::ruprizzle::Related::default(),
+        })
+    }
+}
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for Post {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: row.try_get::<usize, i32>(0).map_err(::ruprizzle::Error::TokioPostgres)?,
+            tags: ::ruprizzle::Related::default(),
+        })
+    }
+}
+/// Insert shape: required fields are required, defaulted/optional fields
+/// are `Option` so the database can fill them in.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "::ruprizzle::serde")]
+pub struct PostInsert {
+    pub id: i32,
+}
+/// Update shape: every field is `Option` to support explicit nulls.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(crate = "::ruprizzle::serde")]
+pub struct PostUpdate {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<i32>,
+}
+#[derive(
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    ::ruprizzle::sqlx::FromRow
+)]
+#[serde(crate = "::ruprizzle::serde", default)]
+pub struct PostAggregate {
+    #[sqlx(default)]
+    pub count_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_id: Option<i64>,
+    #[sqlx(default)]
+    pub sum_id: Option<i64>,
+    #[sqlx(default)]
+    pub avg_id: Option<f64>,
+    #[sqlx(default)]
+    pub min_id: Option<i32>,
+    #[sqlx(default)]
+    pub max_id: Option<i32>,
+}
+#[derive(Debug, Clone, Default)]
+pub struct PostAggregateInput {
+    pub count_id: Option<::ruprizzle::Aggregate<Post, i64>>,
+    pub count_distinct_id: Option<::ruprizzle::Aggregate<Post, i64>>,
+    pub sum_id: Option<::ruprizzle::Aggregate<Post, Option<i64>>>,
+    pub avg_id: Option<::ruprizzle::Aggregate<Post, Option<f64>>>,
+    pub min_id: Option<::ruprizzle::Aggregate<Post, Option<i32>>>,
+    pub max_id: Option<::ruprizzle::Aggregate<Post, Option<i32>>>,
+}
+impl ::ruprizzle::AggregateSet<Post, PostAggregate> for PostAggregateInput {
+    fn push_entries(&self, out: &mut Vec<::ruprizzle::AggregateEntry>) {
+        use ::ruprizzle::IntoAggregate;
+        if let Some(a) = &self.count_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.sum_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.avg_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.min_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.max_id {
+            a.push_entry(out);
+        }
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromRusqliteRow for PostAggregate {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::RusqliteRow,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_id = match row.get::<_, Option<i64>>("count_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_id = match row.get::<_, Option<i64>>("count_distinct_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let sum_id = match row.get::<_, Option<i64>>("sum_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let avg_id = match row.get::<_, Option<f64>>("avg_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let min_id = match row.get::<_, Option<i32>>("min_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let max_id = match row.get::<_, Option<i32>>("max_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        Ok(Self {
+            count_id,
+            count_distinct_id,
+            sum_id,
+            avg_id,
+            min_id,
+            max_id,
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for PostAggregate {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_id = row.get_by_name::<Option<i64>>("count_id")?;
+        let count_distinct_id = row.get_by_name::<Option<i64>>("count_distinct_id")?;
+        let sum_id = row.get_by_name::<Option<i64>>("sum_id")?;
+        let avg_id = row.get_by_name::<Option<f64>>("avg_id")?;
+        let min_id = row.get_by_name::<Option<i32>>("min_id")?;
+        let max_id = row.get_by_name::<Option<i32>>("max_id")?;
+        Ok(Self {
+            count_id,
+            count_distinct_id,
+            sum_id,
+            avg_id,
+            min_id,
+            max_id,
+        })
+    }
+}
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for PostAggregate {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_id = match row.columns().iter().position(|c| c.name() == "count_id") {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_id = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_id")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let sum_id = match row.columns().iter().position(|c| c.name() == "sum_id") {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let avg_id = match row.columns().iter().position(|c| c.name() == "avg_id") {
+            Some(idx) => {
+                row.try_get::<usize, Option<f64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let min_id = match row.columns().iter().position(|c| c.name() == "min_id") {
+            Some(idx) => {
+                row.try_get::<usize, Option<i32>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let max_id = match row.columns().iter().position(|c| c.name() == "max_id") {
+            Some(idx) => {
+                row.try_get::<usize, Option<i32>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        Ok(Self {
+            count_id,
+            count_distinct_id,
+            sum_id,
+            avg_id,
+            min_id,
+            max_id,
+        })
+    }
+}
+impl ::ruprizzle::Model for Post {
+    const TABLE: &'static str = "posts";
+    const PRIMARY_KEY: &'static str = "id";
+    const COLUMNS: &'static [&'static str] = &["id"];
+}
+/// Table name for this model.
+pub const TABLE: &str = "posts";
+pub const ID: Column<Post, i32> = Column::new("posts", "id");
+///Returns a query for the `tags` many-to-many relation.
+pub fn tags_query<'__a>(
+    __exec: &'__a dyn ::ruprizzle::Executor,
+    id: i32,
+) -> ::ruprizzle::SelectQuery<'__a, super::tag::Tag> {
+    let __subquery = ::ruprizzle::SelectQuery::new(__exec)
+        .filter(super::post_tag::POST_ID.eq(id))
+        .columns(super::post_tag::TAG_ID);
+    ::ruprizzle::SelectQuery::new(__exec).filter(super::tag::ID.in_subquery(__subquery))
+}
+///Returns an `IncludeMany` for the `tags` many-to-many relation.
+pub fn tags() -> ::ruprizzle::IncludeMany<
+    'static,
+    Post,
+    super::tag::Tag,
+    super::post_tag::PostTag,
+    i32,
+    i32,
+    (),
+> {
+    ::ruprizzle::IncludeMany::new(
+        |__row: &Post| __row.id,
+        |__row: &mut Post, __loaded: ::ruprizzle::Related<Vec<super::tag::Tag>>| {
+            __row.tags = __loaded;
+        },
+        |__row: &super::post_tag::PostTag| __row.post_id,
+        |__row: &super::post_tag::PostTag| __row.tag_id,
+        |__child: &super::tag::Tag| __child.id,
+        super::post_tag::POST_ID,
+        super::post_tag::TAG_ID,
+        super::tag::ID,
+    )
+}
+///Returns an `M2mWrite::Attach` for the `tags` many-to-many relation.
+pub fn tags_attach(
+    ids: impl IntoIterator<Item = i32>,
+) -> ::ruprizzle::M2mWrite<'static, Post, super::tag::Tag, super::post_tag::PostTag> {
+    ::ruprizzle::M2mWrite::new(
+        ::ruprizzle::M2mAction::Attach,
+        |__row: &Post| ::ruprizzle::Encodable::to_value(&__row.id),
+        "post_tags",
+        "post_id",
+        "tag_id",
+        "tags",
+        "id",
+        ids.into_iter().map(|__id| ::ruprizzle::Encodable::to_value(&__id)).collect(),
+        |__row: &mut Post, __loaded: Vec<super::tag::Tag>| {
+            __row.tags = ::ruprizzle::Related::Loaded(__loaded);
+        },
+    )
+}
+///Returns an `M2mWrite::Set` for the `tags` many-to-many relation.
+pub fn tags_set(
+    ids: impl IntoIterator<Item = i32>,
+) -> ::ruprizzle::M2mWrite<'static, Post, super::tag::Tag, super::post_tag::PostTag> {
+    ::ruprizzle::M2mWrite::new(
+        ::ruprizzle::M2mAction::Set,
+        |__row: &Post| ::ruprizzle::Encodable::to_value(&__row.id),
+        "post_tags",
+        "post_id",
+        "tag_id",
+        "tags",
+        "id",
+        ids.into_iter().map(|__id| ::ruprizzle::Encodable::to_value(&__id)).collect(),
+        |__row: &mut Post, __loaded: Vec<super::tag::Tag>| {
+            __row.tags = ::ruprizzle::Related::Loaded(__loaded);
+        },
+    )
+}
+///Returns an `M2mWrite::Detach` for the `tags` many-to-many relation.
+pub fn tags_detach(
+    ids: impl IntoIterator<Item = i32>,
+) -> ::ruprizzle::M2mWrite<'static, Post, super::tag::Tag, super::post_tag::PostTag> {
+    ::ruprizzle::M2mWrite::new(
+        ::ruprizzle::M2mAction::Detach,
+        |__row: &Post| ::ruprizzle::Encodable::to_value(&__row.id),
+        "post_tags",
+        "post_id",
+        "tag_id",
+        "tags",
+        "id",
+        ids.into_iter().map(|__id| ::ruprizzle::Encodable::to_value(&__id)).collect(),
+        |__row: &mut Post, __loaded: Vec<super::tag::Tag>| {
+            __row.tags = ::ruprizzle::Related::Loaded(__loaded);
+        },
+    )
+}
+/// Prisma-flavoured repository for `#model_name`.
+#[derive(Debug, Clone, Copy)]
+pub struct PostRepo<'a> {
+    db: &'a super::Db,
+}
+impl<'a> PostRepo<'a> {
+    /// Creates a new repository handle.
+    pub(crate) fn new(db: &'a super::Db) -> Self {
+        Self { db }
+    }
+    /// Start a `find_many` query.
+    pub fn find_many(&self) -> ::ruprizzle::SelectQuery<'a, Post> {
+        ::ruprizzle::SelectQuery::new(self.db.raw_pool())
+    }
+    /// Start an `insert` query.
+    pub fn create(&self, _data: PostInsert) -> ::ruprizzle::InsertQuery<'a, Post> {
+        let mut insert = ::ruprizzle::InsertQuery::new(self.db.raw_pool());
+        insert = insert.set(ID, _data.id);
+        insert
+    }
+    /// Start a multi-row `insert` query.
+    pub fn create_many(
+        &self,
+        _data: Vec<PostInsert>,
+    ) -> ::ruprizzle::InsertManyQuery<'a, Post> {
+        let mut q = ::ruprizzle::InsertManyQuery::new(self.db.raw_pool());
+        for _row in _data {
+            q = q.row([("id", ::ruprizzle::Encodable::to_value(&_row.id))]);
+        }
+        q
+    }
+    /// Start an `update` query.
+    pub fn update(&self) -> ::ruprizzle::UpdateQuery<'a, Post> {
+        ::ruprizzle::UpdateQuery::new(self.db.raw_pool())
+    }
+    /// Start a `delete` query.
+    pub fn delete(&self) -> ::ruprizzle::DeleteQuery<'a, Post> {
+        ::ruprizzle::DeleteQuery::new(self.db.raw_pool())
+    }
+}

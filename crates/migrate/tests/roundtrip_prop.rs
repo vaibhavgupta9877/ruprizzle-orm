@@ -10,10 +10,12 @@
 //! SQLite coverage for the same property is deferred; see the note in
 //! `ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md`.
 
+use std::borrow::Cow;
 use std::sync::OnceLock;
 use std::time::Duration;
 
 use proptest::prelude::*;
+use ruprizzle::Executor;
 use ruprizzle_core::ir::Schema;
 use ruprizzle_dialect::dialect_for;
 use ruprizzle_migrate::{diff, up_sql};
@@ -91,7 +93,7 @@ proptest! {
         let changes = diff(&sa, &sb);
         if !changes.is_empty() {
             let dialect = dialect_for(sa.datasource.provider);
-            let sql = up_sql(&sa, &sb, dialect.as_ref());
+            let sql = up_sql(&sa, &sb, dialect);
             prop_assert!(
                 !sql.trim().is_empty(),
                 "diff reported {} changes but produced no SQL",
@@ -162,19 +164,14 @@ async fn round_trip(
         .next()
         .ok_or_else(|| "drop_table produced no statement".to_owned())?
         .sql;
-    sqlx::query(&drop_sql)
-        .execute(&pool)
+    pool.execute_raw(Cow::Owned(drop_sql), Vec::new())
         .await
         .map_err(|e| e.to_string())?;
 
     let empty = parse("empty", &empty_schema()).map_err(|_| "parse empty".to_owned())?;
-    for sql in [
-        up_sql(&empty, from, dialect.as_ref()),
-        up_sql(from, to, dialect.as_ref()),
-    ] {
+    for sql in [up_sql(&empty, from, dialect), up_sql(from, to, dialect)] {
         for stmt in ruprizzle_migrate::runner::split_statements(&sql) {
-            sqlx::query(&stmt)
-                .execute(&pool)
+            pool.execute_raw(Cow::Owned(stmt.clone()), Vec::new())
                 .await
                 .map_err(|e| format!("{stmt}: {e}"))?;
         }

@@ -4,7 +4,9 @@ use std::collections::BTreeMap;
 
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
-use ruprizzle_core::ir::{EnumDef, Field, FieldKind, Model, Provider, ScalarType, Schema};
+use ruprizzle_core::ir::{
+    EnumDef, Field, FieldKind, Model, Provider, RelationKind, ResolvedRelation, ScalarType, Schema,
+};
 use ruprizzle_parser::naming;
 
 /// Generate all source files for a schema.
@@ -180,6 +182,19 @@ fn emit_enum(e: &EnumDef, is_postgres: bool) -> TokenStream {
                 Value::Str(self.as_db_str().into())
             }
         }
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        impl ::ruprizzle::rusqlite::FromValue for #name {
+            fn from_value(value: &::ruprizzle::rusqlite::types::Value) -> Result<Self, ::ruprizzle::Error> {
+                let s = <String as ::ruprizzle::rusqlite::FromValue>::from_value(value)?;
+                s.parse().map_err(|e: String| {
+                    ::ruprizzle::Error::Message(format!(
+                        "cannot parse {} from {s:?}: {e}",
+                        stringify!(#name)
+                    ))
+                })
+            }
+        }
     }
 }
 
@@ -201,10 +216,12 @@ fn mod_rs(schema: &Schema) -> String {
             let model = format_ident!("{}", m.name.as_str());
             let insert = format_ident!("{}Insert", m.name.as_str());
             let update = format_ident!("{}Update", m.name.as_str());
+            let aggregate = format_ident!("{}Aggregate", m.name.as_str());
+            let aggregate_input = format_ident!("{}AggregateInput", m.name.as_str());
             let repo = format_ident!("{}Repo", m.name.as_str());
             quote! {
                 pub use self::#module::{
-                    #insert, #model, #repo, #update,
+                    #aggregate, #aggregate_input, #insert, #model, #repo, #update,
                 };
             }
         })
@@ -232,9 +249,11 @@ fn mod_rs(schema: &Schema) -> String {
             let model = format_ident!("{}", m.name.as_str());
             let insert = format_ident!("{}Insert", m.name.as_str());
             let update = format_ident!("{}Update", m.name.as_str());
+            let aggregate = format_ident!("{}Aggregate", m.name.as_str());
+            let aggregate_input = format_ident!("{}AggregateInput", m.name.as_str());
             let repo = format_ident!("{}Repo", m.name.as_str());
             let module = format_ident!("{}", safe_module_name(m.name.as_str()));
-            quote! { #model, #insert, #update, #repo, #module, }
+            quote! { #model, #insert, #update, #aggregate, #aggregate_input, #repo, #module, }
         })
         .collect();
 
@@ -447,14 +466,14 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
     let relation_helpers: Vec<_> = model
         .fields
         .values()
-        .filter(|f| matches!(f.kind, FieldKind::Relation(_) | FieldKind::List(_)))
+        .filter(|f| f.relation().is_some())
         .filter_map(|f| emit_relation_helper(schema, model, f))
         .collect();
 
     let relation_filter_helpers: Vec<_> = model
         .fields
         .values()
-        .filter(|f| matches!(f.kind, FieldKind::Relation(_) | FieldKind::List(_)))
+        .filter(|f| f.relation().is_some())
         .filter_map(|f| emit_relation_filter_helpers(schema, model, f))
         .collect();
 
@@ -472,11 +491,107 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         .map(emit_insert_many_field)
         .collect();
 
-    let from_row_fields: Vec<_> = model
+    let columns: Vec<_> = model
         .fields
         .values()
-        .map(|f| emit_from_row_field(schema, model.name.as_str(), f))
+        .filter(|f| f.has_column())
+        .map(|f| f.column.as_str())
         .collect();
+
+    let row_fields = |native_json: bool, native_array: bool, is_join_side: bool| {
+        let mut next_index = 0;
+        model
+            .fields
+            .values()
+            .map(|f| {
+                let idx = if f.has_column() {
+                    let i = next_index;
+                    next_index += 1;
+                    Some(i)
+                } else {
+                    None
+                };
+                let row_expr = quote! { row };
+                let idx_expr = if let Some(i) = idx {
+                    let idx = syn::Index::from(i);
+                    if is_join_side {
+                        quote! { #idx + __offset }
+                    } else {
+                        quote! { #idx }
+                    }
+                } else {
+                    quote! { 0 }
+                };
+                emit_from_row_field(
+                    schema,
+                    model.name.as_str(),
+                    f,
+                    &row_expr,
+                    &idx_expr,
+                    native_json,
+                    native_array,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let any_from_row_fields = row_fields(false, false, false);
+    let any_join_side_fields = row_fields(false, false, true);
+    let postgres_from_row_fields = row_fields(true, true, false);
+    let postgres_join_side_fields = row_fields(true, true, true);
+    let sqlite_from_row_fields = row_fields(true, false, false);
+    let sqlite_join_side_fields = row_fields(true, false, true);
+    let mysql_from_row_fields = row_fields(true, false, false);
+    let mysql_join_side_fields = row_fields(true, false, true);
+
+    let mut next_rusqlite_index = 0;
+    let rusqlite_from_row_fields: Vec<_> = model
+        .fields
+        .values()
+        .map(|f| {
+            let idx = if f.has_column() {
+                let i = next_rusqlite_index;
+                next_rusqlite_index += 1;
+                Some(i)
+            } else {
+                None
+            };
+            emit_from_rusqlite_row_field(schema, model.name.as_str(), f, idx)
+        })
+        .collect();
+
+    let mut next_owned_index = 0;
+    let owned_from_row_fields: Vec<_> = model
+        .fields
+        .values()
+        .map(|f| {
+            let idx = if f.has_column() {
+                let i = next_owned_index;
+                next_owned_index += 1;
+                Some(i)
+            } else {
+                None
+            };
+            emit_from_owned_row_field(schema, model.name.as_str(), f, idx)
+        })
+        .collect();
+
+    let mut next_tokio_postgres_index = 0;
+    let tokio_postgres_from_row_fields: Vec<_> = model
+        .fields
+        .values()
+        .map(|f| {
+            let idx = if f.has_column() {
+                let i = next_tokio_postgres_index;
+                next_tokio_postgres_index += 1;
+                Some(i)
+            } else {
+                None
+            };
+            emit_from_tokio_postgres_row_field(schema, model.name.as_str(), f, idx)
+        })
+        .collect();
+
+    let aggregate_tokens = emit_aggregate_structs(schema, model);
 
     let header = header();
     let tokens = quote! {
@@ -500,7 +615,110 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for #model_name {
             fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
                 Ok(Self {
-                    #( #from_row_fields )*
+                    #( #any_from_row_fields )*
+                })
+            }
+        }
+
+        impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow> for #model_name {
+            fn from_row(row: &'r ::ruprizzle::sqlx::postgres::PgRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+                Ok(Self {
+                    #( #postgres_from_row_fields )*
+                })
+            }
+        }
+
+        impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow> for #model_name {
+            fn from_row(row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+                Ok(Self {
+                    #( #sqlite_from_row_fields )*
+                })
+            }
+        }
+
+        impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow> for #model_name {
+            fn from_row(row: &'r ::ruprizzle::sqlx::mysql::MySqlRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
+                Ok(Self {
+                    #( #mysql_from_row_fields )*
+                })
+            }
+        }
+
+        impl ::ruprizzle::JoinSide<AnyRow> for #model_name {
+            fn from_offset_row<'r>(__offset_row: &::ruprizzle::OffsetRow<'r, AnyRow>) -> Result<Self, ::ruprizzle::sqlx::Error>
+            where
+                Self: Sized,
+            {
+                let row = __offset_row.as_raw();
+                let __offset = __offset_row.offset();
+                Ok(Self {
+                    #( #any_join_side_fields )*
+                })
+            }
+        }
+
+        impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::postgres::PgRow> for #model_name {
+            fn from_offset_row<'r>(__offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::postgres::PgRow>) -> Result<Self, ::ruprizzle::sqlx::Error>
+            where
+                Self: Sized,
+            {
+                let row = __offset_row.as_raw();
+                let __offset = __offset_row.offset();
+                Ok(Self {
+                    #( #postgres_join_side_fields )*
+                })
+            }
+        }
+
+        impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::sqlite::SqliteRow> for #model_name {
+            fn from_offset_row<'r>(__offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>) -> Result<Self, ::ruprizzle::sqlx::Error>
+            where
+                Self: Sized,
+            {
+                let row = __offset_row.as_raw();
+                let __offset = __offset_row.offset();
+                Ok(Self {
+                    #( #sqlite_join_side_fields )*
+                })
+            }
+        }
+
+        impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::mysql::MySqlRow> for #model_name {
+            fn from_offset_row<'r>(__offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>) -> Result<Self, ::ruprizzle::sqlx::Error>
+            where
+                Self: Sized,
+            {
+                let row = __offset_row.as_raw();
+                let __offset = __offset_row.offset();
+                Ok(Self {
+                    #( #mysql_join_side_fields )*
+                })
+            }
+        }
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        impl ::ruprizzle::rusqlite::FromRusqliteRow for #model_name {
+            fn from_rusqlite_row(row: &::ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ::ruprizzle::Error> {
+                Ok(Self {
+                    #( #rusqlite_from_row_fields )*
+                })
+            }
+        }
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        impl ::ruprizzle::rusqlite::FromOwnedRow for #model_name {
+            fn from_owned_row(row: &::ruprizzle::rusqlite::Row) -> Result<Self, ::ruprizzle::Error> {
+                Ok(Self {
+                    #( #owned_from_row_fields )*
+                })
+            }
+        }
+
+        #[cfg(feature = "postgres-tokio-postgres")]
+        impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for #model_name {
+            fn from_tokio_postgres_row(row: &::ruprizzle::tokio_postgres::Row) -> Result<Self, ::ruprizzle::Error> {
+                Ok(Self {
+                    #( #tokio_postgres_from_row_fields )*
                 })
             }
         }
@@ -520,9 +738,12 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
             #( #update_fields )*
         }
 
+        #aggregate_tokens
+
         impl ::ruprizzle::Model for #model_name {
             const TABLE: &'static str = #table;
             const PRIMARY_KEY: &'static str = #primary_key;
+            const COLUMNS: &'static [&'static str] = &[ #( #columns ),* ];
         }
 
         /// Table name for this model.
@@ -603,16 +824,23 @@ fn emit_entity_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream
     }
 }
 
-fn emit_from_row_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream {
+fn emit_from_row_field(
+    schema: &Schema,
+    owner: &str,
+    field: &Field,
+    row_expr: &TokenStream,
+    idx_expr: &TokenStream,
+    native_json: bool,
+    native_array: bool,
+) -> TokenStream {
     let name = safe_field_ident(field.name.as_str());
-    let column = field.column.as_str();
 
     if !field.has_column() {
         return quote! { #name: ::ruprizzle::Related::default(), };
     }
 
     let optional = field.optional;
-    let inner = rust_type_tokens(schema, owner, field, false, true);
+    let _inner = rust_type_tokens(schema, owner, field, false, true);
 
     let expr = match &field.kind {
         ruprizzle_core::ir::FieldKind::Scalar(st) => match st {
@@ -620,41 +848,322 @@ fn emit_from_row_field(schema: &Schema, owner: &str, field: &Field) -> TokenStre
             | ruprizzle_core::ir::ScalarType::Int
             | ruprizzle_core::ir::ScalarType::BigInt
             | ruprizzle_core::ir::ScalarType::Float => {
-                let helper = format_ident!("{}", if optional { "direct_opt" } else { "direct" });
-                quote! { ::ruprizzle::decode::#helper::<#inner>(row, #column)? }
+                let helper = format_ident!(
+                    "{}",
+                    if optional {
+                        "direct_opt_idx"
+                    } else {
+                        "direct_idx"
+                    }
+                );
+                quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
             }
             ruprizzle_core::ir::ScalarType::Boolean => {
-                let helper = format_ident!("{}", if optional { "boolean_opt" } else { "boolean" });
-                quote! { ::ruprizzle::decode::#helper(row, #column)? }
+                let helper = format_ident!(
+                    "{}",
+                    if optional {
+                        "boolean_opt_idx"
+                    } else {
+                        "boolean_idx"
+                    }
+                );
+                quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
             }
             ruprizzle_core::ir::ScalarType::Decimal
             | ruprizzle_core::ir::ScalarType::DateTime
             | ruprizzle_core::ir::ScalarType::Date
             | ruprizzle_core::ir::ScalarType::Time
             | ruprizzle_core::ir::ScalarType::Uuid => {
-                let helper = format_ident!("{}", if optional { "text_opt" } else { "text" });
-                quote! { ::ruprizzle::decode::#helper::<#inner>(row, #column)? }
+                let helper =
+                    format_ident!("{}", if optional { "text_opt_idx" } else { "text_idx" });
+                quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
             }
             ruprizzle_core::ir::ScalarType::Json => {
-                let helper = format_ident!("{}", if optional { "json_opt" } else { "json" });
-                quote! { ::ruprizzle::decode::#helper(row, #column)? }
+                let helper = if native_json {
+                    format_ident!("{}", if optional { "json_opt_idx" } else { "json_idx" })
+                } else {
+                    format_ident!(
+                        "{}",
+                        if optional {
+                            "json_text_opt_idx"
+                        } else {
+                            "json_text_idx"
+                        }
+                    )
+                };
+                quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
             }
             ruprizzle_core::ir::ScalarType::Bytes => {
-                let helper = format_ident!("{}", if optional { "bytes_opt" } else { "bytes" });
-                quote! { ::ruprizzle::decode::#helper(row, #column)? }
+                let helper = format_ident!(
+                    "{}",
+                    if optional {
+                        "bytes_opt_idx"
+                    } else {
+                        "bytes_idx"
+                    }
+                );
+                quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
             }
         },
         ruprizzle_core::ir::FieldKind::Enum(_) => {
-            let helper = format_ident!("{}", if optional { "text_opt" } else { "text" });
-            quote! { ::ruprizzle::decode::#helper::<#inner>(row, #column)? }
+            let helper = format_ident!("{}", if optional { "text_opt_idx" } else { "text_idx" });
+            quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
+        }
+        ruprizzle_core::ir::FieldKind::List(inner) => {
+            let inner_base = match inner.as_ref() {
+                ruprizzle_core::ir::FieldKind::Scalar(st) => scalar_type_tokens(*st),
+                ruprizzle_core::ir::FieldKind::Enum(name) => {
+                    let name = format_ident!("{}", name.as_str());
+                    quote! { super::enums::#name }
+                }
+                _ => quote! { () },
+            };
+            if native_array {
+                match inner.as_ref() {
+                    ruprizzle_core::ir::FieldKind::Enum(_) => quote! {
+                        #name: {
+                            let __raw: ::std::vec::Vec<::std::string::String> = #row_expr.try_get(#idx_expr)?;
+                            __raw
+                                .into_iter()
+                                .map(|__s| __s.parse::<#inner_base>().map_err(|__e| ::ruprizzle::sqlx::Error::Decode(::std::boxed::Box::new(__e))))
+                                .collect::<::std::result::Result<::std::vec::Vec<_>, _>>()?
+                        }
+                    },
+                    _ => {
+                        quote! { #name: #row_expr.try_get::<_, ::std::vec::Vec<#inner_base>>(#idx_expr)?, }
+                    }
+                }
+            } else {
+                let helper = format_ident!(
+                    "{}",
+                    if optional {
+                        "array_opt_idx"
+                    } else {
+                        "array_idx"
+                    }
+                );
+                quote! { #name: ::ruprizzle::decode::#helper::<_, #inner_base>(#row_expr, #idx_expr)?, }
+            }
         }
         _ => {
-            let helper = format_ident!("{}", if optional { "direct_opt" } else { "direct" });
-            quote! { ::ruprizzle::decode::#helper::<#inner>(row, #column)? }
+            let helper = format_ident!(
+                "{}",
+                if optional {
+                    "direct_opt_idx"
+                } else {
+                    "direct_idx"
+                }
+            );
+            quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
         }
     };
 
     quote! { #name: #expr, }
+}
+
+fn emit_from_rusqlite_row_field(
+    schema: &Schema,
+    owner: &str,
+    field: &Field,
+    idx: Option<usize>,
+) -> TokenStream {
+    let name = safe_field_ident(field.name.as_str());
+
+    if !field.has_column() {
+        return quote! { #name: ::ruprizzle::Related::default(), };
+    }
+
+    let idx = syn::Index::from(idx.unwrap_or(0));
+    let ty = rust_type_tokens(schema, owner, field, field.optional, false);
+    let inner_ty = rust_type_tokens(schema, owner, field, false, false);
+
+    let expr = match &field.kind {
+        ruprizzle_core::ir::FieldKind::Scalar(st) => {
+            scalar_rusqlite_expr(*st, &idx, &ty, &inner_ty, field.optional)
+        }
+        ruprizzle_core::ir::FieldKind::Enum(_) => {
+            if field.optional {
+                quote! { ::ruprizzle::rusqlite::parse_opt::<#inner_ty>(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::parse::<#inner_ty>(row, #idx)? }
+            }
+        }
+        ruprizzle_core::ir::FieldKind::List(_) => {
+            quote! { ::ruprizzle::rusqlite::get::<_, #ty>(row, #idx)? }
+        }
+        _ => {
+            if field.optional {
+                quote! { ::ruprizzle::rusqlite::get_text_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_text(row, #idx)? }
+            }
+        }
+    };
+
+    quote! { #name: #expr, }
+}
+
+fn emit_from_owned_row_field(
+    schema: &Schema,
+    owner: &str,
+    field: &Field,
+    idx: Option<usize>,
+) -> TokenStream {
+    let name = safe_field_ident(field.name.as_str());
+
+    if !field.has_column() {
+        return quote! { #name: ::ruprizzle::Related::default(), };
+    }
+
+    let idx = syn::Index::from(idx.unwrap_or(0));
+    let ty = rust_type_tokens(schema, owner, field, field.optional, false);
+
+    quote! { #name: ::ruprizzle::rusqlite::Row::get::<#ty>(row, #idx)?, }
+}
+
+fn scalar_rusqlite_expr(
+    st: ruprizzle_core::ir::ScalarType,
+    idx: &syn::Index,
+    _ty: &TokenStream,
+    inner_ty: &TokenStream,
+    optional: bool,
+) -> TokenStream {
+    use ruprizzle_core::ir::ScalarType;
+
+    let col = proc_macro2::Literal::usize_unsuffixed(idx.index as usize);
+
+    match st {
+        ScalarType::String => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::get_text_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_text(row, #idx)? }
+            }
+        }
+        ScalarType::BigInt => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::get_i64_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_i64(row, #idx)? }
+            }
+        }
+        ScalarType::Int => {
+            if optional {
+                quote! {
+                    ::ruprizzle::rusqlite::get_i64_opt(row, #idx)?
+                        .map(|v| v.try_into().map_err(|e: std::num::TryFromIntError| {
+                            ::ruprizzle::Error::Message(format!("cannot decode i32 from column {}: {}", #col, e))
+                        }))
+                        .transpose()?
+                }
+            } else {
+                quote! {
+                    ::ruprizzle::rusqlite::get_i64(row, #idx)?
+                        .try_into()
+                        .map_err(|e: std::num::TryFromIntError| {
+                            ::ruprizzle::Error::Message(format!("cannot decode i32 from column {}: {}", #col, e))
+                        })?
+                }
+            }
+        }
+        ScalarType::Float => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::get_f64_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_f64(row, #idx)? }
+            }
+        }
+        ScalarType::Boolean => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::get_bool_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_bool(row, #idx)? }
+            }
+        }
+        ScalarType::Json => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::get_json_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_json(row, #idx)? }
+            }
+        }
+        ScalarType::Bytes => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::get_bytes_opt(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::get_bytes(row, #idx)? }
+            }
+        }
+        ScalarType::Decimal
+        | ScalarType::DateTime
+        | ScalarType::Date
+        | ScalarType::Time
+        | ScalarType::Uuid => {
+            if optional {
+                quote! { ::ruprizzle::rusqlite::parse_opt::<#inner_ty>(row, #idx)? }
+            } else {
+                quote! { ::ruprizzle::rusqlite::parse::<#inner_ty>(row, #idx)? }
+            }
+        }
+    }
+}
+
+fn emit_from_tokio_postgres_row_field(
+    schema: &Schema,
+    owner: &str,
+    field: &Field,
+    idx: Option<usize>,
+) -> TokenStream {
+    let name = safe_field_ident(field.name.as_str());
+
+    if !field.has_column() {
+        return quote! { #name: ::ruprizzle::Related::default(), };
+    }
+
+    let idx = syn::Index::from(idx.unwrap_or(0));
+    let ty = rust_type_tokens(schema, owner, field, false, false);
+
+    match &field.kind {
+        ruprizzle_core::ir::FieldKind::Enum(_) => {
+            if field.optional {
+                quote! {
+                    #name: row.try_get::<usize, Option<String>>(#idx)
+                        .map_err(::ruprizzle::Error::TokioPostgres)?
+                        .map(|s| s.parse::<#ty>().map_err(|e| ::ruprizzle::Error::Message(format!("cannot parse enum: {e}"))))
+                        .transpose()?,
+                }
+            } else {
+                quote! {
+                    #name: row.try_get::<usize, String>(#idx)
+                        .map_err(::ruprizzle::Error::TokioPostgres)?
+                        .parse::<#ty>()
+                        .map_err(|e| ::ruprizzle::Error::Message(format!("cannot parse enum: {e}")))?,
+                }
+            }
+        }
+        ruprizzle_core::ir::FieldKind::List(inner) => match inner.as_ref() {
+            ruprizzle_core::ir::FieldKind::Enum(enum_name) => {
+                let enum_name = format_ident!("{}", enum_name.as_str());
+                quote! {
+                    #name: row.try_get::<usize, ::std::vec::Vec<::std::string::String>>(#idx)
+                        .map_err(::ruprizzle::Error::TokioPostgres)?
+                        .into_iter()
+                        .map(|s| s.parse::<super::enums::#enum_name>().map_err(|e| ::ruprizzle::Error::Message(format!("cannot parse enum: {e}"))))
+                        .collect::<::std::result::Result<::std::vec::Vec<_>, _>>()?,
+                }
+            }
+            _ => {
+                quote! { #name: row.try_get::<usize, #ty>(#idx).map_err(::ruprizzle::Error::TokioPostgres)?, }
+            }
+        },
+        _ => {
+            if field.optional {
+                quote! { #name: row.try_get::<usize, Option<#ty>>(#idx).map_err(::ruprizzle::Error::TokioPostgres)?, }
+            } else {
+                quote! { #name: row.try_get::<usize, #ty>(#idx).map_err(::ruprizzle::Error::TokioPostgres)?, }
+            }
+        }
+    }
 }
 
 fn emit_insert_field(schema: &Schema, owner: &str, field: &Field) -> TokenStream {
@@ -750,7 +1259,11 @@ fn rust_type_tokens(
         FieldKind::Relation(r) => relation_inner_tokens(schema, owner, r.target.as_str(), false),
     };
 
-    let is_relation = matches!(field.kind, FieldKind::Relation(_) | FieldKind::List(_));
+    let is_relation = match &field.kind {
+        FieldKind::Relation(_) => true,
+        FieldKind::List(inner) => matches!(inner.as_ref(), FieldKind::Relation(_)),
+        _ => false,
+    };
 
     let wrapped = if !base_only && wrap_optional && !is_relation {
         quote! { Option<#inner> }
@@ -805,6 +1318,209 @@ fn scalar_type_tokens(st: ScalarType) -> TokenStream {
         ScalarType::Uuid => quote! { Uuid },
         ScalarType::Json => quote! { JsonValue },
         ScalarType::Bytes => quote! { Vec<u8> },
+    }
+}
+
+#[derive(Debug)]
+struct AggregateField {
+    name: Ident,
+    alias: String,
+    input_r: TokenStream,
+    output_inner: TokenStream,
+}
+
+fn numeric_aggregate_types(st: ScalarType) -> Option<(TokenStream, TokenStream, TokenStream)> {
+    match st {
+        ScalarType::Int => Some((quote! { i64 }, quote! { f64 }, quote! { i32 })),
+        ScalarType::BigInt => Some((quote! { i64 }, quote! { f64 }, quote! { i64 })),
+        ScalarType::Float => Some((quote! { f64 }, quote! { f64 }, quote! { f64 })),
+        _ => None,
+    }
+}
+
+fn emit_aggregate_structs(_schema: &Schema, model: &Model) -> TokenStream {
+    let model_name = format_ident!("{}", model.name.as_str());
+    let aggregate_name = format_ident!("{}Aggregate", model.name.as_str());
+    let input_name = format_ident!("{}AggregateInput", model.name.as_str());
+
+    let mut fields: Vec<AggregateField> = Vec::new();
+
+    for field in model.fields.values().filter(|f| f.has_column()) {
+        let column_suffix = naming::snake_case(&field.column);
+        let optional = field.optional;
+
+        let mut add = |kind: &'static str, input_r: TokenStream, output_inner: TokenStream| {
+            let alias = format!("{}_{}", kind, column_suffix);
+            let name = safe_field_ident(&alias);
+            fields.push(AggregateField {
+                name,
+                alias,
+                input_r,
+                output_inner,
+            });
+        };
+
+        // COUNT / COUNT DISTINCT are valid for every column-bearing field.
+        add("count", quote! { i64 }, quote! { i64 });
+        add("count_distinct", quote! { i64 }, quote! { i64 });
+
+        // SUM / AVG / MIN / MAX are only valid for numeric scalar columns.
+        if let FieldKind::Scalar(st) = &field.kind {
+            if let Some((sum_ty, avg_ty, minmax_ty)) = numeric_aggregate_types(*st) {
+                let sum_r = if optional {
+                    quote! { Option<Option<#sum_ty>> }
+                } else {
+                    quote! { Option<#sum_ty> }
+                };
+                let avg_r = if optional {
+                    quote! { Option<Option<#avg_ty>> }
+                } else {
+                    quote! { Option<#avg_ty> }
+                };
+                let minmax_r = if optional {
+                    quote! { Option<Option<#minmax_ty>> }
+                } else {
+                    quote! { Option<#minmax_ty> }
+                };
+
+                add("sum", sum_r, sum_ty);
+                add("avg", avg_r, avg_ty);
+                add("min", minmax_r.clone(), minmax_ty.clone());
+                add("max", minmax_r, minmax_ty);
+            }
+        }
+    }
+
+    let out_fields: Vec<_> = fields
+        .iter()
+        .map(|af| {
+            let name = &af.name;
+            let inner = &af.output_inner;
+            quote! {
+                #[sqlx(default)]
+                pub #name: Option<#inner>,
+            }
+        })
+        .collect();
+
+    let input_fields: Vec<_> = fields
+        .iter()
+        .map(|af| {
+            let name = &af.name;
+            let r = &af.input_r;
+            quote! {
+                pub #name: Option<::ruprizzle::Aggregate<#model_name, #r>>,
+            }
+        })
+        .collect();
+
+    let push_arms: Vec<_> = fields
+        .iter()
+        .map(|af| {
+            let name = &af.name;
+            quote! {
+                if let Some(a) = &self.#name {
+                    a.push_entry(out);
+                }
+            }
+        })
+        .collect();
+
+    let from_rusqlite_fields: Vec<_> = fields
+        .iter()
+        .map(|af| {
+            let name = &af.name;
+            let alias = &af.alias;
+            let inner = &af.output_inner;
+            quote! {
+                let #name = match row.get::<_, Option<#inner>>(#alias) {
+                    Ok(v) => v,
+                    Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+                    Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+                };
+            }
+        })
+        .collect();
+
+    let from_owned_fields: Vec<_> = fields
+        .iter()
+        .map(|af| {
+            let name = &af.name;
+            let alias = &af.alias;
+            let inner = &af.output_inner;
+            quote! {
+                let #name = row.get_by_name::<Option<#inner>>(#alias)?;
+            }
+        })
+        .collect();
+
+    let from_tokio_postgres_fields: Vec<_> = fields
+        .iter()
+        .map(|af| {
+            let name = &af.name;
+            let alias = &af.alias;
+            let inner = &af.output_inner;
+            quote! {
+                let #name = match row.columns().iter().position(|c| c.name() == #alias) {
+                    Some(idx) => row
+                        .try_get::<usize, Option<#inner>>(idx)
+                        .map_err(::ruprizzle::Error::TokioPostgres)?,
+                    None => None,
+                };
+            }
+        })
+        .collect();
+
+    let field_names: Vec<_> = fields.iter().map(|af| &af.name).collect();
+
+    quote! {
+        #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ::ruprizzle::sqlx::FromRow)]
+        #[serde(crate = "::ruprizzle::serde", default)]
+        pub struct #aggregate_name {
+            #( #out_fields )*
+        }
+
+        #[derive(Debug, Clone, Default)]
+        pub struct #input_name {
+            #( #input_fields )*
+        }
+
+        impl ::ruprizzle::AggregateSet<#model_name, #aggregate_name> for #input_name {
+            fn push_entries(&self, out: &mut Vec<::ruprizzle::AggregateEntry>) {
+                use ::ruprizzle::IntoAggregate;
+                #( #push_arms )*
+            }
+        }
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        impl ::ruprizzle::rusqlite::FromRusqliteRow for #aggregate_name {
+            fn from_rusqlite_row(row: &::ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ::ruprizzle::Error> {
+                #( #from_rusqlite_fields )*
+                Ok(Self {
+                    #( #field_names ),*
+                })
+            }
+        }
+
+        #[cfg(feature = "sqlite-rusqlite")]
+        impl ::ruprizzle::rusqlite::FromOwnedRow for #aggregate_name {
+            fn from_owned_row(row: &::ruprizzle::rusqlite::Row) -> Result<Self, ::ruprizzle::Error> {
+                #( #from_owned_fields )*
+                Ok(Self {
+                    #( #field_names ),*
+                })
+            }
+        }
+
+        #[cfg(feature = "postgres-tokio-postgres")]
+        impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for #aggregate_name {
+            fn from_tokio_postgres_row(row: &::ruprizzle::tokio_postgres::Row) -> Result<Self, ::ruprizzle::Error> {
+                #( #from_tokio_postgres_fields )*
+                Ok(Self {
+                    #( #field_names ),*
+                })
+            }
+        }
     }
 }
 
@@ -942,6 +1658,10 @@ fn emit_relation_helper(schema: &Schema, model: &Model, field: &Field) -> Option
     let is_list = matches!(field.kind, FieldKind::List(_));
     let is_owner = model.name == rel.owner;
 
+    if rel.kind == RelationKind::ManyToMany {
+        return emit_many_to_many_helpers(schema, model, field, rel);
+    }
+
     let (parent_name, child_name, parent_key_col, child_key_col) = if is_owner {
         (
             &rel.owner,
@@ -1041,6 +1761,205 @@ fn emit_relation_helper(schema: &Schema, model: &Model, field: &Field) -> Option
     })
 }
 
+fn emit_many_to_many_helpers(
+    schema: &Schema,
+    model: &Model,
+    field: &Field,
+    rel: &ResolvedRelation,
+) -> Option<TokenStream> {
+    let join_model = schema.models.get(rel.join_model.as_ref()?.as_str())?;
+    let owner_fk_field = join_model
+        .fields
+        .get(rel.join_owner_field.as_ref()?.as_str())?;
+    let target_fk_field = join_model
+        .fields
+        .get(rel.join_target_field.as_ref()?.as_str())?;
+
+    let owner_fk_rel = owner_fk_field.relation()?;
+    let target_fk_rel = target_fk_field.relation()?;
+
+    let owner_pk_name = owner_fk_rel.references.first()?;
+    let target_pk_name = target_fk_rel.references.first()?;
+
+    let owner_model = schema.models.get(rel.owner.as_str())?;
+    let target_model = schema.models.get(rel.target.as_str())?;
+
+    let owner_pk_field = owner_model.fields.get(owner_pk_name.as_str())?;
+    let target_pk_field = target_model.fields.get(target_pk_name.as_str())?;
+
+    if owner_pk_field.optional || target_pk_field.optional {
+        return None;
+    }
+
+    let owner_fk_col_field = join_model
+        .fields
+        .get(owner_fk_rel.fields.first()?.as_str())?;
+    let target_fk_col_field = join_model
+        .fields
+        .get(target_fk_rel.fields.first()?.as_str())?;
+
+    let key_type = rust_type_tokens(schema, rel.owner.as_str(), owner_pk_field, false, true);
+    let ckey_type = rust_type_tokens(schema, rel.target.as_str(), target_pk_field, false, true);
+
+    let include_helper_name = safe_field_ident(field.name.as_str());
+    let query_helper_name = format_ident!("{}_query", include_helper_name);
+    let param_name = safe_field_ident(owner_pk_field.name.as_str());
+    let field_ident = safe_field_ident(field.name.as_str());
+
+    let model_name = format_ident!("{}", model.name.as_str());
+    let join_module = safe_module_name(join_model.name.as_str());
+    let join_module_ident = format_ident!("{}", join_module);
+    let join_type = format_ident!("{}", join_model.name.as_str());
+    let target_module = safe_module_name(target_model.name.as_str());
+    let target_module_ident = format_ident!("{}", target_module);
+    let target_type = format_ident!("{}", target_model.name.as_str());
+
+    let owner_fk_field_ident = safe_field_ident(owner_fk_col_field.name.as_str());
+    let target_fk_field_ident = safe_field_ident(target_fk_col_field.name.as_str());
+    let target_pk_field_ident = safe_field_ident(target_pk_field.name.as_str());
+    let owner_pk_field_ident = safe_field_ident(owner_pk_field.name.as_str());
+
+    let owner_join_const = format_ident!("{}", shouty_snake(owner_fk_col_field.name.as_str()));
+    let target_join_const = format_ident!("{}", shouty_snake(target_fk_col_field.name.as_str()));
+    let target_pk_const = format_ident!("{}", shouty_snake(target_pk_field.name.as_str()));
+
+    let query_doc = format!(
+        "Returns a query for the `{}` many-to-many relation.",
+        include_helper_name
+    );
+    let include_doc = format!(
+        "Returns an `IncludeMany` for the `{}` many-to-many relation.",
+        include_helper_name
+    );
+
+    let attach_helper_name = format_ident!("{}_attach", include_helper_name);
+    let set_helper_name = format_ident!("{}_set", include_helper_name);
+    let detach_helper_name = format_ident!("{}_detach", include_helper_name);
+
+    let attach_doc = format!(
+        "Returns an `M2mWrite::Attach` for the `{}` many-to-many relation.",
+        include_helper_name
+    );
+    let set_doc = format!(
+        "Returns an `M2mWrite::Set` for the `{}` many-to-many relation.",
+        include_helper_name
+    );
+    let detach_doc = format!(
+        "Returns an `M2mWrite::Detach` for the `{}` many-to-many relation.",
+        include_helper_name
+    );
+
+    let join_table = &join_model.table;
+    let join_owner_col = &owner_fk_col_field.column;
+    let join_target_col = &target_fk_col_field.column;
+    let target_table = &target_model.table;
+    let target_pk_col = &target_pk_field.column;
+
+    let m2m_type = quote! {
+        ::ruprizzle::M2mWrite<
+            'static,
+            #model_name,
+            super::#target_module_ident::#target_type,
+            super::#join_module_ident::#join_type,
+        >
+    };
+
+    Some(quote! {
+        #[doc = #query_doc]
+        pub fn #query_helper_name<'__a>(
+            __exec: &'__a dyn ::ruprizzle::Executor,
+            #param_name: #key_type,
+        ) -> ::ruprizzle::SelectQuery<'__a, super::#target_module_ident::#target_type> {
+            let __subquery = ::ruprizzle::SelectQuery::new(__exec)
+                .filter(super::#join_module_ident::#owner_join_const.eq(#param_name))
+                .columns(super::#join_module_ident::#target_join_const);
+            ::ruprizzle::SelectQuery::new(__exec)
+                .filter(super::#target_module_ident::#target_pk_const.in_subquery(__subquery))
+        }
+
+        #[doc = #include_doc]
+        pub fn #include_helper_name() -> ::ruprizzle::IncludeMany<
+            'static,
+            #model_name,
+            super::#target_module_ident::#target_type,
+            super::#join_module_ident::#join_type,
+            #key_type,
+            #ckey_type,
+            (),
+        > {
+            ::ruprizzle::IncludeMany::new(
+                |__row: &#model_name| __row.#owner_pk_field_ident,
+                |__row: &mut #model_name, __loaded: ::ruprizzle::Related<Vec<super::#target_module_ident::#target_type>>| {
+                    __row.#field_ident = __loaded;
+                },
+                |__row: &super::#join_module_ident::#join_type| __row.#owner_fk_field_ident,
+                |__row: &super::#join_module_ident::#join_type| __row.#target_fk_field_ident,
+                |__child: &super::#target_module_ident::#target_type| __child.#target_pk_field_ident,
+                super::#join_module_ident::#owner_join_const,
+                super::#join_module_ident::#target_join_const,
+                super::#target_module_ident::#target_pk_const,
+            )
+        }
+
+        #[doc = #attach_doc]
+        pub fn #attach_helper_name(
+            ids: impl IntoIterator<Item = #ckey_type>,
+        ) -> #m2m_type {
+            ::ruprizzle::M2mWrite::new(
+                ::ruprizzle::M2mAction::Attach,
+                |__row: &#model_name| ::ruprizzle::Encodable::to_value(&__row.#owner_pk_field_ident),
+                #join_table,
+                #join_owner_col,
+                #join_target_col,
+                #target_table,
+                #target_pk_col,
+                ids.into_iter().map(|__id| ::ruprizzle::Encodable::to_value(&__id)).collect(),
+                |__row: &mut #model_name, __loaded: Vec<super::#target_module_ident::#target_type>| {
+                    __row.#field_ident = ::ruprizzle::Related::Loaded(__loaded);
+                },
+            )
+        }
+
+        #[doc = #set_doc]
+        pub fn #set_helper_name(
+            ids: impl IntoIterator<Item = #ckey_type>,
+        ) -> #m2m_type {
+            ::ruprizzle::M2mWrite::new(
+                ::ruprizzle::M2mAction::Set,
+                |__row: &#model_name| ::ruprizzle::Encodable::to_value(&__row.#owner_pk_field_ident),
+                #join_table,
+                #join_owner_col,
+                #join_target_col,
+                #target_table,
+                #target_pk_col,
+                ids.into_iter().map(|__id| ::ruprizzle::Encodable::to_value(&__id)).collect(),
+                |__row: &mut #model_name, __loaded: Vec<super::#target_module_ident::#target_type>| {
+                    __row.#field_ident = ::ruprizzle::Related::Loaded(__loaded);
+                },
+            )
+        }
+
+        #[doc = #detach_doc]
+        pub fn #detach_helper_name(
+            ids: impl IntoIterator<Item = #ckey_type>,
+        ) -> #m2m_type {
+            ::ruprizzle::M2mWrite::new(
+                ::ruprizzle::M2mAction::Detach,
+                |__row: &#model_name| ::ruprizzle::Encodable::to_value(&__row.#owner_pk_field_ident),
+                #join_table,
+                #join_owner_col,
+                #join_target_col,
+                #target_table,
+                #target_pk_col,
+                ids.into_iter().map(|__id| ::ruprizzle::Encodable::to_value(&__id)).collect(),
+                |__row: &mut #model_name, __loaded: Vec<super::#target_module_ident::#target_type>| {
+                    __row.#field_ident = ::ruprizzle::Related::Loaded(__loaded);
+                },
+            )
+        }
+    })
+}
+
 fn emit_relation_filter_helpers(
     schema: &Schema,
     model: &Model,
@@ -1058,6 +1977,9 @@ fn emit_relation_filter_helpers(
 
     let rel_index = rel_ref.resolved?;
     let rel = schema.relations.get(rel_index)?;
+    if rel.kind == RelationKind::ManyToMany {
+        return None;
+    }
     let is_owner = model.name == rel.owner;
 
     let (parent_table, parent_col, child, child_col) = if is_owner {

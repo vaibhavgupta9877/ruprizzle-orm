@@ -1,11 +1,36 @@
 //! End-to-end CRUD round-trip using a live SQLite `Any` pool.
 
-use ruprizzle::{Column, DeleteQuery, InsertQuery, Model, Pool, SelectQuery, UpdateQuery, connect};
+use ruprizzle::{
+    Column, DeleteQuery, Executor, InsertQuery, Model, Pool, SelectQuery, UpdateQuery, connect,
+};
 
-#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct Task {
     id: i64,
     name: String,
+}
+
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Task);
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Task {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            name: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Task {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            name: row.get::<String>(1)?,
+        })
+    }
 }
 
 impl Model for Task {
@@ -19,13 +44,22 @@ async fn fresh_pool() -> Pool {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
-    let url = format!("sqlite:///{}?mode=rwc", file);
+    let driver = if std::env::var("RUPRIZZLE_TEST_RUSQLITE").is_ok() {
+        "&driver=rusqlite"
+    } else {
+        ""
+    };
+    let url = format!("sqlite:///{}?mode=rwc{}", file, driver);
     let pool = connect(&url).await.unwrap();
 
-    sqlx::query("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)"
+            .to_string()
+            .into(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
 
     pool
 }
@@ -116,14 +150,14 @@ async fn transaction_raw_round_trip() {
     let rows_affected = tx
         .execute(
             "INSERT INTO tasks (name) VALUES (?)",
-            vec![ruprizzle::Value::Str("in-tx".into())],
+            &[ruprizzle::Value::Str("in-tx".into())],
         )
         .await
         .unwrap();
     assert_eq!(rows_affected, 1);
 
     let rows: Vec<(i64, String)> = tx
-        .fetch_all("SELECT id, name FROM tasks", vec![])
+        .fetch_all("SELECT id, name FROM tasks", &[])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);

@@ -1,11 +1,305 @@
 //! Connection pool construction and configuration.
 
+use std::str::FromStr;
 use std::time::Duration;
 
+use futures_core::future::BoxFuture;
+use futures_core::stream::BoxStream;
+use ruprizzle_core::ir::Provider;
 use sqlx::any::AnyPoolOptions;
+use sqlx::mysql::MySqlPoolOptions;
+use sqlx::sqlite::SqlitePoolOptions;
 
-/// A `sqlx` pool over the `Any` driver.
-pub type Pool = sqlx::Pool<sqlx::Any>;
+/// An ORM pool that may wrap a native `sqlx` pool or the generic `Any` driver.
+///
+/// `connect`/`connect_with` return native `Pool::Postgres` or `Pool::Sqlite`
+/// pools for their respective URL schemes, and fall back to `Pool::Any` for
+/// other schemes.
+#[derive(Clone, Debug)]
+pub enum Pool {
+    /// Generic `sqlx::Any` pool, chosen by URL scheme.
+    Any(sqlx::Pool<sqlx::Any>),
+    /// Native Postgres pool using `sqlx`.
+    Postgres(sqlx::Pool<sqlx::Postgres>),
+    /// Native SQLite pool.
+    Sqlite(sqlx::Pool<sqlx::Sqlite>),
+    /// Native MySQL / MariaDB pool.
+    Mysql(sqlx::Pool<sqlx::MySql>),
+    /// Native `rusqlite`-backed SQLite pool.
+    #[cfg(feature = "sqlite-rusqlite")]
+    SqliteNative(crate::rusqlite::RusqlitePool),
+    /// Native `tokio-postgres`-backed Postgres pool.
+    #[cfg(feature = "postgres-tokio-postgres")]
+    PostgresNative(crate::tokio_postgres::TokioPostgresPool),
+}
+
+impl Pool {
+    /// Returns the dialect provider for the backend behind this pool.
+    #[must_use]
+    pub fn provider(&self) -> Provider {
+        match self {
+            Pool::Any(any) => {
+                let opts = any.connect_options();
+                let scheme = opts.database_url.scheme();
+                Provider::parse(scheme).unwrap_or(Provider::Postgres)
+            }
+            Pool::Postgres(_) => Provider::Postgres,
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(_) => Provider::Postgres,
+            Pool::Sqlite(_) => Provider::Sqlite,
+            Pool::Mysql(_) => Provider::Mysql,
+            #[cfg(feature = "sqlite-rusqlite")]
+            Pool::SqliteNative(_) => Provider::Sqlite,
+        }
+    }
+
+    /// Begins a new transaction on this pool.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::Sqlx`] if the database cannot begin a transaction.
+    pub async fn begin(&self) -> Result<crate::tx::Tx, crate::Error> {
+        crate::tx::Tx::begin(self).await
+    }
+
+    /// Total connections currently held by the pool.
+    #[must_use]
+    pub fn size(&self) -> u32 {
+        match self {
+            Pool::Any(p) => p.size(),
+            Pool::Postgres(p) => p.size(),
+            Pool::Sqlite(p) => p.size(),
+            Pool::Mysql(p) => p.size(),
+            #[cfg(feature = "sqlite-rusqlite")]
+            Pool::SqliteNative(_) => 0,
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(p) => p.size(),
+        }
+    }
+
+    /// Connections immediately available for checkout.
+    #[must_use]
+    pub fn num_idle(&self) -> usize {
+        match self {
+            Pool::Any(p) => p.num_idle(),
+            Pool::Postgres(p) => p.num_idle(),
+            Pool::Sqlite(p) => p.num_idle(),
+            Pool::Mysql(p) => p.num_idle(),
+            #[cfg(feature = "sqlite-rusqlite")]
+            Pool::SqliteNative(_) => 0,
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(p) => p.num_idle(),
+        }
+    }
+
+    /// Connections currently waiting for a checkout.
+    ///
+    /// `sqlx` pools do not expose this count; they report `0`.
+    #[must_use]
+    pub fn num_waiters(&self) -> usize {
+        match self {
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(p) => p.num_waiters(),
+            _ => 0,
+        }
+    }
+
+    /// Returns the pool's connection options, if this is the `Any` backend.
+    ///
+    /// This is exposed for tests that verify `PoolConfig` propagation.
+    #[must_use]
+    pub fn options(&self) -> Option<&sqlx::pool::PoolOptions<sqlx::Any>> {
+        match self {
+            Pool::Any(any) => Some(any.options()),
+            _ => None,
+        }
+    }
+
+    /// Returns the connection options for a native `sqlx::Postgres` pool, if any.
+    #[must_use]
+    pub fn postgres_options(&self) -> Option<&sqlx::pool::PoolOptions<sqlx::Postgres>> {
+        match self {
+            Pool::Postgres(p) => Some(p.options()),
+            _ => None,
+        }
+    }
+
+    /// Returns the connection options for a native `sqlx::Sqlite` pool, if any.
+    #[must_use]
+    pub fn sqlite_options(&self) -> Option<&sqlx::pool::PoolOptions<sqlx::Sqlite>> {
+        match self {
+            Pool::Sqlite(p) => Some(p.options()),
+            _ => None,
+        }
+    }
+
+    /// Acquires a connection from the `Any` pool.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::NotImplemented`] for native driver-specific pools.
+    /// Use the typed `as_*` accessors to reach those drivers.
+    pub async fn acquire(&self) -> Result<sqlx::pool::PoolConnection<sqlx::Any>, crate::Error> {
+        match self {
+            Pool::Any(any) => any.acquire().await.map_err(crate::Error::Sqlx),
+            _ => Err(crate::Error::NotImplemented),
+        }
+    }
+
+    /// Borrows the wrapped `sqlx::Any` pool, if this is the `Any` backend.
+    ///
+    /// This is a compatibility helper for tests and benchmarks that still want
+    /// to use raw `sqlx` against the `Any` backend.
+    #[must_use]
+    pub fn as_any(&self) -> Option<&sqlx::Pool<sqlx::Any>> {
+        match self {
+            Pool::Any(any) => Some(any),
+            _ => None,
+        }
+    }
+
+    /// Borrows the wrapped `sqlx::Postgres` pool, if any.
+    #[must_use]
+    pub fn as_postgres(&self) -> Option<&sqlx::Pool<sqlx::Postgres>> {
+        match self {
+            Pool::Postgres(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// Borrows the wrapped `sqlx::Sqlite` pool, if any.
+    #[must_use]
+    pub fn as_sqlite(&self) -> Option<&sqlx::Pool<sqlx::Sqlite>> {
+        match self {
+            Pool::Sqlite(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// Borrows the wrapped native `sqlx::MySql` pool, if any.
+    #[must_use]
+    pub fn as_mysql(&self) -> Option<&sqlx::Pool<sqlx::MySql>> {
+        match self {
+            Pool::Mysql(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// Borrows the wrapped native `rusqlite` pool, if any.
+    #[cfg(feature = "sqlite-rusqlite")]
+    #[must_use]
+    pub fn as_rusqlite(&self) -> Option<&crate::rusqlite::RusqlitePool> {
+        match self {
+            Pool::SqliteNative(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// Borrows the wrapped native `tokio-postgres` pool, if any.
+    #[cfg(feature = "postgres-tokio-postgres")]
+    #[must_use]
+    pub fn as_tokio_postgres(&self) -> Option<&crate::tokio_postgres::TokioPostgresPool> {
+        match self {
+            Pool::PostgresNative(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// Closes the pool and waits for all connections to finish.
+    pub async fn close(&self) {
+        tracing::info!(target: "ruprizzle::connection", event = "disconnect", "pool closing");
+        match self {
+            Pool::Any(p) => p.close().await,
+            Pool::Postgres(p) => p.close().await,
+            Pool::Sqlite(p) => p.close().await,
+            Pool::Mysql(p) => p.close().await,
+            #[cfg(feature = "sqlite-rusqlite")]
+            Pool::SqliteNative(_) => (),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(p) => p.close().await,
+        }
+    }
+}
+
+impl<'c> sqlx::Executor<'c> for &'c Pool {
+    type Database = sqlx::Any;
+
+    fn fetch_many<'e, 'q: 'e, E>(
+        self,
+        query: E,
+    ) -> BoxStream<
+        'e,
+        Result<
+            sqlx::Either<
+                <Self::Database as sqlx::Database>::QueryResult,
+                <Self::Database as sqlx::Database>::Row,
+            >,
+            sqlx::Error,
+        >,
+    >
+    where
+        'c: 'e,
+        E: 'q + sqlx::Execute<'q, Self::Database>,
+    {
+        match self {
+            Pool::Any(any) => sqlx::Executor::fetch_many(any, query),
+            _ => Box::pin(futures_util::stream::iter(std::iter::once(Err(
+                sqlx::Error::Protocol(not_any_message().into()),
+            )))),
+        }
+    }
+
+    fn fetch_optional<'e, 'q: 'e, E>(
+        self,
+        query: E,
+    ) -> BoxFuture<'e, Result<Option<<Self::Database as sqlx::Database>::Row>, sqlx::Error>>
+    where
+        'c: 'e,
+        E: 'q + sqlx::Execute<'q, Self::Database>,
+    {
+        match self {
+            Pool::Any(any) => sqlx::Executor::fetch_optional(any, query),
+            _ => Box::pin(futures_util::future::ready(Err(sqlx::Error::Protocol(
+                not_any_message().into(),
+            )))),
+        }
+    }
+
+    fn prepare_with<'e, 'q: 'e>(
+        self,
+        sql: &'q str,
+        parameters: &'e [<Self::Database as sqlx::Database>::TypeInfo],
+    ) -> BoxFuture<'e, Result<<Self::Database as sqlx::Database>::Statement<'q>, sqlx::Error>>
+    where
+        'c: 'e,
+    {
+        match self {
+            Pool::Any(any) => sqlx::Executor::prepare_with(any, sql, parameters),
+            _ => Box::pin(futures_util::future::ready(Err(sqlx::Error::Protocol(
+                not_any_message().into(),
+            )))),
+        }
+    }
+
+    fn describe<'e, 'q: 'e>(
+        self,
+        sql: &'q str,
+    ) -> BoxFuture<'e, Result<sqlx::Describe<Self::Database>, sqlx::Error>>
+    where
+        'c: 'e,
+    {
+        match self {
+            Pool::Any(any) => sqlx::Executor::describe(any, sql),
+            _ => Box::pin(futures_util::future::ready(Err(sqlx::Error::Protocol(
+                not_any_message().into(),
+            )))),
+        }
+    }
+}
+
+fn not_any_message() -> &'static str {
+    "this Pool variant does not support generic sqlx::Any queries; use the typed as_* accessors"
+}
 
 /// Configuration used to build a [`Pool`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,7 +316,41 @@ pub struct PoolConfig {
     /// Maximum connection lifetime; `None` disables recycling by age.
     pub max_lifetime: Option<Duration>,
     /// Whether to test a connection before handing it out.
+    ///
+    /// Defaults to `false` to avoid a per-query ping round-trip (or ~10 µs on
+    /// SQLite). Set `true` when connections are killed between checkouts.
     pub test_before_acquire: bool,
+    /// Whether to reset session state when a connection returns to the pool.
+    ///
+    /// Only meaningful for the native `tokio-postgres` backend, where it
+    /// selects `deadpool`'s `Clean` recycling: temp tables, listens, advisory
+    /// locks, `SET` values and any open transaction are discarded on recycle.
+    ///
+    /// Defaults to `false` because it costs a round trip on every checkout —
+    /// measured at roughly 2× the total per-query latency on a local database
+    /// — and the driver exists to avoid exactly that. Correctness does not
+    /// depend on it: an abandoned transaction is rolled back before its
+    /// connection is released. Turn it on as defence in depth when application
+    /// code sets session state it does not clean up itself.
+    pub reset_on_recycle: bool,
+    /// Number of rows the SQLite driver buffers per prepared statement.
+    ///
+    /// This is only meaningful when `connect`/`connect_with` build a native
+    /// SQLite pool. The default matches `sqlx-sqlite`'s own default.
+    pub row_buffer_size: u32,
+    /// Maximum child-table rows that can be loaded in a single batched `include`
+    /// query before the loader falls back to a chunked `IN (...)` list.
+    ///
+    /// This bounds the full-table fast path so a parent table with millions of
+    /// rows does not cause the loader to materialise and decode the entire child
+    /// table. `None` disables fast-path include loading entirely and always uses
+    /// chunked `IN`. Defaults to `100_000`.
+    pub full_table_include_limit: Option<u64>,
+    /// Duration above which a query emits a `WARN` event with the SQL shape and
+    /// bind count. `None` disables slow-query warnings.
+    ///
+    /// This is a process-wide setting; the last `connect_with` call wins.
+    pub slow_query_threshold: Option<Duration>,
 }
 
 impl Default for PoolConfig {
@@ -33,7 +361,11 @@ impl Default for PoolConfig {
             acquire_timeout: Duration::from_secs(30),
             idle_timeout: Some(Duration::from_secs(600)),
             max_lifetime: Some(Duration::from_secs(1800)),
-            test_before_acquire: true,
+            test_before_acquire: false,
+            reset_on_recycle: false,
+            row_buffer_size: 1024,
+            full_table_include_limit: Some(100_000),
+            slow_query_threshold: None,
         }
     }
 }
@@ -57,17 +389,145 @@ pub async fn connect(url: &str) -> Result<Pool, crate::Error> {
 ///
 /// Returns an error if the URL cannot be parsed or the connection fails.
 pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate::Error> {
+    crate::executor::set_full_table_include_limit(config.full_table_include_limit);
+    crate::executor::set_slow_query_threshold(config.slow_query_threshold);
     sqlx::any::install_default_drivers();
-    AnyPoolOptions::new()
-        .max_connections(config.max_connections)
-        .min_connections(config.min_connections)
-        .acquire_timeout(config.acquire_timeout)
-        .idle_timeout(config.idle_timeout)
-        .max_lifetime(config.max_lifetime)
-        .test_before_acquire(config.test_before_acquire)
-        .connect(url)
-        .await
-        .map_err(Into::into)
+
+    let scheme = url.split(':').next().unwrap_or("");
+
+    tracing::info!(
+        target: "ruprizzle::connection",
+        event = "connect",
+        scheme,
+        "connecting to database"
+    );
+    match scheme {
+        "postgres" | "postgresql" => {
+            #[cfg(feature = "postgres-tokio-postgres")]
+            if url
+                .split_once('?')
+                .is_some_and(|(_, q)| q.contains("driver=tokio-postgres"))
+            {
+                let pool = crate::tokio_postgres::TokioPostgresPool::connect(url, config).await?;
+                return Ok(Pool::PostgresNative(pool));
+            }
+
+            let pool = sqlx::postgres::PgPoolOptions::new()
+                .max_connections(config.max_connections)
+                .min_connections(config.min_connections)
+                .acquire_timeout(config.acquire_timeout)
+                .idle_timeout(config.idle_timeout)
+                .max_lifetime(config.max_lifetime)
+                .test_before_acquire(config.test_before_acquire)
+                .after_connect(|_conn, _meta| {
+                    Box::pin(async move {
+                        tracing::info!(
+                            target: "ruprizzle::connection",
+                            event = "connect",
+                            backend = "postgres",
+                            "sqlx connection opened"
+                        );
+                        Ok(())
+                    })
+                })
+                .connect(url)
+                .await
+                .map_err(crate::Error::Sqlx)?;
+            Ok(Pool::Postgres(pool))
+        }
+        "mysql" | "mariadb" => {
+            let pool = MySqlPoolOptions::new()
+                .max_connections(config.max_connections)
+                .min_connections(config.min_connections)
+                .acquire_timeout(config.acquire_timeout)
+                .idle_timeout(config.idle_timeout)
+                .max_lifetime(config.max_lifetime)
+                .test_before_acquire(config.test_before_acquire)
+                .after_connect(|_conn, _meta| {
+                    Box::pin(async move {
+                        tracing::info!(
+                            target: "ruprizzle::connection",
+                            event = "connect",
+                            backend = "mysql",
+                            "sqlx connection opened"
+                        );
+                        Ok(())
+                    })
+                })
+                .connect(url)
+                .await
+                .map_err(crate::Error::Sqlx)?;
+            Ok(Pool::Mysql(pool))
+        }
+        "sqlite" => {
+            #[cfg(feature = "sqlite-rusqlite")]
+            if url
+                .split_once('?')
+                .is_some_and(|(_, q)| q.contains("driver=rusqlite"))
+            {
+                let pool = crate::rusqlite::RusqlitePool::connect(url, config).await?;
+                return Ok(Pool::SqliteNative(pool));
+            }
+
+            let mut connect_opts =
+                sqlx::sqlite::SqliteConnectOptions::from_str(url).map_err(crate::Error::Sqlx)?;
+            connect_opts = connect_opts
+                .row_buffer_size(config.row_buffer_size as usize)
+                .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+                .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+                .statement_cache_capacity(256)
+                .pragma("cache_size", "-64000")
+                .pragma("mmap_size", "268435456")
+                .pragma("temp_store", "MEMORY");
+
+            let pool = SqlitePoolOptions::new()
+                .max_connections(config.max_connections)
+                .min_connections(config.min_connections)
+                .acquire_timeout(config.acquire_timeout)
+                .idle_timeout(config.idle_timeout)
+                .max_lifetime(config.max_lifetime)
+                .test_before_acquire(config.test_before_acquire)
+                .after_connect(|_conn, _meta| {
+                    Box::pin(async move {
+                        tracing::info!(
+                            target: "ruprizzle::connection",
+                            event = "connect",
+                            backend = "sqlite",
+                            "sqlx connection opened"
+                        );
+                        Ok(())
+                    })
+                })
+                .connect_with(connect_opts)
+                .await
+                .map_err(crate::Error::Sqlx)?;
+            Ok(Pool::Sqlite(pool))
+        }
+        _ => {
+            let pool = AnyPoolOptions::new()
+                .max_connections(config.max_connections)
+                .min_connections(config.min_connections)
+                .acquire_timeout(config.acquire_timeout)
+                .idle_timeout(config.idle_timeout)
+                .max_lifetime(config.max_lifetime)
+                .test_before_acquire(config.test_before_acquire)
+                .after_connect(|_conn, _meta| {
+                    Box::pin(async move {
+                        tracing::info!(
+                            target: "ruprizzle::connection",
+                            event = "connect",
+                            backend = "any",
+                            "sqlx connection opened"
+                        );
+                        Ok(())
+                    })
+                })
+                .connect(url)
+                .await
+                .map_err(crate::Error::Sqlx)?;
+            Ok(Pool::Any(pool))
+        }
+    }
 }
 
 /// Point-in-time pool saturation data for metrics endpoints.
@@ -80,6 +540,8 @@ pub struct PoolStats {
     pub idle: usize,
     /// Connections currently checked out.
     pub in_use: usize,
+    /// Connections waiting to be checked out.
+    pub waiters: usize,
 }
 
 /// Samples the current pool saturation.
@@ -87,11 +549,32 @@ pub struct PoolStats {
 pub fn stats(pool: &Pool) -> PoolStats {
     let size = pool.size();
     let idle = pool.num_idle();
+    let waiters = pool.num_waiters();
     PoolStats {
         size,
         idle,
         in_use: (size as usize).saturating_sub(idle),
+        waiters,
     }
+}
+
+/// Emits pool saturation as `metrics` gauges.
+///
+/// This can be called by users with a `metrics` recorder installed to update
+/// the current pool snapshot. When the `metrics` feature is disabled it is a
+/// no-op and simply returns the sampled stats.
+#[must_use]
+pub fn report_metrics(pool: &Pool) -> PoolStats {
+    let s = stats(pool);
+    #[cfg(feature = "metrics")]
+    {
+        use crate::metrics::{POOL_IDLE, POOL_IN_USE, POOL_SIZE, POOL_WAITERS, gauge};
+        gauge(POOL_SIZE, s.size as f64);
+        gauge(POOL_IDLE, s.idle as f64);
+        gauge(POOL_IN_USE, s.in_use as f64);
+        gauge(POOL_WAITERS, s.waiters as f64);
+    }
+    s
 }
 
 /// Checks database reachability for readiness probes.
@@ -100,9 +583,7 @@ pub fn stats(pool: &Pool) -> PoolStats {
 ///
 /// Returns an error if a connection cannot be acquired or `SELECT 1` fails.
 pub async fn ping(pool: &Pool) -> Result<(), crate::Error> {
-    sqlx::query("SELECT 1")
-        .execute(pool)
+    crate::executor::Executor::execute_raw(pool, std::borrow::Cow::from("SELECT 1"), Vec::new())
         .await
         .map(|_| ())
-        .map_err(Into::into)
 }

@@ -11,138 +11,717 @@
 //! what keeps it object-safe, and object safety is what makes the pool/tx
 //! substitution possible at all.
 
+use std::borrow::Cow;
+
 use ruprizzle_dialect::DbDialect;
 use sqlx::any::AnyRow;
+use sqlx::mysql::MySqlRow;
+use sqlx::postgres::PgRow;
+use sqlx::sqlite::SqliteRow;
+
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
+
+static FULL_TABLE_INCLUDE_LIMIT: AtomicU64 = AtomicU64::new(100_000);
+static SLOW_QUERY_THRESHOLD_NS: AtomicU64 = AtomicU64::new(0);
+
+/// Sets the duration above which a query is logged as a slow query.
+///
+/// `None` disables the warning.
+pub fn set_slow_query_threshold(threshold: Option<Duration>) {
+    let ns = threshold.map_or(0, |d| d.as_nanos() as u64);
+    SLOW_QUERY_THRESHOLD_NS.store(ns, Ordering::Relaxed);
+}
+
+/// Returns the current slow-query threshold, if any.
+#[must_use]
+pub fn slow_query_threshold() -> Option<Duration> {
+    let ns = SLOW_QUERY_THRESHOLD_NS.load(Ordering::Relaxed);
+    if ns == 0 {
+        None
+    } else {
+        Some(Duration::from_nanos(ns))
+    }
+}
+
+/// Sets the process-wide full-table include limit.
+///
+/// `0` (or `None`) disables the fast path entirely.
+pub(crate) fn set_full_table_include_limit(limit: Option<u64>) {
+    FULL_TABLE_INCLUDE_LIMIT.store(limit.unwrap_or(0), Ordering::Relaxed);
+}
+
+fn full_table_include_limit() -> u64 {
+    FULL_TABLE_INCLUDE_LIMIT.load(Ordering::Relaxed)
+}
 
 use crate::BoxFuture;
 use crate::error::Error;
 use crate::pool::Pool;
 use crate::value::Value;
 
+/// A batch of rows returned by an executor, before `FromRow` decoding.
+///
+/// `Executor` is object-safe, so it cannot be generic over the row type.
+/// Returning a backend-tagged batch lets the same trait object carry `AnyRow`,
+/// `PgRow`, or `SqliteRow` rows, and the caller decodes with the matching
+/// `FromRow` implementation.
+#[non_exhaustive]
+pub enum RowBatch {
+    /// Rows from the generic `sqlx::Any` driver.
+    Any(Vec<AnyRow>),
+    /// Rows from the native Postgres driver.
+    Postgres(Vec<PgRow>),
+    /// Rows from the native SQLite driver.
+    Sqlite(Vec<SqliteRow>),
+    /// Rows from the native MySQL / MariaDB driver.
+    Mysql(Vec<MySqlRow>),
+    /// Rows from the native `rusqlite` backend.
+    #[cfg(feature = "sqlite-rusqlite")]
+    Rusqlite(Vec<crate::rusqlite::Row>),
+    /// Rows from the native `tokio-postgres` backend.
+    #[cfg(feature = "postgres-tokio-postgres")]
+    PostgresNative(Vec<tokio_postgres::Row>),
+}
+
+impl RowBatch {
+    /// Returns `true` if the batch contains no rows.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Any(rows) => rows.is_empty(),
+            Self::Postgres(rows) => rows.is_empty(),
+            Self::Sqlite(rows) => rows.is_empty(),
+            Self::Mysql(rows) => rows.is_empty(),
+            #[cfg(feature = "sqlite-rusqlite")]
+            Self::Rusqlite(rows) => rows.is_empty(),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Self::PostgresNative(rows) => rows.is_empty(),
+        }
+    }
+
+    /// Returns the number of rows in the batch.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Any(rows) => rows.len(),
+            Self::Postgres(rows) => rows.len(),
+            Self::Sqlite(rows) => rows.len(),
+            Self::Mysql(rows) => rows.len(),
+            #[cfg(feature = "sqlite-rusqlite")]
+            Self::Rusqlite(rows) => rows.len(),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Self::PostgresNative(rows) => rows.len(),
+        }
+    }
+
+    /// Merges another batch of the same backend into this one.
+    ///
+    /// Used by nested `INSERT ... RETURNING` to accumulate child rows across
+    /// parameter-limit chunks.
+    pub fn merge(&mut self, other: Self) -> Result<(), Error> {
+        match (self, other) {
+            (Self::Any(a), Self::Any(b)) => a.extend(b),
+            (Self::Postgres(a), Self::Postgres(b)) => a.extend(b),
+            (Self::Sqlite(a), Self::Sqlite(b)) => a.extend(b),
+            (Self::Mysql(a), Self::Mysql(b)) => a.extend(b),
+            #[cfg(feature = "sqlite-rusqlite")]
+            (Self::Rusqlite(a), Self::Rusqlite(b)) => a.extend(b),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            (Self::PostgresNative(a), Self::PostgresNative(b)) => a.extend(b),
+            _ => {
+                return Err(Error::Message(
+                    "cannot merge row batches from different backends".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for RowBatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Any(rows) => f.debug_tuple("Any").field(&rows.len()).finish(),
+            Self::Postgres(rows) => f.debug_tuple("Postgres").field(&rows.len()).finish(),
+            Self::Sqlite(rows) => f.debug_tuple("Sqlite").field(&rows.len()).finish(),
+            Self::Mysql(rows) => f.debug_tuple("Mysql").field(&rows.len()).finish(),
+            #[cfg(feature = "sqlite-rusqlite")]
+            Self::Rusqlite(rows) => f.debug_tuple("Rusqlite").field(&rows.len()).finish(),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Self::PostgresNative(rows) => {
+                f.debug_tuple("PostgresNative").field(&rows.len()).finish()
+            }
+        }
+    }
+}
+
 /// Something that can run SQL: a connection pool or an open transaction.
 pub trait Executor: Send + Sync {
     /// The dialect for the backend behind this executor.
     ///
     /// Query compilation needs this to pick identifier quoting and placeholder
-    /// syntax, so it must be answerable without touching the database.
-    fn dialect(&self) -> Box<dyn DbDialect>;
+    /// syntax, so it must be answerable without touching the database. The
+    /// reference is tied to the executor, which typically caches a `'static`
+    /// dialect internally.
+    fn dialect(&self) -> &dyn DbDialect;
+
+    /// Maximum child-table rows the include loader may load in one query when
+    /// using the full-table fast path.
+    ///
+    /// A value of `0` disables the fast path and forces chunked `IN (...)`. The
+    /// default is `100_000` and is configured through `PoolConfig`.
+    fn full_table_include_limit(&self) -> u64 {
+        full_table_include_limit()
+    }
 
     /// Runs a query and returns the raw rows.
     ///
-    /// Takes the SQL by value: the returned future outlives the call, so
-    /// borrowing the query text would force every caller into a
-    /// self-referential struct. One allocation per statement is irrelevant
-    /// beside a database round trip.
+    /// `sql` is a [`Cow`] so callers with an owned `String` can pass it without
+    /// an extra clone, while the executor can still borrow the text to hand to
+    /// `sqlx`. The returned future owns the `Cow` and the binds.
     fn fetch_all_raw(
         &self,
-        sql: String,
+        sql: Cow<'static, str>,
         binds: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<AnyRow>, Error>>;
+    ) -> BoxFuture<'_, Result<RowBatch, Error>>;
 
     /// Runs a statement and returns the number of affected rows.
-    fn execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>>;
+    fn execute_raw(
+        &self,
+        sql: Cow<'static, str>,
+        binds: Vec<Value>,
+    ) -> BoxFuture<'_, Result<u64, Error>>;
 
-    /// Runs a query and yields rows as they arrive.
-    fn stream_raw(&self, sql: String, binds: Vec<Value>) -> BoxRowStream<'_>;
+    /// Runs a query and yields decoded rows from a buffered result set.
+    ///
+    /// This deliberately fetches all rows first and then streams them. A true
+    /// cursor is slower on `sqlx-sqlite` (see `docs/BenchmarkResults.md`).
+    fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_>;
+
+    /// Runs a query and yields rows as the database produces them.
+    ///
+    /// The default implementation falls back to `stream_raw`. Backends that
+    /// support true streaming override this to avoid materialising the whole
+    /// result set in memory.
+    fn stream_unbuffered_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
+        self.stream_raw(sql, binds)
+    }
+
+    /// Optional hook called right before a query is executed.
+    ///
+    /// The default is a no-op; wrappers such as [`CountingExecutor`](crate::CountingExecutor) override it
+    /// to record the statement when the caller takes a backend-specific fast
+    /// path.
+    fn on_query(&self) {}
+
+    /// Returns the underlying [`rusqlite::RusqlitePool`] if this executor is
+    /// backed by the native `rusqlite` backend.
+    ///
+    /// Used by query builders to take a direct, single-pass decode path on
+    /// SQLite. Returns `None` by default.
+    #[cfg(feature = "sqlite-rusqlite")]
+    fn as_rusqlite(&self) -> Option<&crate::rusqlite::RusqlitePool> {
+        None
+    }
+}
+
+/// A single raw row from any backend.
+///
+/// Streaming keeps the executor object-safe by returning an untyped row that the
+/// caller decodes with the matching `FromRow` implementation.
+#[non_exhaustive]
+pub enum RawRow {
+    /// A row from the generic `sqlx::Any` driver.
+    Any(AnyRow),
+    /// A row from the native Postgres driver.
+    Postgres(PgRow),
+    /// A row from the native SQLite driver.
+    Sqlite(SqliteRow),
+    /// A row from the native MySQL / MariaDB driver.
+    Mysql(MySqlRow),
+    /// A row from the native `rusqlite` backend.
+    #[cfg(feature = "sqlite-rusqlite")]
+    Rusqlite(crate::rusqlite::Row),
+    /// A row from the native `tokio-postgres` backend.
+    #[cfg(feature = "postgres-tokio-postgres")]
+    PostgresNative(tokio_postgres::Row),
 }
 
 /// A boxed stream of raw rows.
 pub type BoxRowStream<'a> =
-    std::pin::Pin<Box<dyn futures_core::Stream<Item = Result<AnyRow, Error>> + Send + 'a>>;
+    std::pin::Pin<Box<dyn futures_core::Stream<Item = Result<RawRow, Error>> + Send + 'a>>;
+
+/// Observes a completed `fut` for metrics, debug tracing, and slow-query warnings.
+///
+/// This is the single place where query execution is observed so that pools and
+/// transactions cannot drift. `sql` is logged by shape only; `binds` is the
+/// placeholder count, never the values.
+pub(crate) async fn trace_and_record_query<F>(
+    sql: Cow<'static, str>,
+    bind_count: usize,
+    fut: F,
+) -> Result<RowBatch, Error>
+where
+    F: std::future::Future<Output = Result<RowBatch, Error>>,
+{
+    crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
+    let started = std::time::Instant::now();
+    let result = fut.await;
+    let elapsed = started.elapsed();
+    crate::metrics::histogram(
+        crate::metrics::QUERY_DURATION_SECONDS,
+        elapsed.as_secs_f64(),
+    );
+    if let Err(error) = &result {
+        crate::metrics::counter_with(
+            crate::metrics::QUERY_ERRORS_TOTAL,
+            [("kind", error.kind())],
+            1,
+        );
+        emit_connection_events(error);
+    }
+
+    if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
+        let elapsed_ms = elapsed.as_millis() as u64;
+        match &result {
+            Ok(batch) => tracing::debug!(
+                target: "ruprizzle::query",
+                sql = %sql,
+                binds = bind_count,
+                rows = batch.len(),
+                elapsed_ms,
+                "query"
+            ),
+            Err(error) => tracing::warn!(
+                target: "ruprizzle::query",
+                sql = %sql,
+                binds = bind_count,
+                elapsed_ms,
+                error = error.kind(),
+                "query failed"
+            ),
+        }
+    }
+
+    if let Some(threshold) = slow_query_threshold() {
+        if elapsed > threshold {
+            tracing::warn!(
+                target: "ruprizzle::slow_query",
+                sql = %sql,
+                binds = bind_count,
+                elapsed_ms = elapsed.as_millis(),
+                "slow query"
+            );
+        }
+    }
+
+    result
+}
+
+/// Observes a completed execute `fut` for metrics, debug tracing, and slow-query warnings.
+pub(crate) async fn trace_and_record_execute<F>(
+    sql: Cow<'static, str>,
+    bind_count: usize,
+    fut: F,
+) -> Result<u64, Error>
+where
+    F: std::future::Future<Output = Result<u64, Error>>,
+{
+    crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
+    let started = std::time::Instant::now();
+    let result = fut.await;
+    let elapsed = started.elapsed();
+    crate::metrics::histogram(
+        crate::metrics::QUERY_DURATION_SECONDS,
+        elapsed.as_secs_f64(),
+    );
+    if let Err(error) = &result {
+        crate::metrics::counter_with(
+            crate::metrics::QUERY_ERRORS_TOTAL,
+            [("kind", error.kind())],
+            1,
+        );
+        emit_connection_events(error);
+    }
+
+    if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
+        let elapsed_ms = elapsed.as_millis() as u64;
+        match &result {
+            Ok(rows_affected) => tracing::debug!(
+                target: "ruprizzle::query",
+                sql = %sql,
+                binds = bind_count,
+                rows_affected,
+                elapsed_ms,
+                "execute"
+            ),
+            Err(error) => tracing::warn!(
+                target: "ruprizzle::query",
+                sql = %sql,
+                binds = bind_count,
+                elapsed_ms,
+                error = error.kind(),
+                "execute failed"
+            ),
+        }
+    }
+
+    if let Some(threshold) = slow_query_threshold() {
+        if elapsed > threshold {
+            tracing::warn!(
+                target: "ruprizzle::slow_query",
+                sql = %sql,
+                binds = bind_count,
+                elapsed_ms = elapsed.as_millis(),
+                "slow query"
+            );
+        }
+    }
+
+    result
+}
+
+/// Emit connection lifecycle tracing for error categories that represent the
+/// pool or network rather than the SQL.
+pub(crate) fn emit_connection_events(error: &crate::Error) {
+    match error {
+        crate::Error::AcquireTimeout { reason } => {
+            tracing::warn!(
+                target: "ruprizzle::connection",
+                event = "acquire_timeout",
+                reason,
+                "connection acquire timed out"
+            );
+        }
+        crate::Error::ConnectionFailure { reason } => {
+            tracing::warn!(
+                target: "ruprizzle::connection",
+                event = "disconnect",
+                reason,
+                "connection lost"
+            );
+        }
+        crate::Error::PoolExhausted { backend } => {
+            tracing::warn!(
+                target: "ruprizzle::connection",
+                event = "acquire_timeout",
+                backend,
+                "connection pool exhausted"
+            );
+        }
+        _ => {}
+    }
+}
+
+/// Resolves a pending fetch, then yields its rows one at a time.
+///
+/// Both executors currently buffer: a `Tx` must, because it owns one connection
+/// behind a mutex and an open cursor would block every other statement on the
+/// transaction. The `Pool` shares this path so the two cannot drift; swapping
+/// it for a true incremental cursor is a `Pool`-only change behind this type.
+pub(crate) struct DeferredRowStream<'a> {
+    fut: crate::BoxFuture<'a, Result<RowBatch, Error>>,
+    done: bool,
+    buffered: std::vec::IntoIter<RawRow>,
+}
+
+impl<'a> DeferredRowStream<'a> {
+    pub(crate) fn new(fut: crate::BoxFuture<'a, Result<RowBatch, Error>>) -> Self {
+        Self {
+            fut,
+            done: false,
+            buffered: Vec::new().into_iter(),
+        }
+    }
+}
+
+impl futures_core::Stream for DeferredRowStream<'_> {
+    type Item = Result<RawRow, Error>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        use std::task::Poll;
+
+        let this = self.get_mut();
+
+        if !this.done {
+            match this.fut.as_mut().poll(cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Err(e)) => {
+                    this.done = true;
+                    return Poll::Ready(Some(Err(e)));
+                }
+                Poll::Ready(Ok(batch)) => {
+                    this.done = true;
+                    this.buffered = match batch {
+                        RowBatch::Any(rows) => {
+                            rows.into_iter().map(RawRow::Any).collect::<Vec<_>>()
+                        }
+                        RowBatch::Postgres(rows) => {
+                            rows.into_iter().map(RawRow::Postgres).collect::<Vec<_>>()
+                        }
+                        RowBatch::Sqlite(rows) => {
+                            rows.into_iter().map(RawRow::Sqlite).collect::<Vec<_>>()
+                        }
+                        RowBatch::Mysql(rows) => {
+                            rows.into_iter().map(RawRow::Mysql).collect::<Vec<_>>()
+                        }
+                        #[cfg(feature = "sqlite-rusqlite")]
+                        RowBatch::Rusqlite(rows) => {
+                            rows.into_iter().map(RawRow::Rusqlite).collect::<Vec<_>>()
+                        }
+                        #[cfg(feature = "postgres-tokio-postgres")]
+                        RowBatch::PostgresNative(rows) => rows
+                            .into_iter()
+                            .map(RawRow::PostgresNative)
+                            .collect::<Vec<_>>(),
+                    }
+                    .into_iter();
+                }
+            }
+        }
+
+        Poll::Ready(this.buffered.next().map(Ok))
+    }
+}
 
 impl Executor for Pool {
-    fn dialect(&self) -> Box<dyn DbDialect> {
+    fn dialect(&self) -> &dyn DbDialect {
         crate::compile::dialect_for_pool(self)
+    }
+
+    #[cfg(feature = "sqlite-rusqlite")]
+    fn as_rusqlite(&self) -> Option<&crate::rusqlite::RusqlitePool> {
+        match self {
+            Pool::SqliteNative(p) => Some(p),
+            _ => None,
+        }
     }
 
     fn fetch_all_raw(
         &self,
-        sql: String,
+        sql: Cow<'static, str>,
         binds: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<AnyRow>, Error>> {
-        Box::pin(async move {
-            let bind_count = binds.len();
-            let started = std::time::Instant::now();
-            let mut q = sqlx::query::<sqlx::Any>(&sql);
-            for bind in binds {
-                q = q.bind(bind);
-            }
-            let result = q.fetch_all(self).await.map_err(Error::from);
-            let elapsed_ms = started.elapsed().as_millis() as u64;
-            match &result {
-                Ok(rows) => tracing::debug!(
-                    target: "ruprizzle::query",
-                    sql = %sql,
-                    binds = bind_count,
-                    rows = rows.len(),
-                    elapsed_ms,
-                    "query"
-                ),
-                Err(error) => tracing::warn!(
-                    target: "ruprizzle::query",
-                    sql = %sql,
-                    binds = bind_count,
-                    elapsed_ms,
-                    error = error.kind(),
-                    "query failed"
-                ),
-            }
-            result
-        })
+    ) -> BoxFuture<'_, Result<RowBatch, Error>> {
+        let bind_count = binds.len();
+        let pool = self.clone();
+        Box::pin(trace_and_record_query(
+            sql.clone(),
+            bind_count,
+            async move { dispatch_raw_query(&pool, sql, binds).await },
+        ))
     }
 
-    fn execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>> {
-        Box::pin(async move {
-            let bind_count = binds.len();
-            let started = std::time::Instant::now();
-            let mut q = sqlx::query::<sqlx::Any>(&sql);
-            for bind in binds {
-                q = q.bind(bind);
-            }
-            let result = q
-                .execute(self)
-                .await
-                .map(|result| result.rows_affected())
-                .map_err(Error::from);
-            let elapsed_ms = started.elapsed().as_millis() as u64;
-            match &result {
-                Ok(rows_affected) => tracing::debug!(
-                    target: "ruprizzle::query",
-                    sql = %sql,
-                    binds = bind_count,
-                    rows_affected,
-                    elapsed_ms,
-                    "execute"
-                ),
-                Err(error) => tracing::warn!(
-                    target: "ruprizzle::query",
-                    sql = %sql,
-                    binds = bind_count,
-                    elapsed_ms,
-                    error = error.kind(),
-                    "execute failed"
-                ),
-            }
-            result
-        })
+    fn execute_raw(
+        &self,
+        sql: Cow<'static, str>,
+        binds: Vec<Value>,
+    ) -> BoxFuture<'_, Result<u64, Error>> {
+        let bind_count = binds.len();
+        let pool = self.clone();
+        Box::pin(trace_and_record_execute(
+            sql.clone(),
+            bind_count,
+            async move { dispatch_raw_execute(&pool, sql, binds).await },
+        ))
     }
 
-    fn stream_raw(&self, sql: String, binds: Vec<Value>) -> BoxRowStream<'_> {
-        Box::pin(crate::tx::DeferredRowStream::new(Box::pin(async move {
+    fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
+        Box::pin(DeferredRowStream::new(Box::pin(async move {
             self.fetch_all_raw(sql, binds).await
         })))
     }
+
+    fn stream_unbuffered_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
+        let sql: &'static str = match sql {
+            Cow::Borrowed(s) => s,
+            Cow::Owned(s) => Box::leak(s.into_boxed_str()),
+        };
+        let binds: &'static [Value] = Box::leak(binds.into_boxed_slice());
+
+        match self {
+            Pool::Any(p) => {
+                let mut q = sqlx::query::<sqlx::Any>(sql);
+                for bind in binds {
+                    q = q.bind(bind);
+                }
+                Box::pin(futures_util::StreamExt::map(q.fetch(p), |r| {
+                    r.map(RawRow::Any).map_err(Error::from)
+                }))
+            }
+            Pool::Postgres(p) => {
+                let mut q = sqlx::query::<sqlx::Postgres>(sql);
+                for bind in binds {
+                    q = q.bind(bind);
+                }
+                Box::pin(futures_util::StreamExt::map(q.fetch(p), |r| {
+                    r.map(RawRow::Postgres).map_err(Error::from)
+                }))
+            }
+            Pool::Sqlite(p) => {
+                let mut q = sqlx::query::<sqlx::Sqlite>(sql);
+                for bind in binds {
+                    q = q.bind(bind);
+                }
+                Box::pin(futures_util::StreamExt::map(q.fetch(p), |r| {
+                    r.map(RawRow::Sqlite).map_err(Error::from)
+                }))
+            }
+            Pool::Mysql(p) => {
+                let mut q = sqlx::query::<sqlx::MySql>(sql);
+                for bind in binds {
+                    q = q.bind(bind);
+                }
+                Box::pin(futures_util::StreamExt::map(q.fetch(p), |r| {
+                    r.map(RawRow::Mysql).map_err(Error::from)
+                }))
+            }
+            #[cfg(feature = "sqlite-rusqlite")]
+            Pool::SqliteNative(p) => Executor::stream_raw(p, Cow::Borrowed(sql), binds.to_vec()),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(p) => {
+                Executor::stream_unbuffered_raw(p, Cow::Borrowed(sql), binds.to_vec())
+            }
+        }
+    }
 }
 
-/// Decodes raw rows into a `FromRow` type.
+async fn dispatch_raw_query(
+    pool: &Pool,
+    sql: Cow<'static, str>,
+    binds: Vec<Value>,
+) -> Result<RowBatch, Error> {
+    match pool {
+        Pool::Any(p) => {
+            let mut q = sqlx::query::<sqlx::Any>(&sql);
+            for bind in &binds {
+                q = q.bind(bind);
+            }
+            q.fetch_all(p).await.map(RowBatch::Any).map_err(Error::from)
+        }
+        Pool::Postgres(p) => {
+            let mut q = sqlx::query::<sqlx::Postgres>(&sql);
+            for bind in &binds {
+                q = q.bind(bind);
+            }
+            q.fetch_all(p)
+                .await
+                .map(RowBatch::Postgres)
+                .map_err(Error::from)
+        }
+        Pool::Sqlite(p) => {
+            let mut q = sqlx::query::<sqlx::Sqlite>(&sql);
+            for bind in &binds {
+                q = q.bind(bind);
+            }
+            q.fetch_all(p)
+                .await
+                .map(RowBatch::Sqlite)
+                .map_err(Error::from)
+        }
+        Pool::Mysql(p) => {
+            let mut q = sqlx::query::<sqlx::MySql>(&sql);
+            for bind in &binds {
+                q = q.bind(bind);
+            }
+            q.fetch_all(p)
+                .await
+                .map(RowBatch::Mysql)
+                .map_err(Error::from)
+        }
+        #[cfg(feature = "sqlite-rusqlite")]
+        Pool::SqliteNative(p) => Executor::fetch_all_raw(p, sql, binds).await,
+        #[cfg(feature = "postgres-tokio-postgres")]
+        Pool::PostgresNative(p) => Executor::fetch_all_raw(p, sql, binds).await,
+    }
+}
+
+async fn dispatch_raw_execute(
+    pool: &Pool,
+    sql: Cow<'static, str>,
+    binds: Vec<Value>,
+) -> Result<u64, Error> {
+    match pool {
+        Pool::Any(p) => {
+            let mut q = sqlx::query::<sqlx::Any>(&sql);
+            for bind in &binds {
+                q = q.bind(bind);
+            }
+            q.execute(p)
+                .await
+                .map(|r| r.rows_affected())
+                .map_err(Error::from)
+        }
+        Pool::Postgres(p) => {
+            let mut q = sqlx::query::<sqlx::Postgres>(&sql);
+            for bind in &binds {
+                q = q.bind(bind);
+            }
+            q.execute(p)
+                .await
+                .map(|r| r.rows_affected())
+                .map_err(Error::from)
+        }
+        Pool::Sqlite(p) => {
+            let mut q = sqlx::query::<sqlx::Sqlite>(&sql);
+            for bind in &binds {
+                q = q.bind(bind);
+            }
+            q.execute(p)
+                .await
+                .map(|r| r.rows_affected())
+                .map_err(Error::from)
+        }
+        Pool::Mysql(p) => {
+            let mut q = sqlx::query::<sqlx::MySql>(&sql);
+            for bind in &binds {
+                q = q.bind(bind);
+            }
+            q.execute(p)
+                .await
+                .map(|r| r.rows_affected())
+                .map_err(Error::from)
+        }
+        #[cfg(feature = "sqlite-rusqlite")]
+        Pool::SqliteNative(p) => Executor::execute_raw(p, sql, binds).await,
+        #[cfg(feature = "postgres-tokio-postgres")]
+        Pool::PostgresNative(p) => Executor::execute_raw(p, sql, binds).await,
+    }
+}
+
+/// Decodes a batch of raw rows into a `FromRow` type.
 ///
 /// Shared by every builder so that the pool and transaction paths cannot drift
 /// apart in how they decode.
-pub(crate) fn decode_rows<T>(rows: Vec<AnyRow>) -> Result<Vec<T>, Error>
+pub fn decode_rows<T>(batch: RowBatch) -> Result<Vec<T>, Error>
 where
-    T: for<'r> sqlx::FromRow<'r, AnyRow>,
+    T: crate::model::RowDecode,
 {
-    rows.iter()
-        .map(|r| T::from_row(r).map_err(Error::Sqlx))
-        .collect()
+    match batch {
+        RowBatch::Any(rows) => rows
+            .iter()
+            .map(|r| T::from_row(r).map_err(Error::Sqlx))
+            .collect(),
+        RowBatch::Postgres(rows) => rows
+            .iter()
+            .map(|r| T::from_row(r).map_err(Error::Sqlx))
+            .collect(),
+        RowBatch::Sqlite(rows) => rows
+            .iter()
+            .map(|r| T::from_row(r).map_err(Error::Sqlx))
+            .collect(),
+        RowBatch::Mysql(rows) => rows
+            .iter()
+            .map(|r| T::from_row(r).map_err(Error::Sqlx))
+            .collect(),
+        #[cfg(feature = "sqlite-rusqlite")]
+        RowBatch::Rusqlite(rows) => rows.iter().map(|r| T::from_owned_row(r)).collect(),
+        #[cfg(feature = "postgres-tokio-postgres")]
+        RowBatch::PostgresNative(rows) => {
+            rows.iter().map(|r| T::from_tokio_postgres_row(r)).collect()
+        }
+    }
 }

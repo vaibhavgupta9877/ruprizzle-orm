@@ -26,13 +26,198 @@ pub struct Post {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Post {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
-            title: ::ruprizzle::decode::direct::<String>(row, "title")?,
-            body: ::ruprizzle::decode::direct_opt::<String>(row, "body")?,
-            published: ::ruprizzle::decode::boolean(row, "published")?,
-            author_id: ::ruprizzle::decode::text::<Uuid>(row, "author_id")?,
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            title: ::ruprizzle::decode::direct_idx(row, 1)?,
+            body: ::ruprizzle::decode::direct_opt_idx(row, 2)?,
+            published: ::ruprizzle::decode::boolean_idx(row, 3)?,
+            author_id: ::ruprizzle::decode::text_idx(row, 4)?,
             author: ::ruprizzle::Related::default(),
-            created_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "created_at")?,
+            created_at: ::ruprizzle::decode::text_idx(row, 5)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow> for Post {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::postgres::PgRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            title: ::ruprizzle::decode::direct_idx(row, 1)?,
+            body: ::ruprizzle::decode::direct_opt_idx(row, 2)?,
+            published: ::ruprizzle::decode::boolean_idx(row, 3)?,
+            author_id: ::ruprizzle::decode::text_idx(row, 4)?,
+            author: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 5)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow> for Post {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            title: ::ruprizzle::decode::direct_idx(row, 1)?,
+            body: ::ruprizzle::decode::direct_opt_idx(row, 2)?,
+            published: ::ruprizzle::decode::boolean_idx(row, 3)?,
+            author_id: ::ruprizzle::decode::text_idx(row, 4)?,
+            author: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 5)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow> for Post {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::mysql::MySqlRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            title: ::ruprizzle::decode::direct_idx(row, 1)?,
+            body: ::ruprizzle::decode::direct_opt_idx(row, 2)?,
+            published: ::ruprizzle::decode::boolean_idx(row, 3)?,
+            author_id: ::ruprizzle::decode::text_idx(row, 4)?,
+            author: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 5)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<AnyRow> for Post {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, AnyRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            title: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
+            body: ::ruprizzle::decode::direct_opt_idx(row, 2 + __offset)?,
+            published: ::ruprizzle::decode::boolean_idx(row, 3 + __offset)?,
+            author_id: ::ruprizzle::decode::text_idx(row, 4 + __offset)?,
+            author: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 5 + __offset)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::postgres::PgRow> for Post {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::postgres::PgRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            title: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
+            body: ::ruprizzle::decode::direct_opt_idx(row, 2 + __offset)?,
+            published: ::ruprizzle::decode::boolean_idx(row, 3 + __offset)?,
+            author_id: ::ruprizzle::decode::text_idx(row, 4 + __offset)?,
+            author: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 5 + __offset)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::sqlite::SqliteRow> for Post {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            title: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
+            body: ::ruprizzle::decode::direct_opt_idx(row, 2 + __offset)?,
+            published: ::ruprizzle::decode::boolean_idx(row, 3 + __offset)?,
+            author_id: ::ruprizzle::decode::text_idx(row, 4 + __offset)?,
+            author: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 5 + __offset)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::mysql::MySqlRow> for Post {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            title: ::ruprizzle::decode::direct_idx(row, 1 + __offset)?,
+            body: ::ruprizzle::decode::direct_opt_idx(row, 2 + __offset)?,
+            published: ::ruprizzle::decode::boolean_idx(row, 3 + __offset)?,
+            author_id: ::ruprizzle::decode::text_idx(row, 4 + __offset)?,
+            author: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::decode::text_idx(row, 5 + __offset)?,
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromRusqliteRow for Post {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::RusqliteRow,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::parse::<Uuid>(row, 0)?,
+            title: ::ruprizzle::rusqlite::get_text(row, 1)?,
+            body: ::ruprizzle::rusqlite::get_text_opt(row, 2)?,
+            published: ::ruprizzle::rusqlite::get_bool(row, 3)?,
+            author_id: ::ruprizzle::rusqlite::parse::<Uuid>(row, 4)?,
+            author: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::rusqlite::parse::<DateTime<Utc>>(row, 5)?,
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for Post {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::Row::get::<Uuid>(row, 0)?,
+            title: ::ruprizzle::rusqlite::Row::get::<String>(row, 1)?,
+            body: ::ruprizzle::rusqlite::Row::get::<Option<String>>(row, 2)?,
+            published: ::ruprizzle::rusqlite::Row::get::<bool>(row, 3)?,
+            author_id: ::ruprizzle::rusqlite::Row::get::<Uuid>(row, 4)?,
+            author: ::ruprizzle::Related::default(),
+            created_at: ::ruprizzle::rusqlite::Row::get::<DateTime<Utc>>(row, 5)?,
+        })
+    }
+}
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for Post {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: row
+                .try_get::<usize, Uuid>(0)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            title: row
+                .try_get::<usize, String>(1)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            body: row
+                .try_get::<usize, Option<String>>(2)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            published: row
+                .try_get::<usize, bool>(3)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            author_id: row
+                .try_get::<usize, Uuid>(4)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            author: ::ruprizzle::Related::default(),
+            created_at: row
+                .try_get::<usize, DateTime<Utc>>(5)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
         })
     }
 }
@@ -69,9 +254,385 @@ pub struct PostUpdate {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at: Option<DateTime<Utc>>,
 }
+#[derive(
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    ::ruprizzle::sqlx::FromRow
+)]
+#[serde(crate = "::ruprizzle::serde", default)]
+pub struct PostAggregate {
+    #[sqlx(default)]
+    pub count_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_title: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_title: Option<i64>,
+    #[sqlx(default)]
+    pub count_body: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_body: Option<i64>,
+    #[sqlx(default)]
+    pub count_published: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_published: Option<i64>,
+    #[sqlx(default)]
+    pub count_author_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_author_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_created_at: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_created_at: Option<i64>,
+}
+#[derive(Debug, Clone, Default)]
+pub struct PostAggregateInput {
+    pub count_id: Option<::ruprizzle::Aggregate<Post, i64>>,
+    pub count_distinct_id: Option<::ruprizzle::Aggregate<Post, i64>>,
+    pub count_title: Option<::ruprizzle::Aggregate<Post, i64>>,
+    pub count_distinct_title: Option<::ruprizzle::Aggregate<Post, i64>>,
+    pub count_body: Option<::ruprizzle::Aggregate<Post, i64>>,
+    pub count_distinct_body: Option<::ruprizzle::Aggregate<Post, i64>>,
+    pub count_published: Option<::ruprizzle::Aggregate<Post, i64>>,
+    pub count_distinct_published: Option<::ruprizzle::Aggregate<Post, i64>>,
+    pub count_author_id: Option<::ruprizzle::Aggregate<Post, i64>>,
+    pub count_distinct_author_id: Option<::ruprizzle::Aggregate<Post, i64>>,
+    pub count_created_at: Option<::ruprizzle::Aggregate<Post, i64>>,
+    pub count_distinct_created_at: Option<::ruprizzle::Aggregate<Post, i64>>,
+}
+impl ::ruprizzle::AggregateSet<Post, PostAggregate> for PostAggregateInput {
+    fn push_entries(&self, out: &mut Vec<::ruprizzle::AggregateEntry>) {
+        use ::ruprizzle::IntoAggregate;
+        if let Some(a) = &self.count_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_title {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_title {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_body {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_body {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_published {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_published {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_author_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_author_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_created_at {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_created_at {
+            a.push_entry(out);
+        }
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromRusqliteRow for PostAggregate {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::RusqliteRow,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_id = match row.get::<_, Option<i64>>("count_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_id = match row.get::<_, Option<i64>>("count_distinct_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_title = match row.get::<_, Option<i64>>("count_title") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_title = match row
+            .get::<_, Option<i64>>("count_distinct_title")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_body = match row.get::<_, Option<i64>>("count_body") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_body = match row.get::<_, Option<i64>>("count_distinct_body")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_published = match row.get::<_, Option<i64>>("count_published") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_published = match row
+            .get::<_, Option<i64>>("count_distinct_published")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_author_id = match row.get::<_, Option<i64>>("count_author_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_author_id = match row
+            .get::<_, Option<i64>>("count_distinct_author_id")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_created_at = match row.get::<_, Option<i64>>("count_created_at") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_created_at = match row
+            .get::<_, Option<i64>>("count_distinct_created_at")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        Ok(Self {
+            count_id,
+            count_distinct_id,
+            count_title,
+            count_distinct_title,
+            count_body,
+            count_distinct_body,
+            count_published,
+            count_distinct_published,
+            count_author_id,
+            count_distinct_author_id,
+            count_created_at,
+            count_distinct_created_at,
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for PostAggregate {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_id = row.get_by_name::<Option<i64>>("count_id")?;
+        let count_distinct_id = row.get_by_name::<Option<i64>>("count_distinct_id")?;
+        let count_title = row.get_by_name::<Option<i64>>("count_title")?;
+        let count_distinct_title = row
+            .get_by_name::<Option<i64>>("count_distinct_title")?;
+        let count_body = row.get_by_name::<Option<i64>>("count_body")?;
+        let count_distinct_body = row.get_by_name::<Option<i64>>("count_distinct_body")?;
+        let count_published = row.get_by_name::<Option<i64>>("count_published")?;
+        let count_distinct_published = row
+            .get_by_name::<Option<i64>>("count_distinct_published")?;
+        let count_author_id = row.get_by_name::<Option<i64>>("count_author_id")?;
+        let count_distinct_author_id = row
+            .get_by_name::<Option<i64>>("count_distinct_author_id")?;
+        let count_created_at = row.get_by_name::<Option<i64>>("count_created_at")?;
+        let count_distinct_created_at = row
+            .get_by_name::<Option<i64>>("count_distinct_created_at")?;
+        Ok(Self {
+            count_id,
+            count_distinct_id,
+            count_title,
+            count_distinct_title,
+            count_body,
+            count_distinct_body,
+            count_published,
+            count_distinct_published,
+            count_author_id,
+            count_distinct_author_id,
+            count_created_at,
+            count_distinct_created_at,
+        })
+    }
+}
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for PostAggregate {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_id = match row.columns().iter().position(|c| c.name() == "count_id") {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_id = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_id")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_title = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_title")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_title = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_title")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_body = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_body")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_body = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_body")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_published = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_published")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_published = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_published")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_author_id = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_author_id")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_author_id = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_author_id")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_created_at = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_created_at")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_created_at = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_created_at")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        Ok(Self {
+            count_id,
+            count_distinct_id,
+            count_title,
+            count_distinct_title,
+            count_body,
+            count_distinct_body,
+            count_published,
+            count_distinct_published,
+            count_author_id,
+            count_distinct_author_id,
+            count_created_at,
+            count_distinct_created_at,
+        })
+    }
+}
 impl ::ruprizzle::Model for Post {
     const TABLE: &'static str = "posts";
     const PRIMARY_KEY: &'static str = "id";
+    const COLUMNS: &'static [&'static str] = &[
+        "id",
+        "title",
+        "body",
+        "published",
+        "author_id",
+        "created_at",
+    ];
 }
 /// Table name for this model.
 pub const TABLE: &str = "posts";

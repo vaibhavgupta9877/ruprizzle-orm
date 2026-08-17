@@ -5,14 +5,16 @@ use std::time::Duration;
 use ruprizzle::{PoolConfig, connect_with};
 
 #[test]
-fn defaults_match_sqlx() {
+fn defaults_match_ruprizzle() {
     let config = PoolConfig::default();
     assert_eq!(config.max_connections, 10);
     assert_eq!(config.min_connections, 0);
     assert_eq!(config.acquire_timeout, Duration::from_secs(30));
     assert_eq!(config.idle_timeout, Some(Duration::from_secs(600)));
     assert_eq!(config.max_lifetime, Some(Duration::from_secs(1800)));
-    assert!(config.test_before_acquire);
+    assert!(!config.test_before_acquire);
+    assert!(!config.reset_on_recycle);
+    assert_eq!(config.row_buffer_size, 1024);
 }
 
 #[tokio::test]
@@ -28,7 +30,7 @@ async fn configured_pool_connects() {
     let pool = connect_with("sqlite::memory:", &config)
         .await
         .expect("connect");
-    let options = pool.options();
+    let options = pool.sqlite_options().expect("sqlite pool options");
     assert_eq!(options.get_max_connections(), 3);
     assert_eq!(options.get_min_connections(), 1);
     assert_eq!(options.get_acquire_timeout(), Duration::from_secs(1));
@@ -44,10 +46,10 @@ async fn stats_and_ping_report_a_live_pool() {
         .expect("connect");
     ruprizzle::ping(&pool).await.expect("ping");
 
-    let connection = pool.acquire().await.expect("acquire");
+    let tx = pool.begin().await.expect("begin");
     let busy = ruprizzle::stats(&pool);
     assert!(busy.in_use >= 1);
-    drop(connection);
+    tx.rollback().await.expect("rollback");
 
     let idle = ruprizzle::stats(&pool);
     assert!(idle.idle >= 1);
@@ -57,9 +59,10 @@ async fn stats_and_ping_report_a_live_pool() {
 #[tokio::test]
 async fn ping_reports_an_unreachable_database() {
     ruprizzle::sqlx::any::install_default_drivers();
-    let pool = ruprizzle::sqlx::any::AnyPoolOptions::new()
+    let any = ruprizzle::sqlx::any::AnyPoolOptions::new()
         .acquire_timeout(Duration::from_millis(200))
         .connect_lazy("postgres://127.0.0.1:1/nope")
         .expect("lazy pool");
+    let pool = ruprizzle::Pool::Any(any);
     assert!(ruprizzle::ping(&pool).await.is_err());
 }

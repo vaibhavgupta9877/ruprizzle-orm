@@ -1,8 +1,8 @@
 //! Snapshot tests for code generation.
 //!
 //! Covers the full matrix the G3 gate asks for: all four example schemas, each
-//! generated for both dialects. The dialect is taken from the schema's
-//! `datasource` block, so the non-native provider is exercised by overriding
+//! generated for all three SQL dialects. The dialect is taken from the
+//! schema's `datasource` block, so each provider is exercised by overriding
 //! `provider` after parsing — that is exactly the switch a user makes when they
 //! move a schema between engines, and the promise from ImplPlan03 is that the
 //! Rust-facing API does not change when they do.
@@ -15,7 +15,7 @@ use ruprizzle_parser::parse;
 
 /// The four example schemas, which between them cover every shape codegen has
 /// to handle (see ImplPlan02's example table).
-const EXAMPLES: [&str; 4] = ["blog", "ecommerce", "saas-tenant", "minimal"];
+const EXAMPLES: [&str; 5] = ["blog", "ecommerce", "m2m", "saas-tenant", "minimal"];
 
 fn workspace_root() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -37,11 +37,12 @@ fn generate(example: &str, provider: Provider) -> std::collections::BTreeMap<Str
 }
 
 #[test]
-fn all_examples_both_dialects() {
+fn all_examples_all_dialects() {
     for example in EXAMPLES {
         for (label, provider) in [
             ("postgres", Provider::Postgres),
             ("sqlite", Provider::Sqlite),
+            ("mysql", Provider::Mysql),
         ] {
             let files = generate(example, provider);
             assert!(
@@ -91,7 +92,7 @@ fn rust_api_is_identical_across_dialects() {
 #[test]
 fn generation_is_idempotent() {
     for example in EXAMPLES {
-        for provider in [Provider::Postgres, Provider::Sqlite] {
+        for provider in [Provider::Postgres, Provider::Sqlite, Provider::Mysql] {
             assert_eq!(
                 generate(example, provider),
                 generate(example, provider),

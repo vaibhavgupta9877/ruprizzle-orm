@@ -1,8 +1,11 @@
 //! Typed column tokens.
 
 use std::marker::PhantomData;
+use std::sync::Arc;
 
-use crate::filter::{CmpOp, Filter, FilterNode};
+use crate::filter::{ArrayFilterOp, CmpOp, Filter, FilterNode, JsonFilterOp, Subquery};
+use crate::join::JoinOn;
+use crate::json::{JsonColumn, JsonPath, JsonPathSegment, JsonSet};
 use crate::order::OrderBy;
 use crate::value::{Encodable, Ordered, Value};
 
@@ -52,6 +55,59 @@ impl<M, T> Column<M, T> {
             column,
             _marker: PhantomData,
         }
+    }
+
+    /// Reference the same column in a join condition on the right side of another model.
+    pub fn on<J>(self, other: Column<J, T>) -> JoinOn {
+        JoinOn::new(self, other)
+    }
+
+    /// Use this column token with a different table name, typically a self-join alias.
+    ///
+    /// The model marker `M` is preserved, so the resulting column still has the
+    /// same Rust type; only the SQL qualifier changes. This makes self-joins
+    /// type-safe without needing a separate alias type.
+    #[must_use]
+    pub const fn aliased(self, table: &'static str) -> Self {
+        Self {
+            table,
+            column: self.column,
+            _marker: PhantomData,
+        }
+    }
+
+    /// `column IN (subquery)`.
+    pub fn in_subquery<Q: Into<Subquery<T>>>(self, subquery: Q) -> Filter<M> {
+        let subquery = subquery.into().compiled;
+        Filter::new(FilterNode::InSubquery {
+            table: self.table,
+            column: self.column,
+            subquery,
+            negated: false,
+        })
+    }
+
+    /// `column NOT IN (subquery)`.
+    pub fn not_in_subquery<Q: Into<Subquery<T>>>(self, subquery: Q) -> Filter<M> {
+        let subquery = subquery.into().compiled;
+        Filter::new(FilterNode::InSubquery {
+            table: self.table,
+            column: self.column,
+            subquery,
+            negated: true,
+        })
+    }
+
+    /// Correlate this column to an outer query's column (`inner_col = outer_col`).
+    #[must_use]
+    pub fn correlated_to<J>(self, other: Column<J, T>) -> Filter<M> {
+        Filter::new(FilterNode::ColumnCmp {
+            left_table: self.table,
+            left_col: self.column,
+            op: CmpOp::Eq,
+            right_table: other.table,
+            right_col: other.column,
+        })
     }
 }
 
@@ -233,6 +289,116 @@ impl<M, T> Column<M, Option<T>> {
             table: self.table,
             column: self.column,
             negated: true,
+        })
+    }
+}
+
+impl<M> Column<M, serde_json::Value> {
+    /// Extract a JSON field by key (`column->'key'` or `column#>'{...}'`).
+    #[must_use]
+    pub fn get(self, key: &'static str) -> JsonColumn<M, serde_json::Value> {
+        JsonColumn {
+            table: self.table,
+            column: self.column,
+            path: JsonPath(vec![JsonPathSegment::Key(key)]),
+            text: false,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Extract a JSON field by key as text (`column->>'key'` or `column#>>'{...}'`).
+    #[must_use]
+    pub fn get_text(self, key: &'static str) -> JsonColumn<M, String> {
+        JsonColumn {
+            table: self.table,
+            column: self.column,
+            path: JsonPath(vec![JsonPathSegment::Key(key)]),
+            text: true,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Extract a JSON array element by index (`column->[index]` or `column#>'{index}'`).
+    #[must_use]
+    pub fn at(self, index: usize) -> JsonColumn<M, serde_json::Value> {
+        JsonColumn {
+            table: self.table,
+            column: self.column,
+            path: JsonPath(vec![JsonPathSegment::Index(index)]),
+            text: false,
+            _marker: PhantomData,
+        }
+    }
+
+    /// `column @> value` (JSON containment).
+    pub fn contains(self, value: serde_json::Value) -> Filter<M> {
+        Filter::new(FilterNode::Json {
+            table: self.table,
+            column: self.column,
+            path: JsonPath::default(),
+            text: false,
+            op: JsonFilterOp::Contains,
+            value: value.to_value(),
+        })
+    }
+
+    /// `column ? key` (top-level key existence).
+    pub fn has_key(self, key: impl Into<String>) -> Filter<M> {
+        Filter::new(FilterNode::Json {
+            table: self.table,
+            column: self.column,
+            path: JsonPath::default(),
+            text: false,
+            op: JsonFilterOp::HasKey,
+            value: Value::Str(Arc::from(key.into())),
+        })
+    }
+
+    /// Build a JSON set expression for this column and key.
+    #[must_use]
+    pub fn json_set(self, key: &'static str, value: serde_json::Value) -> JsonSet {
+        JsonSet {
+            column: self.column,
+            path: JsonPath(vec![JsonPathSegment::Key(key)]),
+            value: value.to_value(),
+        }
+    }
+
+    /// Build a JSON set expression for this column and key (Postgres naming).
+    #[must_use]
+    pub fn jsonb_set(self, key: &'static str, value: serde_json::Value) -> JsonSet {
+        self.json_set(key, value)
+    }
+}
+
+impl<M, T: Encodable> Column<M, Vec<T>> {
+    /// `column @> ARRAY[values]` (Postgres) or JSON array containment.
+    pub fn contains<V: Into<T>>(self, values: impl IntoIterator<Item = V>) -> Filter<M> {
+        Filter::new(FilterNode::Array {
+            table: self.table,
+            column: self.column,
+            op: ArrayFilterOp::Contains,
+            values: values.into_iter().map(|v| v.into().to_value()).collect(),
+        })
+    }
+
+    /// `column <@ ARRAY[values]` (Postgres) or JSON array subset.
+    pub fn contained_by<V: Into<T>>(self, values: impl IntoIterator<Item = V>) -> Filter<M> {
+        Filter::new(FilterNode::Array {
+            table: self.table,
+            column: self.column,
+            op: ArrayFilterOp::ContainedBy,
+            values: values.into_iter().map(|v| v.into().to_value()).collect(),
+        })
+    }
+
+    /// `column && ARRAY[values]` (Postgres) or JSON array overlap.
+    pub fn overlaps<V: Into<T>>(self, values: impl IntoIterator<Item = V>) -> Filter<M> {
+        Filter::new(FilterNode::Array {
+            table: self.table,
+            column: self.column,
+            op: ArrayFilterOp::Overlaps,
+            values: values.into_iter().map(|v| v.into().to_value()).collect(),
         })
     }
 }

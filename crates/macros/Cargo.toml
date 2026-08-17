@@ -1,6 +1,6 @@
 [package]
 name        = "ruprizzle-macros"
-description = "Proc-macro support for the ruprizzle ORM"
+description = "Injection-safe raw SQL fragment macro for the ruprizzle ORM"
 version.workspace      = true
 edition.workspace      = true
 rust-version.workspace = true

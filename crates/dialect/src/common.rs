@@ -2,18 +2,27 @@
 
 use ruprizzle_core::SchemaError;
 use ruprizzle_core::ir::{
-    DefaultFn, DefaultValue, Field, FieldKind, IndexDef, Literal, Model, Provider,
+    DefaultFn, DefaultValue, Field, FieldKind, IndexDef, Literal, Model, Provider, RelationKind,
     ResolvedRelation, ScalarType, Schema, SortOrder,
 };
 
 use crate::{DbDialect, DialectError, RustType, Stmt};
 
+static POSTGRES_DIALECT: crate::PostgresDialect = crate::PostgresDialect;
+static SQLITE_DIALECT: crate::SqliteDialect = crate::SqliteDialect;
+static MYSQL_DIALECT: crate::MySqlDialect = crate::MySqlDialect;
+
 /// Returns the dialect implementation for a provider.
+///
+/// The returned reference is `'static'`; the dialect implementations are
+/// zero-sized and live for the life of the process, so callers do not need to
+/// box or clone them.
 #[must_use]
-pub fn dialect_for(provider: Provider) -> Box<dyn DbDialect> {
+pub fn dialect_for(provider: Provider) -> &'static dyn DbDialect {
     match provider {
-        Provider::Postgres => Box::new(crate::PostgresDialect),
-        Provider::Sqlite => Box::new(crate::SqliteDialect),
+        Provider::Postgres => &POSTGRES_DIALECT,
+        Provider::Sqlite => &SQLITE_DIALECT,
+        Provider::Mysql => &MYSQL_DIALECT,
     }
 }
 
@@ -31,7 +40,7 @@ pub fn full_create_table(dialect: &dyn DbDialect, schema: &Schema, m: &Model) ->
     let owned: Vec<&ResolvedRelation> = schema
         .relations
         .iter()
-        .filter(|r| r.owner == m.name)
+        .filter(|r| r.owner == m.name && r.kind != RelationKind::ManyToMany)
         .collect();
 
     if owned.is_empty() {
@@ -245,7 +254,7 @@ pub(crate) fn literal_sql(dialect: &dyn DbDialect, lit: &Literal) -> String {
 }
 
 fn bool_sql(dialect: &dyn DbDialect, b: bool) -> String {
-    if dialect.name() == "sqlite" {
+    if dialect.name() == "sqlite" || dialect.name() == "mysql" {
         i32::from(b).to_string()
     } else if b {
         "true".to_owned()
@@ -264,7 +273,8 @@ pub(crate) fn default_sql(dialect: &dyn DbDialect, f: &Field) -> String {
         DefaultValue::Literal(lit) => literal_sql(dialect, lit),
         DefaultValue::Function(func) => match (func, dialect.name()) {
             (DefaultFn::Uuid4, "postgres") => "gen_random_uuid()".to_owned(),
-            (DefaultFn::Now, "postgres") => "NOW()".to_owned(),
+            (DefaultFn::Uuid4, "mysql") => "UUID()".to_owned(),
+            (DefaultFn::Now, "postgres" | "mysql") => "NOW()".to_owned(),
             (DefaultFn::Now, "sqlite") => "(datetime('now'))".to_owned(),
             (DefaultFn::Now, _) => "datetime('now')".to_owned(),
             (
@@ -283,23 +293,26 @@ pub(crate) fn default_sql(dialect: &dyn DbDialect, f: &Field) -> String {
 /// Builds the Rust type for a field.
 #[must_use]
 pub(crate) fn rust_type_for(f: &Field) -> RustType {
-    let base = match &f.kind {
-        FieldKind::Scalar(ScalarType::String) | FieldKind::Relation(_) | FieldKind::List(_) => {
-            RustType::String
+    fn kind_to_rust(kind: &FieldKind) -> RustType {
+        match kind {
+            FieldKind::Scalar(ScalarType::String) | FieldKind::Relation(_) => RustType::String,
+            FieldKind::Scalar(ScalarType::Int) => RustType::Int,
+            FieldKind::Scalar(ScalarType::BigInt) => RustType::BigInt,
+            FieldKind::Scalar(ScalarType::Float) => RustType::Float,
+            FieldKind::Scalar(ScalarType::Decimal) => RustType::Decimal,
+            FieldKind::Scalar(ScalarType::Boolean) => RustType::Boolean,
+            FieldKind::Scalar(ScalarType::DateTime) => RustType::DateTime,
+            FieldKind::Scalar(ScalarType::Date) => RustType::Date,
+            FieldKind::Scalar(ScalarType::Time) => RustType::Time,
+            FieldKind::Scalar(ScalarType::Uuid) => RustType::Uuid,
+            FieldKind::Scalar(ScalarType::Json) => RustType::Json,
+            FieldKind::Scalar(ScalarType::Bytes) => RustType::Bytes,
+            FieldKind::Enum(name) => RustType::Enum(name.as_str().to_owned()),
+            FieldKind::List(inner) => RustType::Vec(Box::new(kind_to_rust(inner))),
         }
-        FieldKind::Scalar(ScalarType::Int) => RustType::Int,
-        FieldKind::Scalar(ScalarType::BigInt) => RustType::BigInt,
-        FieldKind::Scalar(ScalarType::Float) => RustType::Float,
-        FieldKind::Scalar(ScalarType::Decimal) => RustType::Decimal,
-        FieldKind::Scalar(ScalarType::Boolean) => RustType::Boolean,
-        FieldKind::Scalar(ScalarType::DateTime) => RustType::DateTime,
-        FieldKind::Scalar(ScalarType::Date) => RustType::Date,
-        FieldKind::Scalar(ScalarType::Time) => RustType::Time,
-        FieldKind::Scalar(ScalarType::Uuid) => RustType::Uuid,
-        FieldKind::Scalar(ScalarType::Json) => RustType::Json,
-        FieldKind::Scalar(ScalarType::Bytes) => RustType::Bytes,
-        FieldKind::Enum(name) => RustType::Enum(name.as_str().to_owned()),
-    };
+    }
+
+    let base = kind_to_rust(&f.kind);
 
     if f.optional {
         RustType::Option(Box::new(base))
@@ -332,12 +345,21 @@ impl ColumnSpec {
     /// Renders the full column declaration for a `CREATE TABLE`.
     #[must_use]
     pub fn render(&self, dialect: &dyn DbDialect) -> String {
-        let mut parts = vec![self.quoted_name.clone(), self.sql_type.clone()];
+        format!("{} {}", self.quoted_name, self.render_body(dialect))
+    }
 
-        // In SQLite `AUTOINCREMENT` must follow `PRIMARY KEY`, so it is
-        // appended separately below; for Postgres this emits the identity
-        // clause in the usual position.
-        if self.identity && dialect.name() != "sqlite" {
+    /// Renders the column definition (type, constraints, etc.) without the name.
+    ///
+    /// Used by dialects that rewrite an existing column, such as MySQL's
+    /// `MODIFY COLUMN` and `CHANGE COLUMN`, where the name is stated separately.
+    #[must_use]
+    pub fn render_body(&self, dialect: &dyn DbDialect) -> String {
+        let mut parts = vec![self.sql_type.clone()];
+
+        // Postgres uses `GENERATED BY DEFAULT AS IDENTITY` in the usual
+        // position. MySQL and SQLite add the autoincrement keyword next to
+        // `PRIMARY KEY` below.
+        if self.identity && dialect.name() != "sqlite" && dialect.name() != "mysql" {
             parts.push(identity_clause(dialect));
         }
 
@@ -355,9 +377,12 @@ impl ColumnSpec {
             parts.push("PRIMARY KEY".to_owned());
         }
 
-        // SQLite requires `AUTOINCREMENT` immediately after `PRIMARY KEY`.
-        if self.identity && dialect.name() == "sqlite" {
-            parts.push("AUTOINCREMENT".to_owned());
+        if self.identity && (dialect.name() == "sqlite" || dialect.name() == "mysql") {
+            if dialect.name() == "mysql" {
+                parts.push("AUTO_INCREMENT".to_owned());
+            } else {
+                parts.push("AUTOINCREMENT".to_owned());
+            }
         }
 
         if self.unique && !self.primary_key {
@@ -374,7 +399,9 @@ impl ColumnSpec {
 
 /// Returns the identity clause for an autoincrement column.
 pub(crate) fn identity_clause(dialect: &dyn DbDialect) -> String {
-    if dialect.name() == "sqlite" {
+    if dialect.name() == "sqlite" || dialect.name() == "mysql" {
+        // MySQL and SQLite add AUTOINCREMENT/AUTO_INCREMENT next to PRIMARY KEY
+        // in `ColumnSpec::render` instead of the usual position.
         String::new()
     } else {
         "GENERATED BY DEFAULT AS IDENTITY".to_owned()

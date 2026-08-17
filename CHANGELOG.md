@@ -4,10 +4,102 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.1-beta.1] - 2026-08-13
+
+A beta milestone that closes the remaining alpha.3 beta blockers: clippy warnings, broken doc links, panic-audit failures in `crates/runtime`, and stale performance documentation. It also refreshes the production-readiness assessment for `0.1.0-alpha.3` and the `rusqlite` backend.
 
 ### Added
 
+- `Pool` gained typed `as_any`, `as_sqlite`, `as_postgres`, and feature-gated `as_rusqlite` / `as_tokio_postgres` accessors.
+- `crates/runtime/benches/end_to_end` now creates an `sqlx::Any` pool explicitly so the PostgreSQL benchmark path is like-for-like with hand-written `sqlx`.
+
+### Changed
+
+- `Pool::options`, `Pool::postgres_options`, and `Pool::sqlite_options` now return `Option<&_>` instead of panicking for the wrong variant.
+- `Pool::acquire` now returns `Error::NotImplemented` for native driver-specific pools.
+- The `sqlx::Executor` implementation on `&Pool` now returns a clear `sqlx::Error` for native variants instead of `unimplemented!()`.
+- `Performance.md` now reports fresh PostgreSQL `sqlx::Any` numbers and the previously unmeasured bulk-insert case.
+
+### Fixed
+
+- Clippy warnings in `pg_any_types.rs`, `bottlenecks.rs`, `layer_attribution.rs`, `cross_orm_bench.rs`, `crates/runtime/tests/crud.rs`, `local/deep-tests`, and `crates/runtime/src/rusqlite.rs`.
+- Broken intra-doc links in `crates/runtime/src/executor.rs` and `crates/testkit/src/lib.rs`.
+- `rusqlite` mutex `unwrap()` calls replaced with error paths, satisfying the `crates/runtime` panic budget.
+- Examples and benchmarks that passed `&Pool` to `sqlx::query` now use an explicit `Pool::Any` wrapper where appropriate.
+- Updated crate-level rustdocs and user-facing docs (`README.md`, `docs/QueryGuide.md`, `docs/RelationsGuide.md`, `docs/Quickstart.md`, `docs/MigratingFrom.md`, `docs/KnownLimitations.md`) to the `0.1.1-beta.1` API and backend features.
+- Moved `crates/dialect/tests/conformance.rs` into `tests/integration/tests/dialect_conformance.rs` and removed the `ruprizzle-testkit` dev-dependency from `ruprizzle-dialect` so the crate can be packaged and published.
+- Published `ruprizzle-core`, `ruprizzle-parser`, `ruprizzle-dialect`, `ruprizzle-macros`, `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, and `ruprizzle-cli` version `0.1.1-beta.1` to crates.io.
+
+## [0.4.0-beta.2] - 2026-08-17
+
+### Fixed
+
+- `crates/runtime/tests/soak.rs` now logs per-operation errors, making it
+  possible to diagnose SQLite `database is locked` failures in long soak runs.
+
+### Changed
+
+- `ruprizzle-testkit` is now a path-only dev-dependency in `crates/runtime`, so
+  `cargo publish` for the runtime crate does not require the unpublished
+  `ruprizzle-testkit` to exist on crates.io.
+- Bumped the workspace version to `0.4.0-beta.2` and published all crates
+  (`ruprizzle-core`, `ruprizzle-parser`, `ruprizzle-dialect`, `ruprizzle-macros`,
+  `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, `ruprizzle-cli`) to
+  crates.io.
+
+### Documentation
+
+- `docs/SoakReport.md` now records the 48-hour `rusqlite` soak as stopped early
+  due to sustained `database is locked` / busy-timeout errors under concurrent
+  writers.
+- `docs/MutationTesting.md` now records the `ruprizzle-migrate` mutation
+  baseline (28.6 % score) and documents the in-progress runtime baseline.
+- `ProjectPlan/v1/V1Blockers.md` updated with the current status of the 48-hour
+  soak and mutation testing gates.
+
+## [0.4.0-beta.1] - 2026-08-17
+
+Pre-1.0 milestone covering W2 (query surface), W3 (migrations/CLI), and W5
+(operability). The runtime, CLI, migration, and codegen crates are now
+competitive with Prisma/Drizzle on the measured feature set.
+
+### Fixed
+
+- **Transaction lifecycle on the native drivers (pre-v1 Phase 1).** Neither hand-written
+  native transaction type implemented `Drop`, so a transaction abandoned rather than
+  explicitly committed or rolled back — which `?` does on every early return — was
+  mishandled on both. The `sqlx`-backed variants were never affected.
+  - `rusqlite`: an abandoned transaction lost its connection from the pool permanently.
+    After `max_connections` such drops every `begin()` failed with an exhaustion error and
+    the process had to be restarted. `RusqliteTransaction` now rolls back and returns the
+    connection on drop, and does so without ever panicking. (BUG-01)
+  - `rusqlite`: `RusqlitePool::acquire` computed `next % conns.len()` unguarded, so holding
+    `max_connections` transactions open and running any ordinary query panicked with a
+    divide-by-zero. It now returns the new `Error::PoolExhausted` variant. (BUG-02)
+  - `tokio-postgres`: an abandoned transaction did *not* leak a connection — it recycled one
+    with `BEGIN` still open, so the next request to receive it ran inside the previous
+    request's transaction, silently. Reproduced against PostgreSQL 17.10 before fixing.
+    `Drop` now spawns a `ROLLBACK` with the pooled object moved into the task, so the
+    connection is released only after the rollback resolves. (BUG-03)
+  - `rusqlite`: a failed `COMMIT` and a failure between checkout and `BEGIN` both leaked
+    their connection; both now return it.
+  - `RusqliteTransaction` no longer derives `Clone`, which would have let one connection be
+    returned to the pool twice. (BUG-06)
+
+### Added
+
+- `Error::PoolExhausted { backend }` — a typed, matchable replacement for the previous
+  stringly-typed pool-exhaustion message, with a stable `kind()` of `"pool_exhausted"`.
+- `PoolConfig::reset_on_recycle` (default `false`) selects `deadpool`'s `Clean` recycling
+  for the native `tokio-postgres` backend, discarding session state on every checkout. It
+  is off by default because it measured roughly 2× the per-query latency against a local
+  database (144–178 µs versus 72–78 µs per checkout+query) and is not needed for
+  correctness — abandoned transactions are rolled back before their connection is released.
+- **CI**
+  - Added a `native-drivers` job that builds and tests `sqlite-rusqlite` and
+    `postgres-tokio-postgres`, separately and together, against a Postgres service with
+    `RUPRIZZLE_REQUIRE_DB=1`. No CI job compiled either native driver before this, which is
+    why the defects above reached a published release.
 - **CI / supply chain**
   - Added a `deny` job that runs `cargo-deny` (advisories, licences, bans, sources) on every pull request.
   - Added `dependabot.yml` for weekly `cargo` dependency updates and monthly GitHub Actions updates.
@@ -49,9 +141,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `SelectQuery::fetch_one()` and `fetch_optional()` are now only available on
+  queries without `.include(...)`. Queries with includes must use the new
+  `exec_one()` / `exec_optional()` methods, which load the requested relations
+  and return the single matching row. This prevents a silent `Related::Absent`
+  result when a user added an include but called the non-include terminal.
+  (BUG-04)
+- The panic message in `Related::get()` now points at `.exec()` / `.exec_one()`
+  rather than only mentioning `.include()`, which was itself the source of the
+  confusion.
+- `IncludeList` now correctly distributes children to every parent that shares
+  a join key, rather than only the first matching parent. This requires `C:
+  Clone` on the `IncludeSet` impl, matching `IncludeOne`. (BUG-08)
+- `InsertManyQuery::exec` and nested `with_related` child inserts now validate
+  that every row has the same columns in the same order as row 0, returning an
+  error that names the offending row and column instead of silently producing
+  the wrong SQL or an opaque driver error. (BUG-09)
+
 - CI: stale `generated-code-lint` job (which asserted the code generator was still unimplemented) replaced with the working `generated-code` gate.
 - CI: `cargo-deny-action` pinned to `v2.1.1` to avoid the positional-argument regression in `v2.1.0`.
 - Docs: security advisory reporting link in `ProductionReadinessPlan.md` now points at the real repository.
+- Published `ruprizzle-core`, `ruprizzle-parser`, `ruprizzle-dialect`, `ruprizzle-macros`, `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, and `ruprizzle-cli` version `0.4.0-beta.1` to crates.io.
 
 ## [0.1.0-alpha.2] - 2026-08-10
 
@@ -89,6 +199,7 @@ Initial alpha release of **ruprizzle-orm**: a schema-first ORM for Rust. Write a
 
 See `docs/KnownLimitations.md` for the full list.
 
-[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.0-alpha.2...HEAD
+[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.1-beta.1...HEAD
+[0.1.1-beta.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.0-alpha.2...v0.1.1-beta.1
 [0.1.0-alpha.2]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/releases/tag/v0.1.0-alpha.1

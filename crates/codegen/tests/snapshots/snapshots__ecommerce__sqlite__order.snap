@@ -25,14 +25,189 @@ pub struct Order {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for Order {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::text::<Uuid>(row, "id")?,
-            status: ::ruprizzle::decode::text::<
-                super::enums::OrderStatus,
-            >(row, "status")?,
-            customer_id: ::ruprizzle::decode::text::<Uuid>(row, "customer_id")?,
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            status: ::ruprizzle::decode::text_idx(row, 1)?,
+            customer_id: ::ruprizzle::decode::text_idx(row, 2)?,
             customer: ::ruprizzle::Related::default(),
             items: ::ruprizzle::Related::default(),
-            placed_at: ::ruprizzle::decode::text::<DateTime<Utc>>(row, "placed_at")?,
+            placed_at: ::ruprizzle::decode::text_idx(row, 3)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow> for Order {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::postgres::PgRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            status: ::ruprizzle::decode::text_idx(row, 1)?,
+            customer_id: ::ruprizzle::decode::text_idx(row, 2)?,
+            customer: ::ruprizzle::Related::default(),
+            items: ::ruprizzle::Related::default(),
+            placed_at: ::ruprizzle::decode::text_idx(row, 3)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow> for Order {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            status: ::ruprizzle::decode::text_idx(row, 1)?,
+            customer_id: ::ruprizzle::decode::text_idx(row, 2)?,
+            customer: ::ruprizzle::Related::default(),
+            items: ::ruprizzle::Related::default(),
+            placed_at: ::ruprizzle::decode::text_idx(row, 3)?,
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow> for Order {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::mysql::MySqlRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0)?,
+            status: ::ruprizzle::decode::text_idx(row, 1)?,
+            customer_id: ::ruprizzle::decode::text_idx(row, 2)?,
+            customer: ::ruprizzle::Related::default(),
+            items: ::ruprizzle::Related::default(),
+            placed_at: ::ruprizzle::decode::text_idx(row, 3)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<AnyRow> for Order {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, AnyRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            status: ::ruprizzle::decode::text_idx(row, 1 + __offset)?,
+            customer_id: ::ruprizzle::decode::text_idx(row, 2 + __offset)?,
+            customer: ::ruprizzle::Related::default(),
+            items: ::ruprizzle::Related::default(),
+            placed_at: ::ruprizzle::decode::text_idx(row, 3 + __offset)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::postgres::PgRow> for Order {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::postgres::PgRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            status: ::ruprizzle::decode::text_idx(row, 1 + __offset)?,
+            customer_id: ::ruprizzle::decode::text_idx(row, 2 + __offset)?,
+            customer: ::ruprizzle::Related::default(),
+            items: ::ruprizzle::Related::default(),
+            placed_at: ::ruprizzle::decode::text_idx(row, 3 + __offset)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::sqlite::SqliteRow> for Order {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            status: ::ruprizzle::decode::text_idx(row, 1 + __offset)?,
+            customer_id: ::ruprizzle::decode::text_idx(row, 2 + __offset)?,
+            customer: ::ruprizzle::Related::default(),
+            items: ::ruprizzle::Related::default(),
+            placed_at: ::ruprizzle::decode::text_idx(row, 3 + __offset)?,
+        })
+    }
+}
+impl ::ruprizzle::JoinSide<::ruprizzle::sqlx::mysql::MySqlRow> for Order {
+    fn from_offset_row<'r>(
+        __offset_row: &::ruprizzle::OffsetRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error>
+    where
+        Self: Sized,
+    {
+        let row = __offset_row.as_raw();
+        let __offset = __offset_row.offset();
+        Ok(Self {
+            id: ::ruprizzle::decode::text_idx(row, 0 + __offset)?,
+            status: ::ruprizzle::decode::text_idx(row, 1 + __offset)?,
+            customer_id: ::ruprizzle::decode::text_idx(row, 2 + __offset)?,
+            customer: ::ruprizzle::Related::default(),
+            items: ::ruprizzle::Related::default(),
+            placed_at: ::ruprizzle::decode::text_idx(row, 3 + __offset)?,
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromRusqliteRow for Order {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::RusqliteRow,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::parse::<Uuid>(row, 0)?,
+            status: ::ruprizzle::rusqlite::parse::<super::enums::OrderStatus>(row, 1)?,
+            customer_id: ::ruprizzle::rusqlite::parse::<Uuid>(row, 2)?,
+            customer: ::ruprizzle::Related::default(),
+            items: ::ruprizzle::Related::default(),
+            placed_at: ::ruprizzle::rusqlite::parse::<DateTime<Utc>>(row, 3)?,
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for Order {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::Row::get::<Uuid>(row, 0)?,
+            status: ::ruprizzle::rusqlite::Row::get::<
+                super::enums::OrderStatus,
+            >(row, 1)?,
+            customer_id: ::ruprizzle::rusqlite::Row::get::<Uuid>(row, 2)?,
+            customer: ::ruprizzle::Related::default(),
+            items: ::ruprizzle::Related::default(),
+            placed_at: ::ruprizzle::rusqlite::Row::get::<DateTime<Utc>>(row, 3)?,
+        })
+    }
+}
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for Order {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: row
+                .try_get::<usize, Uuid>(0)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            status: row
+                .try_get::<usize, String>(1)
+                .map_err(::ruprizzle::Error::TokioPostgres)?
+                .parse::<super::enums::OrderStatus>()
+                .map_err(|e| ::ruprizzle::Error::Message(
+                    format!("cannot parse enum: {e}"),
+                ))?,
+            customer_id: row
+                .try_get::<usize, Uuid>(2)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            customer: ::ruprizzle::Related::default(),
+            items: ::ruprizzle::Related::default(),
+            placed_at: row
+                .try_get::<usize, DateTime<Utc>>(3)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
         })
     }
 }
@@ -62,9 +237,275 @@ pub struct OrderUpdate {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub placed_at: Option<DateTime<Utc>>,
 }
+#[derive(
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    ::ruprizzle::sqlx::FromRow
+)]
+#[serde(crate = "::ruprizzle::serde", default)]
+pub struct OrderAggregate {
+    #[sqlx(default)]
+    pub count_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_status: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_status: Option<i64>,
+    #[sqlx(default)]
+    pub count_customer_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_customer_id: Option<i64>,
+    #[sqlx(default)]
+    pub count_placed_at: Option<i64>,
+    #[sqlx(default)]
+    pub count_distinct_placed_at: Option<i64>,
+}
+#[derive(Debug, Clone, Default)]
+pub struct OrderAggregateInput {
+    pub count_id: Option<::ruprizzle::Aggregate<Order, i64>>,
+    pub count_distinct_id: Option<::ruprizzle::Aggregate<Order, i64>>,
+    pub count_status: Option<::ruprizzle::Aggregate<Order, i64>>,
+    pub count_distinct_status: Option<::ruprizzle::Aggregate<Order, i64>>,
+    pub count_customer_id: Option<::ruprizzle::Aggregate<Order, i64>>,
+    pub count_distinct_customer_id: Option<::ruprizzle::Aggregate<Order, i64>>,
+    pub count_placed_at: Option<::ruprizzle::Aggregate<Order, i64>>,
+    pub count_distinct_placed_at: Option<::ruprizzle::Aggregate<Order, i64>>,
+}
+impl ::ruprizzle::AggregateSet<Order, OrderAggregate> for OrderAggregateInput {
+    fn push_entries(&self, out: &mut Vec<::ruprizzle::AggregateEntry>) {
+        use ::ruprizzle::IntoAggregate;
+        if let Some(a) = &self.count_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_status {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_status {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_customer_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_customer_id {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_placed_at {
+            a.push_entry(out);
+        }
+        if let Some(a) = &self.count_distinct_placed_at {
+            a.push_entry(out);
+        }
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromRusqliteRow for OrderAggregate {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::RusqliteRow,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_id = match row.get::<_, Option<i64>>("count_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_id = match row.get::<_, Option<i64>>("count_distinct_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_status = match row.get::<_, Option<i64>>("count_status") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_status = match row
+            .get::<_, Option<i64>>("count_distinct_status")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_customer_id = match row.get::<_, Option<i64>>("count_customer_id") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_customer_id = match row
+            .get::<_, Option<i64>>("count_distinct_customer_id")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_placed_at = match row.get::<_, Option<i64>>("count_placed_at") {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        let count_distinct_placed_at = match row
+            .get::<_, Option<i64>>("count_distinct_placed_at")
+        {
+            Ok(v) => v,
+            Err(::ruprizzle::rusqlite::Error::InvalidColumnName(_)) => None,
+            Err(e) => return Err(::ruprizzle::Error::Message(e.to_string())),
+        };
+        Ok(Self {
+            count_id,
+            count_distinct_id,
+            count_status,
+            count_distinct_status,
+            count_customer_id,
+            count_distinct_customer_id,
+            count_placed_at,
+            count_distinct_placed_at,
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for OrderAggregate {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_id = row.get_by_name::<Option<i64>>("count_id")?;
+        let count_distinct_id = row.get_by_name::<Option<i64>>("count_distinct_id")?;
+        let count_status = row.get_by_name::<Option<i64>>("count_status")?;
+        let count_distinct_status = row
+            .get_by_name::<Option<i64>>("count_distinct_status")?;
+        let count_customer_id = row.get_by_name::<Option<i64>>("count_customer_id")?;
+        let count_distinct_customer_id = row
+            .get_by_name::<Option<i64>>("count_distinct_customer_id")?;
+        let count_placed_at = row.get_by_name::<Option<i64>>("count_placed_at")?;
+        let count_distinct_placed_at = row
+            .get_by_name::<Option<i64>>("count_distinct_placed_at")?;
+        Ok(Self {
+            count_id,
+            count_distinct_id,
+            count_status,
+            count_distinct_status,
+            count_customer_id,
+            count_distinct_customer_id,
+            count_placed_at,
+            count_distinct_placed_at,
+        })
+    }
+}
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for OrderAggregate {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        let count_id = match row.columns().iter().position(|c| c.name() == "count_id") {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_id = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_id")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_status = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_status")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_status = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_status")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_customer_id = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_customer_id")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_customer_id = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_customer_id")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_placed_at = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_placed_at")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        let count_distinct_placed_at = match row
+            .columns()
+            .iter()
+            .position(|c| c.name() == "count_distinct_placed_at")
+        {
+            Some(idx) => {
+                row.try_get::<usize, Option<i64>>(idx)
+                    .map_err(::ruprizzle::Error::TokioPostgres)?
+            }
+            None => None,
+        };
+        Ok(Self {
+            count_id,
+            count_distinct_id,
+            count_status,
+            count_distinct_status,
+            count_customer_id,
+            count_distinct_customer_id,
+            count_placed_at,
+            count_distinct_placed_at,
+        })
+    }
+}
 impl ::ruprizzle::Model for Order {
     const TABLE: &'static str = "orders";
     const PRIMARY_KEY: &'static str = "id";
+    const COLUMNS: &'static [&'static str] = &[
+        "id",
+        "status",
+        "customer_id",
+        "placed_at",
+    ];
 }
 /// Table name for this model.
 pub const TABLE: &str = "orders";

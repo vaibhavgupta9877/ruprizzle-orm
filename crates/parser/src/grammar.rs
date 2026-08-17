@@ -25,6 +25,8 @@ pub struct SchemaParser;
 /// Returns the raw Pest error; [`crate::errors`] turns it into a diagnostic.
 pub fn parse_ast(source: &str) -> Result<Ast, Box<pest::error::Error<Rule>>> {
     let mut pairs = SchemaParser::parse(Rule::schema, source).map_err(Box::new)?;
+    // Pest's `schema = { SOI ~ decl* ~ EOI }` is a single successful match,
+    // so the top-level iterator always produces exactly one pair.
     let schema = pairs.next().expect("Rule::schema always yields one pair");
 
     let mut ast = Ast::default();
@@ -35,6 +37,8 @@ pub fn parse_ast(source: &str) -> Result<Ast, Box<pest::error::Error<Rule>>> {
             Rule::enum_def => Decl::Enum(enum_decl(pair)),
             Rule::model_def => Decl::Model(model_decl(pair)),
             Rule::EOI => continue,
+            // `decl` is `{ datasource | generator | enum_def | model_def }`, and
+            // only those four rules plus EOI can appear inside `schema`.
             other => unreachable!("unexpected top-level rule {other:?}"),
         };
         ast.decls.push(decl);
@@ -84,6 +88,8 @@ fn take_docs(pairs: &mut Walk<'_>) -> Option<String> {
         .peek()
         .is_some_and(|p| p.as_rule() == Rule::doc_comment)
     {
+        // We only enter this loop when `peek` confirmed a `doc_comment`,
+        // so `next` cannot return `None`.
         let comment = pairs.next().expect("peeked");
         let text = comment
             .into_inner()
@@ -102,6 +108,8 @@ fn take_docs(pairs: &mut Walk<'_>) -> Option<String> {
 fn block(pair: Pair<'_, Rule>) -> Block {
     let span = span_of(&pair);
     let mut inner = members(pair);
+    // `datasource`/`generator` both have `~ ident ~ "{"`, so the first
+    // non-keyword child is the identifier.
     let name_pair = inner.next().expect("block always has a name");
     let name = name_pair.as_str().to_owned();
 
@@ -109,6 +117,7 @@ fn block(pair: Pair<'_, Rule>) -> Block {
         .map(|kv| {
             let span = span_of(&kv);
             let mut parts = kv.into_inner();
+            // `config_kv = { ident ~ "=" ~ config_value }` guarantees two children.
             let key = parts
                 .next()
                 .expect("config_kv has a key")
@@ -131,6 +140,7 @@ fn enum_decl(pair: Pair<'_, Rule>) -> EnumDecl {
     let mut inner = members(pair);
     let docs = take_docs(&mut inner);
 
+    // `enum_def = { ... ~ ident ~ "{" ... }` always provides a name.
     let name_pair = inner.next().expect("enum always has a name");
     let name_span = span_of(&name_pair);
     let name = name_pair.as_str().to_owned();
@@ -151,6 +161,7 @@ fn variant_decl(pair: Pair<'_, Rule>) -> VariantDecl {
     let mut inner = members(pair);
     let docs = take_docs(&mut inner);
 
+    // `enum_variant = { doc_comment* ~ ident ~ ... }` always provides a name.
     let name = inner
         .next()
         .expect("variant always has a name")
@@ -171,6 +182,7 @@ fn model_decl(pair: Pair<'_, Rule>) -> ModelDecl {
     let mut inner = members(pair);
     let docs = take_docs(&mut inner);
 
+    // `model_def = { ... ~ ident ~ "{" ... }` always provides a name.
     let name_pair = inner.next().expect("model always has a name");
     let name_span = span_of(&name_pair);
     let name = name_pair.as_str().to_owned();
@@ -181,6 +193,7 @@ fn model_decl(pair: Pair<'_, Rule>) -> ModelDecl {
         match member.as_rule() {
             Rule::field => fields.push(field_decl(member)),
             Rule::block_attr => block_attrs.push(attr(member)),
+            // `model_member = _{ block_attr | field }` is the only shape allowed.
             other => unreachable!("unexpected model member {other:?}"),
         }
     }
@@ -200,6 +213,7 @@ fn field_decl(pair: Pair<'_, Rule>) -> FieldDecl {
     let mut inner = members(pair);
     let docs = take_docs(&mut inner);
 
+    // `field = { ... ~ ident ~ field_type ~ ... }` always provides both.
     let name_pair = inner.next().expect("field always has a name");
     let name_span = span_of(&name_pair);
     let name = name_pair.as_str().to_owned();
@@ -208,6 +222,8 @@ fn field_decl(pair: Pair<'_, Rule>) -> FieldDecl {
     // as a field type rather than as a bare identifier — so the arity marker is
     // read off the text rather than from a child pair.
     let type_pair = inner.next().expect("field always has a type");
+    // `field_type = @{ ident ~ (list_marker | opt_marker)? }` means a type
+    // pair is always present after the field name.
     let type_span = span_of(&type_pair);
     let written = type_pair.as_str();
     let (type_name, arity) = if let Some(base) = written.strip_suffix("[]") {
@@ -236,6 +252,8 @@ fn field_decl(pair: Pair<'_, Rule>) -> FieldDecl {
 fn attr(pair: Pair<'_, Rule>) -> Attr {
     let span = span_of(&pair);
     let mut inner = pair.into_inner();
+    // `field_attr`/`block_attr` both start with `attr_path`, so the first
+    // child is always the path.
     let path = inner
         .next()
         .expect("attribute always has a path")
@@ -251,11 +269,13 @@ fn attr(pair: Pair<'_, Rule>) -> Attr {
 }
 
 fn arg(pair: Pair<'_, Rule>) -> Arg {
+    // `arg = { named_arg | value }` expands to exactly one child.
     let inner = pair.into_inner().next().expect("arg wraps one value");
     match inner.as_rule() {
         Rule::named_arg => {
             let span = span_of(&inner);
             let mut parts = inner.into_inner();
+            // `named_arg = { ident ~ ":" ~ value }` guarantees two children.
             let name = parts
                 .next()
                 .expect("named argument has a name")
@@ -284,6 +304,7 @@ fn value(pair: Pair<'_, Rule>) -> Value {
         Rule::ident => Value::Ident(pair.as_str().to_owned(), span),
         Rule::env_call => Value::Env(
             unescape(inner_text(
+                // `env_call = { kw_env ~ "(" ~ string ~ ")" }` always contains a string.
                 &pair
                     .into_inner()
                     .find(|p| p.as_rule() == Rule::string)
@@ -292,6 +313,7 @@ fn value(pair: Pair<'_, Rule>) -> Value {
             span,
         ),
         Rule::func_call => {
+            // `func_call = { ident ~ "(" ~ ... }` always starts with the name.
             let mut inner = pair.into_inner();
             let name = inner
                 .next()
@@ -305,6 +327,8 @@ fn value(pair: Pair<'_, Rule>) -> Value {
             }
         }
         Rule::array => Value::Array(pair.into_inner().map(value).collect(), span),
+        // `value = _{ func_call | array | string | number | boolean | ident }`
+        // covers every rule that can reach this match.
         other => unreachable!("unexpected value rule {other:?}"),
     }
 }
@@ -330,117 +354,4 @@ fn unescape(raw: String) -> String {
         }
     }
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_every_production() {
-        let src = r#"
-// a line comment that must not eat the next doc comment
-datasource db {
-  provider = "postgres"
-  url      = env("DATABASE_URL")
-  strict   = true
-}
-
-generator client {
-  output      = "src/db"
-  module_name = "db"
-}
-
-/// A registered account.
-enum Role {
-  /// Ordinary user.
-  USER
-  ADMIN @map("admin")
-}
-
-/// A user.
-model User {
-  id        Uuid     @id @default(uuid7())
-  email     String   @unique @db.VarChar(200)
-  name      String?
-  role      Role     @default(USER)
-  posts     Post[]
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@index([email])
-  @@map("users")
-}
-
-model Post {
-  id       Uuid @id @default(uuid7())
-  authorId Uuid @map("author_id")
-  author   User @relation(fields: [authorId], references: [id], onDelete: Cascade)
-}
-"#;
-        let ast = parse_ast(src).expect("fixture parses");
-        assert_eq!(ast.decls.len(), 5);
-
-        let user = ast.models().next().expect("User is the first model");
-        assert_eq!(user.name, "User");
-        assert_eq!(user.fields.len(), 6);
-        assert_eq!(user.block_attrs.len(), 2);
-        assert_eq!(user.docs.as_deref(), Some("A user."));
-        assert_eq!(user.fields[4].arity, Arity::List);
-        assert_eq!(user.fields[2].arity, Arity::Optional);
-
-        let email = &user.fields[1];
-        assert!(email.has_attr("unique"));
-        let varchar = email.attr("db.VarChar").expect("native type attribute");
-        assert_eq!(
-            varchar.first_positional().map(Value::describe),
-            Some("200".to_owned())
-        );
-
-        let role = ast.enums().next().expect("one enum");
-        assert_eq!(role.docs.as_deref(), Some("A registered account."));
-        assert_eq!(role.variants[0].docs.as_deref(), Some("Ordinary user."));
-        assert_eq!(role.variants[1].map.as_deref(), Some("admin"));
-    }
-
-    #[test]
-    fn doc_comments_survive_the_comment_rule() {
-        // Trap 1 from the plan: a `COMMENT` rule without the `!"///"` lookahead
-        // silently swallows doc comments, producing empty rustdoc and no error.
-        let ast = parse_ast("/// kept\nmodel A {\n  id Uuid @id\n}\n").expect("parses");
-        let model = ast.models().next().expect("one model");
-        assert_eq!(model.docs.as_deref(), Some("kept"));
-    }
-
-    #[test]
-    fn keywords_do_not_swallow_identifier_prefixes() {
-        let ast = parse_ast("model modelish {\n  id Uuid @id\n}\n").expect("parses");
-        assert_eq!(ast.models().next().expect("one model").name, "modelish");
-    }
-
-    #[test]
-    fn relation_arguments_keep_their_shape() {
-        let ast = parse_ast(
-            "model Post {\n  author User @relation(\"written\", fields: [authorId], references: [id])\n}\n",
-        )
-        .expect("parses");
-        let field = &ast.models().next().expect("one model").fields[0];
-        let rel = field.attr("relation").expect("relation attribute");
-        assert_eq!(
-            rel.first_positional().and_then(Value::as_str),
-            Some("written")
-        );
-        assert_eq!(
-            rel.named("fields")
-                .and_then(Value::as_array)
-                .map(<[Value]>::len),
-            Some(1)
-        );
-    }
-
-    #[test]
-    fn malformed_input_reports_a_location() {
-        let err = parse_ast("model User {\n  email @unique\n}\n").expect_err("missing a type");
-        let rendered = err.to_string();
-        assert!(rendered.contains("2:"), "no line/column in {rendered}");
-    }
 }

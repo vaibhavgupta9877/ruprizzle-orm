@@ -12,4 +12,5 @@
 [Benchmark results](BenchmarkResults.md)
 [Migrating from other ORMs](MigratingFrom.md)
 [FAQ](Faq.md)
-[0.1.0-alpha announcement](Announcement.md)
+[Architecture decision records](adr/index.md)
+[0.1.1-beta.1 announcement](Announcement.md)

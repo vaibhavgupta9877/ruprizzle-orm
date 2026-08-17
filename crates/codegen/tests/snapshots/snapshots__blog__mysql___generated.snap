@@ -1,0 +1,9 @@
+---
+source: crates/codegen/tests/snapshots.rs
+expression: content
+---
+#![allow(clippy::all, clippy::pedantic, unused_imports)]
+/// Schema hash, used to detect stale generated code.
+pub const SCHEMA_HASH: &str = "6f103456acaee02272151c1f64a9d71910006d41aff6217b8b21b574f397a018";
+/// ruprizzle version that generated this code.
+pub const RUPRIZZLE_VERSION: &str = "0.4.0-beta.2";

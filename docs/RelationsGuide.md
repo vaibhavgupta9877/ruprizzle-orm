@@ -50,6 +50,27 @@ db.user()
     .await?;
 ```
 
+## Single-row includes
+
+`fetch_one()` and `fetch_optional()` are only available on plain selects. Once
+you add `.include(...)`, use the include-aware single-row methods instead:
+
+```rust
+let user = db.user()
+    .find_many()
+    .filter(user::ID.eq(1))
+    .include(user::posts().take(5))
+    .exec_one()
+    .await?;
+
+for post in user.posts.get() {
+    println!("{}", post.title);
+}
+```
+
+`exec_optional()` returns `Option<M>` and also loads the requested includes.
+`exec()` remains the choice when you expect many rows.
+
 ## Many-to-many with an explicit join model
 
 `ruprizzle` does not hide join tables. Model them explicitly for full control:
@@ -83,7 +104,7 @@ Filter parents by a condition on their children:
 db.user()
     .find_many()
     .filter(user::posts().some(post::PUBLISHED.eq(true)))
-    .exec()
+    .fetch_all()
     .await?;
 ```
 
@@ -94,3 +115,14 @@ db.user()
 A naive loop would issue one query per parent to fetch children. `include`
 batches children by parent key and issues one query per *level*, then maps the
 rows back into the parent structs in Rust.
+
+## Full-table fast path and its bound
+
+When the parent query is an unfiltered full-table fetch and the include has no
+extra filter, order, or per-parent limit, `ruprizzle` can load the whole child
+table in one query instead of building a large `IN (...)` list. Before taking
+that path, it `COUNT(*)`s the child table and only uses the full-table load when
+the count is below `PoolConfig::full_table_include_limit` (default `100_000`).
+If the child table is larger, the loader falls back to a chunked `IN (...)` list,
+which preserves the bounded-query guarantee without materialising millions of
+rows. Set the field to `None` to disable the fast path entirely.

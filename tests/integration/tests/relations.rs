@@ -5,9 +5,8 @@ use ruprizzle::{
     InsertManyQuery, InsertQuery, Model, NestedSetter, Related, SelectQuery, Value,
 };
 use ruprizzle_testkit::both_dbs;
-use sqlx::FromRow;
 
-#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct User {
     id: i64,
     name: String,
@@ -15,11 +14,36 @@ struct User {
     posts: Related<Vec<Post>>,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(User);
+
 impl Model for User {
     const TABLE: &'static str = "users";
 }
 
-#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for User {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            name: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
+            posts: Related::default(),
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for User {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            name: row.get::<String>(1)?,
+            posts: Related::default(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct Post {
     id: i64,
     title: String,
@@ -31,11 +55,42 @@ struct Post {
     comments: Related<Vec<Comment>>,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Post);
+
 impl Model for Post {
     const TABLE: &'static str = "posts";
 }
 
-#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Post {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            title: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
+            published: ::ruprizzle::rusqlite::get::<i64>(row, 2)?,
+            author_id: ::ruprizzle::rusqlite::get::<i64>(row, 3)?,
+            author: Related::default(),
+            comments: Related::default(),
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Post {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            title: row.get::<String>(1)?,
+            published: row.get::<i64>(2)?,
+            author_id: row.get::<i64>(3)?,
+            author: Related::default(),
+            comments: Related::default(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 #[allow(dead_code)]
 struct Comment {
     id: i64,
@@ -43,8 +98,33 @@ struct Comment {
     post_id: i64,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Comment);
+
 impl Model for Comment {
     const TABLE: &'static str = "comments";
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Comment {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            body: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
+            post_id: ::ruprizzle::rusqlite::get::<i64>(row, 2)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Comment {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            body: row.get::<String>(1)?,
+            post_id: row.get::<i64>(2)?,
+        })
+    }
 }
 
 const USER_ID: Column<User, i64> = Column::new("users", "id");
@@ -91,7 +171,7 @@ both_dbs! {
              CREATE TABLE posts (id BIGINT PRIMARY KEY, title TEXT NOT NULL, published INTEGER NOT NULL, author_id BIGINT NOT NULL);
              CREATE TABLE comments (id BIGINT PRIMARY KEY, body TEXT NOT NULL, post_id BIGINT NOT NULL)";
     async fn runtime_include_round_trip(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         for (id, name) in [(1, "alice"), (2, "bob")] {
             InsertQuery::<User>::new(pool)
@@ -259,7 +339,7 @@ both_dbs! {
     /// G5's exit gate: a two-level include costs one query per *level*, not one
     /// per row. Any future refactor that reintroduces N+1 fails right here.
     async fn include_is_bounded(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
         seed(pool, 10, 5, 3).await?;
 
         let counter = CountingExecutor::new(pool);
@@ -268,22 +348,23 @@ both_dbs! {
             .exec()
             .await?;
 
-        // users, posts, comments — not 1 + 10 + 50.
-        assert_eq!(counter.count(), 3);
+        // users, count posts, posts, count comments, comments — not 1 + 10 + 50.
+        assert_eq!(counter.count(), 5);
         assert_eq!(users.len(), 10);
         assert!(users.iter().all(|u| u.posts.get().len() == 5));
         assert!(users
             .iter()
             .all(|u| u.posts.get().iter().all(|p| p.comments.get().len() == 3)));
 
-        // A many-to-one include over 50 posts is still a single query, because
-        // the repeated author keys are de-duplicated before the `IN`.
+        // A many-to-one include over 50 posts is still a single query per level,
+        // because the repeated author keys are de-duplicated before the `IN`.
+        // The fast path adds one guard COUNT(*) per level.
         counter.reset();
         let posts_with_author: Vec<Post> = SelectQuery::<Post>::new(&counter)
             .include(author())
             .exec()
             .await?;
-        assert_eq!(counter.count(), 2);
+        assert_eq!(counter.count(), 3);
         assert_eq!(posts_with_author.len(), 50);
         assert!(posts_with_author.iter().all(|p| p.author.get().is_some()));
     }
@@ -296,7 +377,7 @@ both_dbs! {
     /// `take` is per parent, not per batch — the distinction a plain `LIMIT`
     /// gets silently wrong as soon as there is more than one parent.
     async fn per_relation_take_is_per_parent(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
         seed(pool, 4, 5, 0).await?;
 
         let counter = CountingExecutor::new(pool);
@@ -323,16 +404,12 @@ both_dbs! {
              CREATE TABLE posts (id BIGINT PRIMARY KEY, title TEXT NOT NULL, published INTEGER NOT NULL, author_id BIGINT NOT NULL);
              CREATE TABLE comments (id BIGINT PRIMARY KEY, body TEXT NOT NULL, post_id BIGINT NOT NULL)";
     async fn nested_create_round_trip(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         struct SetPosts;
         impl NestedSetter<User> for SetPosts {
-            fn set(&self, parent: &mut User, rows: Vec<sqlx::any::AnyRow>) {
-                parent.posts = Related::Loaded(
-                    rows.into_iter()
-                        .map(|r| Post::from_row(&r).unwrap())
-                        .collect(),
-                );
+            fn set(&self, parent: &mut User, batch: ruprizzle::executor::RowBatch) {
+                parent.posts = Related::Loaded(ruprizzle::executor::decode_rows::<Post>(batch).unwrap());
             }
         }
 

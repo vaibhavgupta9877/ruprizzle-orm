@@ -10,14 +10,24 @@ use ruprizzle_core::ir::Schema;
 use ruprizzle_dialect::dialect_for;
 use ruprizzle_migrate::{detect, diff, up_sql};
 use ruprizzle_parser::parse;
+use std::time::Duration;
 use tempfile::TempDir;
 
 async fn local_pool() -> (Pool, TempDir) {
+    sqlx::any::install_default_drivers();
     let dir = tempfile::tempdir_in(ruprizzle_deep_tests::db_dir()).expect("temp dir");
     let path = dir.path().join("migrate.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
     let url = format!("sqlite:///{}?mode=rwc", file);
-    let pool = ruprizzle::connect(&url).await.expect("connect");
+    // Migration tests need raw `sqlx` access to a single connection, so keep
+    // this pool on the `Any` driver rather than native SQLite.
+    let any = sqlx::any::AnyPoolOptions::new()
+        .max_connections(4)
+        .acquire_timeout(Duration::from_secs(5))
+        .connect(&url)
+        .await
+        .expect("connect");
+    let pool = ruprizzle::Pool::Any(any);
     (pool, dir)
 }
 
@@ -112,7 +122,7 @@ async fn round_trip(from: &Schema, to: &Schema) -> Result<Vec<String>, String> {
     apply_sql(&pool, &drop).await?;
 
     let empty = empty_schema();
-    for sql in [up_sql(&empty, from, dialect.as_ref()), up_sql(from, to, dialect.as_ref())] {
+    for sql in [up_sql(&empty, from, dialect), up_sql(from, to, dialect)] {
         apply_sql(&pool, &sql).await?;
     }
 
@@ -141,7 +151,7 @@ proptest! {
         let changes = diff(&sa, &sb);
         if !changes.is_empty() {
             let dialect = dialect_for(sa.datasource.provider);
-            let sql = up_sql(&sa, &sb, dialect.as_ref());
+            let sql = up_sql(&sa, &sb, dialect);
             prop_assert!(
                 !sql.trim().is_empty(),
                 "diff reported {} changes but produced no SQL",

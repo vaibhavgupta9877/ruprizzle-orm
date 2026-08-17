@@ -33,6 +33,7 @@
 )]
 
 mod common;
+mod mysql;
 mod postgres;
 mod sqlite;
 
@@ -41,6 +42,7 @@ use ruprizzle_core::ir::{
 };
 
 pub use common::{check_schema_capabilities, dialect_for, full_alter_column, full_create_table};
+pub use mysql::MySqlDialect;
 pub use postgres::PostgresDialect;
 pub use sqlite::SqliteDialect;
 
@@ -168,6 +170,8 @@ pub enum RustType {
     Enum(String),
     /// `Option<T>`.
     Option(Box<RustType>),
+    /// `Vec<T>` for scalar or enum lists.
+    Vec(Box<RustType>),
 }
 
 /// An error produced while turning an IR field into a SQL column.
@@ -198,8 +202,9 @@ pub enum DialectError {
 
 /// The SQL dialect abstraction.
 ///
-/// The trait is object-safe: `Box<dyn DbDialect>` can be stored and passed around.
-/// Implementations live in [`PostgresDialect`] and [`SqliteDialect`].
+/// The trait is object-safe: `&dyn DbDialect` can be passed around, and
+/// `dialect_for` returns a cheap `'static` reference. Implementations live in
+/// [`PostgresDialect`], [`MySqlDialect`], and [`SqliteDialect`].
 pub trait DbDialect: Send + Sync {
     /// The canonical name of the dialect, e.g. `"postgres"`.
     fn name(&self) -> &'static str;
@@ -294,4 +299,24 @@ pub trait DbDialect: Send + Sync {
 
     /// The capabilities of this dialect.
     fn capabilities(&self) -> Capabilities;
+
+    /// Whether `RIGHT JOIN` is supported.
+    fn supports_right_join(&self) -> bool {
+        true
+    }
+
+    /// Whether `FULL OUTER JOIN` is supported.
+    fn supports_full_join(&self) -> bool {
+        true
+    }
+
+    /// Whether `INTERSECT` is supported.
+    fn supports_intersect(&self) -> bool {
+        true
+    }
+
+    /// Whether `EXCEPT` is supported.
+    fn supports_except(&self) -> bool {
+        true
+    }
 }

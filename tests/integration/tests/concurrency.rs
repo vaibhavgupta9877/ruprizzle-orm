@@ -31,12 +31,12 @@ both_dbs! {
         let dir = fixture();
         let migrator = Migrator::new(dir.path());
 
-        let first = migrator.apply_all(db.any_pool(), false).await?;
+        let first = migrator.apply_all(db.pool(), false).await?;
         assert_eq!(first.applied.len(), 2);
 
         // The second run models a concurrent deployer that computed the same
         // pending set before the first one committed.
-        let second = migrator.apply_all(db.any_pool(), false).await?;
+        let second = migrator.apply_all(db.pool(), false).await?;
         assert!(
             second.applied.is_empty(),
             "second run should be a no-op, applied {:?}",

@@ -3,7 +3,7 @@
 use ruprizzle_core::ir::{Provider, Schema};
 use ruprizzle_core::{SchemaError, Span};
 use ruprizzle_dialect::{
-    DbDialect, JsonSupport, PostgresDialect, RustType, SqliteDialect, Stmt,
+    DbDialect, JsonSupport, MySqlDialect, PostgresDialect, RustType, SqliteDialect, Stmt,
     check_schema_capabilities, dialect_for, full_alter_column, full_create_table,
 };
 use ruprizzle_parser::parse;
@@ -124,6 +124,42 @@ fn postgres_capabilities_match_plan() {
     assert!(cap.alter_column_type);
     assert!(cap.returning);
     assert!(matches!(cap.json_type, JsonSupport::Native));
+}
+
+#[test]
+fn mysql_dialect_emits_mysql_ddl_and_dml_fragments() {
+    let mysql = MySqlDialect;
+    let schema = example_schema("blog");
+    let user = schema.model("User").unwrap();
+
+    assert_eq!(mysql.name(), "mysql");
+    assert_eq!(mysql.quote_ident("users`archive"), "`users``archive`");
+    assert_eq!(
+        mysql.column_type(user.field("id").unwrap()).unwrap(),
+        "CHAR(36)"
+    );
+    assert_eq!(
+        mysql.column_type(user.field("createdAt").unwrap()).unwrap(),
+        "DATETIME(6)"
+    );
+
+    let post = schema.model("Post").unwrap();
+    let stmts = full_create_table(&mysql, &schema, post);
+    assert!(stmts[0].sql.contains("VARCHAR(255)"));
+    assert!(stmts.iter().any(|stmt| stmt.sql.contains("ADD CONSTRAINT")));
+    assert_eq!(
+        mysql.upsert_clause(&["email".to_owned()], &[]),
+        "ON DUPLICATE KEY UPDATE `email` = `email`"
+    );
+    assert!(!mysql.capabilities().returning);
+    assert!(!mysql.capabilities().deferrable_fks);
+}
+
+#[test]
+fn mysql_provider_selects_mysql_dialect() {
+    assert_eq!(Provider::parse("mysql"), Some(Provider::Mysql));
+    assert_eq!(Provider::parse("mariadb"), Some(Provider::Mysql));
+    assert_eq!(dialect_for(Provider::Mysql).name(), "mysql");
 }
 
 #[test]

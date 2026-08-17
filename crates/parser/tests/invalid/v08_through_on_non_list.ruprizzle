@@ -1,0 +1,27 @@
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  output = "src/db"
+}
+
+model Post {
+  id   Int   @id
+  tags Tag[] @relation(through: PostTag)
+}
+
+model Tag {
+  id    Int  @id
+  posts Post @relation(through: PostTag)
+}
+
+model PostTag {
+  postId Int
+  tagId  Int
+  post   Post @relation(fields: [postId], references: [id])
+  tag    Tag  @relation(fields: [tagId], references: [id])
+  @@id([postId, tagId])
+  @@map("post_tags")
+}

@@ -1,13 +1,9 @@
 //! The `ruprizzle` command-line interface.
 //!
-//! The command surface is declared in full from P0 so that the shape of the tool
-//! is fixed early and the `migrate dev` / `migrate deploy` split — the guard that
-//! keeps a prototyping command away from production data — is structural rather
-//! than something bolted on later.
-//!
-//! Subcommands are implemented incrementally: P6 delivers `migrate deploy`,
-//! `migrate status`, and `db push` (schema push without migration files).
-//! P7 fills in the remaining commands.
+//! Provides `generate`, `validate`, `format`, `migrate dev`, `migrate deploy`,
+//! `migrate status`, `db push`, `db seed`, and other schema-first workflow
+//! commands. The `migrate dev` / `migrate deploy` split is structural: `dev` is
+//! for prototyping, `deploy` is for production data.
 
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
@@ -15,6 +11,7 @@
 use std::collections::BTreeMap;
 
 use indexmap::IndexMap;
+use std::borrow::Cow;
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,12 +20,17 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use clap::{Parser, Subcommand};
 use notify::{RecursiveMode, Watcher};
+use ruprizzle::{Executor, Pool, Tx};
 use ruprizzle_codegen::generate_all;
 use ruprizzle_core::SchemaError;
 use ruprizzle_core::ir::{DatasourceUrl, Provider, Schema};
 use ruprizzle_dialect::{check_schema_capabilities, dialect_for};
+use ruprizzle_migrate::rename::suggest_renames;
 use ruprizzle_migrate::runner::{compute_checksum, split_statements};
 use ruprizzle_migrate::{Change, MigrationMeta, Migrator, diff, down_sql, up_sql};
+
+mod introspect;
+mod seed;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -120,6 +122,15 @@ enum MigrateCommand {
         #[arg(long)]
         force: bool,
     },
+    /// Collapse applied migration history into one baseline, archiving old files.
+    Squash {
+        /// Name for the generated baseline migration.
+        #[arg(long)]
+        name: Option<String>,
+        /// Required because this rewrites migration history and tracking metadata.
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -130,6 +141,8 @@ enum DbCommand {
         #[arg(long)]
         accept_data_loss: bool,
     },
+    /// Introspect the database and rewrite the schema from its live tables.
+    Pull,
     /// Run the project's seed script.
     Seed,
 }
@@ -191,9 +204,16 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             }
             migrate_reset(&cli.schema, "migrations", cli.verbose).await
         }
+        Command::Migrate(MigrateCommand::Squash { name, force }) => {
+            if !force {
+                return Err("migrate squash rewrites history; pass --force to proceed".into());
+            }
+            migrate_squash(&cli.schema, "migrations", name.as_ref(), cli.verbose).await
+        }
         Command::Db(DbCommand::Push { accept_data_loss }) => {
             db_push(&cli.schema, "migrations", *accept_data_loss, cli.verbose).await
         }
+        Command::Db(DbCommand::Pull) => db_pull(&cli.schema, cli.verbose).await,
         Command::Db(DbCommand::Seed) => db_seed(&cli.schema, cli.verbose).await,
     }
 }
@@ -263,6 +283,7 @@ fn init(schema_path: &str, provider: &str) -> Result<(), Box<dyn std::error::Err
     let default_url = match provider {
         Provider::Postgres => "postgres://localhost:5432/postgres?sslmode=disable",
         Provider::Sqlite => "sqlite:test.db?mode=rwc",
+        Provider::Mysql => "mysql://localhost:3306/app",
     };
 
     fs::create_dir_all(base)?;
@@ -493,7 +514,7 @@ fn try_generate(
 fn validate(schema_path: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (schema, source, mut warnings) = parse_schema(schema_path)?;
     let dialect = dialect_for(schema.datasource.provider);
-    let caps = check_schema_capabilities(dialect.as_ref(), &schema);
+    let caps = check_schema_capabilities(dialect, &schema);
     warnings.extend(caps);
 
     print_warnings(&source, warnings);
@@ -598,16 +619,16 @@ fn write_migration(
 }
 
 async fn execute_statements(
-    pool: &sqlx::AnyPool,
+    pool: &Pool,
     sql: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut tx = pool.begin().await?;
+    let tx = Tx::begin(pool).await?;
     for (idx, stmt) in split_statements(sql).iter().enumerate() {
         let sql = stmt.trim();
         if sql.is_empty() || sql.starts_with("-- ") || sql.starts_with("/*") {
             continue;
         }
-        if let Err(e) = sqlx::query(sql).execute(&mut *tx).await {
+        if let Err(e) = tx.execute_raw(Cow::Owned(sql.to_owned()), Vec::new()).await {
             return Err(format!("statement {} failed: {e}\n  sql: {sql}", idx + 1).into());
         }
     }
@@ -625,7 +646,7 @@ async fn migrate_dev(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (schema, source, mut warnings) = parse_schema(schema_path)?;
     let dialect = dialect_for(schema.datasource.provider);
-    warnings.extend(check_schema_capabilities(dialect.as_ref(), &schema));
+    warnings.extend(check_schema_capabilities(dialect, &schema));
     print_warnings(&source, warnings);
 
     let url = resolve_database_url(schema_path, verbose)?;
@@ -637,6 +658,12 @@ async fn migrate_dev(
     let prev = load_snapshot(&snapshot, &schema)?;
 
     let changes = diff(&prev, &schema);
+    for suggestion in suggest_renames(&prev, &schema, &changes) {
+        eprintln!(
+            "Possible rename in {}: `{}` -> `{}`. Add `@renamedFrom(\"{}\")` to the new field to confirm; no rename was inferred.",
+            suggestion.model, suggestion.from_column, suggestion.to_column, suggestion.from
+        );
+    }
     let destructive = destructive_descriptions(&changes);
     if !destructive.is_empty() && !accept_data_loss {
         return Err(format!(
@@ -646,8 +673,8 @@ async fn migrate_dev(
         .into());
     }
 
-    let up = up_sql(&prev, &schema, dialect.as_ref());
-    let down = down_sql(&prev, &schema, dialect.as_ref());
+    let up = up_sql(&prev, &schema, dialect);
+    let down = down_sql(&prev, &schema, dialect);
     let id = migration_id(name);
 
     let is_destructive = changes.iter().any(Change::is_destructive);
@@ -702,14 +729,14 @@ async fn migrate_reset(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (schema, source, mut warnings) = parse_schema(schema_path)?;
     let dialect = dialect_for(schema.datasource.provider);
-    warnings.extend(check_schema_capabilities(dialect.as_ref(), &schema));
+    warnings.extend(check_schema_capabilities(dialect, &schema));
     print_warnings(&source, warnings);
 
     let url = resolve_database_url(schema_path, verbose)?;
     let pool = connect(&url).await?;
 
     let migrator = Migrator::new(migrations_dir);
-    migrator.reset(&pool, dialect.as_ref()).await?;
+    migrator.reset(&pool, dialect).await?;
 
     let report = migrator.apply_all(&pool, true).await?;
     if report.applied.is_empty() {
@@ -791,6 +818,71 @@ async fn migrate_status(
     Ok(())
 }
 
+async fn migrate_squash(
+    schema_path: &str,
+    migrations_dir: &str,
+    name: Option<&String>,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (schema, source, warnings) = parse_schema(schema_path)?;
+    print_warnings(&source, warnings);
+
+    let url = resolve_database_url(schema_path, verbose)?;
+    let pool = connect(&url).await?;
+    let migrator = Migrator::new(migrations_dir);
+    let status = migrator.status(&pool).await?;
+    if !status.pending.is_empty() {
+        return Err(format!(
+            "cannot squash with pending migrations; deploy first: {}",
+            status.pending.join(", ")
+        )
+        .into());
+    }
+    if status.applied.is_empty() {
+        return Err("cannot squash an empty migration history".into());
+    }
+    migrator.verify_checksums(&pool).await?;
+
+    let dialect = dialect_for(schema.datasource.provider);
+    let empty = empty_schema_like(&schema);
+    let up = up_sql(&empty, &schema, dialect);
+    let down = down_sql(&empty, &schema, dialect);
+    let default_name = "baseline".to_owned();
+    let baseline_id = migration_id(name.or(Some(&default_name)));
+    let migrations_path = Path::new(migrations_dir);
+    let archive = migrations_path.join(".archive").join(&baseline_id);
+    fs::create_dir_all(&archive)?;
+
+    for migration in migrator.migrations()? {
+        fs::rename(
+            migrations_path.join(&migration.id),
+            archive.join(&migration.id),
+        )?;
+    }
+
+    write_migration(
+        migrations_dir,
+        &baseline_id,
+        &up,
+        &down,
+        down.to_ascii_lowercase().contains("drop table"),
+    )?;
+    pool.execute_raw(
+        Cow::Owned("DELETE FROM _ruprizzle_migrations".to_owned()),
+        Vec::new(),
+    )
+    .await?;
+    migrator.resolve(&pool, &baseline_id).await?;
+
+    println!(
+        "Squashed {} migration{} into {baseline_id}; archived old files under {}",
+        status.applied.len(),
+        if status.applied.len() == 1 { "" } else { "s" },
+        archive.display()
+    );
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // db push / seed
 // ---------------------------------------------------------------------------
@@ -803,7 +895,7 @@ async fn db_push(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (schema, source, mut warnings) = parse_schema(schema_path)?;
     let dialect = dialect_for(schema.datasource.provider);
-    warnings.extend(check_schema_capabilities(dialect.as_ref(), &schema));
+    warnings.extend(check_schema_capabilities(dialect, &schema));
     print_warnings(&source, warnings);
 
     eprintln!(
@@ -826,7 +918,7 @@ async fn db_push(
         .into());
     }
 
-    let up = up_sql(&prev, &schema, dialect.as_ref());
+    let up = up_sql(&prev, &schema, dialect);
     execute_statements(&pool, &up).await?;
 
     save_snapshot(&snapshot, &schema)?;
@@ -834,25 +926,62 @@ async fn db_push(
     Ok(())
 }
 
+async fn db_pull(
+    schema_path: &str,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (schema, source, warnings) = parse_schema(schema_path)?;
+    print_warnings(&source, warnings);
+
+    let url = resolve_database_url(schema_path, verbose)?;
+    let pool = connect(&url).await?;
+    let database = ruprizzle_migrate::introspect::pull(&pool).await?;
+    if database.provider != schema.datasource.provider {
+        return Err(format!(
+            "database provider `{}` does not match schema provider `{}`",
+            database.provider, schema.datasource.provider
+        )
+        .into());
+    }
+
+    let pulled = introspect::render_schema(&database, &schema.datasource.url, &schema.generator);
+    fs::write(schema_path, pulled)?;
+    println!(
+        "Pulled {} table{} into {schema_path}",
+        database.tables.len(),
+        if database.tables.len() == 1 { "" } else { "s" }
+    );
+    Ok(())
+}
+
 async fn db_seed(
     schema_path: &str,
     verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (_, source, warnings) = parse_schema(schema_path)?;
+    let (schema, source, warnings) = parse_schema(schema_path)?;
     print_warnings(&source, warnings);
 
     let base = Path::new(schema_path).parent().unwrap_or(Path::new("."));
-    let seed = base.join("seeds").join("main.sql");
-    if !seed.exists() {
-        return Err("create seeds/main.sql".into());
-    }
-    let sql = fs::read_to_string(&seed)?;
-
+    let seed = base.join("seeds").join("main.json");
+    let legacy_sql = base.join("seeds").join("main.sql");
     let url = resolve_database_url(schema_path, verbose)?;
     let pool = connect(&url).await?;
-    execute_statements(&pool, &sql).await?;
 
-    println!("Ran {}", seed.display());
+    if seed.exists() {
+        let document = fs::read_to_string(&seed)?;
+        let rows = seed::apply(&schema, &document, &pool).await?;
+        println!(
+            "Seeded {rows} row{} from {}",
+            if rows == 1 { "" } else { "s" },
+            seed.display()
+        );
+    } else if legacy_sql.exists() {
+        let sql = fs::read_to_string(&legacy_sql)?;
+        execute_statements(&pool, &sql).await?;
+        println!("Ran legacy SQL seed {}", legacy_sql.display());
+    } else {
+        return Err("create seeds/main.json".into());
+    }
     Ok(())
 }
 
@@ -891,9 +1020,8 @@ fn resolve_database_url(
     }
 }
 
-async fn connect(url: &str) -> Result<sqlx::AnyPool, Box<dyn std::error::Error + Send + Sync>> {
-    sqlx::any::install_default_drivers();
-    Ok(sqlx::AnyPool::connect(url).await?)
+async fn connect(url: &str) -> Result<Pool, Box<dyn std::error::Error + Send + Sync>> {
+    Ok(ruprizzle::connect(url).await?)
 }
 
 #[cfg(test)]
@@ -927,5 +1055,114 @@ mod tests {
         let cli =
             Cli::try_parse_from(["ruprizzle", "--schema", "db/app.ruprizzle", "validate"]).unwrap();
         assert_eq!(cli.schema, "db/app.ruprizzle");
+    }
+
+    #[tokio::test]
+    async fn migrate_squash_archives_history_and_marks_baseline_applied() {
+        use ruprizzle::Executor;
+        use std::borrow::Cow;
+
+        let root =
+            std::env::temp_dir().join(format!("ruprizzle-cli-squash-{}", std::process::id()));
+        let migrations = root.join("migrations");
+        std::fs::create_dir_all(&migrations).unwrap();
+        let schema_path = root.join("schema.ruprizzle");
+        let database_path = root.join("database.sqlite");
+        let file = database_path.to_string_lossy().replace('\\', "/");
+        let url = format!("sqlite:///{file}?mode=rwc");
+        std::fs::write(
+            &schema_path,
+            format!(
+                r#"datasource db {{ provider = "sqlite" url = "{url}" }}
+
+generator client {{ provider = "rust" }}
+
+model User {{
+  id Int @id
+  name String
+}}
+"#
+            ),
+        )
+        .unwrap();
+        let initial = migrations.join("20240101_init");
+        std::fs::create_dir_all(&initial).unwrap();
+        std::fs::write(
+            initial.join("up.sql"),
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);",
+        )
+        .unwrap();
+        std::fs::write(initial.join("down.sql"), "DROP TABLE users;").unwrap();
+
+        let pool = ruprizzle::connect(&url).await.unwrap();
+        Migrator::new(&migrations)
+            .apply_all(&pool, false)
+            .await
+            .unwrap();
+        migrate_squash(
+            schema_path.to_str().unwrap(),
+            migrations.to_str().unwrap(),
+            None,
+            false,
+        )
+        .await
+        .unwrap();
+
+        let status = Migrator::new(&migrations).status(&pool).await.unwrap();
+        assert_eq!(status.applied.len(), 1);
+        assert!(status.pending.is_empty());
+        assert!(migrations.join(".archive").exists());
+        let baseline_count = std::fs::read_dir(&migrations)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.path().join("up.sql").exists())
+            .count();
+        assert_eq!(baseline_count, 1);
+        pool.execute_raw(Cow::Owned("SELECT 1".to_owned()), Vec::new())
+            .await
+            .unwrap();
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn db_pull_rewrites_schema_from_sqlite() {
+        use ruprizzle::Executor;
+        use std::borrow::Cow;
+
+        let base = std::env::temp_dir();
+        let stem = format!("ruprizzle-cli-pull-{}", std::process::id());
+        let database_path = base.join(format!("{stem}.sqlite"));
+        let schema_path = base.join(format!("{stem}.ruprizzle"));
+        let file = database_path.to_string_lossy().replace('\\', "/");
+        let url = format!("sqlite:///{file}?mode=rwc");
+        let schema = format!(
+            r#"datasource db {{ provider = "sqlite" url = "{url}" }}
+
+generator client {{ provider = "rust" output = "src/db" module_name = "db" }}
+"#
+        );
+        std::fs::write(&schema_path, schema).unwrap();
+
+        let pool = ruprizzle::connect(&url).await.unwrap();
+        pool.execute_raw(
+            Cow::Owned(
+                "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE)"
+                    .to_owned(),
+            ),
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+        pool.close().await;
+
+        db_pull(schema_path.to_str().unwrap(), false).await.unwrap();
+        let pulled = std::fs::read_to_string(&schema_path).unwrap();
+        let parsed = ruprizzle_parser::parse("pulled", &pulled).unwrap();
+        assert_eq!(parsed.model("Users").unwrap().table, "users");
+        assert!(pulled.contains("email String"));
+
+        let _ = std::fs::remove_file(database_path);
+        let _ = std::fs::remove_file(schema_path);
     }
 }

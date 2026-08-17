@@ -1,7 +1,8 @@
 //! PostgreSQL dialect.
 
 use ruprizzle_core::ir::{
-    EnumDef, Field, FieldKind, IndexDef, Model, ResolvedRelation, ScalarType, Schema, UniqueDef,
+    EnumDef, Field, FieldKind, IndexDef, Model, RelationKind, ResolvedRelation, ScalarType, Schema,
+    UniqueDef,
 };
 
 use crate::common::{
@@ -28,23 +29,7 @@ impl DbDialect for PostgresDialect {
     }
 
     fn column_type(&self, f: &Field) -> Result<String, DialectError> {
-        base_column_type("postgres", f, |f| match f.kind {
-            FieldKind::Scalar(ScalarType::String) | FieldKind::Relation(_) | FieldKind::List(_) => {
-                "TEXT".to_owned()
-            }
-            FieldKind::Scalar(ScalarType::Int) => "INTEGER".to_owned(),
-            FieldKind::Scalar(ScalarType::BigInt) => "BIGINT".to_owned(),
-            FieldKind::Scalar(ScalarType::Float) => "DOUBLE PRECISION".to_owned(),
-            FieldKind::Scalar(ScalarType::Decimal) => "NUMERIC".to_owned(),
-            FieldKind::Scalar(ScalarType::Boolean) => "BOOLEAN".to_owned(),
-            FieldKind::Scalar(ScalarType::DateTime) => "TIMESTAMPTZ".to_owned(),
-            FieldKind::Scalar(ScalarType::Date) => "DATE".to_owned(),
-            FieldKind::Scalar(ScalarType::Time) => "TIME".to_owned(),
-            FieldKind::Scalar(ScalarType::Uuid) => "UUID".to_owned(),
-            FieldKind::Scalar(ScalarType::Json) => "JSONB".to_owned(),
-            FieldKind::Scalar(ScalarType::Bytes) => "BYTEA".to_owned(),
-            FieldKind::Enum(ref name) => name.as_str().to_owned(),
-        })
+        base_column_type("postgres", f, |f| pg_kind_type(&f.kind))
     }
 
     fn rust_type(&self, f: &Field) -> RustType {
@@ -193,12 +178,18 @@ impl DbDialect for PostgresDialect {
     }
 
     fn add_foreign_key(&self, m: &Model, r: &ResolvedRelation) -> Vec<Stmt> {
+        if r.kind == RelationKind::ManyToMany {
+            return Vec::new();
+        }
         let table = self.quote_ident(&m.table);
         let constraint = fk_constraint_sql(self, r);
         vec![Stmt::new(format!("ALTER TABLE {table} ADD {constraint};"))]
     }
 
     fn drop_foreign_key(&self, m: &Model, r: &ResolvedRelation) -> Vec<Stmt> {
+        if r.kind == RelationKind::ManyToMany {
+            return Vec::new();
+        }
         let table = self.quote_ident(&m.table);
         let name = self.quote_ident(&r.constraint_name);
         vec![Stmt::new(format!(
@@ -290,5 +281,14 @@ fn pg_type_name(ty: ScalarType) -> &'static str {
         ScalarType::Uuid => "UUID",
         ScalarType::Json => "JSONB",
         ScalarType::Bytes => "BYTEA",
+    }
+}
+
+fn pg_kind_type(kind: &FieldKind) -> String {
+    match kind {
+        FieldKind::Scalar(ScalarType::String) | FieldKind::Relation(_) => "TEXT".to_owned(),
+        FieldKind::Scalar(st) => pg_type_name(*st).to_owned(),
+        FieldKind::Enum(name) => name.as_str().to_owned(),
+        FieldKind::List(inner) => format!("{}[]", pg_kind_type(inner)),
     }
 }

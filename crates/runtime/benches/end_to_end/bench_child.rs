@@ -22,9 +22,97 @@ pub struct BenchChild {
 impl<'r> ::ruprizzle::sqlx::FromRow<'r, AnyRow> for BenchChild {
     fn from_row(row: &'r AnyRow) -> Result<Self, ::ruprizzle::sqlx::Error> {
         Ok(Self {
-            id: ::ruprizzle::decode::direct::<i64>(row, "id")?,
-            parent_id: ::ruprizzle::decode::direct::<i64>(row, "parent_id")?,
-            name: ::ruprizzle::decode::direct::<String>(row, "name")?,
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            parent_id: ::ruprizzle::decode::direct_idx(row, 1)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2)?,
+            parent: ::ruprizzle::Related::default(),
+            grandchildren: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::postgres::PgRow>
+for BenchChild {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::postgres::PgRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            parent_id: ::ruprizzle::decode::direct_idx(row, 1)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2)?,
+            parent: ::ruprizzle::Related::default(),
+            grandchildren: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::sqlite::SqliteRow>
+for BenchChild {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::sqlite::SqliteRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            parent_id: ::ruprizzle::decode::direct_idx(row, 1)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2)?,
+            parent: ::ruprizzle::Related::default(),
+            grandchildren: ::ruprizzle::Related::default(),
+        })
+    }
+}
+impl<'r> ::ruprizzle::sqlx::FromRow<'r, ::ruprizzle::sqlx::mysql::MySqlRow>
+for BenchChild {
+    fn from_row(
+        row: &'r ::ruprizzle::sqlx::mysql::MySqlRow,
+    ) -> Result<Self, ::ruprizzle::sqlx::Error> {
+        Ok(Self {
+            id: ::ruprizzle::decode::direct_idx(row, 0)?,
+            parent_id: ::ruprizzle::decode::direct_idx(row, 1)?,
+            name: ::ruprizzle::decode::direct_idx(row, 2)?,
+            parent: ::ruprizzle::Related::default(),
+            grandchildren: ::ruprizzle::Related::default(),
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromRusqliteRow for BenchChild {
+    fn from_rusqlite_row(
+        row: &::ruprizzle::rusqlite::RusqliteRow,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::get_i64(row, 0)?,
+            parent_id: ::ruprizzle::rusqlite::get_i64(row, 1)?,
+            name: ::ruprizzle::rusqlite::get_text(row, 2)?,
+            parent: ::ruprizzle::Related::default(),
+            grandchildren: ::ruprizzle::Related::default(),
+        })
+    }
+}
+#[cfg(feature = "sqlite-rusqlite")]
+impl ::ruprizzle::rusqlite::FromOwnedRow for BenchChild {
+    fn from_owned_row(
+        row: &::ruprizzle::rusqlite::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::Row::get::<i64>(row, 0)?,
+            parent_id: ::ruprizzle::rusqlite::Row::get::<i64>(row, 1)?,
+            name: ::ruprizzle::rusqlite::Row::get::<String>(row, 2)?,
+            parent: ::ruprizzle::Related::default(),
+            grandchildren: ::ruprizzle::Related::default(),
+        })
+    }
+}
+#[cfg(feature = "postgres-tokio-postgres")]
+impl ::ruprizzle::tokio_postgres::FromTokioPostgresRow for BenchChild {
+    fn from_tokio_postgres_row(
+        row: &::ruprizzle::tokio_postgres::Row,
+    ) -> Result<Self, ::ruprizzle::Error> {
+        Ok(Self {
+            id: row.try_get::<usize, i64>(0).map_err(::ruprizzle::Error::TokioPostgres)?,
+            parent_id: row
+                .try_get::<usize, i64>(1)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
+            name: row
+                .try_get::<usize, String>(2)
+                .map_err(::ruprizzle::Error::TokioPostgres)?,
             parent: ::ruprizzle::Related::default(),
             grandchildren: ::ruprizzle::Related::default(),
         })
@@ -53,6 +141,7 @@ pub struct BenchChildUpdate {
 impl ::ruprizzle::Model for BenchChild {
     const TABLE: &'static str = "bench_children";
     const PRIMARY_KEY: &'static str = "id";
+    const COLUMNS: &'static [&'static str] = &["id", "parent_id", "name"];
 }
 /// Table name for this model.
 pub const TABLE: &str = "bench_children";

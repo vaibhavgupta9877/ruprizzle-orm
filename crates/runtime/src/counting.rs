@@ -17,10 +17,10 @@
 //! It is deliberately in the library rather than the test harness: an
 //! application with its own hot path has the same question to ask.
 
+use std::borrow::Cow;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use ruprizzle_dialect::DbDialect;
-use sqlx::any::AnyRow;
 
 use crate::BoxFuture;
 use crate::error::Error;
@@ -69,26 +69,48 @@ impl<'e> CountingExecutor<'e> {
 }
 
 impl Executor for CountingExecutor<'_> {
-    fn dialect(&self) -> Box<dyn DbDialect> {
+    fn dialect(&self) -> &dyn DbDialect {
         self.inner.dialect()
+    }
+
+    fn full_table_include_limit(&self) -> u64 {
+        self.inner.full_table_include_limit()
+    }
+
+    #[cfg(feature = "sqlite-rusqlite")]
+    fn as_rusqlite(&self) -> Option<&crate::rusqlite::RusqlitePool> {
+        self.inner.as_rusqlite()
+    }
+
+    fn on_query(&self) {
+        self.tick();
     }
 
     fn fetch_all_raw(
         &self,
-        sql: String,
+        sql: Cow<'static, str>,
         binds: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<AnyRow>, Error>> {
+    ) -> BoxFuture<'_, Result<crate::executor::RowBatch, Error>> {
         self.tick();
         self.inner.fetch_all_raw(sql, binds)
     }
 
-    fn execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u64, Error>> {
+    fn execute_raw(
+        &self,
+        sql: Cow<'static, str>,
+        binds: Vec<Value>,
+    ) -> BoxFuture<'_, Result<u64, Error>> {
         self.tick();
         self.inner.execute_raw(sql, binds)
     }
 
-    fn stream_raw(&self, sql: String, binds: Vec<Value>) -> BoxRowStream<'_> {
+    fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
         self.tick();
         self.inner.stream_raw(sql, binds)
+    }
+
+    fn stream_unbuffered_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
+        self.tick();
+        self.inner.stream_unbuffered_raw(sql, binds)
     }
 }

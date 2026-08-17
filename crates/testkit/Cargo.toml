@@ -1,6 +1,6 @@
 [package]
 name        = "ruprizzle-testkit"
-description = "Dual-database test harness for the ruprizzle ORM"
+description = "Dual-database test harness for the ruprizzle ORM (not published)"
 version.workspace      = true
 edition.workspace      = true
 rust-version.workspace = true
@@ -10,10 +10,15 @@ authors.workspace      = true
 homepage.workspace     = true
 readme                 = "README.md"
 documentation          = "https://docs.rs/ruprizzle-testkit"
+publish                = false
 
 [dependencies]
-sqlx      = { workspace = true, features = ["postgres", "sqlite", "any"] }
+ruprizzle = { workspace = true }
+sqlx      = { workspace = true, features = ["postgres", "sqlite", "mysql", "any"] }
 tempfile  = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true }
 uuid      = { workspace = true }
+
+[features]
+sqlite-rusqlite = ["ruprizzle/sqlite-rusqlite"]

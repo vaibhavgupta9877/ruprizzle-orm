@@ -20,6 +20,11 @@ sqlx              = { workspace = true, features = ["any", "sqlite"] }
 tempfile          = { workspace = true }
 tokio             = { workspace = true }
 
+[features]
+default = []
+sqlite-rusqlite = ["ruprizzle/sqlite-rusqlite"]
+postgres-tokio-postgres = ["ruprizzle/postgres-tokio-postgres"]
+
 [dev-dependencies]
 futures-util      = { version = "0.3", default-features = false, features = ["std"] }
 proptest          = "1"

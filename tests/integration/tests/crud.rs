@@ -3,14 +3,37 @@
 use ruprizzle::{Column, DeleteQuery, InsertQuery, Model, SelectQuery, UpdateQuery};
 use ruprizzle_testkit::both_dbs;
 
-#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct Task {
     id: i64,
     name: String,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Task);
+
 impl Model for Task {
     const TABLE: &'static str = "tasks";
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Task {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            name: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Task {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            name: row.get::<String>(1)?,
+        })
+    }
 }
 
 const ID: Column<Task, i64> = Column::new("tasks", "id");
@@ -19,7 +42,7 @@ const NAME: Column<Task, String> = Column::new("tasks", "name");
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn runtime_crud_round_trip(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         // INSERT
         let one: Task = InsertQuery::<Task>::new(pool)
@@ -82,7 +105,7 @@ both_dbs! {
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn runtime_upsert_round_trip(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         let one: Task = InsertQuery::<Task>::new(pool)
             .set(ID, 1)
@@ -115,7 +138,7 @@ both_dbs! {
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn runtime_insert_many_round_trip(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         let rows: Vec<Task> = ruprizzle::InsertManyQuery::<Task>::new(pool)
             .row([("id", ruprizzle::Value::I64(1)), ("name", ruprizzle::Value::Str("one".into()))])
@@ -144,7 +167,7 @@ both_dbs! {
 both_dbs! {
     setup = "CREATE TABLE tasks (id BIGINT PRIMARY KEY, name TEXT NOT NULL)";
     async fn runtime_pagination_round_trip(db: TestDb) {
-        let pool = db.any_pool();
+        let pool = db.pool();
 
         for i in 1..=5 {
             InsertQuery::<Task>::new(pool)

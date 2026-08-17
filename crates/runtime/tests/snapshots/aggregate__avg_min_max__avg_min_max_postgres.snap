@@ -1,0 +1,5 @@
+---
+source: crates/runtime/tests/aggregate.rs
+expression: compiled.sql.as_ref()
+---
+SELECT AVG("employees"."age"::double precision) AS "avg_age", MIN("employees"."age") AS "min_age", MAX("employees"."age") AS "max_age" FROM "employees"

@@ -59,6 +59,11 @@ const RULES: &[(&str, &str, bool)] = &[
         false,
     ),
     (
+        "v08_through_on_non_list",
+        "ruprizzle::relation::through_non_list",
+        false,
+    ),
+    (
         "v09_default_type_mismatch",
         "ruprizzle::default_type_mismatch",
         false,
@@ -71,11 +76,6 @@ const RULES: &[(&str, &str, bool)] = &[
     (
         "v11_unknown_index_field",
         "ruprizzle::unknown_index_field",
-        false,
-    ),
-    (
-        "v12_scalar_list_unsupported",
-        "ruprizzle::scalar_list_unsupported",
         false,
     ),
     (

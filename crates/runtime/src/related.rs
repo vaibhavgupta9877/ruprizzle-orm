@@ -34,7 +34,9 @@ impl<T> Related<T> {
     pub fn get(&self) -> &T {
         match self {
             Self::Loaded(v) => v,
-            Self::Absent => panic!("relation was not loaded — add an `.include()` to the query"),
+            Self::Absent => panic!(
+                "relation was not loaded — add an `.include()` and execute the query with `.exec()` or `.exec_one()`"
+            ),
         }
     }
 

@@ -24,3 +24,11 @@ miette            = { workspace = true, features = ["fancy"] }
 sqlx              = { workspace = true }
 tempfile          = { workspace = true }
 tokio             = { workspace = true }
+
+[features]
+sqlite-rusqlite = [
+    "ruprizzle/sqlite-rusqlite",
+    "ruprizzle-migrate/sqlite-rusqlite",
+    "ruprizzle-testkit/sqlite-rusqlite",
+]
+postgres-tokio-postgres = ["ruprizzle/postgres-tokio-postgres"]

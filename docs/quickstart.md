@@ -88,7 +88,7 @@ async fn main() -> Result<(), ruprizzle::Error> {
         .create(db::UserInsert {
             id: None,
             email: "alice@example.com".into(),
-            name: "Alice".into(),
+            name: Some("Alice".into()),
         })
         .exec()
         .await?;

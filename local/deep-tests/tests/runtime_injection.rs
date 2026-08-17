@@ -4,17 +4,40 @@
 //! that would be dangerous if interpolated, then assert that only the exact row
 //! matches and that the compiled SQL still uses parameter placeholders.
 
-use ruprizzle::{Column, InsertQuery, Model, SelectQuery, Value};
+use ruprizzle::{Column, Executor, InsertQuery, Model, SelectQuery, Value};
 use ruprizzle_deep_tests::fresh_pool;
 
-#[derive(Debug, Clone, sqlx::FromRow, PartialEq)]
+#[derive(Debug, Clone, Default, sqlx::FromRow, PartialEq)]
 struct Note {
     id: i64,
     body: String,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Note);
+
 impl Model for Note {
     const TABLE: &'static str = "notes";
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Note {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            body: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Note {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            body: row.get::<String>(1)?,
+        })
+    }
 }
 
 const ID: Column<Note, i64> = Column::new("notes", "id");
@@ -33,10 +56,14 @@ const MALICIOUS: &[&str] = &[
 async fn exact_match_survives_injection_strings() {
     let (pool, _tmp) = fresh_pool().await;
 
-    sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)"
+            .to_string()
+            .into(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
 
     for (i, body) in MALICIOUS.iter().enumerate() {
         InsertQuery::<Note>::new(&pool)
@@ -62,7 +89,8 @@ async fn exact_match_survives_injection_strings() {
         // Compiled SQL must still use a placeholder, not the literal.
         let compiled = SelectQuery::<Note>::new(&pool)
             .filter(BODY.eq(*body))
-            .to_sql();
+            .to_sql()
+            .unwrap();
         assert!(
             compiled.sql.contains('?'),
             "SQL must use a placeholder: {}",
@@ -80,10 +108,14 @@ async fn exact_match_survives_injection_strings() {
 async fn contains_pattern_is_bound_not_interpolated() {
     let (pool, _tmp) = fresh_pool().await;
 
-    sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)"
+            .to_string()
+            .into(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
 
     InsertQuery::<Note>::new(&pool)
         .set(ID, 1)
@@ -124,18 +156,28 @@ async fn contains_pattern_is_bound_not_interpolated() {
         .fetch_all()
         .await
         .unwrap();
-    assert!(rows.iter().any(|r| r.id == 3), "pattern with underscore bound as value");
-    assert!(!rows.iter().any(|r| r.id == 1), "did not match plain text row");
+    assert!(
+        rows.iter().any(|r| r.id == 3),
+        "pattern with underscore bound as value"
+    );
+    assert!(
+        !rows.iter().any(|r| r.id == 1),
+        "did not match plain text row"
+    );
 }
 
 #[tokio::test]
 async fn raw_fragment_with_binds_is_safe() {
     let (pool, _tmp) = fresh_pool().await;
 
-    sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)"
+            .to_string()
+            .into(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
 
     InsertQuery::<Note>::new(&pool)
         .set(ID, 1)
@@ -150,7 +192,8 @@ async fn raw_fragment_with_binds_is_safe() {
     );
     let compiled = SelectQuery::<Note>::new(&pool)
         .filter(ruprizzle::Filter::<Note>::raw(raw.clone()))
-        .to_sql();
+        .to_sql()
+        .unwrap();
     assert!(compiled.sql.contains('?'));
     assert!(!compiled.sql.contains("safe'"));
 

@@ -218,6 +218,58 @@ pub enum SchemaError {
         span: SourceSpan,
     },
 
+    /// V08 — `through:` is used on a non-list relation field.
+    #[error("`through` can only be used on a list relation field")]
+    #[diagnostic(code(ruprizzle::relation::through_non_list))]
+    ThroughOnNonList {
+        model: String,
+        field: String,
+        #[help]
+        advice: Option<String>,
+        #[label("this relation is not a list")]
+        span: SourceSpan,
+    },
+
+    /// V08 — `through:` is combined with `fields:`.
+    #[error("`through` cannot be combined with `fields:`")]
+    #[diagnostic(code(ruprizzle::relation::through_with_fields))]
+    ThroughWithFields {
+        model: String,
+        field: String,
+        #[help]
+        advice: Option<String>,
+        #[label("remove `fields:` from this `through` relation")]
+        span: SourceSpan,
+    },
+
+    /// V08 — the join model named in `through:` does not exist.
+    #[error("join model `{through}` for `{model}.{field}` does not exist")]
+    #[diagnostic(code(ruprizzle::relation::missing_through_model))]
+    MissingThroughModel {
+        model: String,
+        field: String,
+        through: String,
+        #[help]
+        advice: Option<String>,
+        #[label("unknown join model")]
+        span: SourceSpan,
+    },
+
+    /// V08 — the join model is not a valid many-to-many join.
+    #[error(
+        "join model `{through}` is not a valid many-to-many join between `{owner}` and `{target}`"
+    )]
+    #[diagnostic(code(ruprizzle::relation::invalid_join_model))]
+    InvalidJoinModel {
+        through: String,
+        owner: String,
+        target: String,
+        #[help]
+        advice: Option<String>,
+        #[label("not a valid join model")]
+        span: SourceSpan,
+    },
+
     /// V09 — a `@default(...)` does not match the field's type.
     #[error("default value does not match type `{expected}`")]
     #[diagnostic(code(ruprizzle::default_type_mismatch))]
@@ -251,21 +303,6 @@ pub enum SchemaError {
         #[help]
         advice: Option<String>,
         #[label("no such field on this model")]
-        span: SourceSpan,
-    },
-
-    /// V12 — scalar lists are not supported in v1.
-    #[error("scalar list `{found}[]` is not supported")]
-    #[diagnostic(
-        code(ruprizzle::scalar_list_unsupported),
-        help(
-            "v1 supports lists only for relations; store repeated scalars in a \
-              related model, or use `Json` if the shape is genuinely free-form"
-        )
-    )]
-    ScalarListUnsupported {
-        found: String,
-        #[label("scalar lists are planned for 0.2")]
         span: SourceSpan,
     },
 

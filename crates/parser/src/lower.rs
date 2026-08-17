@@ -162,7 +162,7 @@ fn lower_datasource(ast: &Ast, diags: &mut Diagnostics) -> Datasource {
         None => {
             diags.push(config_error(
                 "`datasource` block has no `provider`",
-                "add `provider = \"postgres\"` or `provider = \"sqlite\"`",
+                "add `provider = \"postgres\"`, `provider = \"sqlite\"`, or `provider = \"mysql\"`",
                 block.span,
             ));
             Provider::Postgres
@@ -372,14 +372,6 @@ fn lower_field(
 ) -> Field {
     let base = base_kind(decl, env, diags);
 
-    // V12 — lists exist only for relations in v1.
-    if decl.arity == Arity::List && !matches!(base, FieldKind::Relation(_)) {
-        diags.push(SchemaError::ScalarListUnsupported {
-            found: decl.type_name.clone(),
-            span: decl.type_span.into(),
-        });
-    }
-
     let kind = if decl.arity == Arity::List {
         FieldKind::List(Box::new(base))
     } else {
@@ -460,6 +452,10 @@ fn relation_ref(decl: &FieldDecl) -> RelationRef {
             .map(str::to_owned)
     });
 
+    let through = attr
+        .and_then(|a| a.named("through"))
+        .and_then(Value::as_ident);
+
     let name_list = |key: &str| -> Vec<FieldName> {
         attr.and_then(|a| a.named(key))
             .and_then(Value::as_array)
@@ -481,6 +477,7 @@ fn relation_ref(decl: &FieldDecl) -> RelationRef {
     RelationRef {
         target: ModelName::new(&decl.type_name),
         name,
+        through: through.map(ModelName::new),
         fields: name_list("fields"),
         references: name_list("references"),
         on_delete: action("onDelete"),
@@ -812,6 +809,9 @@ struct Side {
     field: FieldName,
     target: ModelName,
     rel_name: Option<String>,
+    /// Many-to-many join model this end belongs to, either as `through:` on a
+    /// list field or as the join model itself for its foreign-key relations.
+    join_model: Option<ModelName>,
     is_owner: bool,
     is_list: bool,
     optional: bool,
@@ -822,13 +822,16 @@ fn resolve_relations(
     models: &mut IndexMap<ModelName, Model>,
     diags: &mut Diagnostics,
 ) -> Vec<ResolvedRelation> {
-    let sides = collect_sides(models);
+    let sides = collect_sides(models, diags);
+
+    let (through_sides, regular_sides): (Vec<_>, Vec<_>) =
+        sides.into_iter().partition(|s| s.join_model.is_some());
 
     // Grouping key: the explicit relation name if there is one, plus the unordered
     // pair of models. Without the name, two relations between the same pair land
     // in one group — which is exactly the ambiguity V08 exists to reject.
     let mut groups: IndexMap<(Option<String>, String, String), Vec<Side>> = IndexMap::new();
-    for side in sides {
+    for side in regular_sides {
         let (a, b) = {
             let (x, y) = (side.model.to_string(), side.target.to_string());
             if x <= y { (x, y) } else { (y, x) }
@@ -843,28 +846,85 @@ fn resolve_relations(
     for group in groups.into_values() {
         resolve_group(&group, models, &mut relations, diags);
     }
+
+    resolve_through_relations(through_sides, models, &mut relations, diags);
     relations
 }
 
-fn collect_sides(models: &IndexMap<ModelName, Model>) -> Vec<Side> {
+fn is_join_fk_side(model: &Model, target: &Model, rel: &RelationRef) -> bool {
+    rel.through.is_none()
+        && !rel.fields.is_empty()
+        && target.fields.values().any(|f| {
+            f.relation()
+                .is_some_and(|r| r.through.as_ref() == Some(&model.name))
+        })
+}
+
+fn collect_sides(models: &IndexMap<ModelName, Model>, diags: &mut Diagnostics) -> Vec<Side> {
     let mut sides = Vec::new();
+    let mut poisoned: std::collections::HashSet<ModelName> = std::collections::HashSet::new();
     for model in models.values() {
         for field in model.fields.values() {
             let Some(rel) = field.relation() else {
                 continue;
             };
+
+            if rel.through.is_some() && !field.is_list() {
+                if let Some(t) = &rel.through {
+                    poisoned.insert(t.clone());
+                }
+                diags.push(SchemaError::ThroughOnNonList {
+                    model: model.name.to_string(),
+                    field: field.name.to_string(),
+                    advice: Some("use a list field like `tags Tag[]`".to_owned()),
+                    span: rel.span.into(),
+                });
+                continue;
+            }
+
+            if rel.through.is_some() && !rel.fields.is_empty() {
+                if let Some(t) = &rel.through {
+                    poisoned.insert(t.clone());
+                }
+                diags.push(SchemaError::ThroughWithFields {
+                    model: model.name.to_string(),
+                    field: field.name.to_string(),
+                    advice: Some("`through` relations do not need `fields:`".to_owned()),
+                    span: rel.span.into(),
+                });
+                continue;
+            }
+
+            let join_model = if let Some(t) = rel.through.clone() {
+                Some(t)
+            } else if let Some(target) = models.get(rel.target.as_str()) {
+                if is_join_fk_side(model, target, rel) {
+                    Some(model.name.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            if join_model.as_ref().is_some_and(|m| poisoned.contains(m)) {
+                continue;
+            }
+
             sides.push(Side {
                 model: model.name.clone(),
                 field: field.name.clone(),
                 target: rel.target.clone(),
                 rel_name: rel.name.clone(),
-                is_owner: !rel.fields.is_empty(),
+                join_model,
+                is_owner: !rel.fields.is_empty() && rel.through.is_none(),
                 is_list: field.is_list(),
                 optional: field.optional,
                 span: rel.span,
             });
         }
     }
+    sides.retain(|s| s.join_model.as_ref().is_none_or(|m| !poisoned.contains(m)));
     sides
 }
 
@@ -969,6 +1029,98 @@ fn relation_mut(field: &mut Field) -> Option<&mut RelationRef> {
             _ => None,
         },
         _ => None,
+    }
+}
+
+fn resolve_through_relations(
+    sides: Vec<Side>,
+    models: &mut IndexMap<ModelName, Model>,
+    relations: &mut Vec<ResolvedRelation>,
+    diags: &mut Diagnostics,
+) {
+    // Group by (relation_name, join_model). A valid many-to-many group has four
+    // ends: the two list sides on the endpoints and the two FK-owner sides in
+    // the join model.
+    let mut groups: IndexMap<(Option<String>, ModelName), Vec<Side>> = IndexMap::new();
+    for side in sides {
+        let Some(join_model) = side.join_model.clone() else {
+            continue;
+        };
+        groups
+            .entry((side.rel_name.clone(), join_model))
+            .or_default()
+            .push(side);
+    }
+
+    for group in groups.into_values() {
+        if group.len() != 4 {
+            diags.push(SchemaError::InvalidJoinModel {
+                through: group[0].join_model.as_ref().map(ToString::to_string).unwrap_or_default(),
+                owner: group[0].model.to_string(),
+                target: group[0].target.to_string(),
+                advice: Some("a many-to-many through model needs two endpoint list fields and two join foreign keys".to_owned()),
+                span: group[0].span.into(),
+            });
+            continue;
+        }
+
+        let lists: Vec<&Side> = group.iter().filter(|s| !s.is_owner).collect();
+        let fks: Vec<&Side> = group.iter().filter(|s| s.is_owner).collect();
+
+        if lists.len() != 2 || fks.len() != 2 {
+            diags.push(SchemaError::InvalidJoinModel {
+                through: group[0]
+                    .join_model
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_default(),
+                owner: group[0].model.to_string(),
+                target: group[0].target.to_string(),
+                advice: Some(
+                    "a many-to-many needs exactly two list sides and two FK sides".to_owned(),
+                ),
+                span: group[0].span.into(),
+            });
+            continue;
+        }
+
+        let a = lists[0];
+        let b = lists[1];
+        if a.model != b.target || b.model != a.target {
+            diags.push(SchemaError::MissingBackRelation {
+                model: a.model.to_string(),
+                field: a.field.to_string(),
+                target: a.target.to_string(),
+                back_name: format!("{}[]", a.target),
+                span: a.span.into(),
+            });
+            continue;
+        }
+
+        // Build the join model's two ManyToOne relations first. The back side
+        // for each is the list field that lives on the targeted endpoint model.
+        for fk in &fks {
+            let back = lists.iter().copied().find(|s| s.model == fk.target);
+            if let Some(resolved) = build_relation(fk, back, models, diags) {
+                let index = relations.len();
+                relations.push(resolved);
+                mark_resolved(models, &fk.model, &fk.field, index);
+            }
+        }
+
+        // A many-to-many is a pair of list fields that point at each other.
+        // Each endpoint needs its own `ResolvedRelation` so the owner/target
+        // orientation matches the field being resolved.
+        if let Some(resolved) = build_many_to_many_relation(a, b, &fks, models, diags) {
+            let index = relations.len();
+            relations.push(resolved);
+            mark_resolved(models, &a.model, &a.field, index);
+        }
+        if let Some(resolved) = build_many_to_many_relation(b, a, &fks, models, diags) {
+            let index = relations.len();
+            relations.push(resolved);
+            mark_resolved(models, &b.model, &b.field, index);
+        }
     }
 }
 
@@ -1121,5 +1273,101 @@ fn build_relation(
         optional: owner.optional,
         constraint_name: naming::foreign_key_name(&owner_model.table, &owner_cols),
         span: rel.span,
+        join_model: None,
+        join_owner_field: None,
+        join_target_field: None,
+    })
+}
+
+fn build_many_to_many_relation(
+    owner: &Side,
+    back: &Side,
+    fks: &[&Side],
+    models: &IndexMap<ModelName, Model>,
+    diags: &mut Diagnostics,
+) -> Option<ResolvedRelation> {
+    let through_name = owner.join_model.as_ref()?;
+    let through_model = models.get(through_name.as_str())?;
+
+    let owner_fk = fks.iter().copied().find(|s| s.target == owner.model);
+    let target_fk = fks.iter().copied().find(|s| s.target == back.model);
+
+    let Some(owner_fk) = owner_fk else {
+        diags.push(SchemaError::InvalidJoinModel {
+            through: through_name.to_string(),
+            owner: owner.model.to_string(),
+            target: back.model.to_string(),
+            advice: Some(format!(
+                "`{through_name}` needs a foreign key to `{}`",
+                owner.model
+            )),
+            span: owner.span.into(),
+        });
+        return None;
+    };
+
+    let Some(target_fk) = target_fk else {
+        diags.push(SchemaError::InvalidJoinModel {
+            through: through_name.to_string(),
+            owner: owner.model.to_string(),
+            target: back.model.to_string(),
+            advice: Some(format!(
+                "`{through_name}` needs a foreign key to `{}`",
+                back.model
+            )),
+            span: back.span.into(),
+        });
+        return None;
+    };
+
+    let owner_fk_field = through_model.fields.get(owner_fk.field.as_str())?;
+    let target_fk_field = through_model.fields.get(target_fk.field.as_str())?;
+    let owner_fk_rel = owner_fk_field.relation()?;
+    let target_fk_rel = target_fk_field.relation()?;
+
+    let owner_cols: Vec<String> = owner_fk_rel
+        .fields
+        .iter()
+        .filter_map(|n| {
+            through_model
+                .fields
+                .get(n.as_str())
+                .map(|f| f.column.clone())
+        })
+        .collect();
+    let target_cols: Vec<String> = target_fk_rel
+        .fields
+        .iter()
+        .filter_map(|n| {
+            through_model
+                .fields
+                .get(n.as_str())
+                .map(|f| f.column.clone())
+        })
+        .collect();
+
+    Some(ResolvedRelation {
+        name: owner
+            .rel_name
+            .clone()
+            .unwrap_or_else(|| format!("{}To{}Via{}", owner.model, back.model, through_name)),
+        kind: RelationKind::ManyToMany,
+        owner: owner.model.clone(),
+        owner_cols,
+        owner_field: owner.field.clone(),
+        target: back.model.clone(),
+        target_table: through_model.table.clone(),
+        target_cols,
+        target_field: Some(back.field.clone()),
+        on_delete: owner_fk_rel
+            .on_delete
+            .unwrap_or(ReferentialAction::Restrict),
+        on_update: owner_fk_rel.on_update.unwrap_or(ReferentialAction::Cascade),
+        optional: false,
+        constraint_name: naming::foreign_key_name(&through_model.table, &[]),
+        span: owner.span,
+        join_model: Some(through_name.clone()),
+        join_owner_field: Some(owner_fk.field.clone()),
+        join_target_field: Some(target_fk.field.clone()),
     })
 }

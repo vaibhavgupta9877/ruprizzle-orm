@@ -1,5 +1,6 @@
 # ImplPlan 03 — Dialects & SQL Generation (Phase P2)
 
+**Status:** COMPLETE — both Postgres and SQLite dialect implementations shipped; all P2 tasks below are treated as complete.
 **Duration:** 3 days · **Owners:** Vaibhav Gupta (trait design), Vaibhav Gupta (both impls)
 **Exit gate G2:** both dialects emit DDL that actually applies to a live database.
 

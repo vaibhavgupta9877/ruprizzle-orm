@@ -1,9 +1,9 @@
 //! Concurrent `apply_all` must be idempotent under genuine interleaving.
 
+use std::borrow::Cow;
 use std::fs;
-use std::time::Duration;
 
-use ruprizzle::{PoolConfig, connect_with};
+use ruprizzle::Executor;
 use ruprizzle_migrate::Migrator;
 
 /// Writes a two-migration directory into a temp dir and returns its path.
@@ -42,15 +42,14 @@ async fn ten_concurrent_deployers_all_succeed() {
     };
 
     let dir = fixture();
-    let mut config = PoolConfig::default();
-    config.max_connections = 20;
-    config.acquire_timeout = Duration::from_secs(5);
-    let pool = connect_with(&url, &config).await.expect("connect");
+    let pool = ruprizzle::connect(&url).await.expect("connect");
 
-    sqlx::query("DROP TABLE IF EXISTS conc_a, conc_b, _ruprizzle_migrations")
-        .execute(&pool)
-        .await
-        .expect("clean slate");
+    pool.execute_raw(
+        Cow::Owned("DROP TABLE IF EXISTS conc_a, conc_b, _ruprizzle_migrations".into()),
+        Vec::new(),
+    )
+    .await
+    .expect("clean slate");
 
     let mut handles = Vec::new();
     for _ in 0..10 {
@@ -75,12 +74,10 @@ async fn ten_concurrent_deployers_all_succeed() {
         "each migration must be applied exactly once across all deployers"
     );
 
-    sqlx::query("SELECT 1 FROM conc_a")
-        .execute(&pool)
+    pool.execute_raw(Cow::Owned("SELECT 1 FROM conc_a".into()), Vec::new())
         .await
         .expect("conc_a exists");
-    sqlx::query("SELECT 1 FROM conc_b")
-        .execute(&pool)
+    pool.execute_raw(Cow::Owned("SELECT 1 FROM conc_b".into()), Vec::new())
         .await
         .expect("conc_b exists");
 }

@@ -1,15 +1,16 @@
-//! Decode helpers for `sqlx::any::AnyRow`.
+//! Decode helpers that work against any `sqlx::Row`.
 //!
 //! The `sqlx::Any` driver does not implement `sqlx::Decode` for rich types such
 //! as `Uuid`, `Decimal`, `DateTime`, `NaiveDate`, `NaiveTime` or JSON values.
-//! These helpers work around that by first fetching a type `Any` *does*
-//! understand (`String` or `Vec<u8>`) and then parsing the value. They are used
-//! by the manually generated `sqlx::FromRow` implementations.
+//! These helpers work around that by first trying a native decode, then
+//! fetching a type the driver *does* understand (`String` or `Vec<u8>`) and
+//! parsing the value. They are used by the manually generated
+//! `sqlx::FromRow` implementations.
 
 use std::fmt;
 use std::str::FromStr;
 
-use sqlx::{Row, any::AnyRow};
+use sqlx::{ColumnIndex, Row};
 
 /// Error wrapping a parse failure so it can be returned as a `sqlx::Error`.
 #[derive(Debug)]
@@ -27,14 +28,15 @@ fn decode_text_error<E: fmt::Display>(e: E) -> sqlx::Error {
     sqlx::Error::Decode(Box::new(DecodeTextError(e.to_string())))
 }
 
-/// Decode a column as text and then parse it into `T`.
-///
-/// This first tries `String` (the SQLite path for most rich types) and then
-/// falls back to `Vec<u8>` (the Postgres path for `UUID` / `BYTEA`).
-pub fn text<T>(row: &AnyRow, col: &str) -> Result<T, sqlx::Error>
+fn decode_text<R, T>(row: &R, col: &str) -> Result<T, sqlx::Error>
 where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
     T: FromStr,
     T::Err: fmt::Display + Send + Sync + 'static,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {
     if let Ok(s) = row.try_get::<String, _>(col) {
         return s.parse().map_err(decode_text_error);
@@ -44,11 +46,68 @@ where
     s.parse().map_err(decode_text_error)
 }
 
-/// Decode an optional rich-typed column.
-pub fn text_opt<T>(row: &AnyRow, col: &str) -> Result<Option<T>, sqlx::Error>
+fn decode_text_idx<R, T>(row: &R, idx: usize) -> Result<T, sqlx::Error>
 where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
     T: FromStr,
     T::Err: fmt::Display + Send + Sync + 'static,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(s) = row.try_get::<String, _>(idx) {
+        return s.parse().map_err(decode_text_error);
+    }
+    let bytes: Vec<u8> = row.try_get(idx)?;
+    let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+    s.parse().map_err(decode_text_error)
+}
+
+/// Decode a column as text and then parse it into `T`.
+///
+/// The fallback is needed for `Any` and SQLite, which do not implement
+/// `sqlx::Decode` for rich types such as `Uuid` or `Decimal`. The generic
+/// signature lets the same generated `FromRow` work for `AnyRow`, `PgRow`
+/// and `SqliteRow`; once per-backend `FromRow` is in place Postgres can move
+/// these to `direct` instead.
+pub fn text<R, T>(row: &R, col: &str) -> Result<T, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: FromStr,
+    T::Err: fmt::Display + Send + Sync + 'static,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    decode_text(row, col)
+}
+
+/// Ordinal version of [`text`].
+pub fn text_idx<R, T>(row: &R, idx: usize) -> Result<T, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: FromStr,
+    T::Err: fmt::Display + Send + Sync + 'static,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    decode_text_idx(row, idx)
+}
+
+/// Decode an optional rich-typed column.
+pub fn text_opt<R, T>(row: &R, col: &str) -> Result<Option<T>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: FromStr,
+    T::Err: fmt::Display + Send + Sync + 'static,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {
     match row.try_get::<Option<String>, _>(col) {
         Ok(Some(s)) => s.parse::<T>().map(Some).map_err(decode_text_error),
@@ -56,7 +115,7 @@ where
         Err(_) => match row.try_get::<Option<Vec<u8>>, _>(col) {
             Ok(Some(bytes)) => {
                 let s = String::from_utf8(bytes).map_err(decode_text_error)?;
-                s.parse::<T>().map(Some).map_err(decode_text_error)
+                s.parse().map(Some).map_err(decode_text_error)
             }
             Ok(None) => Ok(None),
             Err(e) => Err(e),
@@ -64,66 +123,516 @@ where
     }
 }
 
-/// Decode a JSON column.
-pub fn json(row: &AnyRow, col: &str) -> Result<serde_json::Value, sqlx::Error> {
-    let s: String = row.try_get(col)?;
+/// Ordinal version of [`text_opt`].
+pub fn text_opt_idx<R, T>(row: &R, idx: usize) -> Result<Option<T>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: FromStr,
+    T::Err: fmt::Display + Send + Sync + 'static,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    match row.try_get::<Option<String>, _>(idx) {
+        Ok(Some(s)) => s.parse::<T>().map(Some).map_err(decode_text_error),
+        Ok(None) => Ok(None),
+        Err(_) => match row.try_get::<Option<Vec<u8>>, _>(idx) {
+            Ok(Some(bytes)) => {
+                let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+                s.parse().map(Some).map_err(decode_text_error)
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        },
+    }
+}
+
+/// Decode a rich-typed column by trying native `sqlx::Decode` first, then text.
+///
+/// This is the right default for `Uuid`, `Decimal`, `DateTime`, `Date`, and
+/// `Time`: on Postgres these decode natively, while on `Any` and SQLite they
+/// fall back to a text parse.
+pub fn rich<R, T>(row: &R, col: &str) -> Result<T, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: FromStr,
+    T::Err: fmt::Display + Send + Sync + 'static,
+    T: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(v) = row.try_get::<T, _>(col) {
+        return Ok(v);
+    }
+    decode_text(row, col)
+}
+
+/// Ordinal version of [`rich`].
+pub fn rich_idx<R, T>(row: &R, idx: usize) -> Result<T, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: FromStr,
+    T::Err: fmt::Display + Send + Sync + 'static,
+    T: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(v) = row.try_get::<T, _>(idx) {
+        return Ok(v);
+    }
+    decode_text_idx(row, idx)
+}
+
+/// Decode an optional rich-typed column, trying native decode first.
+pub fn rich_opt<R, T>(row: &R, col: &str) -> Result<Option<T>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: FromStr,
+    T::Err: fmt::Display + Send + Sync + 'static,
+    Option<T>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    match row.try_get::<Option<T>, _>(col) {
+        Ok(v) => Ok(v),
+        Err(_) => text_opt(row, col),
+    }
+}
+
+/// Ordinal version of [`rich_opt`].
+pub fn rich_opt_idx<R, T>(row: &R, idx: usize) -> Result<Option<T>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: FromStr,
+    T::Err: fmt::Display + Send + Sync + 'static,
+    Option<T>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    match row.try_get::<Option<T>, _>(idx) {
+        Ok(v) => Ok(v),
+        Err(_) => text_opt_idx(row, idx),
+    }
+}
+
+/// Decode a JSON column, trying the native `Json` wrapper first.
+pub fn json<R>(row: &R, col: &str) -> Result<serde_json::Value, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    sqlx::types::Json<serde_json::Value>:
+        for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(j) = row.try_get::<sqlx::types::Json<serde_json::Value>, _>(col) {
+        return Ok(j.0);
+    }
+    if let Ok(s) = row.try_get::<String, _>(col) {
+        return serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)));
+    }
+    let bytes: Vec<u8> = row.try_get(col)?;
+    let s = String::from_utf8(bytes).map_err(decode_text_error)?;
     serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
 
-/// Decode an optional JSON column.
-pub fn json_opt(row: &AnyRow, col: &str) -> Result<Option<serde_json::Value>, sqlx::Error> {
+/// Ordinal version of [`json`].
+pub fn json_idx<R>(row: &R, idx: usize) -> Result<serde_json::Value, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    sqlx::types::Json<serde_json::Value>:
+        for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(j) = row.try_get::<sqlx::types::Json<serde_json::Value>, _>(idx) {
+        return Ok(j.0);
+    }
+    if let Ok(s) = row.try_get::<String, _>(idx) {
+        return serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)));
+    }
+    let bytes: Vec<u8> = row.try_get(idx)?;
+    let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+    serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+}
+
+/// Decode an optional JSON column, trying the native `Json` wrapper first.
+pub fn json_opt<R>(row: &R, col: &str) -> Result<Option<serde_json::Value>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    sqlx::types::Json<serde_json::Value>:
+        for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(j) = row.try_get::<Option<sqlx::types::Json<serde_json::Value>>, _>(col) {
+        return Ok(j.map(|j| j.0));
+    }
     match row.try_get::<Option<String>, _>(col) {
         Ok(Some(s)) => serde_json::from_str(&s)
             .map(Some)
             .map_err(|e| sqlx::Error::Decode(Box::new(e))),
         Ok(None) => Ok(None),
-        Err(e) => Err(e),
+        Err(_) => match row.try_get::<Option<Vec<u8>>, _>(col) {
+            Ok(Some(bytes)) => {
+                let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+                serde_json::from_str(&s)
+                    .map(Some)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        },
+    }
+}
+
+/// Decode JSON from a text/blob column without requiring a native JSON type.
+///
+/// This is used by generated `AnyRow` implementations because `sqlx::Any`
+/// does not expose a native JSON type. Native-dialect implementations use
+/// [`json_idx`] instead.
+pub fn json_text_idx<R>(row: &R, idx: usize) -> Result<serde_json::Value, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(s) = row.try_get::<String, _>(idx) {
+        return serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)));
+    }
+    let bytes: Vec<u8> = row.try_get(idx)?;
+    let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+    serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+}
+
+/// Decode an optional JSON text/blob column without a native JSON type.
+pub fn json_text_opt_idx<R>(row: &R, idx: usize) -> Result<Option<serde_json::Value>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    match row.try_get::<Option<String>, _>(idx) {
+        Ok(Some(s)) => serde_json::from_str(&s)
+            .map(Some)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e))),
+        Ok(None) => Ok(None),
+        Err(_) => match row.try_get::<Option<Vec<u8>>, _>(idx) {
+            Ok(Some(bytes)) => {
+                let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+                serde_json::from_str(&s)
+                    .map(Some)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        },
+    }
+}
+
+/// Ordinal version of [`json_opt`].
+pub fn json_opt_idx<R>(row: &R, idx: usize) -> Result<Option<serde_json::Value>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    sqlx::types::Json<serde_json::Value>:
+        for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(j) = row.try_get::<Option<sqlx::types::Json<serde_json::Value>>, _>(idx) {
+        return Ok(j.map(|j| j.0));
+    }
+    match row.try_get::<Option<String>, _>(idx) {
+        Ok(Some(s)) => serde_json::from_str(&s)
+            .map(Some)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e))),
+        Ok(None) => Ok(None),
+        Err(_) => match row.try_get::<Option<Vec<u8>>, _>(idx) {
+            Ok(Some(bytes)) => {
+                let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+                serde_json::from_str(&s)
+                    .map(Some)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        },
+    }
+}
+
+/// Decode a JSON-encoded scalar array column.
+///
+/// SQLite and MySQL store arrays as JSON text, and the `sqlx::Any` driver falls
+/// back to this path. PostgreSQL uses its own native `Vec<T>` decode.
+pub fn array_idx<R, T>(row: &R, idx: usize) -> Result<Vec<T>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    T: for<'de> serde::Deserialize<'de>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(s) = row.try_get::<String, _>(idx) {
+        return serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)));
+    }
+    let bytes: Vec<u8> = row.try_get(idx)?;
+    let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+    serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+}
+
+/// Named-column version of [`array_idx`].
+pub fn array<R, T>(row: &R, col: &str) -> Result<Vec<T>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: for<'de> serde::Deserialize<'de>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(s) = row.try_get::<String, _>(col) {
+        return serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)));
+    }
+    let bytes: Vec<u8> = row.try_get(col)?;
+    let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+    serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+}
+
+/// Decode an optional JSON-encoded scalar array column.
+pub fn array_opt_idx<R, T>(row: &R, idx: usize) -> Result<Option<Vec<T>>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    T: for<'de> serde::Deserialize<'de>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    match row.try_get::<Option<String>, _>(idx) {
+        Ok(Some(s)) => serde_json::from_str(&s)
+            .map(Some)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e))),
+        Ok(None) => Ok(None),
+        Err(_) => match row.try_get::<Option<Vec<u8>>, _>(idx) {
+            Ok(Some(bytes)) => {
+                let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+                serde_json::from_str(&s)
+                    .map(Some)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        },
+    }
+}
+
+/// Named-column version of [`array_opt_idx`].
+pub fn array_opt<R, T>(row: &R, col: &str) -> Result<Option<Vec<T>>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: for<'de> serde::Deserialize<'de>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    match row.try_get::<Option<String>, _>(col) {
+        Ok(Some(s)) => serde_json::from_str(&s)
+            .map(Some)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e))),
+        Ok(None) => Ok(None),
+        Err(_) => match row.try_get::<Option<Vec<u8>>, _>(col) {
+            Ok(Some(bytes)) => {
+                let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+                serde_json::from_str(&s)
+                    .map(Some)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        },
     }
 }
 
 /// Decode a byte-blob column.
-pub fn bytes(row: &AnyRow, col: &str) -> Result<Vec<u8>, sqlx::Error> {
+pub fn bytes<R>(row: &R, col: &str) -> Result<Vec<u8>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
     row.try_get(col)
+}
+
+/// Ordinal version of [`bytes`].
+pub fn bytes_idx<R>(row: &R, idx: usize) -> Result<Vec<u8>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    row.try_get(idx)
 }
 
 /// Decode an optional byte-blob column.
-pub fn bytes_opt(row: &AnyRow, col: &str) -> Result<Option<Vec<u8>>, sqlx::Error> {
-    row.try_get(col)
-}
-
-/// Decode a column whose type the `Any` driver already understands.
-pub fn direct<T>(row: &AnyRow, col: &str) -> Result<T, sqlx::Error>
+pub fn bytes_opt<R>(row: &R, col: &str) -> Result<Option<Vec<u8>>, sqlx::Error>
 where
-    T: for<'r> sqlx::Decode<'r, sqlx::Any> + sqlx::Type<sqlx::Any>,
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {
     row.try_get(col)
 }
 
-/// Decode an optional column whose type the `Any` driver already understands.
-pub fn direct_opt<T>(row: &AnyRow, col: &str) -> Result<Option<T>, sqlx::Error>
+/// Ordinal version of [`bytes_opt`].
+pub fn bytes_opt_idx<R>(row: &R, idx: usize) -> Result<Option<Vec<u8>>, sqlx::Error>
 where
-    T: for<'r> sqlx::Decode<'r, sqlx::Any> + sqlx::Type<sqlx::Any>,
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    row.try_get(idx)
+}
+
+/// Decode a column whose type the driver already understands.
+pub fn direct<R, T>(row: &R, col: &str) -> Result<T, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {
     row.try_get(col)
+}
+
+/// Ordinal version of [`direct`].
+pub fn direct_idx<R, T>(row: &R, idx: usize) -> Result<T, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    row.try_get(idx)
+}
+
+/// Decode an optional column whose type the driver already understands.
+pub fn direct_opt<R, T>(row: &R, col: &str) -> Result<Option<T>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    row.try_get(col)
+}
+
+/// Ordinal version of [`direct_opt`].
+pub fn direct_opt_idx<R, T>(row: &R, idx: usize) -> Result<Option<T>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    row.try_get(idx)
 }
 
 /// Decode a boolean column.
 ///
 /// SQLite stores booleans as `INTEGER` (0/1), while Postgres has a native
-/// `BOOL` type, so this helper tries the integer path first and falls back to
-/// a native boolean decode.
-pub fn boolean(row: &AnyRow, col: &str) -> Result<bool, sqlx::Error> {
-    if let Ok(i) = row.try_get::<i64, _>(col) {
-        return Ok(i != 0);
+/// `BOOL` type, so this helper tries the native `bool` path first and falls
+/// back to the integer path.
+pub fn boolean<R>(row: &R, col: &str) -> Result<bool, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    bool: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    i64: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(b) = row.try_get::<bool, _>(col) {
+        return Ok(b);
     }
-    row.try_get::<bool, _>(col)
+    let i: i64 = row.try_get(col)?;
+    Ok(i != 0)
+}
+
+/// Ordinal version of [`boolean`].
+pub fn boolean_idx<R>(row: &R, idx: usize) -> Result<bool, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    bool: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    i64: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(b) = row.try_get::<bool, _>(idx) {
+        return Ok(b);
+    }
+    let i: i64 = row.try_get(idx)?;
+    Ok(i != 0)
 }
 
 /// Decode an optional boolean column.
-pub fn boolean_opt(row: &AnyRow, col: &str) -> Result<Option<bool>, sqlx::Error> {
-    match row.try_get::<Option<i64>, _>(col) {
-        Ok(Some(i)) => Ok(Some(i != 0)),
+pub fn boolean_opt<R>(row: &R, col: &str) -> Result<Option<bool>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    bool: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    i64: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    match row.try_get::<Option<bool>, _>(col) {
+        Ok(Some(b)) => Ok(Some(b)),
         Ok(None) => Ok(None),
-        Err(_) => row.try_get::<Option<bool>, _>(col),
+        Err(_) => match row.try_get::<Option<i64>, _>(col) {
+            Ok(Some(i)) => Ok(Some(i != 0)),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        },
+    }
+}
+
+/// Ordinal version of [`boolean_opt`].
+pub fn boolean_opt_idx<R>(row: &R, idx: usize) -> Result<Option<bool>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    bool: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    i64: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    match row.try_get::<Option<bool>, _>(idx) {
+        Ok(Some(b)) => Ok(Some(b)),
+        Ok(None) => Ok(None),
+        Err(_) => match row.try_get::<Option<i64>, _>(idx) {
+            Ok(Some(i)) => Ok(Some(i != 0)),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        },
     }
 }

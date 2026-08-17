@@ -17,7 +17,7 @@ users::table.filter(users::email.eq("alice@example.com")).first::<User>(conn)?
 
 // ruprizzle
 db.user()
-    .select()
+    .find_many()
     .filter(user::EMAIL.eq("alice@example.com"))
     .fetch_one()
     .await?
@@ -38,14 +38,18 @@ db.user()
 User::find_by_id(1).one(db).await?
 
 // ruprizzle
-db.user().find_by_id(1).exec().await?
+db.user()
+    .find_many()
+    .filter(user::ID.eq(1))
+    .fetch_one()
+    .await?
 ```
 
 ## From sqlx
 
 | sqlx | ruprizzle |
 |---|---|
-| Raw SQL with macros | `db.fetch_all_raw` for escape hatches, generated builders for common cases |
+| Raw SQL with macros | `db.raw_pool().fetch_all_raw` for escape hatches, generated builders for common cases |
 | Manual `FromRow` | generated `FromRow` impls per model |
 | No migrations | `ruprizzle migrate` |
 
@@ -59,7 +63,7 @@ sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = $1")
 
 // ruprizzle
 db.user()
-    .select()
+    .find_many()
     .filter(user::EMAIL.eq("alice@example.com"))
     .fetch_one()
     .await?

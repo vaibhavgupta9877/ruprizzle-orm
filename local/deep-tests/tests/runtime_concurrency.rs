@@ -3,18 +3,41 @@
 //! SQLite is single-writer, but the pool and transaction paths must still behave
 //! correctly when many async tasks arrive at once.
 
-use ruprizzle::{Column, InsertManyQuery, InsertQuery, Model, SelectQuery, Value};
+use ruprizzle::{Column, Executor, InsertManyQuery, InsertQuery, Model, SelectQuery, Value};
 use ruprizzle_deep_tests::fresh_pool;
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, Default, sqlx::FromRow)]
 #[allow(dead_code)]
 struct Task {
     id: i64,
     label: String,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Task);
+
 impl Model for Task {
     const TABLE: &'static str = "tasks";
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Task {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            label: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Task {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            label: row.get::<String>(1)?,
+        })
+    }
 }
 
 const ID: Column<Task, i64> = Column::new("tasks", "id");
@@ -24,10 +47,14 @@ const LABEL: Column<Task, String> = Column::new("tasks", "label");
 async fn many_concurrent_inserts_succeed() {
     let (pool, _tmp) = fresh_pool().await;
 
-    sqlx::query("CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)"
+            .to_string()
+            .into(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
 
     let mut handles = Vec::new();
     for t in 0..8 {
@@ -55,10 +82,14 @@ async fn many_concurrent_inserts_succeed() {
 async fn transactions_see_their_own_writes_before_commit() {
     let (pool, _tmp) = fresh_pool().await;
 
-    sqlx::query("CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
+    pool.execute_raw(
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, label TEXT NOT NULL)"
+            .to_string()
+            .into(),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
 
     InsertQuery::<Task>::new(&pool)
         .set(ID, 1)
@@ -71,14 +102,14 @@ async fn transactions_see_their_own_writes_before_commit() {
 
     tx.execute(
         "INSERT INTO tasks (id, label) VALUES (?, ?)",
-        vec![Value::I64(2), Value::Str("in-tx".into())],
+        &[Value::I64(2), Value::Str("in-tx".into())],
     )
     .await
     .unwrap();
 
     // The transaction should see its own uncommitted write.
     let count: (i64,) = tx
-        .fetch_one("SELECT count(*) FROM tasks", vec![])
+        .fetch_one("SELECT count(*) FROM tasks", &[])
         .await
         .unwrap();
     assert_eq!(count.0, 2);

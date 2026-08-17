@@ -1,6 +1,6 @@
 # T3-for-Rust in 12 Weeks: BRUTAL Reality Check (Fixed)
 
-**Status:** Starting from zero (ideas only)  
+**Status:** superseded — the 12-week plan was replaced by the `ImplPlan*.md` / `MasterPlan.md` execution tracker.  
 **Timeline:** 12 weeks (hard deadline, can slip to 14-16 for quality)  
 **Goal:** Shipping alpha stack + reference app + docs  
 **Team:** Vaibhav Gupta (architecture) + Vaibhav Gupta (implementation)  

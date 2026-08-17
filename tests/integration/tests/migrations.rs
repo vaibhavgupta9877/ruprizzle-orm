@@ -70,14 +70,14 @@ both_dbs! {
 
         let migrator = Migrator::new(dir.path());
 
-        let status = migrator.status(db.any_pool()).await?;
+        let status = migrator.status(db.pool()).await?;
         assert_eq!(status.pending, vec!["20260810_000000_init"]);
         assert!(status.applied.is_empty());
 
-        let report = migrator.apply_all(db.any_pool(), false).await?;
+        let report = migrator.apply_all(db.pool(), false).await?;
         assert_eq!(report.applied, vec!["20260810_000000_init"]);
 
-        let status = migrator.status(db.any_pool()).await?;
+        let status = migrator.status(db.pool()).await?;
         assert!(status.pending.is_empty());
         assert_eq!(status.applied, vec!["20260810_000000_init"]);
 
@@ -97,7 +97,7 @@ both_dbs! {
 
         let changes = ruprizzle_migrate::diff(&v1, &v2);
         let dialect = ruprizzle_dialect::dialect_for(v2.datasource.provider);
-        let stmts = ruprizzle_migrate::plan(&v1, &v2, dialect.as_ref(), &changes);
+        let stmts = ruprizzle_migrate::plan(&v1, &v2, dialect, &changes);
 
         let dir = tempfile::tempdir()?;
 
@@ -111,7 +111,7 @@ both_dbs! {
         fs::write(init.join("down.sql"), "DROP TABLE users;")?;
 
         let migrator = Migrator::new(dir.path());
-        migrator.apply_all(db.any_pool(), false).await?;
+        migrator.apply_all(db.pool(), false).await?;
 
         // Insert a row using the v1 schema.
         sqlx::query("INSERT INTO users (id, email, name) VALUES (1, 'a@example.com', 'Alice')")
@@ -125,7 +125,7 @@ both_dbs! {
         fs::write(mig.join("up.sql"), up)?;
         fs::write(mig.join("down.sql"), "")?;
 
-        migrator.apply_all(db.any_pool(), false).await?;
+        migrator.apply_all(db.pool(), false).await?;
 
         let age: i64 = sqlx::query_scalar("SELECT age FROM users WHERE id = 1")
             .fetch_one(db.any_pool())
@@ -151,10 +151,10 @@ both_dbs! {
         fs::write(mig.join("down.sql"), "DROP TABLE users;")?;
 
         let migrator = Migrator::new(dir.path());
-        migrator.apply_all(db.any_pool(), false).await?;
+        migrator.apply_all(db.pool(), false).await?;
 
         // Snapshot should initially match.
-        let snapshot = ruprizzle_migrate::detect(db.any_pool(), &v1).await?;
+        let snapshot = ruprizzle_migrate::detect(db.pool(), &v1).await?;
         assert!(snapshot.is_empty(), "expected no drift: {snapshot:?}");
 
         // Manually add an unexpected table.
@@ -162,7 +162,7 @@ both_dbs! {
             .execute(db.any_pool())
             .await?;
 
-        let drift = ruprizzle_migrate::detect(db.any_pool(), &v1).await?;
+        let drift = ruprizzle_migrate::detect(db.pool(), &v1).await?;
         assert!(
             drift.iter().any(|d| d.contains("drift_test")),
             "expected drift to report extra table: {drift:?}"

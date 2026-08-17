@@ -135,6 +135,8 @@ pub enum Provider {
     Postgres,
     /// `SQLite` 3.35 or newer, the first version with `DROP COLUMN` and `RETURNING`.
     Sqlite,
+    /// `MySQL` 8.0+ and `MariaDB` 10.5+.
+    Mysql,
 }
 
 impl Provider {
@@ -144,6 +146,7 @@ impl Provider {
         match s {
             "postgres" | "postgresql" => Some(Provider::Postgres),
             "sqlite" => Some(Provider::Sqlite),
+            "mysql" | "mariadb" => Some(Provider::Mysql),
             _ => None,
         }
     }
@@ -154,11 +157,12 @@ impl Provider {
         match self {
             Provider::Postgres => "postgres",
             Provider::Sqlite => "sqlite",
+            Provider::Mysql => "mysql",
         }
     }
 
     /// Every provider this build supports, for error suggestions.
-    pub const ALL: &'static [Provider] = &[Provider::Postgres, Provider::Sqlite];
+    pub const ALL: &'static [Provider] = &[Provider::Postgres, Provider::Sqlite, Provider::Mysql];
 }
 
 impl std::fmt::Display for Provider {
@@ -308,10 +312,17 @@ impl Field {
     ///
     /// `false` for navigation properties (`Post[]`, the owner side of a relation,
     /// or the non-owning side of a 1:1). The foreign key columns of a relation
-    /// are the scalar fields named in the relation's `fields:`.
+    /// are the scalar fields named in the relation's `fields:`. Scalar and enum
+    /// lists (`String[]`, `Role[]`) do have a column.
     #[must_use]
     pub fn has_column(&self) -> bool {
-        matches!(&self.kind, FieldKind::Scalar(_) | FieldKind::Enum(_))
+        match &self.kind {
+            FieldKind::Scalar(_) | FieldKind::Enum(_) => true,
+            FieldKind::List(inner) => {
+                matches!(inner.as_ref(), FieldKind::Scalar(_) | FieldKind::Enum(_))
+            }
+            FieldKind::Relation(_) => false,
+        }
     }
 
     /// The relation this field navigates, if any — including through a list.
@@ -663,6 +674,10 @@ pub struct RelationRef {
     /// Explicit `@relation("name")`, required when two relations connect the same
     /// pair of models.
     pub name: Option<String>,
+    /// Join model for an explicit many-to-many (`@relation(through: PostTag)`).
+    /// Only valid on list-valued relation fields.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub through: Option<ModelName>,
     /// FK fields on *this* model. Non-empty only on the owning side.
     pub fields: Vec<FieldName>,
     /// Referenced fields on the target model.
@@ -711,6 +726,15 @@ pub struct ResolvedRelation {
     pub constraint_name: String,
     /// Source location of the owning side's relation attribute.
     pub span: Span,
+    /// Join model for many-to-many relations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_model: Option<ModelName>,
+    /// Field in the join model that references the owner endpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_owner_field: Option<FieldName>,
+    /// Field in the join model that references the target endpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_target_field: Option<FieldName>,
 }
 
 /// The cardinality of a relation, from the owner's point of view.
@@ -720,6 +744,8 @@ pub enum RelationKind {
     OneToOne,
     /// Owner holds a non-unique FK: many owner rows per target row.
     ManyToOne,
+    /// Both sides are lists, joined by an explicit model in between.
+    ManyToMany,
 }
 
 /// `onDelete` / `onUpdate` behaviour.

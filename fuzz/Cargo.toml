@@ -1,0 +1,27 @@
+[package]
+name = "ruprizzle-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+ruprizzle-parser = { path = "../crates/parser" }
+ruprizzle-migrate = { path = "../crates/migrate" }
+
+[[bin]]
+name = "parser"
+path = "fuzz_targets/parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "migrate_splitter"
+path = "fuzz_targets/migrate_splitter.rs"
+test = false
+doc = false

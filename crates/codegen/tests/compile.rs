@@ -1,11 +1,11 @@
 //! Compile-test for generated code.
 //!
-//! Generates all four example schemas for both dialects, writes them as sibling
-//! modules of one throw-away crate in `target/generated-check`, and runs a
-//! single `cargo check` over the lot. Generated code refers to its neighbours
+//! Generates all four example schemas for all three SQL dialects, writes them as
+//! sibling modules of one throw-away crate in `target/generated-check`, and runs
+//! a single `cargo check` over the lot. Generated code refers to its neighbours
 //! only through `super::`, never through absolute `crate::` paths, which is what
-//! lets the eight variants coexist in one crate and keeps this to one check
-//! instead of eight.
+//! lets the twelve variants coexist in one crate and keeps this to one check
+//! instead of twelve.
 
 use std::fs;
 use std::process::Command;
@@ -14,11 +14,11 @@ use ruprizzle_codegen::generate_all;
 use ruprizzle_core::ir::Provider;
 use ruprizzle_parser::parse;
 
-const EXAMPLES: [&str; 4] = ["blog", "ecommerce", "saas-tenant", "minimal"];
+const EXAMPLES: [&str; 5] = ["blog", "ecommerce", "m2m", "saas-tenant", "minimal"];
 
 #[test]
-#[ignore = "runs cargo check over 8 generated crates; expensive (CI: --ignored)"]
-fn all_examples_both_dialects_compile() {
+#[ignore = "runs cargo check over 12 generated crates; expensive (CI: --ignored)"]
+fn all_examples_all_dialects_compile() {
     let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -40,9 +40,13 @@ rust-version = "1.85"
 
 [workspace]
 
+[features]
+sqlite-rusqlite = []
+postgres-tokio-postgres = []
+
 [dependencies]
 ruprizzle = { path = "../../crates/runtime" }
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "macros", "uuid", "chrono", "json", "rust_decimal", "any", "postgres", "sqlite"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "macros", "uuid", "chrono", "json", "rust_decimal", "any", "postgres", "sqlite", "mysql"] }
 "#;
     fs::write(out.join("Cargo.toml"), cargo_toml).unwrap();
 
@@ -52,6 +56,7 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio",
         for (label, provider) in [
             ("postgres", Provider::Postgres),
             ("sqlite", Provider::Sqlite),
+            ("mysql", Provider::Mysql),
         ] {
             let schema_src =
                 fs::read_to_string(workspace.join(format!("examples/{example}/schema.ruprizzle")))
@@ -92,7 +97,7 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio",
 /// G3 exit gate. Split from the check above so a pedantic-only regression is
 /// distinguishable from a hard compile error.
 #[test]
-#[ignore = "runs cargo clippy over 8 generated crates; expensive (CI: --ignored)"]
+#[ignore = "runs cargo clippy over 12 generated crates; expensive (CI: --ignored)"]
 fn generated_code_is_pedantic_clean() {
     let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -104,7 +109,7 @@ fn generated_code_is_pedantic_clean() {
 
     assert!(
         manifest.exists(),
-        "run all_examples_both_dialects_compile first (it materialises the crate)"
+        "run all_examples_all_dialects_compile first (it materialises the crate)"
     );
 
     let output = Command::new("cargo")

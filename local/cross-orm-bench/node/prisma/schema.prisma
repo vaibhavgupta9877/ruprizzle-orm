@@ -8,21 +8,94 @@ datasource db {
 }
 
 model User {
-  id    Int    @id
-  email String
-  age   Int
-  posts Post[]
+  id        Int        @id
+  email     String
+  age       Int
+  name      String
+  createdAt Int        @map("created_at")
+  posts     Post[]
+  comments  Comment[]
+  likes     Like[]
+  following Follower[] @relation("Following")
+  followers Follower[] @relation("Followers")
 
   @@map("users")
 }
 
+model Category {
+  id    Int    @id
+  name  String
+  posts Post[]
+
+  @@map("categories")
+}
+
 model Post {
-  id       Int    @id
-  authorId Int    @map("author_id")
-  title    String
-  author   User   @relation(fields: [authorId], references: [id])
+  id          Int         @id
+  authorId    Int         @map("author_id")
+  categoryId  Int         @map("category_id")
+  title       String
+  publishedAt Int         @map("published_at")
+  views       Int
+  author      User        @relation(fields: [authorId], references: [id])
+  category    Category    @relation(fields: [categoryId], references: [id])
+  comments    Comment[]
+  likes       Like[]
+  postTags    PostTag[]
 
   @@map("posts")
+}
+
+model Comment {
+  id        Int    @id
+  postId    Int    @map("post_id")
+  authorId  Int    @map("author_id")
+  content   String
+  createdAt Int    @map("created_at")
+  post      Post   @relation(fields: [postId], references: [id])
+  author    User   @relation(fields: [authorId], references: [id])
+
+  @@map("comments")
+}
+
+model Tag {
+  id       Int       @id
+  name     String
+  postTags PostTag[]
+
+  @@map("tags")
+}
+
+model PostTag {
+  postId Int  @map("post_id")
+  tagId  Int  @map("tag_id")
+  post   Post @relation(fields: [postId], references: [id])
+  tag    Tag  @relation(fields: [tagId], references: [id])
+
+  @@id([postId, tagId])
+  @@map("post_tags")
+}
+
+model Follower {
+  followerId Int   @map("follower_id")
+  followeeId Int   @map("followee_id")
+  createdAt  Int   @map("created_at")
+  follower   User  @relation("Followers", fields: [followerId], references: [id])
+  followee   User  @relation("Following", fields: [followeeId], references: [id])
+
+  @@id([followerId, followeeId])
+  @@map("followers")
+}
+
+model Like {
+  id        Int  @id
+  userId    Int  @map("user_id")
+  postId    Int  @map("post_id")
+  createdAt Int  @map("created_at")
+  user      User @relation(fields: [userId], references: [id])
+  post      Post @relation(fields: [postId], references: [id])
+
+  @@map("likes")
 }
 
 model BenchBulk {

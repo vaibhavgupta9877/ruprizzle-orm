@@ -4,12 +4,10 @@
 //! verify that the query builder's type-system guarantees hold end to end.
 
 use futures_util::StreamExt;
-use ruprizzle::{
-    Column, DeleteQuery, InsertQuery, Model, SelectQuery, UpdateQuery,
-};
+use ruprizzle::{Column, DeleteQuery, Executor, InsertQuery, Model, SelectQuery, UpdateQuery};
 use ruprizzle_deep_tests::fresh_pool;
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, Default, sqlx::FromRow)]
 #[allow(dead_code)]
 struct Item {
     id: i64,
@@ -19,8 +17,37 @@ struct Item {
     note: Option<String>,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Item);
+
 impl Model for Item {
     const TABLE: &'static str = "items";
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Item {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::get::<i64>(row, 0)?,
+            handle: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
+            age: ::ruprizzle::rusqlite::get::<i64>(row, 2)?,
+            active: ::ruprizzle::rusqlite::get::<i64>(row, 3)?,
+            note: ::ruprizzle::rusqlite::get::<Option<String>>(row, 4)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Item {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            handle: row.get::<String>(1)?,
+            age: row.get::<i64>(2)?,
+            active: row.get::<i64>(3)?,
+            note: row.get::<Option<String>>(4)?,
+        })
+    }
 }
 
 const ID: Column<Item, i64> = Column::new("items", "id");
@@ -30,16 +57,18 @@ const ACTIVE: Column<Item, i64> = Column::new("items", "active");
 const NOTE: Column<Item, Option<String>> = Column::new("items", "note");
 
 async fn seed(pool: &ruprizzle::Pool) {
-    sqlx::query(
+    pool.execute_raw(
         "CREATE TABLE items (
             id INTEGER PRIMARY KEY,
             handle TEXT NOT NULL,
             age INTEGER NOT NULL,
             active INTEGER NOT NULL,
             note TEXT
-        )",
+        )"
+        .to_string()
+        .into(),
+        Vec::new(),
     )
-    .execute(pool)
     .await
     .unwrap();
 
@@ -183,11 +212,7 @@ async fn and_or_all_any_combinators() {
         .unwrap();
     assert_eq!(rows.iter().map(|r| r.id).collect::<Vec<_>>(), vec![1, 4]);
 
-    let f = ruprizzle::all([
-        ACTIVE.eq(1),
-        AGE.gt(15),
-        AGE.lt(35),
-    ]);
+    let f = ruprizzle::all([ACTIVE.eq(1), AGE.gt(15), AGE.lt(35)]);
     let rows: Vec<Item> = SelectQuery::<Item>::new(&pool)
         .filter(f)
         .order_by(ID.asc())
@@ -260,7 +285,8 @@ async fn projection_distinct_count_exists_stream() {
     let mut stream = SelectQuery::<Item>::new(&pool)
         .filter(ACTIVE.eq(1))
         .order_by(ID.asc())
-        .stream();
+        .stream()
+        .unwrap();
     let mut ids = Vec::new();
     while let Some(row) = stream.next().await {
         ids.push(row.unwrap().id);
@@ -349,7 +375,11 @@ async fn update_and_delete_guards() {
     assert_eq!(affected, 1);
     assert_eq!(SelectQuery::<Item>::new(&pool).count().await.unwrap(), 4);
 
-    let affected = DeleteQuery::<Item>::new(&pool).all_rows().exec().await.unwrap();
+    let affected = DeleteQuery::<Item>::new(&pool)
+        .all_rows()
+        .exec()
+        .await
+        .unwrap();
     assert_eq!(affected, 4);
     assert_eq!(SelectQuery::<Item>::new(&pool).count().await.unwrap(), 0);
 }

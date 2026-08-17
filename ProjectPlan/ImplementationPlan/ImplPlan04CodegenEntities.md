@@ -1,5 +1,6 @@
 # ImplPlan 04 — Codegen: Entities & Column Tokens (Phase P3)
 
+**Status:** COMPLETE — generated-client and column-token machinery shipped; all P3 tasks below are treated as complete.
 **Duration:** 4 days · **Owners:** Vaibhav Gupta (token design), Vaibhav Gupta (emission)
 **Exit gate G3:** the generated crate compiles with zero warnings under
 `clippy::pedantic`, for all four example schemas, on both dialects.

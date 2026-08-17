@@ -18,6 +18,14 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 unmaintained = "workspace"
 unsound = "none"
 yanked = "warn"
+# `rsa 0.9.10` (via `sqlx-mysql`) has RUSTSEC-2023-0071. No patched release is
+# available as of 2026-08-17. The side-channel only affects MySQL's
+# caching_sha2_password RSA key exchange, which is not the default auth method
+# on most modern deployments (TLS or unix_socket is preferred). Revisit before
+# declaring MySQL support production-ready in v1.
+ignore = [
+    { id = "RUSTSEC-2023-0071", reason = "transitive via sqlx-mysql; no patched release available yet" },
+]
 
 [licenses]
 allow = [
