@@ -87,6 +87,13 @@ enum Command {
     /// Direct-to-database commands that bypass migration history.
     #[command(subcommand)]
     Db(DbCommand),
+
+    /// Run the language server for `schema.ruprizzle`.
+    Lsp {
+        /// Use stdio for LSP transport.
+        #[arg(long, default_value_t = true)]
+        stdio: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -215,6 +222,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
         Command::Db(DbCommand::Pull) => db_pull(&cli.schema, cli.verbose).await,
         Command::Db(DbCommand::Seed) => db_seed(&cli.schema, cli.verbose).await,
+        Command::Lsp { stdio } => run_lsp(*stdio).await,
     }
 }
 
@@ -234,6 +242,14 @@ impl std::fmt::Display for DiagnosticReport {
 }
 
 impl std::error::Error for DiagnosticReport {}
+
+async fn run_lsp(stdio: bool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if !stdio {
+        return Err("only --stdio transport is currently supported".into());
+    }
+    ruprizzle_lsp::run_stdio().await;
+    Ok(())
+}
 
 fn parse_schema(
     path: &str,

@@ -21,6 +21,7 @@ ruprizzle-migrate = { path = "crates/migrate", version = "0.4.0-beta.2" }
 ruprizzle-macros  = { path = "crates/macros",  version = "0.4.0-beta.2" }
 ruprizzle         = { path = "crates/runtime", version = "0.4.0-beta.2" }
 ruprizzle-testkit = { path = "crates/testkit", version = "0.4.0-beta.2" }
+ruprizzle-lsp     = { path = "crates/lsp",     version = "0.4.0-beta.2" }
 
 # --- external ---
 pest         = "2.8"
@@ -47,6 +48,7 @@ dotenvy      = "0.15"
 notify       = "7"
 walkdir      = "2"
 criterion    = "0.5"
+tower-lsp    = { version = "0.20", default-features = false, features = ["runtime-tokio"] }
 
 [profile.dev]
 # Codegen output and sqlx make debug builds heavy; this trims link time without

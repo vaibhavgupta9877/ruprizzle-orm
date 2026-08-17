@@ -1,0 +1,29 @@
+[package]
+name        = "ruprizzle-lsp"
+description = "Language server for the ruprizzle schema DSL"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+authors.workspace      = true
+homepage.workspace     = true
+documentation          = "https://docs.rs/ruprizzle-lsp"
+keywords    = ["orm", "database", "lsp", "language-server"]
+categories  = ["database", "development-tools"]
+
+[[bin]]
+name = "ruprizzle-lsp"
+path = "src/main.rs"
+
+[lib]
+name = "ruprizzle_lsp"
+path = "src/lib.rs"
+
+[dependencies]
+ruprizzle-core    = { workspace = true }
+ruprizzle-parser  = { workspace = true }
+tower-lsp         = { workspace = true }
+tokio             = { workspace = true, features = ["macros", "rt-multi-thread", "io-std", "io-util"] }
+serde_json        = { workspace = true }
+miette            = { workspace = true }

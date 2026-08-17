@@ -1,0 +1,61 @@
+{
+  "name": "vscode-ruprizzle",
+  "displayName": "ruprizzle",
+  "description": "Language support for ruprizzle schema files",
+  "version": "0.4.0-beta.2",
+  "publisher": "ruprizzle",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:ruprizzle"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "ruprizzle",
+        "aliases": [
+          "ruprizzle",
+          "schema.ruprizzle"
+        ],
+        "extensions": [
+          ".ruprizzle"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ruprizzle",
+        "scopeName": "source.ruprizzle",
+        "path": "../ruprizzle.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "ruprizzle",
+      "properties": {
+        "ruprizzle.languageServer.path": {
+          "type": "string",
+          "default": "ruprizzle",
+          "description": "Path to the ruprizzle language server executable."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.74.0",
+    "typescript": "^5.0.0"
+  }
+}

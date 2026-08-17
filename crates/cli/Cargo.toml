@@ -28,6 +28,7 @@ ruprizzle-parser  = { workspace = true }
 ruprizzle-codegen = { workspace = true }
 ruprizzle-migrate = { workspace = true }
 ruprizzle-dialect = { workspace = true }
+ruprizzle-lsp     = { workspace = true }
 clap              = { workspace = true }
 dotenvy           = { workspace = true }
 
