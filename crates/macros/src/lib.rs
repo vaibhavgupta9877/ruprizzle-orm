@@ -10,6 +10,9 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs, clippy::pedantic)]
 
+use std::collections::HashMap;
+use std::{env, fs};
+
 use proc_macro::TokenStream;
 use proc_macro_crate::FoundCrate;
 use quote::quote;
@@ -83,6 +86,10 @@ pub fn raw(input: TokenStream) -> TokenStream {
         .into();
     }
 
+    if let Some(err) = offline_schema_check(&literal, format_str) {
+        return err.to_compile_error().into();
+    }
+
     let parts: Vec<String> = literal.split("{}").map(String::from).collect();
 
     let part_lits: Vec<proc_macro2::Literal> = parts
@@ -113,4 +120,128 @@ pub fn raw(input: TokenStream) -> TokenStream {
     };
 
     expanded.into()
+}
+
+fn offline_schema_check(sql: &str, format_str: &syn::LitStr) -> Option<syn::Error> {
+    let Ok(path) = env::var("RUPRIZZLE_OFFLINE_SCHEMA") else {
+        return None;
+    };
+    let source = match fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            return Some(syn::Error::new_spanned(
+                format_str,
+                format!("RUPRIZZLE_OFFLINE_SCHEMA points to unreadable file `{path}`: {e}"),
+            ));
+        }
+    };
+
+    let schema = match ruprizzle_parser::parse(&path, &source) {
+        Ok(s) => s,
+        Err(e) => {
+            return Some(syn::Error::new_spanned(
+                format_str,
+                format!("failed to parse offline schema `{path}`: {e:?}"),
+            ));
+        }
+    };
+
+    let table_to_model: HashMap<&str, &ruprizzle_core::ir::Model> = schema
+        .models
+        .values()
+        .map(|m| (m.table.as_str(), m))
+        .collect();
+
+    let tokens = tokenise_sql(sql);
+    for (idx, token) in tokens.iter().enumerate() {
+        if let Some(model) = table_to_model.get(token.as_str()) {
+            if let Some(next) = tokens.get(idx + 1) {
+                if next == "." {
+                    if let Some(column) = tokens.get(idx + 2) {
+                        if !model.fields.values().any(|f| f.column == *column) {
+                            return Some(syn::Error::new_spanned(
+                                format_str,
+                                format!("unknown column `{column}` on table `{token}`"),
+                            ));
+                        }
+                    }
+                }
+            }
+            continue;
+        }
+
+        if idx > 0
+            && is_table_context(&tokens[idx - 1])
+            && !is_sql_keyword(token)
+            && !looks_like_string_or_param(token)
+        {
+            return Some(syn::Error::new_spanned(
+                format_str,
+                format!("unknown table `{token}`"),
+            ));
+        }
+    }
+
+    None
+}
+
+fn tokenise_sql(sql: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut in_string = false;
+    let mut string_quote = '\0';
+
+    for c in sql.chars() {
+        if in_string {
+            current.push(c);
+            if c == string_quote {
+                in_string = false;
+            }
+            continue;
+        }
+        if c == '\'' || c == '"' {
+            if !current.is_empty() {
+                tokens.push(std::mem::take(&mut current));
+            }
+            in_string = true;
+            string_quote = c;
+            current.push(c);
+            continue;
+        }
+        if c.is_alphanumeric() || c == '_' || c == '*' || c == '$' {
+            current.push(c);
+        } else {
+            if !current.is_empty() {
+                tokens.push(std::mem::take(&mut current));
+            }
+            if c == '.' {
+                tokens.push(".".to_owned());
+            }
+        }
+    }
+    if !current.is_empty() {
+        tokens.push(current);
+    }
+    tokens
+}
+
+fn is_table_context(prev: &str) -> bool {
+    matches!(
+        prev.to_ascii_uppercase().as_str(),
+        "FROM" | "JOIN" | "INTO" | "UPDATE" | "TABLE"
+    )
+}
+
+fn is_sql_keyword(token: &str) -> bool {
+    const KEYWORDS: &[&str] = &[
+        "SELECT", "FROM", "WHERE", "AND", "OR", "NOT", "INSERT", "UPDATE", "DELETE", "JOIN",
+        "INNER", "LEFT", "RIGHT", "FULL", "OUTER", "ON", "GROUP", "BY", "ORDER", "LIMIT", "OFFSET",
+        "HAVING", "VALUES", "SET", "AS", "WITH", "UNION", "ALL", "DISTINCT", "IS", "NULL", "TRUE",
+        "FALSE", "IN", "BETWEEN", "LIKE", "EXISTS", "CASE", "WHEN", "THEN", "ELSE", "END",
+    ];
+    KEYWORDS.iter().any(|&k| k == token.to_ascii_uppercase())
+}
+
+fn looks_like_string_or_param(token: &str) -> bool {
+    token.starts_with('\'') || token.starts_with('"') || token.starts_with('$')
 }

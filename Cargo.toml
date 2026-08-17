@@ -22,6 +22,7 @@ ruprizzle-macros  = { path = "crates/macros",  version = "0.4.0-beta.2" }
 ruprizzle         = { path = "crates/runtime", version = "0.4.0-beta.2" }
 ruprizzle-testkit = { path = "crates/testkit", version = "0.4.0-beta.2" }
 ruprizzle-lsp     = { path = "crates/lsp",     version = "0.4.0-beta.2" }
+ruprizzle-check   = { path = "crates/check",   version = "0.4.0-beta.2" }
 
 # --- external ---
 pest         = "2.8"

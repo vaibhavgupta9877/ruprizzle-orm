@@ -21,6 +21,7 @@ use crate::model::{Model, RowDecode};
 use crate::order::OrderBy;
 use crate::page::Page;
 use crate::pool::Pool;
+use crate::query_manifest;
 use crate::rel::{AnyRelDelete, AnyRelWrite, DeleteAction, DeleteCascade, RelAction, RelWrite};
 use crate::value::{Encodable, Ordered, Value};
 
@@ -498,7 +499,14 @@ where
     pub fn to_sql(&self) -> Result<CompiledSql, Error> {
         let dialect = self.exec.dialect();
         let main = self.to_sql_without_cte()?;
-        Ok(crate::compile::with_cte_prefix(dialect, &self.ctes, main))
+        let compiled = crate::compile::with_cte_prefix(dialect, &self.ctes, main);
+        query_manifest::record(
+            compiled.sql.clone().into_owned(),
+            Some(file!()),
+            Some(line!()),
+            dialect.name(),
+        );
+        Ok(compiled)
     }
 
     /// Combines this query with another using `UNION`.
@@ -982,6 +990,12 @@ impl<'db, Out> SetOpQuery<'db, Out> {
         if let Some(n) = self.offset {
             compiled.sql = Cow::Owned(format!("{} OFFSET {}", compiled.sql, n));
         }
+        query_manifest::record(
+            compiled.sql.clone().into_owned(),
+            Some(file!()),
+            Some(line!()),
+            dialect.name(),
+        );
         Ok(compiled)
     }
 }
@@ -1413,12 +1427,19 @@ impl<'db, M: Model> InsertQuery<'db, M> {
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> CompiledSql {
         let dialect = dialect_for_pool(self.pool);
-        if let Some(ref conflict) = self.on_conflict {
+        let compiled = if let Some(ref conflict) = self.on_conflict {
             let do_update = self.do_update.as_deref().unwrap_or(&[]);
             upsert::<M>(dialect, M::TABLE, &self.values, conflict, do_update, &[])
         } else {
             insert::<M>(dialect, M::TABLE, &self.values, &[])
-        }
+        };
+        query_manifest::record(
+            compiled.sql.clone().into_owned(),
+            Some(file!()),
+            Some(line!()),
+            dialect.name(),
+        );
+        compiled
     }
 
     /// Executes the insert and returns the inserted row.
@@ -1903,13 +1924,14 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
             return Err(Error::Message("update has no columns to set".into()));
         }
         let dialect = dialect_for_pool(self.pool);
-        Ok(update_with_sets(
-            dialect,
-            M::TABLE,
-            &self.sets,
-            &self.filter.node,
-            &[],
-        ))
+        let compiled = update_with_sets(dialect, M::TABLE, &self.sets, &self.filter.node, &[]);
+        query_manifest::record(
+            compiled.sql.clone().into_owned(),
+            Some(file!()),
+            Some(line!()),
+            dialect.name(),
+        );
+        Ok(compiled)
     }
 
     /// Executes the update and returns the number of rows affected.
@@ -2093,7 +2115,14 @@ impl<'db, M: Model> DeleteQuery<'db, M, FilteredDelete> {
             ));
         }
         let dialect = dialect_for_pool(self.pool);
-        Ok(delete::<M>(dialect, M::TABLE, &self.filter.node, &[]))
+        let compiled = delete::<M>(dialect, M::TABLE, &self.filter.node, &[]);
+        query_manifest::record(
+            compiled.sql.clone().into_owned(),
+            Some(file!()),
+            Some(line!()),
+            dialect.name(),
+        );
+        Ok(compiled)
     }
 
     /// Executes the delete and returns the number of rows removed.
@@ -2354,7 +2383,14 @@ where
             self.limit,
             self.offset,
         );
-        crate::compile::with_cte_prefix(dialect, &self.ctes, main)
+        let compiled = crate::compile::with_cte_prefix(dialect, &self.ctes, main);
+        query_manifest::record(
+            compiled.sql.clone().into_owned(),
+            Some(file!()),
+            Some(line!()),
+            dialect.name(),
+        );
+        compiled
     }
 
     /// Executes the query and returns all matching aggregate rows.

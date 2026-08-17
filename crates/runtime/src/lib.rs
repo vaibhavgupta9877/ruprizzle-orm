@@ -48,6 +48,7 @@ pub mod order;
 pub mod page;
 pub mod pool;
 pub mod query;
+pub mod query_manifest;
 pub mod rel;
 pub mod related;
 #[cfg(feature = "sqlite-rusqlite")]

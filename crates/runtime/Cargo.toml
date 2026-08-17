@@ -17,6 +17,7 @@ categories  = ["database"]
 ruprizzle-core    = { workspace = true }
 ruprizzle-dialect = { workspace = true }
 ruprizzle-macros  = { workspace = true }
+ruprizzle-check   = { workspace = true }
 chrono            = { workspace = true }
 futures-core      = "0.3"
 futures-util      = { version = "0.3", default-features = false, features = ["std", "alloc"] }

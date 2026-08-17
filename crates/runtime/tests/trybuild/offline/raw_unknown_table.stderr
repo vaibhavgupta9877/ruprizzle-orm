@@ -1,0 +1,5 @@
+error: unknown table `not_a_table`
+ --> tests/trybuild/offline/raw_unknown_table.rs:6:18
+  |
+6 |     let _ = raw!("SELECT * FROM not_a_table");
+  |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -2394,6 +2394,7 @@ dependencies = [
  "futures-util",
  "insta",
  "metrics",
+ "ruprizzle-check",
  "ruprizzle-core",
  "ruprizzle-dialect",
  "ruprizzle-macros",
@@ -2416,6 +2417,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruprizzle-check"
+version = "0.4.0-beta.2"
+dependencies = [
+ "ruprizzle-core",
+ "ruprizzle-parser",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "ruprizzle-cli"
 version = "0.4.0-beta.2"
 dependencies = [
@@ -2425,6 +2437,7 @@ dependencies = [
  "miette",
  "notify",
  "ruprizzle",
+ "ruprizzle-check",
  "ruprizzle-codegen",
  "ruprizzle-core",
  "ruprizzle-dialect",
@@ -2524,6 +2537,8 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
+ "ruprizzle-core",
+ "ruprizzle-parser",
  "syn 2.0.119",
 ]
 

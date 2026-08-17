@@ -94,6 +94,13 @@ enum Command {
         #[arg(long, default_value_t = true)]
         stdio: bool,
     },
+
+    /// Validate a query manifest against the schema without a database.
+    Check {
+        /// Path to the query manifest JSON.
+        #[arg(long)]
+        manifest: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -223,6 +230,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Command::Db(DbCommand::Pull) => db_pull(&cli.schema, cli.verbose).await,
         Command::Db(DbCommand::Seed) => db_seed(&cli.schema, cli.verbose).await,
         Command::Lsp { stdio } => run_lsp(*stdio).await,
+        Command::Check { manifest } => run_check(&cli.schema, manifest),
     }
 }
 
@@ -249,6 +257,27 @@ async fn run_lsp(stdio: bool) -> Result<(), Box<dyn std::error::Error + Send + S
     }
     ruprizzle_lsp::run_stdio().await;
     Ok(())
+}
+
+fn run_check(
+    schema_path: &str,
+    manifest_path: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let source = std::fs::read_to_string(manifest_path)?;
+    let manifest: ruprizzle_check::QueryManifest = serde_json::from_str(&source)?;
+
+    let (schema, _, _) = parse_schema(schema_path)?;
+    let errors = ruprizzle_check::validate_manifest(&schema, &manifest);
+
+    if errors.is_empty() {
+        println!("{manifest_path} is valid against {schema_path}");
+        return Ok(());
+    }
+
+    for error in &errors {
+        eprintln!("{manifest_path}: {error}");
+    }
+    Err(format!("{} query(s) failed validation", errors.len()).into())
 }
 
 fn parse_schema(
