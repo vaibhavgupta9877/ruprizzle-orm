@@ -536,6 +536,375 @@ Use these exact phrases in copy, headlines, and comparisons:
 
 ---
 
-*End of marketing plan.*
+*End of the original (2026-08-11) marketing plan.*
 
-*Next action: Review this plan, decide on the MySQL/LSP roadmap, set up GitHub Discussions, and begin the 90-day execution sprint.*
+---
+
+# Part II — SEO & GEO (AI Search) Plan
+
+*Added: 2026-08-17. Applies to `0.4.0-beta.2` (Postgres + SQLite + MySQL/MariaDB, native `rusqlite` backend behind `sqlite-rusqlite`).*
+
+> **Note on Part I drift:** Part I was written at `0.1.1-beta.1` and describes MySQL as "not yet shipped" and the project as "alpha, Postgres + SQLite". That is now out of date — MySQL/MariaDB shipped and the crate is at `0.4.0-beta.2`. Section 22 includes a task to reconcile Part I with reality; until then, treat Part II as the current source of truth for status claims used in copy.
+
+## 14. Why SEO and GEO Are One Plan Here
+
+Two distinct discovery surfaces, one content investment:
+
+- **SEO (classic search):** Google/Bing rankings for non-branded queries like "rust orm like prisma", "seaorm alternative", "rust schema first migrations".
+- **GEO (Generative Engine Optimization):** getting **cited** inside ChatGPT, Perplexity, Claude, Google AI Overviews, and Copilot answers to questions like "what's the best Rust ORM in 2026?"
+
+For a developer-tool crate with zero domain authority, **GEO is the higher-leverage half**. Ranking #1 for "rust orm" against Diesel (14k stars) and sqlx (17k stars) is a multi-year fight. But a page on ruprizzle can be *cited* by ChatGPT next week if it is well-structured, data-backed, and honest — AI engines select passages on extractability and authority signals, not just rank position. Non-Google engines routinely cite page-2 and page-3 sources.
+
+**The unfair advantage:** developer-tool queries are exactly the queries LLMs get asked most, and the Rust-ORM category is under-documented. Nobody has written the definitive, well-sourced, table-driven "Rust ORM comparison 2026" page. That page is a citation magnet, and this repo already contains the raw material for it (`docs/FeaturesMasterComparison.md`, `docs/BenchmarkResults.md`, `competitor-profiles/`, `customer-research.md`).
+
+**Non-negotiable constraint:** everything below must be written for humans first. Google's own AI optimization guidance is explicit that content written *for AI* — chunked fragments, AI-only variants, scaled generation — risks the scaled-content-abuse spam policy. Every asset in this plan is a page a Rust developer would genuinely want to read.
+
+---
+
+## 15. Baseline Audit — Current State (2026-08-17)
+
+Audited against the repo at `dev-v0-2`. Surface = `https://vaibhavgupta9877.github.io/ruprizzle-orm/` (mdBook), `crates.io/crates/ruprizzle`, `docs.rs/ruprizzle`, and the GitHub README.
+
+### 15.1 What is already right
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| AI crawlers allowed | ✅ Pass | `robots.txt` is `User-agent: * / Allow: /` — GPTBot, PerplexityBot, ClaudeBot, Google-Extended, Bingbot all permitted. No accidental blocking. |
+| Sitemap declared | ✅ Pass | `robots.txt` points at the absolute sitemap URL. |
+| Docs are static HTML | ✅ Pass | mdBook output is server-rendered; no JS-gated content, so agents and crawlers see everything. |
+| Canonical site URL configured | ✅ Pass | `book.toml` sets `site-url`, `git-repository-url`, `edit-url-template`. |
+| Nothing gated | ✅ Pass | No login walls, no PDFs-only, no email gates. |
+| Original data exists | ✅ Pass | `docs/BenchmarkResults.md` + `docs/FeaturesMasterComparison.md` are genuinely original, reproducible research — the single most citable asset the project owns. |
+| Licence + security posture | ✅ Pass | MIT/Apache-2.0, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md` — real E-E-A-T trust signals. |
+
+### 15.2 Confirmed defects
+
+| # | Defect | Impact | Severity |
+|---|--------|--------|----------|
+| D1 | **Sitemap URLs do not match built pages.** `sitemap.xml` lists `schema-reference.html`, `query-guide.html`, `relations-guide.html`, `migrations-guide.html`, `dialect-notes.html`, `known-limitations.html`, `migrating-from.html`. But `docs/SUMMARY.md` builds the CamelCase variants (`SchemaReference.html`, `QueryGuide.html`, …). **7 of 11 sitemap URLs are almost certainly 404s.** | Crawlers waste budget on dead URLs; the real doc pages are only discoverable via internal links. Directly suppresses indexation of the highest-intent pages. | **P0** |
+| D2 | **Duplicate doc source files.** `docs/` contains both `schema-reference.md` and `SchemaReference.md`, `query-guide.md` and `QueryGuide.md`, `migrations-guide.md` and `MigrationsGuide.md`, `dialect-notes.md` and `DialectNotes.md`, `known-limitations.md` and `KnownLimitations.md`, `migrating-from.md` and `MigratingFrom.md`. 29 `.md` files for ~15 real topics. | Content duplication, ambiguous canonicals, maintenance drift (the two copies will diverge and one will become wrong). | **P0** |
+| D3 | **No `<lastmod>` in sitemap.** All 11 entries are bare `<loc>`. | Freshness is a heavy weighting factor for both AI citation and crawl scheduling. We are throwing away a free signal on a repo that ships constantly. | **P1** |
+| D4 | **No `llms.txt`.** | ChatGPT/Claude/Perplexity have no fast-path summary of what ruprizzle is, who it's for, and which pages to read. | **P1** |
+| D5 | **No structured data anywhere.** mdBook emits no `Article`, `FAQPage`, `SoftwareSourceCode`, or `Organization` JSON-LD. | Loses ~30–40% AI visibility uplift on non-Google engines; loses FAQ rich results on Google. `docs/faq.md` exists and is pure wasted `FAQPage` markup. | **P1** |
+| D6 | **No author/date attribution on doc pages.** No "last updated", no author byline, no credentials. | E-E-A-T gap. Undated content systematically loses to dated content in AI citation. | **P1** |
+| D7 | **Headings do not match query phrasing.** Docs use noun-label headings ("Relations guide", "Dialect notes") rather than the interrogative forms people and LLMs actually use ("How do I load nested relations without N+1?"). | Passage retrieval misses. Headings are the primary chunk boundary for retrieval. | **P1** |
+| D8 | **No comparison/alternative landing pages.** Comparison content lives inside `README.md` and `docs/FeaturesMasterComparison.md` — not on dedicated, linkable, individually-titled pages. | Comparison articles are ~33% of all AI citations, the single largest citable content category. We have the data and no pages to hang it on. | **P0** |
+| D9 | **No third-party presence.** No Wikipedia, no Reddit history, no lib.rs/libs.tech listing, no YouTube, no Stack Overflow answers. | Brands are ~6.5x more likely to be cited via third-party sources than their own domain. This is the largest single GEO gap. | **P0** |
+| D10 | **`crates.io` / `docs.rs` metadata not SEO-tuned.** Need to verify `keywords`, `categories`, and `description` on every published crate. | `crates.io` and `docs.rs` outrank the project's own GitHub Pages for nearly every branded query — they are the real front door. | **P1** |
+| D11 | **No `pricing.md`.** | Lower priority for a free OSS crate, but AI agents evaluating "is this free / what's the licence / is there a paid tier" have nothing structured to read. | **P3** |
+| D12 | **No analytics on the docs site.** | Cannot measure any of this. No baseline, no attribution of AI referral traffic. | **P1** |
+
+### 15.3 Scorecard
+
+| Dimension | Score (0–5) | Note |
+|-----------|:-----------:|------|
+| Crawlability / indexability | 2 | Crawlers welcome, but the sitemap points them at 404s. |
+| Content extractability | 2 | Prose-heavy, noun headings, few standalone answer blocks. |
+| Structured data | 0 | None. |
+| Authority signals (data, citations, attribution) | 3 | Excellent original benchmarks; no bylines, no dates, few outbound citations. |
+| Freshness signalling | 1 | Ships constantly, signals nothing. |
+| Third-party presence | 0 | Nothing. |
+| AI-agent readability (`llms.txt`, machine-readable files) | 0 | None. |
+| Measurement | 0 | None. |
+
+---
+
+## 16. Keyword & Query Map
+
+Two tiers, because the two surfaces reward different things.
+
+### 16.1 Classic SEO — non-branded target queries
+
+Grouped by intent, with the page that should own each cluster.
+
+| Cluster | Representative queries | Intent | Target page | Difficulty |
+|---------|------------------------|--------|-------------|:----------:|
+| **Category discovery** | "rust orm", "best rust orm 2026", "rust orm comparison", "async rust orm" | Commercial investigation | `/compare/` hub | Very high |
+| **Prisma-shaped intent** | "prisma for rust", "rust orm like prisma", "prisma alternative rust", "schema first orm rust" | High-intent, low competition | `/compare/prisma-for-rust` | **Low — best wedge** |
+| **Drizzle-shaped intent** | "drizzle for rust", "rust orm with sql transparency", "see generated sql rust orm" | High-intent | `/compare/drizzle-for-rust` | Low |
+| **Competitor alternative** | "seaorm alternative", "diesel alternative async", "sqlx query builder", "sqlx dynamic query" | Highest-intent of all | `/compare/vs-seaorm`, `/compare/vs-diesel`, `/compare/vs-sqlx` | Medium |
+| **New-cohort** | "ferriorm vs", "toasty orm rust", "prax orm", "kosame rust" | Low volume, near-zero competition | `/compare/new-rust-orms-2026` | Very low |
+| **Problem-aware** | "rust orm n+1", "rust migrations automatic", "rust database schema drift", "rust orm compile time" | Top of funnel | Deep-dive blog posts | Low–medium |
+| **Task / how-to** | "rust nested relation query", "rust orm transaction example", "sqlx migration vs diesel migration" | Navigational-informational | Docs pages (re-headed per D7) | Medium |
+| **Benchmark** | "rust orm benchmark", "seaorm vs diesel performance", "rust orm query build speed" | Research | `/benchmarks` | Low — **we own the data** |
+
+**Wedge strategy:** do not fight "rust orm" head-on. Own **"prisma for rust"**, **"seaorm alternative"**, and **"rust orm benchmark"** first. They are lower-competition, higher-intent, and they feed the fan-out queries that Google's AI systems generate for the head term anyway.
+
+### 16.2 GEO — the 20 prompts to track
+
+These are the actual prompts to run monthly across ChatGPT, Perplexity, Claude, Gemini, Copilot, and Google AI Overviews. This is the scoreboard.
+
+| # | Prompt | Type |
+|---|--------|------|
+| 1 | What is the best ORM for Rust in 2026? | Category |
+| 2 | Is there a Prisma equivalent for Rust? | Wedge |
+| 3 | What's a good alternative to SeaORM? | Alternative |
+| 4 | I want a Rust ORM where I can see the generated SQL. What should I use? | Differentiator |
+| 5 | What Rust ORMs support automatic migration generation from a schema file? | Differentiator |
+| 6 | Diesel vs SeaORM vs sqlx — which should I pick for an Axum app? | Comparison |
+| 7 | How do I avoid N+1 queries in a Rust ORM? | Problem |
+| 8 | Which Rust ORMs are async-first? | Filter |
+| 9 | What is ruprizzle? | Branded |
+| 10 | Is ruprizzle production ready? | Branded / risk |
+| 11 | ruprizzle vs SeaORM | Branded comparison |
+| 12 | What's the fastest Rust ORM? | Benchmark |
+| 13 | Rust ORM that works with both Postgres and SQLite with one API | Filter |
+| 14 | How do I do schema-first database development in Rust? | Problem |
+| 15 | Best Rust ORM for a solo developer building an MVP | ICP |
+| 16 | Does any Rust ORM avoid a Node.js sidecar like Prisma's? | Differentiator |
+| 17 | New Rust ORMs to watch in 2026 | Category / new-cohort |
+| 18 | How do I migrate from sqlx to a full ORM in Rust? | Migration |
+| 19 | Rust ORM with MySQL and MariaDB support | Filter |
+| 20 | Type-safe database queries in Rust without macros in my domain structs | Differentiator |
+
+Log per prompt: cited (Y/N), which URL, which competitors were cited, and the sentiment of any mention. Month-over-month delta is the north star for this plan.
+
+---
+
+## 17. GEO Content Architecture
+
+The three pillars, applied to this project specifically.
+
+### 17.1 Pillar 1 — Structure (make it extractable)
+
+AI engines extract *passages*, not pages. Rules for every new and rewritten page:
+
+1. **Lead with the answer.** First paragraph under each H2 is a complete, self-contained, 40–60 word answer that makes sense with zero surrounding context. Assume it will be lifted verbatim.
+2. **Interrogative headings.** `## How does ruprizzle avoid N+1 queries?` not `## Relations`. Headings are the retrieval chunk boundary.
+3. **Tables over prose for anything comparative.** Comparison tables are the single most-extracted structure in the corpus.
+4. **Numbered lists for any process.** Migration flows, install steps, upgrade paths.
+5. **One idea per paragraph.**
+6. **Every number gets a source and a date.** "3.2x faster (ruprizzle benchmark suite, run 2026-08-17, Postgres 16, `cargo xtask bench`)" beats "much faster" by an enormous margin.
+7. **Never claim more than the beta supports.** An LLM that cites an overclaim and is contradicted by a user will stop citing the source. Honesty is a *retrieval* strategy, not only an ethical one.
+
+### 17.2 Pillar 2 — Authority (make it citable)
+
+Ranked by measured citation uplift from the Princeton GEO study (KDD 2024):
+
+| Method | Uplift | Concrete application here |
+|--------|:------:|---------------------------|
+| Cite sources | +40% | Link SeaORM issues, HN threads, sqlx docs, Prisma docs directly when making a claim about them. `customer-research.md` already holds the quotes with attribution — surface them on public pages. |
+| Add statistics | +37% | Benchmark numbers, compile-time measurements, crate size, MSRV, dependency count, migration timings. We have these; they are buried in `docs/BenchmarkResults.md`. |
+| Add quotations | +30% | The verbatim developer quotes in `customer-research.md` ("SQLx sucks at dynamic queries", "Sea ORM is too opinionated") — attributed, linked, used as the *problem statement* on comparison pages. |
+| Authoritative tone | +25% | Explain the `DbDialect` trait design and the `migrate dev` / `migrate deploy` split as deliberate engineering decisions, with rationale. The `docs/adr/` directory is a goldmine here. |
+| Improve clarity | +20% | Short sentences, defined terms, no marketing filler. |
+| Technical terms | +18% | Use the real vocabulary: dialect trait, schema diffing, shadow database, bounded include, prepared statement cache. |
+| **Keyword stuffing** | **−10%** | Actively harmful. Do not repeat "Rust ORM" mechanically. |
+
+**Best measured combination: fluency + statistics.** Low-authority domains — which is exactly what this project is today — see up to **+115%** visibility from adding citations. This project is the ideal profile for GEO to work.
+
+### 17.3 Pillar 3 — Presence (be where AI looks)
+
+Own-domain content is the smaller half. Priority order by expected citation yield:
+
+| Surface | Why it matters | Action |
+|---------|----------------|--------|
+| **crates.io / docs.rs / lib.rs** | These dominate every Rust-crate query and are heavily crawled and cited. Highest-yield surface available. | Perfect `keywords`, `categories`, `description` on all 8 crates; write real crate-level rustdoc with examples. |
+| **GitHub README** | Frequently cited directly by ChatGPT and Perplexity for OSS queries. | Treat the README as a landing page, not a manual. Answer-first, table-heavy. |
+| **Reddit r/rust** | 1.8% of all ChatGPT citations; disproportionately high for developer queries. | Authentic participation. Answer ORM questions helpfully with no pitch. Never astroturf — it fails and it burns the project. |
+| **This Week in Rust** | High-authority, heavily indexed, heavily scraped. | Submit every release and every deep-dive post. |
+| **Hacker News** | Threads rank and get cited for years. | One honest Show HN per major release; substantive comments on ORM threads. |
+| **Stack Overflow** | Classic long-tail authority. | Answer existing Rust-ORM questions properly; mention ruprizzle only where genuinely the right answer. |
+| **YouTube** | Frequently cited by Google AI Overviews. | One 5-minute "schema → generate → migrate → query" screencast. |
+| **libs.tech / Rust-LibHunt / awesome-rust** | Directory listings that rank. | Submit. One-time cost, permanent return. |
+| **Wikipedia** | 7.8% of ChatGPT citations — but ruprizzle is not notable enough for its own article and attempting one will get it deleted. | Do **not** create an article. Revisit only if the project reaches genuine notability with independent coverage. |
+
+---
+
+## 18. Technical SEO Fixes
+
+Ordered by severity. These are the highest ROI items in the entire plan because they are cheap and currently broken.
+
+### 18.1 P0 — Fix the sitemap/build mismatch (D1, D2)
+
+The docs directory has two parallel copies of six guides, and the sitemap references the copy that mdBook does not build.
+
+Resolution: pick **one** canonical naming convention (recommend lowercase-kebab — cleaner URLs, matches the existing sitemap, and matches Rust ecosystem convention), delete the other copy after merging any divergent content, update `docs/SUMMARY.md` to reference the kept files, and regenerate the sitemap from the actual build output.
+
+Add a CI check that fails when a `sitemap.xml` `<loc>` has no corresponding file in `book/` — this class of bug must not recur.
+
+### 18.2 P1 — Enrich the sitemap (D3)
+
+Add `<lastmod>`, `<changefreq>`, and `<priority>` to every entry. Generate `lastmod` from git commit time per source file so it is always truthful, in an `xtask` subcommand wired into the docs build.
+
+### 18.3 P1 — Add `llms.txt` (D4)
+
+Publish `/llms.txt` at the site root, following [llmstxt.org](https://llmstxt.org). Contents: one-paragraph definition, the honest status line, supported databases, the three differentiators, and a linked index of the canonical docs pages. Keep it under ~2KB and regenerate it on release so the version string never goes stale.
+
+### 18.4 P1 — Structured data (D5)
+
+Inject JSON-LD via an mdBook theme override (`theme/head.hbs`):
+
+| Schema | Where | Payload |
+|--------|-------|---------|
+| `SoftwareSourceCode` / `SoftwareApplication` | Site-wide | Name, description, `programmingLanguage: Rust`, licence, repo URL, version. |
+| `TechArticle` | Every docs page | Headline, `dateModified`, author, `about`. |
+| `FAQPage` | `docs/faq.md` | Direct Q&A extraction — highest-value single schema on the site. |
+| `HowTo` | `quickstart.md`, `migrations-guide.md` | Step extraction for "how to" queries. |
+| `Organization` / `Person` | Site-wide | Entity recognition for the maintainer and project. |
+
+Validate with Google's Rich Results Test and schema.org's validator before shipping.
+
+### 18.5 P1 — Freshness and attribution (D6)
+
+Every docs page gets a footer line: `Last updated: YYYY-MM-DD · Maintained by Vaibhav Gupta · ruprizzle 0.4.0-beta.2`. Generate the date from git, not by hand — hand-maintained dates rot and a wrong date is worse than none.
+
+### 18.6 P1 — Crate metadata (D10)
+
+Audit `keywords` and `categories` on all 8 published crates. Targets: `keywords = ["orm", "database", "sql", "postgres", "schema"]` (max 5, max 20 chars each), `categories = ["database"]`. Every crate needs a distinct, descriptive `description` — this string is what appears in crates.io search results and in nearly every AI answer about the crate.
+
+### 18.7 P2 — robots.txt hardening
+
+Currently `Allow: /` for everyone, which is correct and should stay. Optionally add explicit `Allow` blocks for GPTBot, ChatGPT-User, PerplexityBot, ClaudeBot, anthropic-ai, Google-Extended, and Bingbot — functionally redundant but it documents the intent so no future contributor "tidies up" by blocking them. Do **not** block any search-and-cite bot; blocking means those platforms cannot cite the project at all.
+
+### 18.8 P3 — `pricing.md` (D11)
+
+Low priority for a free crate, but cheap: a `/pricing.md` stating the core ORM is free and MIT/Apache-2.0 dual-licensed forever, with no paid tier today, answers the "what does it cost / what's the licence" agent query definitively.
+
+---
+
+## 19. Content Plan — The Citation Assets
+
+Ten pages, ranked by expected citation yield per hour invested. Each is a page a Rust developer would want regardless of SEO.
+
+| # | Asset | Target queries | Why it gets cited | Effort |
+|---|-------|----------------|-------------------|:------:|
+| C1 | **`/compare/` hub — "Rust ORM Comparison 2026"** | "rust orm comparison", "best rust orm" | Comparison content = ~33% of all AI citations. Full matrix across 16 ORMs, honest about where ruprizzle loses. Built from `FeaturesMasterComparison.md`. | L |
+| C2 | **"Is there a Prisma for Rust?"** | "prisma for rust", "prisma alternative rust" | Lowest-competition highest-intent query in the category. Directly answers a question thousands of TypeScript-to-Rust developers ask. | M |
+| C3 | **`/benchmarks` — reproducible cross-ORM benchmarks** | "rust orm benchmark", "fastest rust orm" | Original data is ~12% of citations and this is the project's genuinely unique asset. Publish methodology, hardware, versions, and the command to reproduce. | M |
+| C4 | **"SeaORM alternatives in 2026"** | "seaorm alternative" | Highest commercial intent. Opens with the real developer complaints from `customer-research.md`, attributed and linked. | M |
+| C5 | **"The State of Rust ORMs in 2026"** | "rust orm 2026", "new rust orms" | Landscape piece covering all 16 projects fairly. Maximum shareability; the piece that gets linked by others, which is what actually builds authority. | L |
+| C6 | **"How to avoid N+1 queries in Rust"** | "rust orm n+1" | Problem-aware, framework-agnostic, genuinely useful. Bounded `include` is the natural demonstration. | M |
+| C7 | **"Schema-first vs entity-first database development in Rust"** | "schema first orm rust" | Owns the category vocabulary. Concept pages get cited as definitions. | M |
+| C8 | **"Migrating from sqlx / SeaORM / Diesel to ruprizzle"** (3 pages) | "migrate from seaorm", "sqlx to orm" | High-intent, activation-driving, low competition. `docs/MigratingFrom.md` is the seed. | M |
+| C9 | **Rewritten FAQ with `FAQPage` schema** | Long-tail question queries | Direct Q&A extraction is the single most efficient citation format that exists. | S |
+| C10 | **"Why we built ruprizzle" + ADR write-ups** | Branded, trust | Answers "is this serious / who maintains this / is it abandoned" — the questions LLMs are asked about any new dependency. Sourced from `docs/adr/`. | S |
+
+**Editorial rules for every asset:**
+- Named author with a byline and a real bio.
+- A visible "last updated" date.
+- At least 3 outbound citations to primary sources.
+- At least 3 specific, dated, sourced statistics.
+- A comparison table or a numbered process list.
+- An honest "when *not* to use ruprizzle" section — this is a genuine differentiator; almost no competitor does it, and it materially increases how much an LLM will trust and cite the page.
+
+---
+
+## 20. Measurement
+
+### North star
+**Citation rate across the 20 tracked GEO prompts** (§16.2) — the percentage of prompt × platform combinations where ruprizzle is cited.
+
+### Targets
+
+| Metric | Baseline (2026-08-17) | 30 days | 90 days | 12 months |
+|--------|:---------------------:|:-------:|:-------:|:---------:|
+| GEO citation rate (20 prompts × 6 platforms) | ~0% (assumed; needs measurement) | 5% | 15% | 40% |
+| Branded prompts answered correctly (#9–11) | Unknown | 3/3 | 3/3 | 3/3 |
+| Indexed docs pages (Google) | Unknown — likely low, see D1 | 15+ | 25+ | 40+ |
+| Non-branded organic clicks/mo | ~0 | 50 | 400 | 5,000 |
+| crates.io downloads/mo | Track from crates.io | +25% | +100% | +500% |
+| Referral sessions from AI platforms | 0 (untracked) | tracked | 100/mo | 1,500/mo |
+| Third-party citable mentions | 0 | 3 | 10 | 40 |
+
+### Instrumentation
+- **Plausible** (or GoatCounter) on the docs site — privacy-friendly, no cookie banner, free tier sufficient.
+- **Google Search Console** + **Bing Webmaster Tools** — verify the GitHub Pages property, submit the fixed sitemap. Note: there is no AI-specific Search Console reporting; standard reports are the measurement surface for Google.
+- **AI referral tracking** — segment referrers matching `chatgpt.com`, `perplexity.ai`, `claude.ai`, `copilot.microsoft.com`, `gemini.google.com`.
+- **Manual GEO log** — a spreadsheet, run monthly against §16.2. Free and more honest than any tool at this scale. Paid tools (Otterly, Peec, ZipTie) only make sense once there is a citation rate worth optimizing.
+
+---
+
+## 21. Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Comparison pages read as competitor-bashing and damage the project's reputation in a small community | Be scrupulously fair. State where each competitor *wins*. Link to their docs. Offer corrections publicly and fix them fast. |
+| Benchmark claims get challenged and the project loses credibility | Publish methodology, hardware, exact versions, and a reproduction command. Invite maintainers to dispute. Never cherry-pick a favourable subset. |
+| AI cites a stale claim (e.g. "Postgres and SQLite only", which Part I still says) | Keep `llms.txt`, README, and comparison pages version-stamped and regenerated on release. Treat stale public claims as bugs. |
+| Comparison pages read as scaled/templated content | Every page hand-written with genuine analysis. Do not generate a page per competitor from a template. |
+| Reddit/HN participation reads as promotion and gets the project banned | Strict rule: answer the question asked, mention ruprizzle only when it is genuinely the best answer, always disclose maintainership. |
+| Effort spent on SEO starves engineering, and the product is what actually earns citations | Cap at ~20% of available time. The P0 technical fixes are hours, not weeks — do those first, they are pure profit. |
+
+---
+
+## 22. Execution Tasks
+
+Tracked checklist. `[P0]` = do first, `[P1]` = this month, `[P2]` = this quarter, `[P3]` = opportunistic.
+
+### 22.1 Sprint 1 — Fix what's broken (Week 1, ~1 day of work)
+
+- [ ] **[P0]** Choose a canonical docs naming convention (recommend lowercase-kebab) and record the decision in `docs/adr/`.
+- [ ] **[P0]** Diff each duplicate pair in `docs/` (`schema-reference` / `SchemaReference`, `query-guide` / `QueryGuide`, `migrations-guide` / `MigrationsGuide`, `dialect-notes` / `DialectNotes`, `known-limitations` / `KnownLimitations`, `migrating-from` / `MigratingFrom`); merge divergent content into the canonical file.
+- [ ] **[P0]** Delete the non-canonical duplicates and update `docs/SUMMARY.md`.
+- [ ] **[P0]** Regenerate `sitemap.xml` from actual `book/` build output; verify every `<loc>` returns 200.
+- [ ] **[P0]** Add a CI step (`cargo xtask ci`) that fails when a sitemap `<loc>` has no corresponding built file.
+- [ ] **[P0]** Add redirects or `404.html` handling for the old URL forms, in case any are already indexed.
+- [ ] **[P1]** Add `<lastmod>` (from git commit time), `<changefreq>`, `<priority>` to the sitemap generator.
+- [ ] **[P1]** Verify the GitHub Pages property in Google Search Console and Bing Webmaster Tools; submit the fixed sitemap.
+- [ ] **[P1]** Add Plausible (or GoatCounter) to the mdBook theme; record the baseline.
+
+### 22.2 Sprint 2 — Machine-readable surface (Week 2)
+
+- [ ] **[P1]** Write `/llms.txt` — definition, honest status, supported DBs, three differentiators, linked page index.
+- [ ] **[P1]** Add an `xtask` step that regenerates `llms.txt` version strings on release.
+- [ ] **[P1]** Add `theme/head.hbs` JSON-LD: `SoftwareSourceCode` site-wide + `TechArticle` per page.
+- [ ] **[P1]** Add `FAQPage` JSON-LD to `docs/faq.md`.
+- [ ] **[P1]** Add `HowTo` JSON-LD to `quickstart.md` and `migrations-guide.md`.
+- [ ] **[P1]** Validate all schema with the Rich Results Test and schema.org validator.
+- [ ] **[P1]** Add a git-derived "Last updated · Maintainer · Version" footer to every docs page.
+- [ ] **[P1]** Audit `keywords`, `categories`, and `description` for all 8 published crates; publish corrections with the next release.
+- [ ] **[P2]** Add explicit `Allow` blocks for named AI bots to `robots.txt`, with a comment explaining why they must not be removed.
+- [ ] **[P3]** Add `/pricing.md` stating the free-and-dual-licensed-forever position.
+
+### 22.3 Sprint 3 — Extractability rewrite (Weeks 3–4)
+
+- [ ] **[P1]** Rewrite all docs H2/H3 headings into interrogative form matching real query phrasing (fixes D7).
+- [ ] **[P1]** Add a self-contained 40–60 word answer paragraph as the first paragraph under every H2.
+- [ ] **[P1]** Add a definition block to the docs homepage: "ruprizzle is a schema-first ORM for Rust that…" — the passage most likely to be lifted verbatim by an LLM.
+- [ ] **[P1]** Rewrite the README above-the-fold answer-first, with the comparison table above the fold.
+- [ ] **[P1]** Add a "When *not* to use ruprizzle" section to the README and the docs homepage.
+- [ ] **[P2]** Add source links and dates to every statistic currently in the README and `docs/BenchmarkResults.md`.
+- [ ] **[P2]** Write real crate-level rustdoc (`//!`) with runnable examples for all 8 crates — docs.rs is a top-cited surface.
+
+### 22.4 Sprint 4 — Citation assets (Weeks 5–10)
+
+- [ ] **[P0]** C1 — `/compare/` hub: "Rust ORM Comparison 2026" (full 16-project matrix, from `FeaturesMasterComparison.md`).
+- [ ] **[P0]** C2 — "Is there a Prisma for Rust?"
+- [ ] **[P0]** C3 — `/benchmarks` with full methodology and a reproduction command.
+- [ ] **[P1]** C4 — "SeaORM alternatives in 2026".
+- [ ] **[P1]** C5 — "The State of Rust ORMs in 2026".
+- [ ] **[P1]** C9 — Rewrite the FAQ around the 20 tracked GEO prompts.
+- [ ] **[P2]** C6 — "How to avoid N+1 queries in Rust".
+- [ ] **[P2]** C7 — "Schema-first vs entity-first in Rust".
+- [ ] **[P2]** C8 — Three migration guides (from sqlx, SeaORM, Diesel).
+- [ ] **[P2]** C10 — "Why we built ruprizzle" + ADR write-ups.
+- [ ] **[P1]** Apply the six editorial rules (§19) to every asset before publishing.
+
+### 22.5 Sprint 5 — Third-party presence (Weeks 5–12, ongoing)
+
+- [ ] **[P0]** Submit to lib.rs, libs.tech, Rust-LibHunt, `awesome-rust`, and relevant GitHub Topics.
+- [ ] **[P0]** Submit the `0.4.0-beta.2` release and each major post to This Week in Rust.
+- [ ] **[P1]** Answer 5+ existing Rust-ORM questions per week on r/rust and Stack Overflow — helpfully, with maintainer disclosure, no pitch.
+- [ ] **[P1]** Record and publish a 5-minute "schema → generate → migrate → query" screencast on YouTube.
+- [ ] **[P1]** Post an honest Show HN when `v0.4` stabilises.
+- [ ] **[P2]** Get listed in at least 3 independent "best Rust ORM" roundups.
+- [ ] **[P2]** Publish one guest post on a Rust-adjacent publication.
+- [ ] **[P3]** Revisit Wikipedia only if independent coverage makes the project genuinely notable. Do not attempt before then.
+
+### 22.6 Ongoing — Measurement & hygiene
+
+- [ ] **[P0]** Run the §16.2 baseline measurement now, before any changes ship. Without a baseline none of this is assessable.
+- [ ] **[P1]** Run the 20-prompt GEO check monthly across all 6 platforms; log to a spreadsheet.
+- [ ] **[P1]** Review Search Console queries monthly; feed new non-branded queries back into §16.1.
+- [ ] **[P1]** Refresh every comparison page within 2 weeks of any competitor's major release.
+- [ ] **[P1]** Re-run and republish benchmarks each minor release.
+- [ ] **[P1]** **Reconcile Part I with reality** — it still describes the project as alpha, Postgres+SQLite only, at `0.1.1-beta.1`. Update the scorecard, competitive matrix, and roadmap to `0.4.0-beta.2`.
+- [ ] **[P2]** Audit for stale public claims each release; treat a stale claim as a bug.
+- [ ] **[P3]** Re-evaluate paid GEO monitoring tools once citation rate exceeds 15%.
+
+---
+
+*End of marketing plan (Parts I and II).*
+
+*Next action: run the §16.2 baseline measurement, then execute Sprint 1 — the sitemap/duplicate-docs fix is roughly one day of work and is the highest-ROI item in this document.*
