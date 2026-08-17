@@ -103,7 +103,7 @@ where
 /// A compiled subquery used by `EXISTS` / `NOT EXISTS` filters.
 ///
 /// Unlike [`Subquery`], `EXISTS` does not care about the projection shape,
-/// so any [`SelectQuery`](crate::query::SelectQuery) can be converted into an `ExistsSubquery`.
+/// so any [`SelectQuery`] can be converted into an `ExistsSubquery`.
 pub struct ExistsSubquery {
     pub(crate) compiled: CompiledSql,
 }
@@ -145,7 +145,7 @@ where
 
 /// A compiled common table expression (CTE).
 ///
-/// Stored inside a [`SelectQuery`](crate::query::SelectQuery) and emitted as
+/// Stored inside a [`SelectQuery`] and emitted as
 /// `WITH ... AS (...)` or `WITH RECURSIVE ... AS (...)` when the query is
 /// compiled.
 #[derive(Debug, Clone, PartialEq)]

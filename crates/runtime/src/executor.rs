@@ -201,7 +201,7 @@ pub trait Executor: Send + Sync {
 
     /// Runs a query and yields rows as the database produces them.
     ///
-    /// The default implementation falls back to [`stream_raw`]. Backends that
+    /// The default implementation falls back to `stream_raw`. Backends that
     /// support true streaming override this to avoid materialising the whole
     /// result set in memory.
     fn stream_unbuffered_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {

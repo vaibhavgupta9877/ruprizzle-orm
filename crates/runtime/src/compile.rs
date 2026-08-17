@@ -227,7 +227,7 @@ pub fn set_op(
 /// Compile a `SELECT` for a join between `M` and `J`.
 ///
 /// This is the public, typed entry point; the query builder uses
-/// [`join_select_with_columns`] so it does not need to keep `J` in the
+/// `join_select_with_columns` so it does not need to keep `J` in the
 /// `SelectQuery` type.
 #[must_use]
 #[allow(clippy::too_many_arguments)]
