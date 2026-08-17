@@ -1,8 +1,9 @@
-# Migration guide: `0.1.1-beta.1` to `1.0.0`
+# Migration guide: pre-1.0 to `1.0.0`
 
 This covers every API-shape change between the `0.1.1-beta.1` publish (commit `95ec17b`,
-2026-08-13) and current `dev-v0-2` `HEAD`, which is what will become `1.0.0` once
-`docs/Stability.md`'s W6 workstream and the `1.0.0-rc.1` feedback window (W6-04) complete.
+2026-08-13) and current `dev-v0-2` `HEAD` (`0.4.0-beta.2` and later), which is what will
+become `1.0.0` once `docs/Stability.md`'s W6 workstream and the `1.0.0-rc.1` feedback
+window (W6-04) complete.
 Purely additive features (savepoints, array binds, streaming, new query operators, MySQL,
 `db pull`, seeding, migration squashing, rename detection, metrics — see the parity table in
 `ProjectPlan/v1/PathToStableV1.md`) are not covered here unless they changed an existing
