@@ -2,7 +2,9 @@
 
 use miette::Diagnostic;
 use ruprizzle_core::SchemaError;
-use tower_lsp::lsp_types::{Diagnostic as LspDiagnostic, DiagnosticSeverity, NumberOrString, Position, Range};
+use tower_lsp::lsp_types::{
+    Diagnostic as LspDiagnostic, DiagnosticSeverity, NumberOrString, Position, Range,
+};
 
 fn byte_offset_to_position(source: &str, offset: usize) -> Position {
     let mut line = 0;

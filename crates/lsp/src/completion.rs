@@ -1,7 +1,9 @@
 //! Completion for `schema.ruprizzle`.
 
 use ruprizzle_core::ir::{ScalarType, Schema};
-use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, CompletionList, CompletionResponse, Position};
+use tower_lsp::lsp_types::{
+    CompletionItem, CompletionItemKind, CompletionList, CompletionResponse, Position,
+};
 
 /// Build completion items for the given source and cursor position.
 #[must_use]
