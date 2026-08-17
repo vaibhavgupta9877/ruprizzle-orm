@@ -4,33 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1-beta.1] - 2026-08-13
+## [Unreleased]
 
-A beta milestone that closes the remaining alpha.3 beta blockers: clippy warnings, broken doc links, panic-audit failures in `crates/runtime`, and stale performance documentation. It also refreshes the production-readiness assessment for `0.1.0-alpha.3` and the `rusqlite` backend.
+### Docs
 
-### Added
+- Refreshed `README.md`, `docs/README.md`, `docs/announcement.md`, `docs/faq.md`, `docs/SUMMARY.md`, `docs/Operations.md`, `docs/BenchmarkResults.md`, `docs/performance.md`, and `docs/FeaturesMasterComparison.md` to the `0.4.0-beta.2` release.
+- Extended `docs/FeaturesMasterComparison.md` with all 16 end-to-end and 16 query-construction benchmark operations, a new "Advanced query builder & SQL features" table, and an updated best-fit summary.
+- Added prax, Prisma, and Drizzle columns and new feature rows to the high-level comparison in `docs/README.md`.
+- Fixed and cross-linked internal markdown links across `README.md`, `docs/README.md`, `docs/SUMMARY.md`, `docs/announcement.md`, `docs/BenchmarkResults.md`, `docs/FeaturesMasterComparison.md`, `docs/KnownLimitations.md`, and `ProjectPlan/Enhancements/Performance/Enhancements1.md`.
 
-- `Pool` gained typed `as_any`, `as_sqlite`, `as_postgres`, and feature-gated `as_rusqlite` / `as_tokio_postgres` accessors.
-- `crates/runtime/benches/end_to_end` now creates an `sqlx::Any` pool explicitly so the PostgreSQL benchmark path is like-for-like with hand-written `sqlx`.
-
-### Changed
-
-- `Pool::options`, `Pool::postgres_options`, and `Pool::sqlite_options` now return `Option<&_>` instead of panicking for the wrong variant.
-- `Pool::acquire` now returns `Error::NotImplemented` for native driver-specific pools.
-- The `sqlx::Executor` implementation on `&Pool` now returns a clear `sqlx::Error` for native variants instead of `unimplemented!()`.
-- `Performance.md` now reports fresh PostgreSQL `sqlx::Any` numbers and the previously unmeasured bulk-insert case.
-
-### Fixed
-
-- Clippy warnings in `pg_any_types.rs`, `bottlenecks.rs`, `layer_attribution.rs`, `cross_orm_bench.rs`, `crates/runtime/tests/crud.rs`, `local/deep-tests`, and `crates/runtime/src/rusqlite.rs`.
-- Broken intra-doc links in `crates/runtime/src/executor.rs` and `crates/testkit/src/lib.rs`.
-- `rusqlite` mutex `unwrap()` calls replaced with error paths, satisfying the `crates/runtime` panic budget.
-- Examples and benchmarks that passed `&Pool` to `sqlx::query` now use an explicit `Pool::Any` wrapper where appropriate.
-- Updated crate-level rustdocs and user-facing docs (`README.md`, `docs/QueryGuide.md`, `docs/RelationsGuide.md`, `docs/Quickstart.md`, `docs/MigratingFrom.md`, `docs/KnownLimitations.md`) to the `0.1.1-beta.1` API and backend features.
-- Moved `crates/dialect/tests/conformance.rs` into `tests/integration/tests/dialect_conformance.rs` and removed the `ruprizzle-testkit` dev-dependency from `ruprizzle-dialect` so the crate can be packaged and published.
-- Published `ruprizzle-core`, `ruprizzle-parser`, `ruprizzle-dialect`, `ruprizzle-macros`, `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, and `ruprizzle-cli` version `0.1.1-beta.1` to crates.io.
 
 ## [0.4.0-beta.2] - 2026-08-17
+
 
 ### Fixed
 
@@ -58,6 +43,7 @@ A beta milestone that closes the remaining alpha.3 beta blockers: clippy warning
   soak and mutation testing gates.
 
 ## [0.4.0-beta.1] - 2026-08-17
+
 
 Pre-1.0 milestone covering W2 (query surface), W3 (migrations/CLI), and W5
 (operability). The runtime, CLI, migration, and codegen crates are now
@@ -158,12 +144,42 @@ competitive with Prisma/Drizzle on the measured feature set.
   error that names the offending row and column instead of silently producing
   the wrong SQL or an opaque driver error. (BUG-09)
 
+### Changed
+
 - CI: stale `generated-code-lint` job (which asserted the code generator was still unimplemented) replaced with the working `generated-code` gate.
 - CI: `cargo-deny-action` pinned to `v2.1.1` to avoid the positional-argument regression in `v2.1.0`.
 - Docs: security advisory reporting link in `ProductionReadinessPlan.md` now points at the real repository.
 - Published `ruprizzle-core`, `ruprizzle-parser`, `ruprizzle-dialect`, `ruprizzle-macros`, `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, and `ruprizzle-cli` version `0.4.0-beta.1` to crates.io.
 
+## [0.1.1-beta.1] - 2026-08-13
+
+
+A beta milestone that closes the remaining alpha.3 beta blockers: clippy warnings, broken doc links, panic-audit failures in `crates/runtime`, and stale performance documentation. It also refreshes the production-readiness assessment for `0.1.0-alpha.3` and the `rusqlite` backend.
+
+### Added
+
+- `Pool` gained typed `as_any`, `as_sqlite`, `as_postgres`, and feature-gated `as_rusqlite` / `as_tokio_postgres` accessors.
+- `crates/runtime/benches/end_to_end` now creates an `sqlx::Any` pool explicitly so the PostgreSQL benchmark path is like-for-like with hand-written `sqlx`.
+
+### Changed
+
+- `Pool::options`, `Pool::postgres_options`, and `Pool::sqlite_options` now return `Option<&_>` instead of panicking for the wrong variant.
+- `Pool::acquire` now returns `Error::NotImplemented` for native driver-specific pools.
+- The `sqlx::Executor` implementation on `&Pool` now returns a clear `sqlx::Error` for native variants instead of `unimplemented!()`.
+- `Performance.md` now reports fresh PostgreSQL `sqlx::Any` numbers and the previously unmeasured bulk-insert case.
+
+### Fixed
+
+- Clippy warnings in `pg_any_types.rs`, `bottlenecks.rs`, `layer_attribution.rs`, `cross_orm_bench.rs`, `crates/runtime/tests/crud.rs`, `local/deep-tests`, and `crates/runtime/src/rusqlite.rs`.
+- Broken intra-doc links in `crates/runtime/src/executor.rs` and `crates/testkit/src/lib.rs`.
+- `rusqlite` mutex `unwrap()` calls replaced with error paths, satisfying the `crates/runtime` panic budget.
+- Examples and benchmarks that passed `&Pool` to `sqlx::query` now use an explicit `Pool::Any` wrapper where appropriate.
+- Updated crate-level rustdocs and user-facing docs (`README.md`, `docs/QueryGuide.md`, `docs/RelationsGuide.md`, `docs/Quickstart.md`, `docs/MigratingFrom.md`, `docs/KnownLimitations.md`) to the `0.1.1-beta.1` API and backend features.
+- Moved `crates/dialect/tests/conformance.rs` into `tests/integration/tests/dialect_conformance.rs` and removed the `ruprizzle-testkit` dev-dependency from `ruprizzle-dialect` so the crate can be packaged and published.
+- Published `ruprizzle-core`, `ruprizzle-parser`, `ruprizzle-dialect`, `ruprizzle-macros`, `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, and `ruprizzle-cli` version `0.1.1-beta.1` to crates.io.
+
 ## [0.1.0-alpha.2] - 2026-08-10
+
 
 A quick follow-up to `0.1.0-alpha.1` that adds README files and SEO metadata to every workspace crate, improves the docs site with structured data, sitemap, and `robots.txt`, and refreshes the `book.toml` homepage URL.
 
@@ -176,6 +192,7 @@ A quick follow-up to `0.1.0-alpha.1` that adds README files and SEO metadata to 
 - `sitemap.xml` and `robots.txt` wired into the GitHub Pages workflow.
 
 ## [0.1.0-alpha.1] - 2026-08-10
+
 
 Initial alpha release of **ruprizzle-orm**: a schema-first ORM for Rust. Write a Prisma-style schema, get typed entities, a Drizzle-style query builder that shows you its SQL, and automatic migrations generated by diffing your schema. Postgres and SQLite. No query engine binary.
 
@@ -199,7 +216,9 @@ Initial alpha release of **ruprizzle-orm**: a schema-first ORM for Rust. Write a
 
 See `docs/KnownLimitations.md` for the full list.
 
-[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.1-beta.1...HEAD
+[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.4.0-beta.2...HEAD
+[0.4.0-beta.2]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.4.0-beta.1...v0.4.0-beta.2
+[0.4.0-beta.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.1-beta.1...v0.4.0-beta.1
 [0.1.1-beta.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.0-alpha.2...v0.1.1-beta.1
 [0.1.0-alpha.2]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/releases/tag/v0.1.0-alpha.1
