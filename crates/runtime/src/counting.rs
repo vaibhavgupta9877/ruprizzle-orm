@@ -108,4 +108,9 @@ impl Executor for CountingExecutor<'_> {
         self.tick();
         self.inner.stream_raw(sql, binds)
     }
+
+    fn stream_unbuffered_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
+        self.tick();
+        self.inner.stream_unbuffered_raw(sql, binds)
+    }
 }

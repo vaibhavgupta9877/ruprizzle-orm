@@ -33,6 +33,13 @@ whether the tool is right for your project.
   implementation buffers the full result set and yields decoded rows. Using
   `sqlx`'s `.fetch()` stream is **~64% slower per row** on SQLite, so the
   buffered design is deliberate. See [BenchmarkResults](BenchmarkResults.md).
+- **`SelectQuery::stream_unbuffered` is available for true streaming.** It uses
+  `sqlx`'s `.fetch()` cursor for the SQLx backends and a server-side portal for
+  `postgres-tokio-postgres`. To satisfy `sqlx`'s lifetime model, the owned SQL
+  string and bind values are leaked for the lifetime of the stream (they are
+  typically small). `stream_unbuffered` must not be used inside a transaction,
+  because a transaction holds a single connection and a streaming cursor would
+  prevent any other statement from running on it.
 
 ## Deferrals to 0.2
 

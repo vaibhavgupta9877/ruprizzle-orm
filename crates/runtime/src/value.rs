@@ -307,9 +307,10 @@ impl sqlx::Type<sqlx::MySql> for Value {
     }
 }
 
-// P1-4: encode `&'q Value` by reference so `Str`/`Bytes` never re-allocate.
-// Binding `&Value` instead of `Value` lets sqlx see the `'q` lifetime it needs
-// to borrow `Arc<str>` / `Arc<[u8]>` data directly.
+// P1-4: encode `&'q Value` by reference so `Str`/`Bytes` data is never
+// re-allocated. The lifetime `'q` is the borrow of the value inside the sqlx
+// query, which lets `sqlx::query` use its `.fetch()` cursor for unbuffered
+// streams.
 
 impl<'q> sqlx::Encode<'q, sqlx::Any> for &'q Value {
     fn encode_by_ref(

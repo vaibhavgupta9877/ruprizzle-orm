@@ -52,9 +52,10 @@ macro_rules! pg_tokio_array_encode {
 
 use crate::BoxFuture;
 use crate::Error;
-use crate::executor::{BoxRowStream, Executor, RowBatch};
+use crate::executor::{BoxRowStream, Executor, RawRow, RowBatch};
 use crate::pool::PoolConfig;
 use crate::value::Value;
+use futures_util::StreamExt as _;
 
 /// A `tokio-postgres`-backed PostgreSQL connection pool.
 #[derive(Clone)]
@@ -210,6 +211,53 @@ impl Executor for TokioPostgresPool {
         Box::pin(crate::executor::DeferredRowStream::new(Box::pin(
             async move { self.fetch_all_raw(sql, binds).await },
         )))
+    }
+
+    fn stream_unbuffered_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
+        let sql: &'static str = match sql {
+            Cow::Borrowed(s) => s,
+            Cow::Owned(s) => Box::leak(s.into_boxed_str()),
+        };
+        let binds: &'static [Value] = Box::leak(binds.into_boxed_slice());
+        let pool = self.clone();
+
+        Box::pin(futures_util::stream::unfold(
+            (
+                sql,
+                binds,
+                None::<std::pin::Pin<Box<tokio_postgres::RowStream>>>,
+            ),
+            move |(sql, binds, mut stream)| {
+                let pool = pool.clone();
+                async move {
+                    if stream.is_none() {
+                        let client = match pool.inner.get().await {
+                            Ok(c) => c,
+                            Err(e) => {
+                                return Some((
+                                    Err(tokio_postgres_pool_error(e)),
+                                    (sql, binds, None),
+                                ));
+                            }
+                        };
+                        let row_stream = match client.query_raw(sql, binds).await {
+                            Ok(s) => s,
+                            Err(e) => return Some((Err(Error::from(e)), (sql, binds, None))),
+                        };
+                        stream = Some(Box::pin(row_stream));
+                    }
+
+                    let s = stream.as_mut()?;
+                    match s.next().await {
+                        Some(Ok(row)) => {
+                            Some((Ok(RawRow::PostgresNative(row)), (sql, binds, stream)))
+                        }
+                        Some(Err(e)) => Some((Err(Error::from(e)), (sql, binds, None))),
+                        None => None,
+                    }
+                }
+            },
+        ))
     }
 }
 

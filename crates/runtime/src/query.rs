@@ -633,6 +633,29 @@ where
         })
     }
 
+    /// Streams matching rows without buffering the whole result set.
+    ///
+    /// Only available when the query has no `.include(...)`: a stream without
+    /// loaded includes would silently return the wrong data. Use
+    /// [`exec`](SelectQuery::exec) for include-aware execution.
+    ///
+    /// For `sqlx` backends the rows are produced incrementally by the driver,
+    /// which keeps peak memory proportional to the number of in-flight rows
+    /// rather than the total result size. The `postgres-tokio-postgres` backend
+    /// uses an unbuffered server-side portal.
+    pub fn stream_unbuffered(self) -> Result<RowStream<'db, Out>, Error>
+    where
+        Out: Send + Unpin + RowDecode,
+    {
+        let compiled = self.to_sql()?;
+        Ok(RowStream {
+            inner: self
+                .exec
+                .stream_unbuffered_raw(compiled.sql, compiled.binds),
+            _out: PhantomData,
+        })
+    }
+
     /// Fetches one page, reporting whether another page follows.
     ///
     /// Fetches `size + 1` rows and discards the extra, so `has_next` is exact
@@ -903,6 +926,20 @@ where
         let compiled = self.to_sql()?;
         Ok(RowStream {
             inner: self.exec.stream_raw(compiled.sql, compiled.binds),
+            _out: PhantomData,
+        })
+    }
+
+    /// Streams matching rows without buffering the whole result set.
+    pub fn stream_unbuffered(self) -> Result<RowStream<'db, Out>, Error>
+    where
+        Out: Send + Unpin,
+    {
+        let compiled = self.to_sql()?;
+        Ok(RowStream {
+            inner: self
+                .exec
+                .stream_unbuffered_raw(compiled.sql, compiled.binds),
             _out: PhantomData,
         })
     }

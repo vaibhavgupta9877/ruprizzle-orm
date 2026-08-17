@@ -199,6 +199,15 @@ pub trait Executor: Send + Sync {
     /// cursor is slower on `sqlx-sqlite` (see `docs/BenchmarkResults.md`).
     fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_>;
 
+    /// Runs a query and yields rows as the database produces them.
+    ///
+    /// The default implementation falls back to [`stream_raw`]. Backends that
+    /// support true streaming override this to avoid materialising the whole
+    /// result set in memory.
+    fn stream_unbuffered_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
+        self.stream_raw(sql, binds)
+    }
+
     /// Optional hook called right before a query is executed.
     ///
     /// The default is a no-op; wrappers such as [`CountingExecutor`](crate::CountingExecutor) override it
@@ -524,6 +533,59 @@ impl Executor for Pool {
         Box::pin(DeferredRowStream::new(Box::pin(async move {
             self.fetch_all_raw(sql, binds).await
         })))
+    }
+
+    fn stream_unbuffered_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
+        let sql: &'static str = match sql {
+            Cow::Borrowed(s) => s,
+            Cow::Owned(s) => Box::leak(s.into_boxed_str()),
+        };
+        let binds: &'static [Value] = Box::leak(binds.into_boxed_slice());
+
+        match self {
+            Pool::Any(p) => {
+                let mut q = sqlx::query::<sqlx::Any>(sql);
+                for bind in binds {
+                    q = q.bind(bind);
+                }
+                Box::pin(futures_util::StreamExt::map(q.fetch(p), |r| {
+                    r.map(RawRow::Any).map_err(Error::from)
+                }))
+            }
+            Pool::Postgres(p) => {
+                let mut q = sqlx::query::<sqlx::Postgres>(sql);
+                for bind in binds {
+                    q = q.bind(bind);
+                }
+                Box::pin(futures_util::StreamExt::map(q.fetch(p), |r| {
+                    r.map(RawRow::Postgres).map_err(Error::from)
+                }))
+            }
+            Pool::Sqlite(p) => {
+                let mut q = sqlx::query::<sqlx::Sqlite>(sql);
+                for bind in binds {
+                    q = q.bind(bind);
+                }
+                Box::pin(futures_util::StreamExt::map(q.fetch(p), |r| {
+                    r.map(RawRow::Sqlite).map_err(Error::from)
+                }))
+            }
+            Pool::Mysql(p) => {
+                let mut q = sqlx::query::<sqlx::MySql>(sql);
+                for bind in binds {
+                    q = q.bind(bind);
+                }
+                Box::pin(futures_util::StreamExt::map(q.fetch(p), |r| {
+                    r.map(RawRow::Mysql).map_err(Error::from)
+                }))
+            }
+            #[cfg(feature = "sqlite-rusqlite")]
+            Pool::SqliteNative(p) => Executor::stream_raw(p, Cow::Borrowed(sql), binds.to_vec()),
+            #[cfg(feature = "postgres-tokio-postgres")]
+            Pool::PostgresNative(p) => {
+                Executor::stream_unbuffered_raw(p, Cow::Borrowed(sql), binds.to_vec())
+            }
+        }
     }
 }
 
