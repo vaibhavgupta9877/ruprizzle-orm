@@ -46,7 +46,7 @@ insta        = { version = "1", features = ["json"] }
 dotenvy      = "0.15"
 notify       = "7"
 walkdir      = "2"
-criterion    = "0.5"
+criterion    = "0.7"
 
 [profile.dev]
 # Codegen output and sqlx make debug builds heavy; this trims link time without
