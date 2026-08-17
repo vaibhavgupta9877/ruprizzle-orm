@@ -26,6 +26,19 @@ After the build breaks and the advisory are fixed, the next sensible milestone i
 
 ---
 
+## 0. Fix status
+
+| # | Blocker | Status | Commit |
+|---|---------|--------|--------|
+| 1 | `cargo fmt --all --check` | **not fixed** | — |
+| 2 | `tests/integration/tests/diagnostics_snapshot.rs` stale `SchemaError` | **not fixed** | — |
+| 3 | `cargo clippy --workspace --all-targets` / `cargo xtask harden` | **not fixed** | — |
+| 4 | `cargo deny` `RUSTSEC-2023-0071` | **not fixed** | — |
+| 5 | rustdoc warnings | **not fixed** | — |
+| 6 | PostgreSQL / `sqlx::Any` benchmark fix | **not fixed** | — |
+
+---
+
 ## 1. Current state of the repository
 
 | Item | Current value |
