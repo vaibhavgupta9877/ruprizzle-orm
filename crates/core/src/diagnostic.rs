@@ -306,21 +306,6 @@ pub enum SchemaError {
         span: SourceSpan,
     },
 
-    /// V12 — scalar lists are not supported in v1.
-    #[error("scalar list `{found}[]` is not supported")]
-    #[diagnostic(
-        code(ruprizzle::scalar_list_unsupported),
-        help(
-            "v1 supports lists only for relations; store repeated scalars in a \
-              related model, or use `Json` if the shape is genuinely free-form"
-        )
-    )]
-    ScalarListUnsupported {
-        found: String,
-        #[label("scalar lists are planned for 0.2")]
-        span: SourceSpan,
-    },
-
     /// V13 — an optional relation backed by a non-nullable foreign key.
     #[error("optional relation `{model}.{field}` has a required foreign key")]
     #[diagnostic(

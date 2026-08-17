@@ -47,10 +47,8 @@ impl DbDialect for MySqlDialect {
             FieldKind::Scalar(ScalarType::Date) => "DATE".to_owned(),
             FieldKind::Scalar(ScalarType::Time) => "TIME".to_owned(),
             FieldKind::Scalar(ScalarType::Uuid) => "CHAR(36)".to_owned(),
-            FieldKind::Scalar(ScalarType::Json) => "JSON".to_owned(),
-            FieldKind::Enum(_) | FieldKind::Relation(_) | FieldKind::List(_) => {
-                "VARCHAR(255)".to_owned()
-            }
+            FieldKind::Scalar(ScalarType::Json) | FieldKind::List(_) => "JSON".to_owned(),
+            FieldKind::Enum(_) | FieldKind::Relation(_) => "VARCHAR(255)".to_owned(),
             FieldKind::Scalar(ScalarType::Int) => "INT".to_owned(),
             FieldKind::Scalar(ScalarType::BigInt) => "BIGINT".to_owned(),
             FieldKind::Scalar(ScalarType::Float) => "DOUBLE".to_owned(),

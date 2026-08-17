@@ -372,14 +372,6 @@ fn lower_field(
 ) -> Field {
     let base = base_kind(decl, env, diags);
 
-    // V12 — lists exist only for relations in v1.
-    if decl.arity == Arity::List && !matches!(base, FieldKind::Relation(_)) {
-        diags.push(SchemaError::ScalarListUnsupported {
-            found: decl.type_name.clone(),
-            span: decl.type_span.into(),
-        });
-    }
-
     let kind = if decl.arity == Arity::List {
         FieldKind::List(Box::new(base))
     } else {

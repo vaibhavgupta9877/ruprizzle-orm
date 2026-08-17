@@ -312,10 +312,17 @@ impl Field {
     ///
     /// `false` for navigation properties (`Post[]`, the owner side of a relation,
     /// or the non-owning side of a 1:1). The foreign key columns of a relation
-    /// are the scalar fields named in the relation's `fields:`.
+    /// are the scalar fields named in the relation's `fields:`. Scalar and enum
+    /// lists (`String[]`, `Role[]`) do have a column.
     #[must_use]
     pub fn has_column(&self) -> bool {
-        matches!(&self.kind, FieldKind::Scalar(_) | FieldKind::Enum(_))
+        match &self.kind {
+            FieldKind::Scalar(_) | FieldKind::Enum(_) => true,
+            FieldKind::List(inner) => {
+                matches!(inner.as_ref(), FieldKind::Scalar(_) | FieldKind::Enum(_))
+            }
+            FieldKind::Relation(_) => false,
+        }
     }
 
     /// The relation this field navigates, if any — including through a list.

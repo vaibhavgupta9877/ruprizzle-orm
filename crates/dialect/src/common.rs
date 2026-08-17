@@ -293,23 +293,26 @@ pub(crate) fn default_sql(dialect: &dyn DbDialect, f: &Field) -> String {
 /// Builds the Rust type for a field.
 #[must_use]
 pub(crate) fn rust_type_for(f: &Field) -> RustType {
-    let base = match &f.kind {
-        FieldKind::Scalar(ScalarType::String) | FieldKind::Relation(_) | FieldKind::List(_) => {
-            RustType::String
+    fn kind_to_rust(kind: &FieldKind) -> RustType {
+        match kind {
+            FieldKind::Scalar(ScalarType::String) | FieldKind::Relation(_) => RustType::String,
+            FieldKind::Scalar(ScalarType::Int) => RustType::Int,
+            FieldKind::Scalar(ScalarType::BigInt) => RustType::BigInt,
+            FieldKind::Scalar(ScalarType::Float) => RustType::Float,
+            FieldKind::Scalar(ScalarType::Decimal) => RustType::Decimal,
+            FieldKind::Scalar(ScalarType::Boolean) => RustType::Boolean,
+            FieldKind::Scalar(ScalarType::DateTime) => RustType::DateTime,
+            FieldKind::Scalar(ScalarType::Date) => RustType::Date,
+            FieldKind::Scalar(ScalarType::Time) => RustType::Time,
+            FieldKind::Scalar(ScalarType::Uuid) => RustType::Uuid,
+            FieldKind::Scalar(ScalarType::Json) => RustType::Json,
+            FieldKind::Scalar(ScalarType::Bytes) => RustType::Bytes,
+            FieldKind::Enum(name) => RustType::Enum(name.as_str().to_owned()),
+            FieldKind::List(inner) => RustType::Vec(Box::new(kind_to_rust(inner))),
         }
-        FieldKind::Scalar(ScalarType::Int) => RustType::Int,
-        FieldKind::Scalar(ScalarType::BigInt) => RustType::BigInt,
-        FieldKind::Scalar(ScalarType::Float) => RustType::Float,
-        FieldKind::Scalar(ScalarType::Decimal) => RustType::Decimal,
-        FieldKind::Scalar(ScalarType::Boolean) => RustType::Boolean,
-        FieldKind::Scalar(ScalarType::DateTime) => RustType::DateTime,
-        FieldKind::Scalar(ScalarType::Date) => RustType::Date,
-        FieldKind::Scalar(ScalarType::Time) => RustType::Time,
-        FieldKind::Scalar(ScalarType::Uuid) => RustType::Uuid,
-        FieldKind::Scalar(ScalarType::Json) => RustType::Json,
-        FieldKind::Scalar(ScalarType::Bytes) => RustType::Bytes,
-        FieldKind::Enum(name) => RustType::Enum(name.as_str().to_owned()),
-    };
+    }
+
+    let base = kind_to_rust(&f.kind);
 
     if f.optional {
         RustType::Option(Box::new(base))

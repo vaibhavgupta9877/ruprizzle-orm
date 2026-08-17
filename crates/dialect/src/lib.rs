@@ -170,6 +170,8 @@ pub enum RustType {
     Enum(String),
     /// `Option<T>`.
     Option(Box<RustType>),
+    /// `Vec<T>` for scalar or enum lists.
+    Vec(Box<RustType>),
 }
 
 /// An error produced while turning an IR field into a SQL column.

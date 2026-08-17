@@ -466,14 +466,14 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
     let relation_helpers: Vec<_> = model
         .fields
         .values()
-        .filter(|f| matches!(f.kind, FieldKind::Relation(_) | FieldKind::List(_)))
+        .filter(|f| f.relation().is_some())
         .filter_map(|f| emit_relation_helper(schema, model, f))
         .collect();
 
     let relation_filter_helpers: Vec<_> = model
         .fields
         .values()
-        .filter(|f| matches!(f.kind, FieldKind::Relation(_) | FieldKind::List(_)))
+        .filter(|f| f.relation().is_some())
         .filter_map(|f| emit_relation_filter_helpers(schema, model, f))
         .collect();
 
@@ -498,7 +498,7 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         .map(|f| f.column.as_str())
         .collect();
 
-    let row_fields = |native_json: bool, is_join_side: bool| {
+    let row_fields = |native_json: bool, native_array: bool, is_join_side: bool| {
         let mut next_index = 0;
         model
             .fields
@@ -529,18 +529,19 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
                     &row_expr,
                     &idx_expr,
                     native_json,
+                    native_array,
                 )
             })
             .collect::<Vec<_>>()
     };
-    let any_from_row_fields = row_fields(false, false);
-    let any_join_side_fields = row_fields(false, true);
-    let postgres_from_row_fields = row_fields(true, false);
-    let postgres_join_side_fields = row_fields(true, true);
-    let sqlite_from_row_fields = row_fields(true, false);
-    let sqlite_join_side_fields = row_fields(true, true);
-    let mysql_from_row_fields = row_fields(true, false);
-    let mysql_join_side_fields = row_fields(true, true);
+    let any_from_row_fields = row_fields(false, false, false);
+    let any_join_side_fields = row_fields(false, false, true);
+    let postgres_from_row_fields = row_fields(true, true, false);
+    let postgres_join_side_fields = row_fields(true, true, true);
+    let sqlite_from_row_fields = row_fields(true, false, false);
+    let sqlite_join_side_fields = row_fields(true, false, true);
+    let mysql_from_row_fields = row_fields(true, false, false);
+    let mysql_join_side_fields = row_fields(true, false, true);
 
     let mut next_rusqlite_index = 0;
     let rusqlite_from_row_fields: Vec<_> = model
@@ -830,6 +831,7 @@ fn emit_from_row_field(
     row_expr: &TokenStream,
     idx_expr: &TokenStream,
     native_json: bool,
+    native_array: bool,
 ) -> TokenStream {
     let name = safe_field_ident(field.name.as_str());
 
@@ -907,6 +909,42 @@ fn emit_from_row_field(
             let helper = format_ident!("{}", if optional { "text_opt_idx" } else { "text_idx" });
             quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
         }
+        ruprizzle_core::ir::FieldKind::List(inner) => {
+            let inner_base = match inner.as_ref() {
+                ruprizzle_core::ir::FieldKind::Scalar(st) => scalar_type_tokens(*st),
+                ruprizzle_core::ir::FieldKind::Enum(name) => {
+                    let name = format_ident!("{}", name.as_str());
+                    quote! { super::enums::#name }
+                }
+                _ => quote! { () },
+            };
+            if native_array {
+                match inner.as_ref() {
+                    ruprizzle_core::ir::FieldKind::Enum(_) => quote! {
+                        #name: {
+                            let __raw: ::std::vec::Vec<::std::string::String> = #row_expr.try_get(#idx_expr)?;
+                            __raw
+                                .into_iter()
+                                .map(|__s| __s.parse::<#inner_base>().map_err(|__e| ::ruprizzle::sqlx::Error::Decode(::std::boxed::Box::new(__e))))
+                                .collect::<::std::result::Result<::std::vec::Vec<_>, _>>()?
+                        }
+                    },
+                    _ => {
+                        quote! { #name: #row_expr.try_get::<_, ::std::vec::Vec<#inner_base>>(#idx_expr)?, }
+                    }
+                }
+            } else {
+                let helper = format_ident!(
+                    "{}",
+                    if optional {
+                        "array_opt_idx"
+                    } else {
+                        "array_idx"
+                    }
+                );
+                quote! { #name: ::ruprizzle::decode::#helper::<_, #inner_base>(#row_expr, #idx_expr)?, }
+            }
+        }
         _ => {
             let helper = format_ident!(
                 "{}",
@@ -949,6 +987,9 @@ fn emit_from_rusqlite_row_field(
             } else {
                 quote! { ::ruprizzle::rusqlite::parse::<#inner_ty>(row, #idx)? }
             }
+        }
+        ruprizzle_core::ir::FieldKind::List(_) => {
+            quote! { ::ruprizzle::rusqlite::get::<_, #ty>(row, #idx)? }
         }
         _ => {
             if field.optional {
@@ -1100,6 +1141,21 @@ fn emit_from_tokio_postgres_row_field(
                 }
             }
         }
+        ruprizzle_core::ir::FieldKind::List(inner) => match inner.as_ref() {
+            ruprizzle_core::ir::FieldKind::Enum(enum_name) => {
+                let enum_name = format_ident!("{}", enum_name.as_str());
+                quote! {
+                    #name: row.try_get::<usize, ::std::vec::Vec<::std::string::String>>(#idx)
+                        .map_err(::ruprizzle::Error::TokioPostgres)?
+                        .into_iter()
+                        .map(|s| s.parse::<super::enums::#enum_name>().map_err(|e| ::ruprizzle::Error::Message(format!("cannot parse enum: {e}"))))
+                        .collect::<::std::result::Result<::std::vec::Vec<_>, _>>()?,
+                }
+            }
+            _ => {
+                quote! { #name: row.try_get::<usize, #ty>(#idx).map_err(::ruprizzle::Error::TokioPostgres)?, }
+            }
+        },
         _ => {
             if field.optional {
                 quote! { #name: row.try_get::<usize, Option<#ty>>(#idx).map_err(::ruprizzle::Error::TokioPostgres)?, }
@@ -1203,7 +1259,11 @@ fn rust_type_tokens(
         FieldKind::Relation(r) => relation_inner_tokens(schema, owner, r.target.as_str(), false),
     };
 
-    let is_relation = matches!(field.kind, FieldKind::Relation(_) | FieldKind::List(_));
+    let is_relation = match &field.kind {
+        FieldKind::Relation(_) => true,
+        FieldKind::List(inner) => matches!(inner.as_ref(), FieldKind::Relation(_)),
+        _ => false,
+    };
 
     let wrapped = if !base_only && wrap_optional && !is_relation {
         quote! { Option<#inner> }

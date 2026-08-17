@@ -79,11 +79,6 @@ const RULES: &[(&str, &str, bool)] = &[
         false,
     ),
     (
-        "v12_scalar_list_unsupported",
-        "ruprizzle::scalar_list_unsupported",
-        false,
-    ),
-    (
         "v13_relation_nullability_mismatch",
         "ruprizzle::relation_nullability_mismatch",
         false,

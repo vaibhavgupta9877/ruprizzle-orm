@@ -380,6 +380,99 @@ where
     }
 }
 
+/// Decode a JSON-encoded scalar array column.
+///
+/// SQLite and MySQL store arrays as JSON text, and the `sqlx::Any` driver falls
+/// back to this path. PostgreSQL uses its own native `Vec<T>` decode.
+pub fn array_idx<R, T>(row: &R, idx: usize) -> Result<Vec<T>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    T: for<'de> serde::Deserialize<'de>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(s) = row.try_get::<String, _>(idx) {
+        return serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)));
+    }
+    let bytes: Vec<u8> = row.try_get(idx)?;
+    let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+    serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+}
+
+/// Named-column version of [`array_idx`].
+pub fn array<R, T>(row: &R, col: &str) -> Result<Vec<T>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: for<'de> serde::Deserialize<'de>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    if let Ok(s) = row.try_get::<String, _>(col) {
+        return serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)));
+    }
+    let bytes: Vec<u8> = row.try_get(col)?;
+    let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+    serde_json::from_str(&s).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+}
+
+/// Decode an optional JSON-encoded scalar array column.
+pub fn array_opt_idx<R, T>(row: &R, idx: usize) -> Result<Option<Vec<T>>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    T: for<'de> serde::Deserialize<'de>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    match row.try_get::<Option<String>, _>(idx) {
+        Ok(Some(s)) => serde_json::from_str(&s)
+            .map(Some)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e))),
+        Ok(None) => Ok(None),
+        Err(_) => match row.try_get::<Option<Vec<u8>>, _>(idx) {
+            Ok(Some(bytes)) => {
+                let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+                serde_json::from_str(&s)
+                    .map(Some)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        },
+    }
+}
+
+/// Named-column version of [`array_opt_idx`].
+pub fn array_opt<R, T>(row: &R, col: &str) -> Result<Option<Vec<T>>, sqlx::Error>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    for<'a> &'a str: ColumnIndex<R>,
+    T: for<'de> serde::Deserialize<'de>,
+    String: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+    Vec<u8>: for<'r> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
+{
+    match row.try_get::<Option<String>, _>(col) {
+        Ok(Some(s)) => serde_json::from_str(&s)
+            .map(Some)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e))),
+        Ok(None) => Ok(None),
+        Err(_) => match row.try_get::<Option<Vec<u8>>, _>(col) {
+            Ok(Some(bytes)) => {
+                let s = String::from_utf8(bytes).map_err(decode_text_error)?;
+                serde_json::from_str(&s)
+                    .map(Some)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        },
+    }
+}
+
 /// Decode a byte-blob column.
 pub fn bytes<R>(row: &R, col: &str) -> Result<Vec<u8>, sqlx::Error>
 where

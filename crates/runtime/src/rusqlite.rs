@@ -780,6 +780,14 @@ impl FromValue for serde_json::Value {
     }
 }
 
+impl<T: FromValue + crate::serde::de::DeserializeOwned> FromValue for Vec<T> {
+    fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
+        let s = String::from_value(value)?;
+        serde_json::from_str(&s)
+            .map_err(|e| Error::Message(format!("cannot decode array from {s:?}: {e}")))
+    }
+}
+
 impl<T: FromValue> FromValue for Option<T> {
     fn from_value(value: &RusqliteValue) -> Result<Self, Error> {
         match value {
