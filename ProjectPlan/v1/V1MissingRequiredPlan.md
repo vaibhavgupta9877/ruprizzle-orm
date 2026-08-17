@@ -349,14 +349,14 @@ The table below cross-checks every limitation/priority in
 - Consumes: `CompiledSql` from `crates/runtime/src/compile.rs`, `Schema` IR.
 - Produces: `QueryManifest` type and JSON schema.
 
-- [ ] **Step 1: Write ADR-012**
+- [x] **Step 1: Write ADR-012**
   - State the goal: validate dynamically constructed queries and `raw!` fragments
     against the schema **without a live database** at CI/build time.
   - Decision: use a manifest of `(sql, binds, source_file, line, dialect)`
     captured from test/example runs and from a static scan of `raw!` literals,
     then validate against a schema snapshot.
 
-- [ ] **Step 2: Define the manifest type**
+- [x] **Step 2: Define the manifest type**
   - In `crates/check/src/manifest.rs`:
     ```rust
     #[derive(Serialize, Deserialize)]
@@ -374,7 +374,7 @@ The table below cross-checks every limitation/priority in
     }
     ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   - `git commit -m "docs(adr): ADR-012 for offline query checking and query-manifest"`
 
 ### Task C.2: Capture manifests from `to_sql()` in tests/examples
@@ -388,7 +388,7 @@ The table below cross-checks every limitation/priority in
 - Consumes: `CompiledSql` produced by every builder's `to_sql()`.
 - Produces: `query-manifest.json` on disk when `RUPRIZZLE_RECORD_QUERIES` is set.
 
-- [ ] **Step 1: Add an opt-in recorder**
+- [x] **Step 1: Add an opt-in recorder**
   - In `crates/runtime/src/query_manifest.rs`:
     ```rust
     static RECORDING: OnceLock<Mutex<Vec<QueryEntry>>> = OnceLock::new();
@@ -402,16 +402,16 @@ The table below cross-checks every limitation/priority in
     }
     ```
 
-- [ ] **Step 2: Instrument `to_sql()` methods**
+- [x] **Step 2: Instrument `to_sql()` methods**
   - In `crates/runtime/src/query.rs`, at the end of each public `to_sql()`
     method, call `query_manifest::record(compiled.sql.into_owned(),
     file!(), line!(), self.dialect().name())`.
 
-- [ ] **Step 3: Dump manifest at process end**
+- [x] **Step 3: Dump manifest at process end**
   - Add a `write_manifest()` function and an `atexit`-style hook or call it from
     `crates/runtime/tests` that set `RUPRIZZLE_RECORD_QUERIES`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   - `git commit -m "feat(check): opt-in query manifest recorder"`
 
 ### Task C.3: Validate `raw!` at compile/build time
@@ -425,7 +425,7 @@ The table below cross-checks every limitation/priority in
 - Consumes: schema snapshot path, `raw!` format string and bind expressions.
 - Produces: compile-time errors for unknown tables/columns or malformed SQL.
 
-- [ ] **Step 1: Add an offline schema check to the `raw!` macro**
+- [x] **Step 1: Add an offline schema check to the `raw!` macro**
   - At compile time, if `RUPRIZZLE_OFFLINE_SCHEMA` is set and points to a schema
     file, parse it and extract table/column names.
   - Validate that every identifier in the raw SQL literal that matches a known
@@ -433,11 +433,11 @@ The table below cross-checks every limitation/priority in
   - If a check fails, emit `syn::Error::new_spanned` so the build fails with a
     file:line message.
 
-- [ ] **Step 2: Add a trybuild test**
+- [x] **Step 2: Add a trybuild test**
   - `crates/runtime/tests/trybuild/raw_unknown_table.rs` uses `raw!("SELECT * FROM not_a_table")`.
   - `.stderr` expects "unknown table `not_a_table`".
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   - `git commit -m "feat(macros): offline schema validation for raw! SQL"`
 
 ### Task C.4: CLI `ruprizzle check`
@@ -451,10 +451,10 @@ The table below cross-checks every limitation/priority in
 - Consumes: `Schema` from parser, `QueryManifest`, `DbDialect`.
 - Produces: `Result<(), Vec<QueryCheckError>>`.
 
-- [ ] **Step 1: Add `Command::Check`**
+- [x] **Step 1: Add `Command::Check`**
   - `ruprizzle check --schema schema.ruprizzle --manifest query-manifest.json`
 
-- [ ] **Step 2: Implement validation logic**
+- [x] **Step 2: Implement validation logic**
   - For each query entry, use `sql_parser` or a small hand-written validator to
     verify:
     - referenced tables exist in `Schema`;
@@ -463,7 +463,7 @@ The table below cross-checks every limitation/priority in
       with the bound values (use `Field::kind` and `Value` type).
   - Return a non-zero exit code on failure and print `file:line: message`.
 
-- [ ] **Step 3: Add tests and commit**
+- [x] **Step 3: Add tests and commit**
   - `crates/check/tests/validate.rs` with a known-good and a known-bad manifest.
   - `git commit -m "feat(cli): ruprizzle check for offline query validation"`
 
