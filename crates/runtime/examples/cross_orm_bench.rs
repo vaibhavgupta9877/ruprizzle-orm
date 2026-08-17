@@ -10,13 +10,13 @@
 use std::borrow::Cow;
 use std::time::Instant;
 
+use futures_util::StreamExt;
 use ruprizzle::serde::Serialize;
 use ruprizzle::serde_json;
-use futures_util::StreamExt;
 use ruprizzle::{
-    Column, CountingExecutor, Encodable, Executor, Filter, IncludeList, IncludeOne, InsertManyQuery,
-    InsertQuery, Model, NestedSetter, Related, RowBatch, SelectQuery, UpdateQuery, Value,
-    decode_rows,
+    Column, CountingExecutor, Encodable, Executor, Filter, IncludeList, IncludeOne,
+    InsertManyQuery, InsertQuery, Model, NestedSetter, Related, RowBatch, SelectQuery, UpdateQuery,
+    Value, decode_rows,
 };
 use simple_process_stats::ProcessStats;
 use sqlx::FromRow;
@@ -709,21 +709,28 @@ async fn main() -> Result<(), ruprizzle::Error> {
 
     results.push(bench_sync("to_sql_select_with_cte", 100_000, || {
         let q = SelectQuery::<User>::new(&pool)
-            .with("active", SelectQuery::<User>::new(&pool).filter(USER_AGE.gt(18i64)))
+            .with(
+                "active",
+                SelectQuery::<User>::new(&pool).filter(USER_AGE.gt(18i64)),
+            )
             .filter(USER_ID.gt(0i64));
         std::hint::black_box(q.to_sql().unwrap());
         BenchOutcome::default()
     }));
 
-    results.push(bench_sync("to_sql_select_with_recursive_cte", 100_000, || {
-        let anchor = SelectQuery::<User>::new(&pool).filter(USER_ID.eq(1i64));
-        let recursive = SelectQuery::<User>::new(&pool).filter(USER_ID.eq(2i64));
-        let q = SelectQuery::<User>::new(&pool)
-            .with_recursive("nums", anchor, recursive)
-            .filter(USER_ID.gt(0i64));
-        std::hint::black_box(q.to_sql().unwrap());
-        BenchOutcome::default()
-    }));
+    results.push(bench_sync(
+        "to_sql_select_with_recursive_cte",
+        100_000,
+        || {
+            let anchor = SelectQuery::<User>::new(&pool).filter(USER_ID.eq(1i64));
+            let recursive = SelectQuery::<User>::new(&pool).filter(USER_ID.eq(2i64));
+            let q = SelectQuery::<User>::new(&pool)
+                .with_recursive("nums", anchor, recursive)
+                .filter(USER_ID.gt(0i64));
+            std::hint::black_box(q.to_sql().unwrap());
+            BenchOutcome::default()
+        },
+    ));
 
     results.push(bench_sync("to_sql_set_union", 100_000, || {
         let left = SelectQuery::<User>::new(&pool).filter(USER_AGE.gt(18i64));
@@ -778,7 +785,12 @@ async fn main() -> Result<(), ruprizzle::Error> {
         let q = UpdateQuery::<User>::new(&pool)
             .filter(USER_ID.eq(1i64))
             .set(USER_NAME, "updated".to_string())
-            .set_related::<Post, Vec<i64>, i64>(user_id_value, "author_id", "id", vec![10_001i64, 10_002i64]);
+            .set_related::<Post, Vec<i64>, i64>(
+                user_id_value,
+                "author_id",
+                "id",
+                vec![10_001i64, 10_002i64],
+            );
         std::hint::black_box(q.to_sql().unwrap());
         BenchOutcome::default()
     }));
@@ -1165,7 +1177,10 @@ async fn main() -> Result<(), ruprizzle::Error> {
                 p.bind(0, 500i64);
                 let row = p.fetch_one().await.expect("fetch prepared user");
                 assert_eq!(row.id, 500);
-                BenchOutcome { rows: 1, queries: 1 }
+                BenchOutcome {
+                    rows: 1,
+                    queries: 1,
+                }
             }
         })
         .await,
