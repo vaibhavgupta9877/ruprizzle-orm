@@ -11,9 +11,9 @@ A **schema-first ORM for Rust** that combines the best parts of Prisma and Drizz
 - **Prisma's** declarative schema as the single source of truth, with a generated typed client, automatic migration diffing, and nested relation loading.
 - **Drizzle's** SQL transparency — no hidden query engine, no sidecar binary, and `.to_sql()` on every builder so you always know what is being sent to the database.
 
-Postgres and SQLite are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver.
+Postgres, SQLite, and MySQL/MariaDB are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver. A native `rusqlite` backend is also available for SQLite via the `sqlite-rusqlite` Cargo feature.
 
-> **Status:** `0.4.0-beta.2` is ready for beta. P0–P7 are complete; P8 (tests, benchmarks, docs site, crates.io release) is mostly complete and the public API is now stabilising. See [Known limitations](#known-limitations) for the honest boundaries of the beta.
+> **Status:** `0.4.0-beta.2` is published on crates.io. P0–P8 are complete, the public API is stabilising, and a native `rusqlite` SQLite backend is available behind the `sqlite-rusqlite` feature. See [Known limitations](#known-limitations) for the honest boundaries of the beta.
 
 ---
 
@@ -26,7 +26,7 @@ Postgres and SQLite are supported from day one behind a `DbDialect` trait, so mo
 - [Quickstart](#quickstart)
 - [Query examples](#query-examples)
 - [CLI workflow](#cli-workflow)
-- [Comparison with other Rust ORMs](#comparison-with-other-rust-orms)
+- [Comparison with other ORMs](#comparison-with-other-orms)
 - [Architecture and repository layout](#architecture-and-repository-layout)
 - [Performance](#performance)
 - [Status and roadmap](#status-and-roadmap)
@@ -128,7 +128,7 @@ ruprizzle tries to give you all three at once:
 - **Predictable SQL.** Every builder call maps to a visible SQL fragment. `.to_sql()` is available on every query.
 - **Type errors, not runtime errors.** Column tokens are typed `Column<Model, T>`, so `user::email.eq(42)` fails to compile.
 - **Escape hatch always present.** `sqlx::query_as!` interop and the `raw!` macro / `RawFragment` predicate are first-class, not a defeat.
-- **Dialect differences are explicit.** If Postgres supports something SQLite does not, the generator tells you at build time, not at runtime.
+- **Dialect differences are explicit.** If Postgres supports something SQLite or MySQL does not, the generator tells you at build time, not at runtime.
 
 ---
 
@@ -421,47 +421,54 @@ See the [query guide](docs/QueryGuide.md) and [relations guide](docs/RelationsGu
 
 ---
 
-## Comparison with other Rust ORMs
+## Comparison with other ORMs
 
-| Feature | ruprizzle | Diesel | SeaORM | sqlx | Prisma Client Rust |
-|---|---|---|---|---|---|
-| **Schema-first code generation** | ✅ | partial | ❌ | ❌ | ✅ |
-| **Declarative schema DSL** | ✅ | ❌ | ❌ | ❌ | ✅ |
-| **Type-safe column tokens** | ✅ | ✅ | partial | ❌ | ✅ |
-| **Type-safe nested `include`** | ✅ | ❌ | partial | ❌ | ✅ |
-| **SQL-first, visible query builder** | ✅ | partial | ❌ | ✅ | partial |
-| `.to_sql()` on every builder | ✅ | ❌ | ❌ | N/A | partial |
-| **Migrations from schema diff** | ✅ | ❌ | partial | ❌ | partial |
-| **Compile-time query checking** | planned | ✅ | ❌ | ✅ | N/A |
-| **No sidecar / no hidden engine** | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **Native async / `await`** | ✅ | partial | ✅ | ✅ | ✅ |
-| **Postgres + SQLite** | ✅ | ✅ | ✅ | ✅ | partial |
-| **Built on `sqlx`** | ✅ | ❌ | ✅ | N/A | ❌ |
+The table below focuses on the features that differentiate ruprizzle from the tools a Rust team is most likely to evaluate. A full feature, architecture, and benchmark comparison covering ruprizzle (sqlx), ruprizzle (rusqlite), prax, Sea-ORM, Diesel, Prisma, and Drizzle is in [`docs/FeaturesMasterComparison.md`](docs/FeaturesMasterComparison.md).
+
+| Feature | ruprizzle | Diesel | SeaORM | sqlx | prax | Prisma Client Rust | Drizzle |
+|---|---|---|---|---|---|---|---|
+| **Schema-first code generation** | ✅ | partial | ❌ | ❌ | ✅ | ✅ | ❌ |
+| **Declarative schema DSL** | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ |
+| **Type-safe column tokens** | ✅ | ✅ | partial | ❌ | ✅ | ✅ | ✅ |
+| **Type-safe nested `include`** | ✅ | ❌ | partial | ❌ | ✅ | ✅ | ✅ |
+| **SQL-first, visible query builder** | ✅ | partial | ❌ | ✅ | partial | partial | ✅ |
+| `.to_sql()` on every builder | ✅ | partial | ❌ | N/A | partial | partial | ✅ |
+| **Migrations from schema diff** | ✅ | ❌ | partial | ❌ | ✅ | ✅ | partial |
+| **Compile-time query checking** | planned | ✅ | ❌ | ✅ | ✅ | N/A | ❌ |
+| **No sidecar / no hidden engine** | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ |
+| **Native async / `await`** | ✅ | partial | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Postgres + SQLite + MySQL** | ✅ | ✅ | ✅ | ✅ | ✅ | partial | ✅ |
+| **Native `rusqlite` backend** | ✅ | ✅ | ❌ | N/A | partial | ❌ | N/A |
+| **Advanced SQL (CTEs, subqueries, set ops)** | ✅ | partial | partial | ✅ | partial | partial | partial |
 
 ### What this means in practice
 
 - **Diesel** gives you compile-time checked SQL and strong types, but migrations are hand-written and the DSL can feel macro-heavy. ruprizzle keeps the type safety and adds a declarative schema, generated client, and automatic migration diffing.
 - **SeaORM** is ergonomic and active-record style, but the schema is not the single source of truth and the generated code can drift. ruprizzle inverts that: edit `schema.ruprizzle`, run `ruprizzle generate`.
 - **sqlx** is the most transparent, but you write SQL and `FromRow` by hand. ruprizzle builds on sqlx and gives you a typed client while preserving the escape hatch.
-- **Prisma Client Rust** is closest in philosophy, but it ships a Rust query engine and uses a Node sidecar for migration generation. ruprizzle is pure Rust with no sidecar binary.
+- **prax** is the closest Rust alternative in philosophy and also uses a declarative schema, but it targets broader database support (MSSQL, MongoDB, DuckDB, ScyllaDB) and ships extra machinery for multi-tenancy and pgvector that ruprizzle intentionally leaves out.
+- **Prisma Client Rust** is similar in philosophy, but it ships a Rust query engine and uses a Node sidecar for migration generation. ruprizzle is pure Rust with no sidecar binary.
+- **Drizzle** is SQL-first and code-first by design; there is no separate declarative schema DSL, and the schema is plain TypeScript.
 
 ---
 
 ## Architecture and repository layout
 
-The workspace is split so that parser and codegen never enter the user's runtime dependency graph:
+The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`0.4.0-beta.2` at the time of writing).
 
-| Crate | Role | Ships to users? | Phase |
-|---|---|---|---|
-| `crates/core` | IR, spans, diagnostics | transitively | P0 |
-| `crates/parser` | Schema DSL → validated IR | no (build/CLI only) | P1 |
-| `crates/dialect` | `DbDialect` trait, Postgres + SQLite | transitively | P2 |
-| `crates/codegen` | IR → Rust source | no | P3 |
-| `crates/runtime` (`ruprizzle`) | Query builder, executor, transactions | **yes** | P4 |
-| `crates/macros` | `#[derive(FromRow)]` passthrough, `raw!` | **yes** | P4 |
-| `crates/migrate` | Snapshot, diff, plan, apply | transitively | P6 |
-| `crates/cli` | The `ruprizzle` binary | **yes** | P7 |
-| `crates/testkit` | Dual-database test harness | no | P0 |
+| Directory | Crate | Role | Ships to users? | Status |
+|---|---|---|---|---|
+| `crates/core` | `ruprizzle-core` | IR, spans, diagnostics | transitively | ✅ complete |
+| `crates/parser` | `ruprizzle-parser` | Schema DSL → validated IR | no (build/CLI only) | ✅ complete |
+| `crates/dialect` | `ruprizzle-dialect` | `DbDialect` trait, Postgres + SQLite + MySQL | transitively | ✅ complete |
+| `crates/codegen` | `ruprizzle-codegen` | IR → Rust source | no | ✅ complete |
+| `crates/runtime` | `ruprizzle` | Query builder, executor, transactions | **yes (published)** | ✅ complete |
+| `crates/macros` | `ruprizzle-macros` | `#[derive(FromRow)]` passthrough, `raw!` | **yes (published)** | ✅ complete |
+| `crates/migrate` | `ruprizzle-migrate` | Snapshot, diff, plan, apply | transitively | ✅ complete |
+| `crates/cli` | `ruprizzle-cli` | The `ruprizzle` binary | **yes (published)** | ✅ complete |
+| `crates/testkit` | `ruprizzle-testkit` | Dual-database test harness | no | ✅ complete |
+
+Published crates are available on [crates.io](https://crates.io/crates/ruprizzle). `crates/testkit` is the only crate in the workspace marked `publish = false`; it is used by the integration suite and is not published.
 
 The pipeline is:
 
@@ -488,26 +495,36 @@ Measured locally during development (no I/O for construction benchmarks):
 | Query construction (filter + order, no I/O) | ~1.8 µs |
 | Codegen, 50-model schema | ~16 ms |
 
-The end-to-end I/O benchmark is `cargo bench -p ruprizzle --bench end_to_end`; for the latest numbers and the text-marshalling note, see [docs/performance.md](docs/performance.md). Generated-crate compile-time benchmarks are not yet automated because they require a dedicated compile-time machine.
+The latest cross-ORM SQLite run (2026-08-17, 16:55 UTC, 1 warm-up + 10 measured trials, medians) is in [`docs/BenchmarkResults.md`](docs/BenchmarkResults.md) and the human-readable summary is in [`local/cross-orm-bench/BENCHMARKS.log`](local/cross-orm-bench/BENCHMARKS.log). Highlights:
+
+| Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | fastest comparison |
+|---|---|---|---|
+| `select_by_pk` | 27.9 µs | **3.1 µs** | Diesel 10.0 µs, Drizzle 38.3 µs, Prisma 182.9 µs |
+| `find_many_1000` | 1,741.1 µs | **385.8 µs** | Diesel 297.4 µs, Drizzle 414.2 µs, Sea-ORM 1,616.5 µs |
+| `include_posts` | 22,881.2 µs | **7,545.5 µs** | Diesel 3,647.4 µs, prax 11,712.9 µs, Sea-ORM 20,333.5 µs |
+| `bulk_insert_1000` | 2,099.7 µs | 1,395.0 µs | **prax 1,174.6 µs**, Drizzle 8,536.1 µs, Sea-ORM 5,031.3 µs |
+
+The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchronous native `rusqlite` crate and is enabled with the `sqlite-rusqlite` feature. Postgres still uses `sqlx` in both variants. For the Postgres-vs-sqlx overhead report and the `sqlx::Any` text-marshalling note, see [docs/performance.md](docs/performance.md). Generated-crate compile-time benchmarks are not yet automated because they require a dedicated compile-time machine.
 
 ---
 
 ## Status and roadmap
 
-P0–P7 are complete, P8 is mostly complete (docs site pending), and `0.4.0-beta.2` is on crates.io. Remaining work before a stable 0.2:
+`0.4.0-beta.2` is on [crates.io](https://crates.io/crates/ruprizzle). P0–P8 are complete and the public API is stabilising. The main remaining work before a stable 0.2 / 1.0 release:
 
-- Many-to-many implicit join tables (explicit join model works today).
+- Many-to-many implicit join tables (explicit join model works today; see ADR-006).
 - Raw-SQL compile-time verification (`sqlx::query!` style).
 - Full LSP for the schema DSL.
 - Connection pool metrics.
+- Docs site and generated-crate compile-time automation.
 
-See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md) and [decisions log](ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md) for the full phase-by-phase state and ADRs.
+See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md), the [production-readiness plan](ProjectPlan/ProductionReadinessPlan.md), and the [decisions log](ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md) for the full phase-by-phase state, production assessment, and ADRs.
 
 ---
 
 ## Known limitations
 
-This is an honest alpha. The boundaries are documented so you can decide whether ruprizzle is right for your project today.
+This is an honest beta. The boundaries are documented so you can decide whether ruprizzle is right for your project today.
 
 - **Heuristic renames** are suggested automatically; add `@renamedFrom` to confirm a data-preserving rename. The diff never guesses silently.
 - **`db push`** does not write migration files and is only for prototyping.

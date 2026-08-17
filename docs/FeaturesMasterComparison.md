@@ -140,49 +140,50 @@ Numbers are from the latest `local/cross-orm-bench/BENCHMARKS.log`
 
 | Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
 |---|---|---|---|---|---|---|---|
-| `select_by_pk` | 22.6 | 3.0 | 22.9 | 65.8 | 15.5 | 196.4 | 39.2 |
-| `find_many_1000` | 1,644.7 | 383.2 | 770.6 | 1,684.5 | 311.2 | 3,061.4 | 411.1 |
-| `find_filtered_ordered` | 1,781.2 | 569.4 | 946.2 | 1,777.0 | 446.4 | 3,469.7 | 498.7 |
-| `find_filtered_paginated` | 381.8 | 308.6 | 403.6 | 460.7 | 314.5 | 730.7 | 347.7 |
-| `find_in_list` | 102.1 | 29.6 | 107.3 | 147.8 | 53.2 | 463.5 | 100.6 |
-| `find_complex_filter` | 306.6 | 164.9 | 262.0 | 372.8 | 182.1 | 850.3 | 221.4 |
-| `count_filtered` | 39.4 | 20.0 | 44.4 | 87.1 | 33.7 | 199.4 | 47.1 |
-| `exists_filtered` | 17.3 | 2.7 | 18.4 | 64.6 | 13.4 | 166.7 | 41.3 |
-| `include_posts` | 22,236.7 | 7,679.7 | 11,498.6 | 21,707.3 | 3,801.7 | 45,196.0 | 187,172.4 |
-| `include_author` | 22,262.8 | 7,436.9 | 9,581.2 | 21,619.0 | 3,453.0 | 87,424.8 | 16,660.2 |
-| `include_posts_and_comments` | 132,481.4 | 57,545.4 | 44,265.0 | 117,815.9 | 21,704.7 | 270,511.9 | 9,144,201.9 |
-| `include_posts_with_tags` | 55,727.3 | 27,186.3 | 26,821.0 | 57,127.1 | 8,494.4 | 274,363.4 | 37,185.9 |
-| `find_popular_posts` | 1,478.6 | 1,268.7 | 2,160.1 | 1,661.8 | 1,317.8 | 2,689.4 | 5,543.8 |
-| `prepared_select_by_pk` | 26.0 | 2.3 | 4.6 | 74.9 | 15.0 | 179.6 | 14.9 |
-| `stream_find_many_1000` | 2,035.8 | 686.0 | 59.7 | 2,485.3 | 245.5 | 2,754.3 | 316.6 |
-| `bulk_insert_1000` | 1,962.5 | 1,346.0 | 1,222.4 | 9,403.5 | 13,988.2 | 13,118.6 | 8,341.6 |
+| `select_by_pk` | 27.9 | 3.1 | 22.5 | 76.8 | 10.0 | 182.9 | 38.3 |
+| `find_many_1000` | 1,741.1 | 385.8 | 771.0 | 1,616.5 | 297.4 | 2,935.7 | 414.2 |
+| `find_filtered_ordered` | 1,918.1 | 569.6 | 966.1 | 1,669.8 | 433.8 | 3,358.3 | 506.7 |
+| `find_filtered_paginated` | 412.9 | 312.6 | 371.2 | 426.0 | 307.9 | 666.1 | 360.0 |
+| `find_in_list` | 125.6 | 29.5 | 101.0 | 129.4 | 39.9 | 427.7 | 101.9 |
+| `find_complex_filter` | 324.8 | 166.8 | 256.8 | 343.9 | 172.2 | 838.5 | 229.3 |
+| `count_filtered` | 39.6 | 20.6 | 40.7 | 81.3 | 25.9 | 178.9 | 47.7 |
+| `exists_filtered` | 18.5 | 2.7 | 19.3 | 57.9 | 9.8 | 157.7 | 42.4 |
+| `include_posts` | 22,881.2 | 7,545.5 | 11,712.9 | 20,333.5 | 3,647.4 | 44,300.7 | 186,014.4 |
+| `include_author` | 23,033.2 | 7,332.0 | 9,596.4 | 20,500.2 | 3,362.5 | 86,517.4 | 16,450.2 |
+| `include_posts_and_comments` | 136,207.9 | 57,665.9 | 44,929.0 | 110,745.1 | 20,997.0 | 267,560.2 | 9,098,301.2 |
+| `include_posts_with_tags` | 57,895.0 | 27,607.2 | 27,132.6 | 54,141.4 | 8,209.3 | 276,963.6 | 36,364.1 |
+| `find_popular_posts` | 1,579.2 | 1,268.0 | 2,221.2 | 1,564.6 | 1,296.9 | 2,662.8 | 5,553.4 |
+| `prepared_select_by_pk` | 20.5 | 2.3 | 5.3 | 60.2 | 10.2 | 165.5 | 14.8 |
+| `stream_find_many_1000` | 2,096.7 | 706.5 | 58.1 | 2,576.9 | 231.7 | 2,659.3 | 330.7 |
+| `bulk_insert_1000` | 2,099.7 | 1,395.0 | 1,174.6 | 5,031.3 | 6,619.3 | 13,236.6 | 8,536.1 |
 
 ### Query construction (no I/O)
 
 | Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
 |---|---|---|---|---|---|---|---|
-| `to_sql_select_by_pk` | 0.6 | 0.6 | 0.4 | 7.6 | 0.7 | 0.1 | 12.2 |
-| `to_sql_select_filter_order` | 1.5 | 1.6 | 1.1 | 12.4 | 1.0 | 0.1 | 18.0 |
-| `to_sql_select_in_list` | 2.3 | 2.4 | 4.4 | 25.4 | 2.8 | 0.7 | 40.6 |
-| `to_sql_select_complex_filter` | 1.8 | 1.8 | 1.5 | 14.6 | 1.2 | 0.1 | 20.0 |
-| `to_sql_select_paginated` | 1.5 | 1.5 | 1.1 | 12.0 | 1.0 | 0.1 | 18.4 |
-| `to_sql_prepared_select_by_pk` | 0.6 | 0.6 | 0.4 | 2.7 | 0.8 | 0.1 | 12.0 |
+| `to_sql_select_by_pk` | 0.6 | 0.6 | 0.4 | 7.4 | 0.7 | 0.1 | 11.8 |
+| `to_sql_select_filter_order` | 1.6 | 1.6 | 1.2 | 12.2 | 1.0 | 0.1 | 17.2 |
+| `to_sql_select_in_list` | 2.3 | 2.4 | 4.5 | 25.6 | 2.7 | 0.7 | 40.3 |
+| `to_sql_select_complex_filter` | 1.8 | 1.9 | 1.6 | 14.2 | 1.1 | 0.1 | 19.1 |
+| `to_sql_select_paginated` | 1.5 | 1.5 | 1.1 | 11.8 | 1.0 | 0.1 | 17.7 |
+| `to_sql_prepared_select_by_pk` | 0.6 | 0.6 | 0.4 | 2.7 | 0.7 | 0.1 | 11.7 |
 | `prepared_rebind_select_by_pk` | 0.0 | 0.0 | 0.1 | 0.1 | 0.2 | 0.1 | 0.1 |
-| `to_sql_conditional_filter` | 0.8 | 0.8 | 0.4 | 8.4 | 0.9 | 0.3 | 15.4 |
-| `to_sql_select_with_cte` | 1.6 | 1.6 | 0.8 | 15.7 | 0.2 | 0.1 | 36.9 |
-| `to_sql_select_with_recursive_cte` | 2.3 | 2.4 | 0.5 | 21.4 | 0.2 | 0.1 | 0.1 |
-| `to_sql_set_union` | 1.6 | 1.4 | 0.9 | 14.1 | 1.2 | 0.1 | 27.4 |
-| `to_sql_select_with_join` | 0.9 | 0.9 | 0.1 | 9.2 | 1.1 | 0.1 | 30.3 |
-| `to_sql_select_exists_subquery` | 1.0 | 1.1 | 0.1 | 15.1 | 1.1 | 0.1 | 24.3 |
-| `to_sql_select_in_subquery` | 1.4 | 1.4 | 0.1 | 10.7 | 0.8 | 0.1 | 19.3 |
-| `to_sql_nested_insert` | 1.2 | 1.3 | 0.4 | 0.0 | 0.6 | 0.1 | 20.6 |
-| `to_sql_nested_update` | 0.8 | 0.8 | 0.3 | 0.0 | 0.3 | 0.1 | 18.4 |
+| `to_sql_conditional_filter` | 0.8 | 0.8 | 0.4 | 8.3 | 0.8 | 0.3 | 14.6 |
+| `to_sql_select_with_cte` | 1.6 | 1.6 | 0.8 | 15.3 | 0.2 | 0.1 | 35.6 |
+| `to_sql_select_with_recursive_cte` | 2.3 | 2.4 | 0.5 | 20.8 | 0.2 | 0.1 | 0.1 |
+| `to_sql_set_union` | 1.6 | 1.4 | 0.9 | 13.7 | 1.1 | 0.1 | 26.0 |
+| `to_sql_select_with_join` | 0.9 | 0.9 | 0.1 | 9.0 | 1.1 | 0.1 | 29.0 |
+| `to_sql_select_exists_subquery` | 1.0 | 1.1 | 0.1 | 14.4 | 1.1 | 0.1 | 24.0 |
+| `to_sql_select_in_subquery` | 1.4 | 1.4 | 0.1 | 10.5 | 0.8 | 0.1 | 18.6 |
+| `to_sql_nested_insert` | 1.2 | 1.2 | 0.4 | 0.0 | 0.5 | 0.1 | 19.8 |
+| `to_sql_nested_update` | 0.8 | 0.8 | 0.3 | 0.0 | 0.3 | 0.1 | 17.4 |
+
 ## Best-fit summary
 
 | Criterion | Best choice | Why |
 |---|---|---|
 | Compile-time type safety, generated typed client | **Diesel** or **ruprizzle** | Both schema-first and fully typed; Diesel has the larger ecosystem, ruprizzle the more ergonomic generated client. |
-| Maximum simple-query throughput on SQLite | **ruprizzle (rusqlite)** | 3.0 µs on `select_by_pk` — faster than Diesel's 15.5 µs — with zero async dispatch overhead. |
+| Maximum simple-query throughput on SQLite | **ruprizzle (rusqlite)** | 3.1 µs on `select_by_pk` — faster than Diesel's 10.0 µs — with zero async dispatch overhead. |
 | Multi-row reads and filtered queries on SQLite | **Diesel**, then **ruprizzle (rusqlite)** | Diesel is fastest on most multi-row reads; ruprizzle (rusqlite) is within 20–40% and beats Drizzle/prax/Sea-ORM. |
 | Bulk inserts on SQLite | **prax**, then **ruprizzle (rusqlite)** | prax leads at ~1.2 ms; ruprizzle (rusqlite) at ~1.4 ms is still roughly 4× faster than Diesel/Sea-ORM. |
 | Nested relation loading, automatic batching | **ruprizzle (rusqlite)**, then **prax**, then **Diesel** (manual) | ruprizzle's auto-batched loader is ~2× faster than Sea-ORM/Prisma; Diesel is fastest if you hand-write the join. |
