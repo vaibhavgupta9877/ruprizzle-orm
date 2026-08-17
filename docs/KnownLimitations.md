@@ -31,7 +31,7 @@ whether the tool is right for your project.
   explicitly construct `Pool::Any(...)` or use a non-default URL. The
   `postgres-tokio-postgres` feature is available as an additional native driver
   with its own performance characteristics. See
-  [ADR-009](../ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md).
+  [ADR-009](adr/ADR-009-RuntimeDialectSelection.md).
 - **`SelectQuery::stream` is buffered, not a true cursor.** The current
   implementation buffers the full result set and yields decoded rows. Using
   `sqlx`'s `.fetch()` stream is **~64% slower per row** on SQLite, so the

@@ -138,7 +138,7 @@ Numbers are from the latest `local/cross-orm-bench/BENCHMARKS.log`
 | TypeScript ecosystem, migrations, team familiarity | **Prisma** | Largest community, mature migrations, schema-first. |
 | Zero build-step / runtime schema | **Drizzle** | Schema is plain TypeScript, no code generation. |
 | SQL transparency / `.to_sql()` on every builder | **ruprizzle**, **Diesel**, or **Drizzle** | ruprizzle and Diesel expose SQL cheaply; Drizzle exposes it too but is slower to construct. |
-| Production Postgres | **ruprizzle**, **Prisma**, or **Diesel** | ruprizzle's [`Performance.md`](Performance.md) shows it within ~5% of hand-written `sqlx` on Postgres; Diesel and Drizzle are also strong on Postgres but were not measured here. |
+| Production Postgres | **ruprizzle**, **Prisma**, or **Diesel** | ruprizzle's [`performance.md`](performance.md) shows it within ~5% of hand-written `sqlx` on Postgres; Diesel and Drizzle are also strong on Postgres but were not measured here. |
 | Multi-tenancy or vector search out of the box | **prax** | Advertises row-level security, schema/database isolation, and pgvector integration. |
 
 ## Footnotes

@@ -144,7 +144,7 @@ Query construction remains a sub-microsecond win for ruprizzle (rusqlite); the b
 | TypeScript ecosystem, migrations, team familiarity | **Prisma** | Largest community, mature migrations, schema-first. |
 | Zero build-step / runtime schema | **Drizzle** | Schema is plain TypeScript, no code generation. |
 | SQL transparency / `.to_sql()` on every builder | **ruprizzle, Diesel, or Drizzle** | ruprizzle and Diesel expose SQL cheaply; Drizzle exposes it too but is slower to construct. |
-| Production Postgres | ruprizzle, Prisma, or Diesel | ruprizzle's [`Performance.md`](Performance.md) shows it within ~5% of hand-written `sqlx` on Postgres; Diesel and Drizzle are also strong on Postgres but were not measured here. |
+| Production Postgres | ruprizzle, Prisma, or Diesel | ruprizzle's [`performance.md`](performance.md) shows it within ~5% of hand-written `sqlx` on Postgres; Diesel and Drizzle are also strong on Postgres but were not measured here. |
 
 ## Caveats
 
@@ -156,7 +156,7 @@ Query construction remains a sub-microsecond win for ruprizzle (rusqlite); the b
 
 ## See also
 
-- [Performance](Performance.md) — Postgres vs `sqlx` measurements and the `sqlx::Any` text-marshalling note.
+- [Performance](performance.md) — Postgres vs `sqlx` measurements and the `sqlx::Any` text-marshalling note.
 - [Known limitations](KnownLimitations.md) — honest boundaries of the alpha.
 - `ProjectPlan/ImplementationPlan/ImplPlan09TestingRelease.md` — original testing-and-benchmark plan.
 
