@@ -291,7 +291,7 @@ async fn main() -> Result<(), ruprizzle::Error> {
 }
 ```
 
-See the full [quickstart](docs/Quickstart.md) for a step-by-step walkthrough.
+See the full [quickstart](docs/quickstart.md) for a step-by-step walkthrough.
 
 ---
 
@@ -488,7 +488,7 @@ Measured locally during development (no I/O for construction benchmarks):
 | Query construction (filter + order, no I/O) | ~1.8 µs |
 | Codegen, 50-model schema | ~16 ms |
 
-The end-to-end I/O benchmark is `cargo bench -p ruprizzle --bench end_to_end`; for the latest numbers and the text-marshalling note, see [docs/Performance.md](docs/Performance.md). Generated-crate compile-time benchmarks are not yet automated because they require a dedicated compile-time machine.
+The end-to-end I/O benchmark is `cargo bench -p ruprizzle --bench end_to_end`; for the latest numbers and the text-marshalling note, see [docs/performance.md](docs/performance.md). Generated-crate compile-time benchmarks are not yet automated because they require a dedicated compile-time machine.
 
 ---
 

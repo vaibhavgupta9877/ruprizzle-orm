@@ -696,6 +696,6 @@ is not stable. Sanity check on D every run:
 ## 10. See also
 
 - [`docs/BenchmarkResults.md`](../../../docs/BenchmarkResults.md) — the cross-ORM run this responds to (needs §6 corrections)
-- [`docs/Performance.md`](../../../docs/Performance.md) — Postgres vs hand-written `sqlx`
+- [`docs/performance.md`](../../../docs/performance.md) — Postgres vs hand-written `sqlx`
 - [`docs/KnownLimitations.md`](../../../docs/KnownLimitations.md) — needs the F2 and F10 corrections
 - `ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md` — ADR-009, the `sqlx::Any` decision this proposes to revisit

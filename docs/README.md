@@ -2,9 +2,9 @@
 
 [![Crates.io](https://img.shields.io/crates/v/ruprizzle.svg)](https://crates.io/crates/ruprizzle)
 [![docs.rs](https://docs.rs/ruprizzle/badge.svg)](https://docs.rs/ruprizzle)
-[![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](./Cargo.toml)
-[![License](https://img.shields.io/crates/l/ruprizzle.svg)](./LICENSE-MIT)
-[![CI](https://img.shields.io/badge/CI-cargo%20xtask%20ci-success)](./xtask/src/main.rs)
+[![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](../Cargo.toml)
+[![License](https://img.shields.io/crates/l/ruprizzle.svg)](../LICENSE-MIT)
+[![CI](https://img.shields.io/badge/CI-cargo%20xtask%20ci-success)](../xtask/src/main.rs)
 
 A schema-first ORM for Rust that combines the best parts of Prisma and Drizzle:
 
