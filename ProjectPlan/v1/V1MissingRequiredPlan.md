@@ -101,7 +101,7 @@ The table below cross-checks every limitation/priority in
 - Consumes: the validation table above.
 - Produces: a public status section that matches `docs/KnownLimitations.md`.
 
-- [ ] **Step 1: Remove or reword the stale entries**
+- [x] **Step 1: Remove or reword the stale entries**
   - In `README.md:520`, delete "Connection pool metrics" from the main
     remaining-work list.
   - In `README.md:536`, reword the SQLite JSON note to:
@@ -111,17 +111,17 @@ The table below cross-checks every limitation/priority in
   - In `README.md:519`, keep the compile-time checking entry but align wording
     with `docs/KnownLimitations.md`.
 
-- [ ] **Step 2: Update `docs/KnownLimitations.md` to be explicit about v1.0 vs 0.2+**
+- [x] **Step 2: Update `docs/KnownLimitations.md` to be explicit about v1.0 vs 0.2+**
   - Keep the "Current beta" section.
   - Add a "Deferred to v1.1" section: compile-time query checking.
   - Add a "Deferred to v1.2+" section: full-text search, PostGIS, soft deletes,
     polymorphic relations, implicit many-to-many, recursive tree helpers.
 
-- [ ] **Step 3: Verify docs**
+- [x] **Step 3: Verify docs**
   - Run: `cargo xtask ci`
   - Expected: all green.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   - `git add README.md docs/KnownLimitations.md`
   - `git commit -m "docs: align README and KnownLimitations with 0.4.0-beta.2 status"`
 
