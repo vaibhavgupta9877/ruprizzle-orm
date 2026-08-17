@@ -10,7 +10,7 @@ use std::fmt::Write as _;
 use ruprizzle_dialect::{DbDialect, dialect_for};
 
 use crate::aggregate::{AggregateEntry, AggregateKind};
-use crate::filter::{CmpOp, Cte, FilterNode, JsonFilterOp};
+use crate::filter::{ArrayFilterOp, CmpOp, Cte, FilterNode, JsonFilterOp};
 use crate::join::JoinKind;
 use crate::json::{JsonPath, JsonPathSegment};
 use crate::model::Model;
@@ -1262,6 +1262,130 @@ impl<'d> Compiler<'d> {
         }
     }
 
+    /// Emit an array column predicate for the current dialect.
+    fn push_array_op(&mut self, table: &str, column: &str, op: ArrayFilterOp, values: &[Value]) {
+        match self.dialect.name() {
+            "postgres" => {
+                self.push_quoted(table);
+                self.push('.');
+                self.push_quoted(column);
+                self.push(' ');
+                self.push_str(match op {
+                    ArrayFilterOp::Contains => "@>",
+                    ArrayFilterOp::ContainedBy => "<@",
+                    ArrayFilterOp::Overlaps => "&&",
+                });
+                self.push(' ');
+                self.push_bind(Value::Array(values.to_vec()));
+            }
+            "mysql" => match op {
+                ArrayFilterOp::Contains => {
+                    self.push_str("JSON_CONTAINS(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(", ");
+                    self.push_json_array(values);
+                    self.push_str(", '$')");
+                }
+                ArrayFilterOp::ContainedBy => {
+                    self.push_str("JSON_CONTAINS(");
+                    self.push_json_array(values);
+                    self.push_str(", ");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(", '$')");
+                }
+                ArrayFilterOp::Overlaps => {
+                    self.push_str("JSON_OVERLAPS(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(", ");
+                    self.push_json_array(values);
+                    self.push_str(")");
+                }
+            },
+            _ => {
+                // SQLite and the Any fallback: the column stores a JSON array and we
+                // use the JSON1 `json_each` table-valued function.
+                match op {
+                    ArrayFilterOp::Contains => {
+                        if values.is_empty() {
+                            self.push_str("1");
+                            return;
+                        }
+                        for (i, value) in values.iter().enumerate() {
+                            if i > 0 {
+                                self.push_str(" AND ");
+                            }
+                            self.push_str("EXISTS (SELECT 1 FROM json_each(");
+                            self.push_quoted(table);
+                            self.push('.');
+                            self.push_quoted(column);
+                            self.push_str(") WHERE json_each.value = ");
+                            self.push_bind(value.clone());
+                            self.push_str(")");
+                        }
+                    }
+                    ArrayFilterOp::ContainedBy => {
+                        if values.is_empty() {
+                            self.push_str("(json_array_length(");
+                            self.push_quoted(table);
+                            self.push('.');
+                            self.push_quoted(column);
+                            self.push_str(") = 0)");
+                            return;
+                        }
+                        self.push_str("NOT EXISTS (SELECT 1 FROM json_each(");
+                        self.push_quoted(table);
+                        self.push('.');
+                        self.push_quoted(column);
+                        self.push_str(") WHERE json_each.value NOT IN (");
+                        for (i, value) in values.iter().enumerate() {
+                            if i > 0 {
+                                self.push_str(", ");
+                            }
+                            self.push_bind(value.clone());
+                        }
+                        self.push_str("))");
+                    }
+                    ArrayFilterOp::Overlaps => {
+                        if values.is_empty() {
+                            self.push_str("0");
+                            return;
+                        }
+                        self.push_str("EXISTS (SELECT 1 FROM json_each(");
+                        self.push_quoted(table);
+                        self.push('.');
+                        self.push_quoted(column);
+                        self.push_str(") WHERE json_each.value IN (");
+                        for (i, value) in values.iter().enumerate() {
+                            if i > 0 {
+                                self.push_str(", ");
+                            }
+                            self.push_bind(value.clone());
+                        }
+                        self.push_str("))");
+                    }
+                }
+            }
+        }
+    }
+
+    /// Emit `JSON_ARRAY(?1, ?2, ...)` for MySQL array predicates.
+    fn push_json_array(&mut self, values: &[Value]) {
+        self.push_str("JSON_ARRAY(");
+        for (i, value) in values.iter().enumerate() {
+            if i > 0 {
+                self.push_str(", ");
+            }
+            self.push_bind(value.clone());
+        }
+        self.push_str(")");
+    }
+
     fn push_json_string_literal(&mut self, s: &str) {
         for c in s.chars() {
             if c == '\'' {
@@ -1547,6 +1671,14 @@ impl<'d> Compiler<'d> {
                     self.push_json_has_key(table, column, path, value);
                 }
             },
+            FilterNode::Array {
+                table,
+                column,
+                op,
+                values,
+            } => {
+                self.push_array_op(table, column, *op, values);
+            }
         }
     }
 
@@ -1694,6 +1826,8 @@ mod tests {
     const NAME: Column<User, String> = Column::new("users", "name");
     const ROLE: Column<User, String> = Column::new("users", "role");
     const DATA: Column<User, serde_json::Value> = Column::new("docs", "data");
+    const TAGS: Column<User, Vec<String>> = Column::new("users", "tags");
+    const SCORES: Column<User, Vec<i32>> = Column::new("users", "scores");
 
     fn pg() -> &'static dyn DbDialect {
         dialect_for(Provider::Postgres)
@@ -2806,5 +2940,113 @@ mod tests {
             c.binds,
             vec![Value::Json(serde_json::Value::String("hello".into()))]
         );
+    }
+
+    #[test]
+    fn array_contains_postgres() {
+        let f = TAGS.contains(["a"]);
+        let c = select::<User>(pg(), "users", &[], &f.node, &[], None, None, false);
+        assert_eq!(c.sql, r#"SELECT * FROM "users" WHERE "users"."tags" @> $1"#);
+        assert_eq!(c.binds, vec![Value::Array(vec![Value::Str("a".into())])]);
+    }
+
+    #[test]
+    fn array_contained_by_postgres() {
+        let f = TAGS.contained_by(["a", "b"]);
+        let c = select::<User>(pg(), "users", &[], &f.node, &[], None, None, false);
+        assert_eq!(c.sql, r#"SELECT * FROM "users" WHERE "users"."tags" <@ $1"#);
+        assert_eq!(
+            c.binds,
+            vec![Value::Array(vec![
+                Value::Str("a".into()),
+                Value::Str("b".into())
+            ])]
+        );
+    }
+
+    #[test]
+    fn array_overlaps_postgres() {
+        let f = SCORES.overlaps([1, 2]);
+        let c = select::<User>(pg(), "users", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r#"SELECT * FROM "users" WHERE "users"."scores" && $1"#
+        );
+        assert_eq!(
+            c.binds,
+            vec![Value::Array(vec![Value::I32(1), Value::I32(2)])]
+        );
+    }
+
+    #[test]
+    fn array_contains_sqlite() {
+        let f = TAGS.contains(["a"]);
+        let c = select::<User>(sqlite(), "users", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r"SELECT * FROM `users` WHERE EXISTS (SELECT 1 FROM json_each(`users`.`tags`) WHERE json_each.value = ?)"
+        );
+        assert_eq!(c.binds, vec![Value::Str("a".into())]);
+    }
+
+    #[test]
+    fn array_contained_by_sqlite() {
+        let f = TAGS.contained_by(["a", "b"]);
+        let c = select::<User>(sqlite(), "users", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r"SELECT * FROM `users` WHERE NOT EXISTS (SELECT 1 FROM json_each(`users`.`tags`) WHERE json_each.value NOT IN (?, ?))"
+        );
+        assert_eq!(
+            c.binds,
+            vec![Value::Str("a".into()), Value::Str("b".into())]
+        );
+    }
+
+    #[test]
+    fn array_overlaps_sqlite() {
+        let f = SCORES.overlaps([1, 2]);
+        let c = select::<User>(sqlite(), "users", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r"SELECT * FROM `users` WHERE EXISTS (SELECT 1 FROM json_each(`users`.`scores`) WHERE json_each.value IN (?, ?))"
+        );
+        assert_eq!(c.binds, vec![Value::I32(1), Value::I32(2)]);
+    }
+
+    #[test]
+    fn array_contains_mysql() {
+        let f = TAGS.contains(["a"]);
+        let c = select::<User>(mysql(), "users", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r"SELECT * FROM `users` WHERE JSON_CONTAINS(`users`.`tags`, JSON_ARRAY(?), '$')"
+        );
+        assert_eq!(c.binds, vec![Value::Str("a".into())]);
+    }
+
+    #[test]
+    fn array_contained_by_mysql() {
+        let f = TAGS.contained_by(["a", "b"]);
+        let c = select::<User>(mysql(), "users", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r"SELECT * FROM `users` WHERE JSON_CONTAINS(JSON_ARRAY(?, ?), `users`.`tags`, '$')"
+        );
+        assert_eq!(
+            c.binds,
+            vec![Value::Str("a".into()), Value::Str("b".into())]
+        );
+    }
+
+    #[test]
+    fn array_overlaps_mysql() {
+        let f = SCORES.overlaps([1, 2]);
+        let c = select::<User>(mysql(), "users", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r"SELECT * FROM `users` WHERE JSON_OVERLAPS(`users`.`scores`, JSON_ARRAY(?, ?))"
+        );
+        assert_eq!(c.binds, vec![Value::I32(1), Value::I32(2)]);
     }
 }

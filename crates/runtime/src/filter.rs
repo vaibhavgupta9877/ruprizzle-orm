@@ -359,6 +359,17 @@ pub enum FilterNode {
         /// The bound value.
         value: Value,
     },
+    /// A scalar/enum array column operation.
+    Array {
+        /// The SQL table name.
+        table: &'static str,
+        /// The SQL column name.
+        column: &'static str,
+        /// The array-specific operator.
+        op: ArrayFilterOp,
+        /// The bound element values.
+        values: Vec<Value>,
+    },
 }
 
 /// JSON-specific filter operations.
@@ -370,6 +381,18 @@ pub enum JsonFilterOp {
     Contains,
     /// Top-level or nested key existence (`?`).
     HasKey,
+}
+
+/// Array-specific filter operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(missing_docs)]
+pub enum ArrayFilterOp {
+    /// The column contains all of the supplied values (`@>` / `JSON_CONTAINS`).
+    Contains,
+    /// The column is contained by the supplied set (`<@` / `JSON_CONTAINS` reversed).
+    ContainedBy,
+    /// The column and the supplied set share at least one element (`&&` / `JSON_OVERLAPS`).
+    Overlaps,
 }
 
 /// Comparison operators.

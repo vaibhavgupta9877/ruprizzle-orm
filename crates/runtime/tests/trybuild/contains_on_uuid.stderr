@@ -78,6 +78,7 @@ error[E0599]: no method named `contains` found for struct `ruprizzle::Column<Use
    |
    = note: the method was found for
            - `ruprizzle::Column<M, JsonValue>`
+           - `ruprizzle::Column<M, Vec<T>>`
            - `ruprizzle::Column<M, std::string::String>`
 help: some of the expressions' fields have a method of the same name
    |

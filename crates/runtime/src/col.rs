@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::filter::{CmpOp, Filter, FilterNode, JsonFilterOp, Subquery};
+use crate::filter::{ArrayFilterOp, CmpOp, Filter, FilterNode, JsonFilterOp, Subquery};
 use crate::join::JoinOn;
 use crate::json::{JsonColumn, JsonPath, JsonPathSegment, JsonSet};
 use crate::order::OrderBy;
@@ -368,6 +368,38 @@ impl<M> Column<M, serde_json::Value> {
     #[must_use]
     pub fn jsonb_set(self, key: &'static str, value: serde_json::Value) -> JsonSet {
         self.json_set(key, value)
+    }
+}
+
+impl<M, T: Encodable> Column<M, Vec<T>> {
+    /// `column @> ARRAY[values]` (Postgres) or JSON array containment.
+    pub fn contains<V: Into<T>>(self, values: impl IntoIterator<Item = V>) -> Filter<M> {
+        Filter::new(FilterNode::Array {
+            table: self.table,
+            column: self.column,
+            op: ArrayFilterOp::Contains,
+            values: values.into_iter().map(|v| v.into().to_value()).collect(),
+        })
+    }
+
+    /// `column <@ ARRAY[values]` (Postgres) or JSON array subset.
+    pub fn contained_by<V: Into<T>>(self, values: impl IntoIterator<Item = V>) -> Filter<M> {
+        Filter::new(FilterNode::Array {
+            table: self.table,
+            column: self.column,
+            op: ArrayFilterOp::ContainedBy,
+            values: values.into_iter().map(|v| v.into().to_value()).collect(),
+        })
+    }
+
+    /// `column && ARRAY[values]` (Postgres) or JSON array overlap.
+    pub fn overlaps<V: Into<T>>(self, values: impl IntoIterator<Item = V>) -> Filter<M> {
+        Filter::new(FilterNode::Array {
+            table: self.table,
+            column: self.column,
+            op: ArrayFilterOp::Overlaps,
+            values: values.into_iter().map(|v| v.into().to_value()).collect(),
+        })
     }
 }
 
