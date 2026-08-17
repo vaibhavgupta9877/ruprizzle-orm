@@ -481,22 +481,22 @@ The table below cross-checks every limitation/priority in
 - Consumes: `both_dbs!` macro, MySQL backend.
 - Produces: passing tests for upserts, arrays, rich types on MySQL.
 
-- [ ] **Step 1: Promote MySQL to the default `both_dbs!` set**
+- [x] **Step 1: Promote MySQL to the default `both_dbs!` set**
   - In `crates/testkit/src/lib.rs` or in a new `all_dbs!` macro, run tests on
     SQLite + PostgreSQL + MySQL when all three URLs are available.
 
-- [ ] **Step 2: Add MySQL-specific tests**
+- [x] **Step 2: Add MySQL-specific tests**
   - Upsert with `ON DUPLICATE KEY UPDATE`.
   - `String[]` stored as JSON and queried with `contains`/`overlaps`.
   - `Uuid` round-trip through `CHAR(36)`.
   - `Decimal` text fallback on MySQL? MySQL has `DECIMAL`; verify native.
 
-- [ ] **Step 3: Document limitations**
+- [x] **Step 3: Document limitations**
   - Add a section to `docs/DialectNotes.md` for MySQL: no `INTERSECT`/`EXCEPT`,
     no `RETURNING` (PK follow-up), no native enums (CHECK constraint),
     no `FULL OUTER JOIN`/`RIGHT JOIN` on older versions.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   - `git commit -m "test(mysql): conformance suite and dialect notes"`
 
 ### Task D.2: PostgreSQL and MySQL benchmarks

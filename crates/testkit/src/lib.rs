@@ -1,4 +1,4 @@
-//! Dual-database test harness.
+//! Multi-database test harness.
 //!
 //! Integration tests are written **once** and run against **every** backend. That
 //! is the whole point: a Postgres-only test suite lets the `SQLite` dialect rot
@@ -611,6 +611,34 @@ macro_rules! both_dbs {
             async fn mysql() {
                 $crate::run_case($crate::Backend::MySql, $setup, case).await;
             }
+        }
+    };
+
+    (
+        $(#[$attr:meta])*
+        async fn $name:ident ( $db:ident : TestDb ) $body:block
+    ) => {
+        $crate::both_dbs! {
+            setup = "";
+            $(#[$attr])*
+            async fn $name($db: TestDb) $body
+        }
+    };
+}
+
+/// Alias for [`both_dbs!`] that reflects the fact that tests run on all three
+/// supported backends (`PostgreSQL`, `SQLite`, and `MySQL`) when available.
+#[macro_export]
+macro_rules! all_dbs {
+    (
+        setup = $setup:expr;
+        $(#[$attr:meta])*
+        async fn $name:ident ( $db:ident : TestDb ) $body:block
+    ) => {
+        $crate::both_dbs! {
+            setup = $setup;
+            $(#[$attr])*
+            async fn $name($db: TestDb) $body
         }
     };
 
