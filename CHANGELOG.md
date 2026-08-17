@@ -30,7 +30,7 @@ A beta milestone that closes the remaining alpha.3 beta blockers: clippy warning
 - Moved `crates/dialect/tests/conformance.rs` into `tests/integration/tests/dialect_conformance.rs` and removed the `ruprizzle-testkit` dev-dependency from `ruprizzle-dialect` so the crate can be packaged and published.
 - Published `ruprizzle-core`, `ruprizzle-parser`, `ruprizzle-dialect`, `ruprizzle-macros`, `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, and `ruprizzle-cli` version `0.1.1-beta.1` to crates.io.
 
-## [Unreleased]
+## [0.4.0-beta.1] - 2026-08-17
 
 ### Fixed
 

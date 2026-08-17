@@ -3,7 +3,7 @@ members = ["crates/*", "tests/integration", "local/deep-tests", "xtask"]
 resolver = "3"
 
 [workspace.package]
-version      = "0.1.1-beta.1"
+version      = "0.4.0-beta.1"
 edition      = "2024"
 rust-version = "1.85"
 license      = "MIT OR Apache-2.0"
@@ -13,14 +13,14 @@ authors      = ["Vaibhav Gupta <vaibhavgupta9877@gmail.com>"]
 
 [workspace.dependencies]
 # --- internal ---
-ruprizzle-core    = { path = "crates/core",    version = "0.1.1-beta.1" }
-ruprizzle-dialect = { path = "crates/dialect", version = "0.1.1-beta.1" }
-ruprizzle-parser  = { path = "crates/parser",  version = "0.1.1-beta.1" }
-ruprizzle-codegen = { path = "crates/codegen", version = "0.1.1-beta.1" }
-ruprizzle-migrate = { path = "crates/migrate", version = "0.1.1-beta.1" }
-ruprizzle-macros  = { path = "crates/macros",  version = "0.1.1-beta.1" }
-ruprizzle         = { path = "crates/runtime", version = "0.1.1-beta.1" }
-ruprizzle-testkit = { path = "crates/testkit", version = "0.1.1-beta.1" }
+ruprizzle-core    = { path = "crates/core",    version = "0.4.0-beta.1" }
+ruprizzle-dialect = { path = "crates/dialect", version = "0.4.0-beta.1" }
+ruprizzle-parser  = { path = "crates/parser",  version = "0.4.0-beta.1" }
+ruprizzle-codegen = { path = "crates/codegen", version = "0.4.0-beta.1" }
+ruprizzle-migrate = { path = "crates/migrate", version = "0.4.0-beta.1" }
+ruprizzle-macros  = { path = "crates/macros",  version = "0.4.0-beta.1" }
+ruprizzle         = { path = "crates/runtime", version = "0.4.0-beta.1" }
+ruprizzle-testkit = { path = "crates/testkit", version = "0.4.0-beta.1" }
 
 # --- external ---
 pest         = "2.8"
