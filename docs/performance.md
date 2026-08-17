@@ -86,3 +86,12 @@ In a real workload with rich types the gap between ruprizzle and hand-written
 sqlx is expected to be dominated by the ORM decode path, not by driver
 marshalling, as long as the native driver is selected. If you profile, compare
 against hand-written `sqlx::query` using the same native `sqlx::Postgres` pool.
+
+## See also
+
+- [Benchmark results](BenchmarkResults.md) — cross-ORM SQLite numbers for
+  ruprizzle (sqlx), ruprizzle (rusqlite), prax, Sea-ORM, Diesel, Prisma, and
+  Drizzle, including the new query-construction operations added in the latest
+  benchmark run.
+- [Feature master comparison](FeaturesMasterComparison.md) — full feature and
+  architecture comparison, including the advanced SQL builder feature matrix.
