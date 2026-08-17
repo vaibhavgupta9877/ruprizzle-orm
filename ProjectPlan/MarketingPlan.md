@@ -1061,7 +1061,7 @@ Audited all eight `crates/*/Cargo.toml`. **This is in better shape than Part II 
 | M2 | **Runtime description omits the differentiators.** `"A schema-first ORM for Rust: typed queries, relations, and automatic migrations"` is accurate but generic — it does not say *no sidecar*, *SQL transparency*, or which databases. This string is what appears in crates.io search results and in most LLM answers about the crate. It is the highest-leverage 100 characters in the project. | **P1** |
 | M3 | **`ruprizzle-testkit` description says "(not published)"** yet the crate sets `documentation = "https://docs.rs/ruprizzle-testkit"`. Either it publishes or it doesn't — reconcile, because a contradictory record is exactly what produces confused LLM answers. | **P2** |
 | M4 | **Keyword strings are near-identical across all 8 crates** (`orm`, `sql`, `database` + 2). Fine for the sub-crates, but it means crates.io keyword pages surface eight ruprizzle crates and a user cannot tell which one to install. The runtime crate should be unmistakably the entry point. | **P2** |
-| M5 | **GitHub repo description and topics unverified** — no `gh` CLI available in this environment. Must be checked manually. | **P1** |
+| M5 | ~~**GitHub repo description and topics unverified**~~ — **RESOLVED 2026-08-17.** Checked via the public GitHub API: `description` is `null`, `homepage` is `null`, `topics` is `[]`. Worse than assumed — all three are unset, so the repo currently contributes *nothing* to entity resolution. Fix staged in `scripts/apply-repo-metadata.sh`, gated on the §28 baseline. See §29.1. | **P1** |
 
 ---
 
@@ -1105,9 +1105,17 @@ Score-1 responses are the priority to eliminate. A model confidently describing 
 
 - [~] **[P0]** Record the §28 zero-context baseline across all 6 platforms *before* changing anything. This is the only chance to capture it. — **Instrument ready, run pending.** `ProjectPlan/NameResolutionBaseline.md` holds the protocol, the 5 verbatim questions, the rubric, the correctness key, and the empty grid. Requires a human with accounts on ChatGPT, Claude, Perplexity, Gemini, Copilot, and Google AI Overviews; must be filled in *before* the repo-metadata changes below go live.
 - [x] **[P0]** Ratify the §25.4 disambiguation sentence as the single canonical description. Do not vary it per channel. — **Done 2026-08-17.** Ratified in `ProjectPlan/CanonicalCopy.md`, which holds the verbatim sentence, the plain-text form, the only three sanctioned short variants (for the 100-char crates.io budget and shorter fields), the ancillary canonical lines (disambiguation, status, databases), a change log, and a 10-surface placement checklist. Applied to the README's first prose line.
-- [ ] **[P0]** Set the **GitHub repo description** field to the disambiguation sentence (verify current value — unverified, M5).
-- [ ] **[P0]** Set **GitHub repo topics**: `rust`, `orm`, `database`, `postgres`, `mysql`, `sqlite`, `sqlx`, `prisma`, `schema-first`, `migrations`, `type-safe`. Verify what's currently set first.
-- [ ] **[P0]** Confirm the repo's **homepage field** points somewhere useful (docs site or crates.io), not blank.
+> **M5 resolved (2026-08-17).** All three fields below were verified against the public
+> GitHub API (`api.github.com/repos/vaibhavgupta9877/ruprizzle-orm`): **`description` is
+> `null`, `homepage` is `null`, and `topics` is `[]`.** Nothing is set. The fix for all
+> three is staged in `scripts/apply-repo-metadata.sh` and is **gated on task 1** — the
+> zero-context baseline must be recorded before these go live, because publishing them
+> destroys the only chance to measure the pre-change state. Run `gh auth login`, fill in
+> `ProjectPlan/NameResolutionBaseline.md`, then run the script.
+
+- [~] **[P0]** Set the **GitHub repo description** field to the disambiguation sentence (verify current value — unverified, M5). — **Verified empty; staged.** Value is the ratified §25.4 sentence, verbatim from `ProjectPlan/CanonicalCopy.md` (160 chars, within GitHub's 350 limit).
+- [~] **[P0]** Set **GitHub repo topics**: `rust`, `orm`, `database`, `postgres`, `mysql`, `sqlite`, `sqlx`, `prisma`, `schema-first`, `migrations`, `type-safe`. Verify what's currently set first. — **Verified empty; staged.** All 11 topics valid under GitHub's naming rules.
+- [~] **[P0]** Confirm the repo's **homepage field** points somewhere useful (docs site or crates.io), not blank. — **Verified blank; staged.** Will be set to `https://vaibhavgupta9877.github.io/ruprizzle-orm`, matching the workspace `Cargo.toml` `homepage` field so the two records agree.
 - [ ] **[P0]** Write `LLM_CONTEXT.md` at the repo root from the §25.2 draft.
 - [ ] **[P0]** Audit the README against the one-link test (§25.1): if this URL is the *only* thing pasted, can a model correctly state what ruprizzle is, its databases, its differentiators, and its status? Fix whatever fails.
 - [ ] **[P0]** Add an explicit "Not related to Drizzle / drizzle-orm / drizzle-rs" disambiguation line to the README, `LLM_CONTEXT.md`, and `llms.txt`. This directly targets the score-1 failure mode.
