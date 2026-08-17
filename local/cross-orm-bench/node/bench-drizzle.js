@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import Database from 'better-sqlite3';
-import { eq, gt, asc, desc, and, like, between, inArray, sql } from 'drizzle-orm';
+import { eq, gt, asc, desc, and, like, between, inArray, sql, exists, lte, fillPlaceholders } from 'drizzle-orm';
 import { performance } from 'node:perf_hooks';
 import { writeFileSync } from 'node:fs';
 import * as schema from './schema.js';
@@ -56,6 +56,8 @@ async function bench(name, fn, iters, { setup, rows: rowsFnOrConst, queries } = 
       if (name === 'count_filtered') console.assert(typeof r === 'number' && r >= 980, `${name}: unexpected result`);
       if (name === 'exists_filtered') console.assert(r === true, `${name}: unexpected result`);
       if (name === 'select_by_pk') console.assert(r && r.id === 500, `${name}: unexpected result`);
+      if (name === 'prepared_select_by_pk') console.assert(r && r.id === 500, `${name}: unexpected result`);
+      if (name === 'stream_find_many_1000') console.assert(typeof r === 'number' && r === 1000, `${name}: unexpected result`);
       if (name === 'include_posts') console.assert(Array.isArray(r) && r.length === 1000 && r[0]?.posts?.length === 10, `${name}: unexpected result`);
       if (name === 'include_author') console.assert(Array.isArray(r) && r.length === 10000 && r[0]?.author != null, `${name}: unexpected result`);
       if (name === 'include_posts_and_comments') console.assert(Array.isArray(r) && r.length === 1000 && r[0]?.posts?.[0]?.comments?.length === 5, `${name}: unexpected result`);
@@ -140,6 +142,98 @@ results.push(await bench('to_sql_select_paginated', () => {
     .limit(20)
     .offset(500)
     .toSQL();
+}, 100000, { rows: 0, queries: 0 }));
+
+// New query-construction benchmarks for recent ruprizzle enhancements.
+
+results.push(await bench('to_sql_prepared_select_by_pk', () => {
+  return db.select().from(users)
+    .where(eq(users.id, sql.placeholder('id')))
+    .limit(1)
+    .toSQL();
+}, 100000, { rows: 0, queries: 0 }));
+
+const preparedQueryForRebind = db.select().from(users)
+  .where(eq(users.id, sql.placeholder('id')))
+  .limit(1)
+  .toSQL();
+results.push(await bench('prepared_rebind_select_by_pk', () => {
+  return fillPlaceholders(preparedQueryForRebind.params, { id: 123 });
+}, 100000, { rows: 0, queries: 0 }));
+
+results.push(await bench('to_sql_conditional_filter', () => {
+  let q = db.select().from(users);
+  if (1) q = q.where(gt(users.age, 18));
+  if (1) q = q.orderBy(asc(users.age), asc(users.email));
+  if (1) q = q.limit(100);
+  return q.toSQL();
+}, 100000, { rows: 0, queries: 0 }));
+
+results.push(await bench('to_sql_select_with_cte', () => {
+  const active = db.$with('active').as(
+    db.select().from(users).where(gt(users.age, 18))
+  );
+  return db.with(active).select().from(active).where(gt(users.id, 0)).toSQL();
+}, 100000, { rows: 0, queries: 0 }));
+
+// Drizzle's query builder does not expose a recursive CTE helper, so we
+// construct the recursive CTE with the raw `sql` template for this benchmark.
+results.push(await bench('to_sql_select_with_recursive_cte', () => {
+  return sql`WITH RECURSIVE nums(n) AS (SELECT 1 AS n UNION ALL SELECT n+1 FROM nums WHERE n < 5) SELECT * FROM nums`;
+}, 100000, { rows: 0, queries: 0 }));
+
+results.push(await bench('to_sql_set_union', () => {
+  return db.select().from(users).where(gt(users.age, 18))
+    .unionAll(db.select().from(users).where(lte(users.age, 18)))
+    .toSQL();
+}, 100000, { rows: 0, queries: 0 }));
+
+results.push(await bench('to_sql_select_with_join', () => {
+  return db.select().from(posts)
+    .innerJoin(users, eq(posts.authorId, users.id))
+    .toSQL();
+}, 100000, { rows: 0, queries: 0 }));
+
+results.push(await bench('to_sql_select_exists_subquery', () => {
+  const sub = db.select().from(posts).where(eq(posts.authorId, users.id));
+  return db.select().from(users).where(exists(sub)).toSQL();
+}, 100000, { rows: 0, queries: 0 }));
+
+results.push(await bench('to_sql_select_in_subquery', () => {
+  const sub = db.select({ authorId: posts.authorId }).from(posts).where(gt(posts.authorId, 0));
+  return db.select().from(users).where(inArray(users.id, sub)).toSQL();
+}, 100000, { rows: 0, queries: 0 }));
+
+results.push(await bench('to_sql_nested_insert', () => {
+  const newUser = db.$with('new_user').as(
+    db.insert(users).values({
+      id: 9999,
+      email: 'nested@example.com',
+      age: 30,
+      name: 'Nested',
+      createdAt: 0,
+    }).returning({ id: users.id })
+  );
+  // Drizzle cannot reference CTE columns directly in `.values()`, so we keep
+  // the CTE in the statement and use a concrete value for the child row.
+  return db.with(newUser).insert(posts).values({
+    id: 10001,
+    authorId: 9999,
+    categoryId: 1,
+    title: 'nested post',
+    publishedAt: 0,
+    views: 0,
+  }).toSQL();
+}, 100000, { rows: 0, queries: 0 }));
+
+results.push(await bench('to_sql_nested_update', () => {
+  const updatedUser = db.$with('updated_user').as(
+    db.update(users).set({ name: 'updated' }).where(eq(users.id, 1)).returning({ id: users.id })
+  );
+  // Drizzle cannot set a column to a CTE column reference, so the CTE is
+  // preserved and the SET clause uses a concrete value.
+  return db.with(updatedUser).update(posts).set({ authorId: 9999 })
+    .where(inArray(posts.id, [10001, 10002])).toSQL();
 }, 100000, { rows: 0, queries: 0 }));
 
 // End-to-end: select by PK
@@ -235,6 +329,25 @@ results.push(await bench('find_popular_posts', () => {
     with: { author: true },
   }).execute();
 }, 50, { queries: 2 }));
+
+// End-to-end: reusable prepared statement for single-row PK lookup.
+const preparedSelectByPk = db.select().from(users)
+  .where(eq(users.id, sql.placeholder('id')))
+  .limit(1)
+  .prepare();
+results.push(await bench('prepared_select_by_pk', () => {
+  return preparedSelectByPk.get({ id: 500 });
+}, 1000, { rows: 1, queries: 1 }));
+
+// End-to-end: stream all users using the underlying better-sqlite3 driver.
+const streamQuery = db.select().from(users).toSQL();
+const streamStmt = client.prepare(streamQuery.sql);
+results.push(await bench('stream_find_many_1000', () => {
+  let rows = 0;
+  for (const _ of streamStmt.iterate()) rows += 1;
+  if (rows !== 1000) throw new Error(`stream_find_many_1000: expected 1000, got ${rows}`);
+  return rows;
+}, 50, { rows: 1000, queries: 1 }));
 
 // Bulk insert 1000 rows into bench_bulk
 results.push(await bench('bulk_insert_1000', () => {

@@ -10,7 +10,9 @@ use std::time::{Duration, Instant};
 
 use prax_orm::{client, Model, PraxClient};
 use prax_orm::sqlite::{SqliteConfig, SqliteEngine, SqlitePool};
-use prax_query::filter::FilterValue;
+use prax_query::filter::{Filter, FilterValue};
+use prax_query::sql::DatabaseType;
+use prax_query::Sql;
 use prax_query::{OrderBy, OrderByField, QueryEngine};
 use serde::Serialize;
 use simple_process_stats::ProcessStats;
@@ -353,6 +355,217 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }));
     }
 
+    // New query-construction micro-benchmarks for recent ruprizzle enhancements.
+
+    // 6. to_sql_prepared_select_by_pk: Prax has no separate .prepare(); use find_unique build_sql.
+    {
+        let client = client.clone();
+        results.push(bench_sync("to_sql_prepared_select_by_pk", 100_000, move || {
+            let (_sql, _params) = client
+                .user()
+                .find_unique()
+                .r#where(user::id::equals(500i64))
+                .build_sql(client.engine().dialect());
+            std::hint::black_box((_sql, _params));
+            BenchOutcome::default()
+        }));
+    }
+
+    // 7. prepared_rebind_select_by_pk: Prax has no prepared-statement rebind API;
+    //    pre-build the SQL once and swap the parameter vector each iteration.
+    {
+        let (sql, _) = Sql::new("SELECT * FROM users WHERE id = ")
+            .with_db_type(DatabaseType::SQLite)
+            .bind(0i64)
+            .push(" LIMIT 1")
+            .build();
+        results.push(bench_sync("prepared_rebind_select_by_pk", 100_000, move || {
+            let params = vec![FilterValue::Int(123i64)];
+            std::hint::black_box((sql.clone(), params));
+            BenchOutcome::default()
+        }));
+    }
+
+    // 8. to_sql_conditional_filter: conditionally attach filter, order, and limit.
+    {
+        let client = client.clone();
+        results.push(bench_sync("to_sql_conditional_filter", 100_000, move || {
+            let maybe_age: Option<Filter> = Some(user::age::gt(18i64).into());
+            let maybe_order: Option<OrderBy> = Some(OrderByField::asc(user::age::COLUMN).into());
+            let maybe_limit: Option<u64> = Some(100);
+
+            let mut q = client.user().find_many();
+            if let Some(f) = maybe_age {
+                q = q.r#where(f);
+            }
+            if let Some(o) = maybe_order {
+                q = q.order_by(o);
+            }
+            if let Some(l) = maybe_limit {
+                q = q.take(l);
+            }
+
+            let (_sql, _params) = q.build_sql(client.engine().dialect());
+            std::hint::black_box((_sql, _params));
+            BenchOutcome::default()
+        }));
+    }
+
+    // 9. to_sql_select_with_cte: Prax has CTE string builders but no query-builder CTE integration.
+    {
+        let client = client.clone();
+        results.push(bench_sync("to_sql_select_with_cte", 100_000, move || {
+            let (inner_sql, _) = client
+                .user()
+                .find_many()
+                .r#where(user::age::gt(18i64))
+                .build_sql(client.engine().dialect());
+            let sql = prax_query::cte::WithClause::new()
+                .cte(prax_query::cte::Cte::new("active").as_query(inner_sql))
+                .select("*")
+                .from("active")
+                .where_clause("id > 0")
+                .build(DatabaseType::SQLite)
+                .unwrap();
+            std::hint::black_box(sql);
+            BenchOutcome::default()
+        }));
+    }
+
+    // 10. to_sql_select_with_recursive_cte: build a recursive CTE from raw SQL.
+    {
+        results.push(bench_sync("to_sql_select_with_recursive_cte", 100_000, move || {
+            let sql = prax_query::cte::WithClause::new()
+                .cte(
+                    prax_query::cte::Cte::new("nums")
+                        .recursive()
+                        .as_query("SELECT * FROM users WHERE id = ? UNION ALL SELECT * FROM users WHERE id = ?"),
+                )
+                .select("*")
+                .from("nums")
+                .where_clause("id > 0")
+                .build(DatabaseType::SQLite)
+                .unwrap();
+            std::hint::black_box(sql);
+            BenchOutcome::default()
+        }));
+    }
+
+    // 11. to_sql_set_union: Prax FindMany has no union; build two SQLs and concatenate.
+    {
+        let client = client.clone();
+        results.push(bench_sync("to_sql_set_union", 100_000, move || {
+            let (left_sql, mut left_params) = client
+                .user()
+                .find_many()
+                .r#where(user::age::gt(18i64))
+                .build_sql(client.engine().dialect());
+            let (right_sql, right_params) = client
+                .user()
+                .find_many()
+                .r#where(user::age::lte(18i64))
+                .build_sql(client.engine().dialect());
+
+            let sql = format!("({}) UNION ALL ({})", left_sql, right_sql);
+            left_params.extend(right_params);
+            std::hint::black_box((sql, left_params));
+            BenchOutcome::default()
+        }));
+    }
+
+    // 12. to_sql_select_with_join: Prax has no join support in the query builder.
+    {
+        results.push(bench_sync("to_sql_select_with_join", 100_000, move || {
+            let (_sql, _params) = Sql::new(
+                "SELECT posts.* FROM posts INNER JOIN users ON posts.author_id = users.id",
+            )
+            .with_db_type(DatabaseType::SQLite)
+            .build();
+            std::hint::black_box((_sql, _params));
+            BenchOutcome::default()
+        }));
+    }
+
+    // 13. to_sql_select_exists_subquery: Prax has no Filter::exists; build raw SQL.
+    {
+        results.push(bench_sync("to_sql_select_exists_subquery", 100_000, move || {
+            let (_sql, _params) = Sql::new(
+                "SELECT * FROM users WHERE EXISTS (SELECT 1 FROM posts WHERE posts.author_id = users.id)",
+            )
+            .with_db_type(DatabaseType::SQLite)
+            .build();
+            std::hint::black_box((_sql, _params));
+            BenchOutcome::default()
+        }));
+    }
+
+    // 14. to_sql_select_in_subquery: Prax has no in_subquery filter; build raw SQL.
+    {
+        results.push(bench_sync("to_sql_select_in_subquery", 100_000, move || {
+            let (_sql, _params) = Sql::new("SELECT * FROM users WHERE users.id IN (SELECT author_id FROM posts WHERE author_id > ")
+                .with_db_type(DatabaseType::SQLite)
+                .bind(0i64)
+                .push(")")
+                .build();
+            std::hint::black_box((_sql, _params));
+            BenchOutcome::default()
+        }));
+    }
+
+    // 15. to_sql_nested_insert: Prax CreateOperation.build_sql ignores nested writes; build raw SQL.
+    {
+        results.push(bench_sync("to_sql_nested_insert", 100_000, move || {
+            let (_sql, _params) = Sql::new("INSERT INTO users (id, email, age, name, created_at) VALUES (")
+                .with_db_type(DatabaseType::SQLite)
+                .bind(9999i64)
+                .push(", ")
+                .bind("nested@example.com")
+                .push(", ")
+                .bind(30i64)
+                .push(", ")
+                .bind("Nested")
+                .push(", ")
+                .bind(0i64)
+                .push("); INSERT INTO posts (id, category_id, title, published_at, views, author_id) VALUES (")
+                .bind(10001i64)
+                .push(", ")
+                .bind(1i64)
+                .push(", ")
+                .bind("nested post")
+                .push(", ")
+                .bind(0i64)
+                .push(", ")
+                .bind(0i64)
+                .push(", ")
+                .bind(9999i64)
+                .push(")")
+                .build();
+            std::hint::black_box((_sql, _params));
+            BenchOutcome::default()
+        }));
+    }
+
+    // 16. to_sql_nested_update: Prax UpdateOperation.build_sql ignores nested writes; build raw SQL.
+    {
+        results.push(bench_sync("to_sql_nested_update", 100_000, move || {
+            let (_sql, _params) = Sql::new("UPDATE users SET name = ")
+                .with_db_type(DatabaseType::SQLite)
+                .bind("updated")
+                .push(" WHERE id = ")
+                .bind(1i64)
+                .push("; UPDATE posts SET author_id = ")
+                .bind(1i64)
+                .push(" WHERE id IN (")
+                .bind(10001i64)
+                .push(", ")
+                .bind(10002i64)
+                .push(")")
+                .build();
+            std::hint::black_box((_sql, _params));
+            BenchOutcome::default()
+        }));
+    }
+
     // ── End-to-end reads ─────────────────────────────────────────────────────
 
     // 6. select_by_pk: fetch user id = 500.
@@ -370,6 +583,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .await
                         .expect("fetch user by pk");
                     assert_eq!(user.id, 500);
+                    BenchOutcome { rows: 1, queries: 1 }
+                }
+            })
+            .await,
+        );
+    }
+
+    // 6a. prepared_select_by_pk: Prax has no prepared statement builder;
+    //     fall back to the underlying SQLite connection with prepare_cached.
+    {
+        let conn = client.engine().pool().get().await?;
+        let handle = conn.inner().clone();
+        drop(conn);
+        results.push(
+            bench_async("prepared_select_by_pk", 1000, move || {
+                let handle = handle.clone();
+                async move {
+                    let id = handle
+                        .call(|conn| {
+                            let mut stmt = conn
+                                .prepare_cached("SELECT * FROM users WHERE id = ? LIMIT 1")?;
+                            let id: i64 = stmt.query_row((500i64,), |row| row.get(0))?;
+                            Ok(id)
+                        })
+                        .await
+                        .expect("prepared select by pk");
+                    assert_eq!(id, 500);
                     BenchOutcome { rows: 1, queries: 1 }
                 }
             })
@@ -395,6 +635,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         rows: rows.len(),
                         queries: 1,
                     }
+                }
+            })
+            .await,
+        );
+    }
+
+    // 7a. stream_find_many_1000: Prax has no streaming API; fall back to raw SQLite row iteration.
+    {
+        let conn = client.engine().pool().get().await?;
+        let handle = conn.inner().clone();
+        drop(conn);
+        results.push(
+            bench_async("stream_find_many_1000", 50, move || {
+                let handle = handle.clone();
+                async move {
+                    let rows = handle
+                        .call(|conn| {
+                            let mut stmt = conn.prepare_cached("SELECT * FROM users")?;
+                            let mut rows = stmt.query(())?;
+                            let mut count = 0;
+                            while let Some(_) = rows.next()? {
+                                count += 1;
+                            }
+                            Ok(count)
+                        })
+                        .await
+                        .expect("stream all users");
+                    assert_eq!(rows, 1000);
+                    BenchOutcome { rows, queries: 1 }
                 }
             })
             .await,

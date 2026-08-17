@@ -3,8 +3,10 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use sea_orm::entity::prelude::*;
-use sea_orm::query::{Condition, LoaderTrait};
-use sea_orm::{ActiveValue, Database, DbBackend, QueryOrder, QuerySelect, QueryTrait};
+use sea_orm::query::{Condition, LoaderTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::sea_query::{Alias, CommonTableExpression, Expr, JoinType, Query, UnionType, WithClause};
+use sea_orm::{ActiveValue, Database, DbBackend, QueryTrait, Statement, StatementBuilder, Value, Values};
+use futures::StreamExt;
 use serde::Serialize;
 use simple_process_stats::ProcessStats;
 
@@ -215,6 +217,189 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             .build(DbBackend::Sqlite)
             .to_string();
         std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: prepared select by PK (parameterized SQL).
+    results.push(bench_sync("to_sql_prepared_select_by_pk", 100_000, || {
+        let stmt = user::Entity::find()
+            .filter(user::Column::Id.eq(500i64))
+            .limit(1)
+            .offset(0)
+            .build(DbBackend::Sqlite);
+        std::hint::black_box(stmt);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: rebind a prepared select by PK.
+    {
+        let base = user::Entity::find()
+            .filter(user::Column::Id.eq(0i64))
+            .limit(1)
+            .offset(0)
+            .build(DbBackend::Sqlite);
+        results.push(bench_sync("prepared_rebind_select_by_pk", 100_000, || {
+            let mut stmt = base.clone();
+            stmt.values = Some(Values(vec![Value::from(123i64)]));
+            std::hint::black_box(stmt);
+            BenchOutcome::default()
+        }));
+    }
+
+    // Query-construction: conditional filter.
+    results.push(bench_sync("to_sql_conditional_filter", 100_000, || {
+        let maybe_age = Some(user::Column::Age.gt(18i64));
+        let maybe_order = Some(user::Column::Age);
+        let maybe_limit = Some(100u64);
+        let q = user::Entity::find()
+            .apply_if(maybe_age, |q, f| q.filter(f))
+            .apply_if(maybe_order, |q, c| q.order_by_asc(c))
+            .apply_if(maybe_limit, QuerySelect::limit);
+        let sql = q.build(DbBackend::Sqlite).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: select with a CTE.
+    results.push(bench_sync("to_sql_select_with_cte", 100_000, || {
+        let active = user::Entity::find()
+            .filter(user::Column::Age.gt(18i64))
+            .into_query();
+        let cte = CommonTableExpression::new()
+            .table_name(Alias::new("active"))
+            .query(active)
+            .to_owned();
+        let mut q = user::Entity::find().filter(user::Column::Id.gt(0i64));
+        QuerySelect::query(&mut q).with_cte(cte);
+        let sql = q.build(DbBackend::Sqlite).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: select with a recursive CTE.
+    results.push(bench_sync("to_sql_select_with_recursive_cte", 100_000, || {
+        let mut anchor = Query::select();
+        anchor
+            .from(user::Entity)
+            .column(user::Column::Id)
+            .and_where(user::Column::Id.eq(1i64));
+        let mut recursive = Query::select();
+        recursive
+            .from(user::Entity)
+            .column(user::Column::Id)
+            .and_where(user::Column::Id.eq(2i64))
+            .join(
+                JoinType::InnerJoin,
+                Alias::new("nums"),
+                Expr::col((user::Entity, user::Column::Id)).equals((Alias::new("nums"), user::Column::Id)),
+            );
+        let cte_query = anchor.union(UnionType::All, recursive.to_owned()).to_owned();
+        let cte = CommonTableExpression::new()
+            .table_name(Alias::new("nums"))
+            .column(user::Column::Id)
+            .query(cte_query)
+            .to_owned();
+        let with_clause = WithClause::new()
+            .recursive(true)
+            .cte(cte)
+            .to_owned();
+        let mut q = user::Entity::find().filter(user::Column::Id.gt(0i64));
+        QuerySelect::query(&mut q).with_cte(with_clause);
+        let sql = q.build(DbBackend::Sqlite).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: set union.
+    results.push(bench_sync("to_sql_set_union", 100_000, || {
+        let left = user::Entity::find()
+            .filter(user::Column::Age.gt(18i64))
+            .into_query();
+        let right = user::Entity::find()
+            .filter(user::Column::Age.lte(18i64))
+            .into_query();
+        let mut q = left;
+        q.union(UnionType::All, right);
+        let sql = StatementBuilder::build(&q, &DbBackend::Sqlite).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: select with a join.
+    results.push(bench_sync("to_sql_select_with_join", 100_000, || {
+        let sql = post::Entity::find()
+            .inner_join(user::Entity)
+            .build(DbBackend::Sqlite)
+            .to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: select with an EXISTS subquery.
+    results.push(bench_sync("to_sql_select_exists_subquery", 100_000, || {
+        let sub = post::Entity::find()
+            .filter(
+                Expr::col((post::Entity, post::Column::AuthorId)).equals((user::Entity, user::Column::Id)),
+            )
+            .into_query();
+        let sql = user::Entity::find()
+            .filter(Expr::exists(sub))
+            .build(DbBackend::Sqlite)
+            .to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: select with an IN subquery.
+    results.push(bench_sync("to_sql_select_in_subquery", 100_000, || {
+        let sub = Query::select()
+            .from(post::Entity)
+            .column(post::Column::AuthorId)
+            .and_where(post::Column::AuthorId.gt(0i64))
+            .to_owned();
+        let sql = user::Entity::find()
+            .filter(user::Column::Id.in_subquery(sub))
+            .build(DbBackend::Sqlite)
+            .to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: nested insert.
+    // Fallback: sea-orm 1.1 does not have nested ActiveModel writes, so we construct
+    // a representative raw SQL string that inserts a parent and child row.
+    results.push(bench_sync("to_sql_nested_insert", 100_000, || {
+        let sql = r#"
+            WITH inserted_user AS (
+                INSERT INTO "users" ("id", "email", "age", "name", "created_at")
+                VALUES (?, ?, ?, ?, ?)
+                RETURNING "id"
+            )
+            INSERT INTO "posts" ("id", "author_id", "category_id", "title", "published_at", "views")
+            SELECT ?, "inserted_user"."id", 1, 'nested post', 0, 0
+            FROM "inserted_user"
+        "#;
+        let stmt = Statement::from_string(DbBackend::Sqlite, sql);
+        std::hint::black_box(stmt);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: nested update.
+    // Fallback: sea-orm 1.1 does not have nested relation updates, so we construct
+    // a representative raw SQL string that updates a parent and its related rows.
+    results.push(bench_sync("to_sql_nested_update", 100_000, || {
+        let sql = r#"
+            WITH updated_user AS (
+                UPDATE "users" SET "name" = ?
+                WHERE "id" = ?
+                RETURNING "id"
+            )
+            UPDATE "posts"
+            SET "author_id" = (SELECT "id" FROM "updated_user")
+            WHERE "id" IN (?, ?)
+        "#;
+        let stmt = Statement::from_string(DbBackend::Sqlite, sql);
+        std::hint::black_box(stmt);
         BenchOutcome::default()
     }));
 
@@ -511,6 +696,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 BenchOutcome {
                     rows: posts.len(),
                     queries: 2,
+                }
+            }
+        })
+        .await,
+    );
+
+    // End-to-end: reusable prepared statement for single-row PK lookup.
+    let base = user::Entity::find_by_id(0i64).build(DbBackend::Sqlite);
+    let prepared_sql = base.sql.clone();
+    results.push(
+        bench_async("prepared_select_by_pk", 1_000, || {
+            let sql = prepared_sql.clone();
+            async {
+                let stmt = Statement::from_sql_and_values(
+                    DbBackend::Sqlite,
+                    sql,
+                    vec![Value::from(500i64)],
+                );
+                let row = user::Entity::find()
+                    .from_raw_sql(stmt)
+                    .one(&db)
+                    .await
+                    .expect("fetch prepared user")
+                    .expect("user 500 not found");
+                assert_eq!(row.id, 500);
+                BenchOutcome { rows: 1, queries: 1 }
+            }
+        })
+        .await,
+    );
+
+    // End-to-end: unbuffered streaming of all users.
+    let db2 = db.clone();
+    results.push(
+        bench_async("stream_find_many_1000", 50, move || {
+            let db = db2.clone();
+            async move {
+                let mut stream = user::Entity::find().stream(&db).await.expect("create stream");
+                let mut rows = 0;
+                while let Some(Ok(_row)) = stream.next().await {
+                    rows += 1;
+                }
+                assert_eq!(rows, 1000);
+                BenchOutcome {
+                    rows,
+                    queries: 1,
                 }
             }
         })

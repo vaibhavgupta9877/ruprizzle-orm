@@ -10,6 +10,8 @@ use std::time::{Duration, Instant};
 
 use diesel::dsl::exists;
 use diesel::prelude::*;
+use diesel::query_dsl::CombineDsl;
+use diesel::sql_types::{BigInt, Text};
 use diesel::sqlite::Sqlite;
 use serde::Serialize;
 use simple_process_stats::ProcessStats;
@@ -382,6 +384,172 @@ fn main() {
         BenchOutcome::default()
     }));
 
+    // Query-construction: prepared SELECT ... WHERE id = ? LIMIT 1 OFFSET 0
+    let target_id = 500i64;
+    results.push(bench_sync("to_sql_prepared_select_by_pk", 100_000, || {
+        let query = users::table
+            .filter(users::id.eq(target_id))
+            .limit(1)
+            .offset(0);
+        let sql = diesel::debug_query::<Sqlite, _>(&query).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: rebind a prepared raw SQL template with a new id.
+    // Diesel does not expose a mutable prepared-statement rebind, so we clone
+    // a base `SqlQuery` template and push a fresh bind value each iteration.
+    {
+        let prepared = diesel::sql_query(
+            "SELECT id, email, age, name, created_at FROM users WHERE id = ? LIMIT 1 OFFSET 0",
+        );
+        let mut id = 500i64;
+        results.push(bench_sync("prepared_rebind_select_by_pk", 100_000, || {
+            let q = prepared.clone().bind::<BigInt, _>(id);
+            let sql = diesel::debug_query::<Sqlite, _>(&q).to_string();
+            std::hint::black_box(sql);
+            id = (id % 1000) + 1;
+            BenchOutcome::default()
+        }));
+    }
+
+    // Query-construction: conditionally apply filter/order/limit to a boxed query.
+    results.push(bench_sync("to_sql_conditional_filter", 100_000, || {
+        let mut query = users::table.into_boxed::<Sqlite>();
+        let maybe_age = Some(true);
+        let maybe_order = Some(true);
+        let maybe_limit: Option<i64> = Some(100);
+        if maybe_age.is_some() {
+            query = query.filter(users::age.gt(18i64));
+        }
+        if maybe_order.is_some() {
+            query = query.order_by(users::age.asc());
+        }
+        if let Some(limit) = maybe_limit {
+            query = query.limit(limit);
+        }
+        let sql = diesel::debug_query::<Sqlite, _>(&query).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: non-recursive CTE.
+    // Diesel has no high-level CTE query builder, so this falls back to `sql_query`.
+    results.push(bench_sync("to_sql_select_with_cte", 100_000, || {
+        let query = diesel::sql_query(
+            "WITH active AS (SELECT id, email, age, name, created_at FROM users WHERE age > ?) \
+             SELECT * FROM active WHERE id > ?",
+        )
+        .bind::<BigInt, _>(18i64)
+        .bind::<BigInt, _>(0i64);
+        let sql = diesel::debug_query::<Sqlite, _>(&query).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: recursive CTE.
+    // Diesel has no high-level CTE query builder, so this falls back to `sql_query`.
+    results.push(bench_sync("to_sql_select_with_recursive_cte", 100_000, || {
+        let query = diesel::sql_query(
+            "WITH RECURSIVE nums(id, email, age, name, created_at) AS (\
+                SELECT id, email, age, name, created_at FROM users WHERE id = ? \
+                UNION ALL \
+                SELECT id, email, age, name, created_at FROM nums WHERE id = ?\
+            ) SELECT * FROM nums WHERE id > ?",
+        )
+        .bind::<BigInt, _>(1i64)
+        .bind::<BigInt, _>(2i64)
+        .bind::<BigInt, _>(0i64);
+        let sql = diesel::debug_query::<Sqlite, _>(&query).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: set union.
+    results.push(bench_sync("to_sql_set_union", 100_000, || {
+        let query = users::table
+            .filter(users::age.gt(18i64))
+            .union_all(users::table.filter(users::age.le(18i64)));
+        let sql = diesel::debug_query::<Sqlite, _>(&query).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: inner join.
+    results.push(bench_sync("to_sql_select_with_join", 100_000, || {
+        let query = posts::table
+            .inner_join(users::table.on(posts::author_id.eq(users::id)))
+            .select((posts::all_columns, users::all_columns));
+        let sql = diesel::debug_query::<Sqlite, _>(&query).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: EXISTS subquery.
+    results.push(bench_sync("to_sql_select_exists_subquery", 100_000, || {
+        let query = users::table.filter(exists(
+            posts::table.filter(posts::author_id.eq(users::id)),
+        ));
+        let sql = diesel::debug_query::<Sqlite, _>(&query).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: IN subquery.
+    results.push(bench_sync("to_sql_select_in_subquery", 100_000, || {
+        let sub = posts::table
+            .select(posts::author_id)
+            .filter(posts::author_id.gt(0i64));
+        let query = users::table.filter(users::id.eq_any(sub));
+        let sql = diesel::debug_query::<Sqlite, _>(&query).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: nested insert (parent + child).
+    // Diesel has no native nested-insert API, so this falls back to a single raw
+    // CTE statement built with `sql_query` and `bind`.
+    results.push(bench_sync("to_sql_nested_insert", 100_000, || {
+        let query = diesel::sql_query(
+            "WITH new_user AS (\
+                INSERT INTO users (id, email, age, name, created_at) VALUES (?, ?, ?, ?, ?) \
+                RETURNING id\
+            ) INSERT INTO posts (id, author_id, category_id, title, published_at, views) \
+              SELECT ?, new_user.id, ?, ?, ?, ? FROM new_user",
+        )
+        .bind::<BigInt, _>(9999i64)
+        .bind::<Text, _>("nested@example.com")
+        .bind::<BigInt, _>(30i64)
+        .bind::<Text, _>("Nested")
+        .bind::<BigInt, _>(0i64)
+        .bind::<BigInt, _>(10_001i64)
+        .bind::<BigInt, _>(1i64)
+        .bind::<Text, _>("nested post")
+        .bind::<BigInt, _>(0i64)
+        .bind::<BigInt, _>(0i64);
+        let sql = diesel::debug_query::<Sqlite, _>(&query).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
+    // Query-construction: nested update (parent + related rows).
+    // Diesel has no native nested-update API, so this falls back to a single raw
+    // CTE statement built with `sql_query` and `bind`.
+    results.push(bench_sync("to_sql_nested_update", 100_000, || {
+        let query = diesel::sql_query(
+            "WITH updated_user AS (\
+                UPDATE users SET name = ? WHERE id = ? RETURNING id\
+            ) UPDATE posts SET author_id = (SELECT id FROM updated_user) WHERE id IN (?, ?)",
+        )
+        .bind::<Text, _>("updated")
+        .bind::<BigInt, _>(1i64)
+        .bind::<BigInt, _>(10_001i64)
+        .bind::<BigInt, _>(10_002i64);
+        let sql = diesel::debug_query::<Sqlite, _>(&query).to_string();
+        std::hint::black_box(sql);
+        BenchOutcome::default()
+    }));
+
     // End-to-end: select by PK.
     {
         let conn = &mut conn;
@@ -685,6 +853,39 @@ fn main() {
                 rows: rows_returned,
                 queries: 2,
             }
+        }));
+    }
+
+    // End-to-end: prepared select by PK with bound parameter.
+    {
+        let conn = &mut conn;
+        results.push(bench_sync("prepared_select_by_pk", 1_000, || {
+            let user: User = users::table
+                .filter(users::id.eq(500i64))
+                .limit(1)
+                .offset(0)
+                .get_result(conn)
+                .expect("failed to fetch prepared user by pk");
+            assert_eq!(user.id, 500);
+            std::hint::black_box(user);
+            BenchOutcome { rows: 1, queries: 1 }
+        }));
+    }
+
+    // End-to-end: unbuffered stream of all users.
+    {
+        let conn = &mut conn;
+        results.push(bench_sync("stream_find_many_1000", 50, || {
+            let mut rows = 0;
+            let iter = users::table
+                .load_iter::<User, _>(conn)
+                .expect("failed to create user stream");
+            for r in iter {
+                let _ = r.expect("failed to read streamed user");
+                rows += 1;
+            }
+            assert_eq!(rows, 1000);
+            BenchOutcome { rows, queries: 1 }
         }));
     }
 
