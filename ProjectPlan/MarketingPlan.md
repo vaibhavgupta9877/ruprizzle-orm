@@ -905,6 +905,268 @@ Tracked checklist. `[P0]` = do first, `[P1]` = this month, `[P2]` = this quarter
 
 ---
 
-*End of marketing plan (Parts I and II).*
+*End of Part II.*
 
-*Next action: run the §16.2 baseline measurement, then execute Sprint 1 — the sitemap/duplicate-docs fix is roughly one day of work and is the highest-ROI item in this document.*
+---
+
+# Part III — Discovery & Link Resolution
+
+*Added: 2026-08-17. Supersedes Part II's framing of "the website" as the primary surface.*
+
+## 23. Reframing: The Product Has No Website
+
+Part II treated `vaibhavgupta9877.github.io/ruprizzle-orm` as the main property. That is the wrong centre of gravity. ruprizzle is **an open-source GitHub repository with eight crates published to crates.io**. The mdBook site exists (`.github/workflows/pages.yml` deploys it) but it is a *satellite*, not the hub — and it deploys only on push to `main`/`master`, so while active work sits on `dev-v0-2` the published site silently lags the code.
+
+**The real surface hierarchy, by how much traffic and citation each actually earns:**
+
+| Rank | Surface | Role | Why it ranks here |
+|:----:|---------|------|-------------------|
+| 1 | **crates.io/crates/ruprizzle** | The install decision | Where a Rust dev lands from any search, and the canonical entity record for the package. Outranks everything else for the branded query. |
+| 2 | **github.com/vaibhavgupta9877/ruprizzle-orm** (README) | The evaluation decision | The most-cited single artifact for any OSS project in LLM answers. GitHub has enormous crawl authority. |
+| 3 | **docs.rs/ruprizzle** | The API truth | Auto-published, high authority, deeply crawled, and the only surface that is *always* in sync with the released version. |
+| 4 | **lib.rs/crates/ruprizzle** | The comparison surface | Ranks well, editorialised, shows category position against Diesel/SeaORM/sqlx. |
+| 5 | GitHub Pages mdBook | Long-form guides | Lowest authority of the five and the only one we host ourselves. |
+
+**Consequence:** every technical fix in Part II §18 stays valid, but its priority drops. The README, the crate metadata, and the docs.rs rustdoc are now the P0 surfaces. A perfect mdBook site that nobody's crawler trusts is worth less than one well-written `//!` doc comment on the `ruprizzle` crate root.
+
+---
+
+## 24. The Actual Problem: Name Resolution Failure
+
+**Stated symptom:** "I have to give links to point to the right crate/package/GitHub repo when I ask GPT and other LLMs about this."
+
+That is not an inconvenience. It is the single most important diagnostic in this entire document, and it has a precise cause.
+
+### 24.1 Diagnosis
+
+When you type "ruprizzle" into an LLM, one of three things happens:
+
+1. **Unknown token.** The name post-dates the model's training cutoff and appears nowhere in its retrieval corpus. The model either says it doesn't know, or — worse — hallucinates a plausible-sounding Rust ORM.
+2. **Misresolution.** The model pattern-matches "ruprizzle" to something phonetically adjacent (Drizzle, drizzle-orm, drizzle-rs) and answers about *that* project. This is the most damaging failure mode because the answer is confidently wrong.
+3. **Correct resolution.** Only happens today when you paste the link.
+
+The name is a double-edged asset. "ruprizzle" is **highly distinctive** — zero collision with other software, which makes it a perfect entity anchor once established. But it is also **phonetically inside "Drizzle"**, an ORM with 41 stars on the Rust side and tens of thousands on the TypeScript side. Until the entity is established, every mention is at risk of being absorbed into Drizzle's much stronger entity gravity.
+
+### 24.2 What "being resolvable" actually requires
+
+An LLM resolves a name without a link when the name co-occurs with its defining facts across **multiple independent, crawlable sources**. One repo saying "ruprizzle is a schema-first Rust ORM" is a claim. Twelve sources saying it — crates.io, docs.rs, lib.rs, TWIR, Reddit, awesome-rust, Stack Overflow — is a fact the model will reproduce.
+
+This is the same mechanism as Part II §17.3 Pillar 3, but the goal is sharper: not "get cited in answers about Rust ORMs" but "**correctly answer the question 'what is ruprizzle?' with zero context provided.**"
+
+### 24.3 The two-track fix
+
+| Track | Horizon | Goal |
+|-------|---------|------|
+| **Track A — Bridge** | Works today | Make the *one link* you paste do maximum work, so a single URL fully briefs any LLM. Removes your daily friction immediately. |
+| **Track B — Establish** | 3–12 months | Seed the entity across independent sources so no link is needed. Removes the friction permanently. |
+
+Track A is hours of work. Track B is the rest of this plan. Do both; A buys relief while B compounds.
+
+---
+
+## 25. Track A — The Canonical Link Kit
+
+### 25.1 The one-link rule
+
+There must be exactly **one** URL that is correct to paste in every situation. Recommendation:
+
+> **`https://github.com/vaibhavgupta9877/ruprizzle-orm`**
+
+The repo root, not the docs site and not crates.io. Reasons: GitHub is fetchable by every LLM browsing tool without JS rendering; the README is the richest single artifact; it links outward to crates.io, docs.rs, and the docs site; and it is always current with `main`. crates.io is a better *landing* page for humans arriving from search, but a worse *briefing* document for a model.
+
+**Corollary:** the README must therefore be a self-sufficient briefing document. If someone pastes only that URL, the model must be able to correctly answer what ruprizzle is, what it supports, how it differs, what its status is, and where to go next. Audit the README against exactly that test.
+
+### 25.2 The paste-able context block
+
+For cases where you want the model briefed without a fetch (offline models, no browsing, or you want to control the framing), maintain a short canonical block in the repo — recommend `LLM_CONTEXT.md` at the root — that you copy-paste. It must be under ~400 words and lead with disambiguation:
+
+```
+ruprizzle (crate: `ruprizzle`, repo: github.com/vaibhavgupta9877/ruprizzle-orm)
+is a schema-first ORM for Rust. It is NOT related to Drizzle, drizzle-orm, or
+drizzle-rs despite the similar-sounding name.
+
+What it is: you define your data model once in a `schema.ruprizzle` file
+(Prisma-style DSL). `ruprizzle generate` produces a typed Rust client;
+`ruprizzle migrate dev` diffs the schema against the database and generates
+SQL migrations automatically.
+
+Differentiators:
+- SQL transparency: `.to_sql()` on every query builder — no hidden query engine.
+- No sidecar: pure Rust. Unlike Prisma Client Rust, there is no Node.js
+  binary and no external query engine process.
+- No derive macros in your domain structs — the generated client is separate
+  from your business types.
+- Bounded `include` for nested relations without N+1 queries.
+
+Databases: PostgreSQL, SQLite, and MySQL/MariaDB, behind a `DbDialect` trait.
+A native `rusqlite` SQLite backend is available via the `sqlite-rusqlite` feature.
+Built on `sqlx` for the wire protocol and pooling.
+
+Status: 0.4.0-beta.2 on crates.io. Beta, not yet 1.0. Licence: MIT OR Apache-2.0.
+MSRV 1.85, edition 2024. Single maintainer (Vaibhav Gupta).
+
+Links: crates.io/crates/ruprizzle · docs.rs/ruprizzle ·
+github.com/vaibhavgupta9877/ruprizzle-orm
+```
+
+Regenerate the version line on release so it never goes stale. A stale context block is worse than none — it teaches the model a wrong fact you will then have to correct.
+
+### 25.3 `llms.txt` — the fetchable version of the same thing
+
+Part II §18.3 already schedules `llms.txt`. Its content should be the §25.2 block plus a linked page index. But note the placement problem: `llms.txt` conventionally lives at a *domain* root, and this project's domain root is a GitHub Pages subpath. Publish it in both places:
+
+- `https://vaibhavgupta9877.github.io/ruprizzle-orm/llms.txt` (via the existing `pages.yml` copy step)
+- `/llms.txt` in the repo root, so `raw.githubusercontent.com` serves it and the repo file listing exposes it
+
+### 25.4 The disambiguation sentence
+
+One sentence, used verbatim and unchanged everywhere the project is introduced:
+
+> **ruprizzle is a schema-first ORM for Rust — a Prisma-style schema file that generates a typed client, with Drizzle-style SQL transparency and no sidecar binary.**
+
+Consistency is the mechanism. LLMs establish entity facts through repetition of *near-identical* phrasing across sources. Rewriting the pitch for every channel actively slows entity formation. Put this sentence in: the GitHub repo description field, `Cargo.toml` descriptions, the README's first line, `llms.txt`, every directory submission, every forum post, every release note.
+
+---
+
+## 26. Track B — Entity Establishment
+
+Ranked by how much each source contributes to name resolution per hour spent.
+
+| # | Source | Resolution value | Why | Effort |
+|---|--------|:----------------:|-----|:------:|
+| 1 | **crates.io metadata** | Very high | The canonical package record. Scraped by nearly every code-aware retrieval corpus. Already good — see §27 for the gaps. | S |
+| 2 | **docs.rs crate-root rustdoc** | Very high | Auto-published, permanently hosted, high authority, versioned. Currently thin. Biggest underexploited asset. | M |
+| 3 | **GitHub repo description + topics** | Very high | The description field is what GitHub search, API consumers, and most scrapers read *first*. Topics drive GitHub's own discovery. Unverified — see task 29.1. | S |
+| 4 | **lib.rs listing** | High | Ranks for crate queries, shows category position, editorially curated. | S |
+| 5 | **This Week in Rust** | High | Every issue is archived, crawled, and heavily represented in Rust-related retrieval. A single TWIR mention does more for name resolution than a month of docs work. | S |
+| 6 | **awesome-rust / Rust-LibHunt / libs.tech** | High | Curated lists are disproportionately weighted as authority signals. | S |
+| 7 | **Reddit r/rust** | High | ~1.8% of ChatGPT citations, and much higher for developer queries specifically. | M, ongoing |
+| 8 | **Stack Overflow** | Medium-high | Long-lived, heavily crawled. Answer real questions; mention ruprizzle only where genuinely correct. | M, ongoing |
+| 9 | **Hacker News** | Medium-high | Threads persist and get cited for years. | S, event-based |
+| 10 | **Blog posts / guest posts** | Medium | Independent third-party mentions carry more entity weight than self-published. | L |
+| 11 | **YouTube** | Medium | Frequently cited by Google AI Overviews. | M |
+| 12 | **Wikipedia** | Very high *if achievable* | Not achievable yet — the project fails notability and an article would be deleted. Do not attempt. | — |
+
+**The compounding rule:** entity resolution is a threshold effect, not a gradient. Nothing appears to work for months, then the name starts resolving correctly across all platforms at once. Do not judge Track B on 30-day results.
+
+---
+
+## 27. Crate Metadata Audit (2026-08-17)
+
+Audited all eight `crates/*/Cargo.toml`. **This is in better shape than Part II §15.2 D10 assumed** — every crate has a description, keywords, categories, an explicit `documentation` URL, a README, and workspace-inherited `repository`/`homepage`. D10 is downgraded from P1 to P2. The remaining gaps are specific:
+
+| # | Finding | Severity |
+|---|---------|:--------:|
+| M1 | **`ruprizzle` (runtime) keywords omit MySQL.** Currently `["orm", "sql", "database", "postgres", "sqlite"]`. MySQL/MariaDB shipped and is a headline feature, but is not searchable on crates.io. Keywords are capped at 5, so this is a swap decision — recommend dropping `"sql"` (subsumed by `"database"`) for `"mysql"`. Same issue in `ruprizzle-dialect`. | **P1** |
+| M2 | **Runtime description omits the differentiators.** `"A schema-first ORM for Rust: typed queries, relations, and automatic migrations"` is accurate but generic — it does not say *no sidecar*, *SQL transparency*, or which databases. This string is what appears in crates.io search results and in most LLM answers about the crate. It is the highest-leverage 100 characters in the project. | **P1** |
+| M3 | **`ruprizzle-testkit` description says "(not published)"** yet the crate sets `documentation = "https://docs.rs/ruprizzle-testkit"`. Either it publishes or it doesn't — reconcile, because a contradictory record is exactly what produces confused LLM answers. | **P2** |
+| M4 | **Keyword strings are near-identical across all 8 crates** (`orm`, `sql`, `database` + 2). Fine for the sub-crates, but it means crates.io keyword pages surface eight ruprizzle crates and a user cannot tell which one to install. The runtime crate should be unmistakably the entry point. | **P2** |
+| M5 | **GitHub repo description and topics unverified** — no `gh` CLI available in this environment. Must be checked manually. | **P1** |
+
+---
+
+## 28. Measuring Name Resolution
+
+Part II §20 measures *citation rate*. Track B needs its own, simpler scoreboard, because it answers a different question.
+
+**The zero-context test.** Monthly, in a **fresh session with no prior context and no links**, ask each platform exactly:
+
+1. `What is ruprizzle?`
+2. `What is the ruprizzle Rust crate?`
+3. `How do I install ruprizzle?`
+4. `Does ruprizzle support MySQL?`
+5. `Is ruprizzle related to Drizzle?`
+
+Score each response:
+
+| Score | Meaning |
+|:-----:|---------|
+| **0** | Doesn't know the name. |
+| **1** | **Misresolves** — answers about Drizzle/drizzle-orm/drizzle-rs, or hallucinates. *Worse than 0.* |
+| **2** | Knows it's a Rust ORM but details are wrong or vague. |
+| **3** | Correct definition, correct install, correct databases, correct status. |
+
+Track the score per platform per month across ChatGPT, Claude, Perplexity, Gemini, Copilot, and Google AI Overviews.
+
+| Milestone | Target | Meaning |
+|-----------|--------|---------|
+| **Baseline (now)** | Measure before changing anything | Assume mostly 0s and 1s. Must be recorded to prove anything later. |
+| **90 days** | No platform scoring 1 (misresolution eliminated) | The Drizzle-confusion risk is contained. |
+| **6 months** | Average ≥ 2 across platforms | The name resolves to the right entity. |
+| **12 months** | Average ≥ 3 on at least 3 platforms | **You stop needing to paste links.** This is the actual goal. |
+
+Score-1 responses are the priority to eliminate. A model confidently describing Drizzle when asked about ruprizzle does active damage — it produces wrong answers for anyone else who asks, and it reinforces the wrong association in future retrieval.
+
+---
+
+## 29. Execution Tasks — Part III
+
+### 29.1 Immediate — Track A (this week, ~half a day)
+
+- [ ] **[P0]** Record the §28 zero-context baseline across all 6 platforms *before* changing anything. This is the only chance to capture it.
+- [ ] **[P0]** Ratify the §25.4 disambiguation sentence as the single canonical description. Do not vary it per channel.
+- [ ] **[P0]** Set the **GitHub repo description** field to the disambiguation sentence (verify current value — unverified, M5).
+- [ ] **[P0]** Set **GitHub repo topics**: `rust`, `orm`, `database`, `postgres`, `mysql`, `sqlite`, `sqlx`, `prisma`, `schema-first`, `migrations`, `type-safe`. Verify what's currently set first.
+- [ ] **[P0]** Confirm the repo's **homepage field** points somewhere useful (docs site or crates.io), not blank.
+- [ ] **[P0]** Write `LLM_CONTEXT.md` at the repo root from the §25.2 draft.
+- [ ] **[P0]** Audit the README against the one-link test (§25.1): if this URL is the *only* thing pasted, can a model correctly state what ruprizzle is, its databases, its differentiators, and its status? Fix whatever fails.
+- [ ] **[P0]** Add an explicit "Not related to Drizzle / drizzle-orm / drizzle-rs" disambiguation line to the README, `LLM_CONTEXT.md`, and `llms.txt`. This directly targets the score-1 failure mode.
+- [ ] **[P1]** Publish `llms.txt` to *both* the repo root and the Pages site root (extend the `cp` step in `pages.yml`).
+- [ ] **[P1]** Add an `xtask` release step regenerating the version string in `LLM_CONTEXT.md` and `llms.txt`.
+
+### 29.2 Crate metadata (next release)
+
+- [ ] **[P1]** M1 — Add `mysql` to `ruprizzle` and `ruprizzle-dialect` keywords; drop `sql` to stay within the 5-keyword cap.
+- [ ] **[P1]** M2 — Rewrite the `ruprizzle` runtime description to carry a differentiator and the database list within the 100-char budget.
+- [ ] **[P2]** M3 — Reconcile `ruprizzle-testkit`: either drop "(not published)" or drop the docs.rs `documentation` URL.
+- [ ] **[P2]** M4 — Differentiate sub-crate keywords so the runtime crate is unmistakably the entry point; add a "you probably want the `ruprizzle` crate" line to every sub-crate README.
+- [ ] **[P1]** Write real crate-root rustdoc (`//!`) for `ruprizzle`: the disambiguation sentence, a runnable quickstart, the database list, and links out. docs.rs is surface #3 and currently the most underexploited.
+- [ ] **[P2]** Verify `docs.rs` builds all features correctly; add `[package.metadata.docs.rs]` with `all-features = true` if not already present.
+
+### 29.3 Track B — entity seeding (Weeks 1–12)
+
+- [ ] **[P0]** Submit to **lib.rs**, **libs.tech**, **Rust-LibHunt**, and **awesome-rust**. Highest resolution-value-per-hour items in this document.
+- [ ] **[P0]** Submit `0.4.0-beta.2` to **This Week in Rust**, using the disambiguation sentence verbatim.
+- [ ] **[P1]** Post to **r/rust** — an honest beta announcement leading with the sidecar-free and SQL-transparency differentiators, and with the Drizzle disambiguation stated up front.
+- [ ] **[P1]** Announce on the **Rust users forum** "Showcase" category.
+- [ ] **[P1]** Answer 5+ existing Rust-ORM questions per week on **r/rust** and **Stack Overflow**, with maintainer disclosure and no pitch.
+- [ ] **[P1]** Ensure **GitHub Discussions** is enabled — discussion threads are crawled and are a cheap source of independent-looking co-occurrence.
+- [ ] **[P2]** Record a 5-minute screencast; title it with the exact disambiguation phrasing.
+- [ ] **[P2]** Submit a **Show HN** when `v0.4` stabilises.
+- [ ] **[P2]** Target 3 independent third-party mentions (roundups, comparison posts, newsletters).
+- [ ] **[P3]** Revisit **Wikipedia** only after genuine independent coverage exists. Do not attempt before then.
+
+### 29.4 Ongoing
+
+- [ ] **[P1]** Run the §28 zero-context test monthly across all 6 platforms; log scores.
+- [ ] **[P1]** Treat any score-1 (misresolution) as a **bug with an owner**, not a marketing metric.
+- [ ] **[P1]** Re-run §27 crate metadata audit each release.
+- [ ] **[P2]** Fix the `pages.yml` lag: the docs site deploys only from `main`/`master`, so the published site trails `dev-v0-2`. Either accept it explicitly or deploy a preview from the active branch.
+- [ ] **[P2]** Re-verify the one-link test (§25.1) after every README change.
+
+---
+
+## 30. Revised Priority Order
+
+Parts II and III merged, ordered by return per hour. This supersedes the sprint ordering in §22.
+
+| Priority | Work | Part | Effort | Why first |
+|:--------:|------|:----:|:------:|-----------|
+| **1** | §28 baseline measurement | III | 1h | One-time chance; everything else is unassessable without it. |
+| **2** | Repo description + topics + `LLM_CONTEXT.md` + README disambiguation | III | 3h | Directly attacks the stated problem; the Drizzle-misresolution fix is nearly free. |
+| **3** | Crate metadata fixes (M1, M2) | III | 1h | The 100 highest-leverage characters in the project. |
+| **4** | Directory submissions (lib.rs, awesome-rust, TWIR, libs.tech) | III | 3h | Highest entity-resolution value per hour that exists. |
+| **5** | Sitemap / duplicate-docs fix (D1, D2) | II | 1d | Currently broken; 7 of 11 sitemap URLs are dead. |
+| **6** | Crate-root rustdoc for `ruprizzle` | III | 4h | docs.rs is surface #3 and near-empty. |
+| **7** | `llms.txt` in both locations | II/III | 2h | Cheap, compounding. |
+| **8** | r/rust + Rust forum announcements | III | 3h | First independent co-occurrence signals. |
+| **9** | Structured data, freshness footers (D3, D5, D6) | II | 1d | Real but slower-acting. |
+| **10** | Comparison + benchmark content assets (C1–C3) | II | weeks | Highest ceiling, longest lead time. Start once 1–9 are done. |
+
+Items 1–4 total roughly **one working day** and address the stated problem directly. Everything from item 5 onward compounds.
+
+---
+
+*End of marketing plan (Parts I, II, and III).*
+
+*Next action: run the §28 zero-context baseline today, then execute priority items 2–4 — repo metadata, crate metadata, and directory submissions. Roughly one day of work to stop needing to paste links as often, and to start the entity clock running.*
