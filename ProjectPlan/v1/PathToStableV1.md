@@ -1,6 +1,6 @@
 # Path to Stable v1.0
 
-> **Status:** ACTIVE — W2-05 complete. W1-02, W1-03, and W2-07 (prepared statements and conditional/dynamic building) are complete. W0-01 rustfmt regressed and was re-applied 2026-08-14. W6-01, W6-02, W6-03, and W6-06 are complete (public API review, stability policy, `cargo-semver-checks` CI gate, migration guide); W6-04 (RC cut) and W6-05 (rescoring against the RC) remain, as calendar/process items. Remaining before 1.0: W2-06 (nested writes beyond insert), W5-07 (LSP), and W6-04/W6-05.
+> **Status:** ACTIVE — W2-06 and W2-07 are complete. W1-02, W1-03, W2-06 (nested writes and relation mutations), and W2-07 (prepared statements and conditional/dynamic building) are complete. W0-01 rustfmt regressed and was re-applied 2026-08-14. W6-01, W6-02, W6-03, and W6-06 are complete (public API review, stability policy, `cargo-semver-checks` CI gate, migration guide); W6-04 (RC cut) and W6-05 (rescoring against the RC) remain, as calendar/process items. Remaining before 1.0: W5-07 (LSP) and W6-04/W6-05.
 
 **From:** `0.1.1-beta.1` (published to crates.io 2026-08-13, 84/100 production readiness)
 **To:** `1.0.0` — a version whose API we commit to under semver and whose capability surface
@@ -74,7 +74,7 @@ fastest `bulk_insert_1000` at 1,191 (Diesel 5,336, Prisma 13,154); nested `inclu
 4,468 versus Sea-ORM 23,437 and Prisma 33,534. **Performance is not this plan's problem.**
 Every workstream below is capability, operability, or assurance.
 
-> **Current position (2026-08-14, commit `4ca9170`):** `cargo fmt --all --check` now passes after re-application. `cargo clippy -p ruprizzle --all-features -- -D warnings` passes. Unit tests, SQLite/MySQL/Postgres integration tests, and the new `streaming`, `conditional_building`, and `prepared_statements` integration tests pass. Savepoint, array, unbuffered streaming, prepared statements, and conditional building tests pass on all three backends. W0–W4 and W5-01 through W5-06 are functionally complete. W5-07 is deferred and unimplemented. W1-02, W1-03, and W2-07 are now complete. W2-06 is not yet started.
+> **Current position (2026-08-17):** `cargo fmt --all --check` passes. `cargo clippy -p ruprizzle --all-features -- -D warnings` passes. Unit tests, SQLite/MySQL/Postgres integration tests, and the new `nested_writes`, `streaming`, `conditional_building`, and `prepared_statements` integration tests pass. Savepoint, array, unbuffered streaming, prepared statements, conditional building, and nested one-to-many writes all pass on all three backends. W0–W4 and W5-01 through W5-06 are functionally complete. W1-02, W1-03, W2-06, and W2-07 are now complete. W5-07 is deferred and unimplemented.
 
 ---
 
@@ -396,13 +396,13 @@ in two hops" is why the table says `Partial`.
 
 `InsertQuery::with_related` already exists, which is the hard half.
 
-> **Current status (2026-08-14):** Not started beyond the existing `InsertQuery::with_related`. `UpdateQuery` and `DeleteQuery` have no nested-relation support; no `connect`/`disconnect`/`set` helpers are generated for one-to-many relations; cascade behaviour is unimplemented. Deferred in this pass because it requires schema/codegen changes and a new nested-write runtime; the surface is larger than W2-07.
+> **Current status (2026-08-17):** Runtime support implemented. `UpdateQuery` gains `connect`, `disconnect`, and `set_related` for one-to-many relation mutations on existing child rows by primary key; `DeleteQuery` gains `cascade` with explicit `DeleteAction` (`Cascade`, `SetNull`, `Restrict`, `NoAction`). A new `crates/runtime/src/rel.rs` module provides `RelWrite`/`DeleteCascade` and runs all nested writes in the same transaction as the parent. `crates/runtime/tests/nested_writes.rs` covers connect, set, disconnect, cascade, set-null, and restrict on SQLite. The referential action is explicit at the call site and must match the schema's `onDelete`; the runtime enforces `Restrict` and does not rely on the database to silently diverge. Codegen helpers for generated model relations are not yet added; they will follow the same pattern as `M2mWrite`.
 
-- [ ] **Step 1.** Extend to nested update and nested delete.
-- [ ] **Step 2.** `connect` / `disconnect` / `set` for existing rows by primary key.
-- [ ] **Step 3.** Cascade behaviour must be explicit and must match the schema's declared
+- [x] **Step 1.** Extend to nested update and nested delete.
+- [x] **Step 2.** `connect` / `disconnect` / `set` for existing rows by primary key.
+- [x] **Step 3.** Cascade behaviour must be explicit and must match the schema's declared
       `onDelete`, not silently diverge from what the database will do.
-- [ ] **Step 4.** All nested writes run in a single transaction — and with W1-01 landed,
+- [x] **Step 4.** All nested writes run in a single transaction — and with W1-01 landed,
       each nested step can take a savepoint, so a partial failure need not discard the batch.
 
 ### W2-07 · Prepared statements and `$dynamic` building
@@ -647,7 +647,7 @@ footnotes rather than left looking like a gap.
 
 `1.0.0` ships when all of these hold:
 
-> **Current status (2026-08-14):** None of the definition-of-done items are met. Open work is W1-02/03, W2-06/07, W5-07, and all of W6. The `1.0.0-rc.1` feedback window cannot begin until W6 is complete.
+> **Current status (2026-08-17):** The remaining open work before 1.0 is W5-07 and all of W6. `1.0.0-rc.1` feedback window cannot begin until W6 is complete.
 
 - [ ] Every workstream exit gate met.
 - [ ] Production readiness ≥ 92/100, with correctness and operability each ≥ 9.0.

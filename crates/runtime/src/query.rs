@@ -21,6 +21,7 @@ use crate::model::{Model, RowDecode};
 use crate::order::OrderBy;
 use crate::page::Page;
 use crate::pool::Pool;
+use crate::rel::{AnyRelDelete, AnyRelWrite, DeleteAction, DeleteCascade, RelAction, RelWrite};
 use crate::value::{Encodable, Ordered, Value};
 
 /// A typed `SELECT` query.
@@ -1698,6 +1699,7 @@ pub struct UpdateQuery<'db, M: Model> {
     filter: Filter<M>,
     all_rows: bool,
     m2m: Option<Arc<dyn AnyM2mWrite<M> + 'db>>,
+    rel: Vec<Arc<dyn AnyRelWrite<M>>>,
     _marker: PhantomData<fn() -> M>,
 }
 
@@ -1711,6 +1713,7 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
             filter: Filter::new(FilterNode::And(Vec::new())),
             all_rows: false,
             m2m: None,
+            rel: Vec::new(),
             _marker: PhantomData,
         }
     }
@@ -1820,6 +1823,75 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
         self
     }
 
+    /// Attaches a one-to-many nested write to this update.
+    ///
+    /// This is the low-level building block; use [`connect`](UpdateQuery::connect),
+    /// [`disconnect`](UpdateQuery::disconnect), or [`set_related`](UpdateQuery::set_related) for
+    /// the common cases.
+    pub fn with_related<C: Model>(mut self, write: RelWrite<M, C>) -> Self {
+        self.rel.push(Arc::new(write) as Arc<dyn AnyRelWrite<M>>);
+        self
+    }
+
+    /// Connects existing child rows to the parent updated by this query.
+    ///
+    /// `get_parent_pk` extracts the parent primary key from the updated row;
+    /// `child_fk_col` is the child's foreign-key column; `child_pk_col` is the
+    /// child's primary-key column; and `pks` are the primary keys of the child
+    /// rows to connect. The query must match exactly one parent row.
+    pub fn connect<C: Model, P: IntoIterator<Item = V>, V: Encodable>(
+        self,
+        get_parent_pk: fn(&M) -> Value,
+        child_fk_col: &'static str,
+        child_pk_col: &'static str,
+        pks: P,
+    ) -> Self {
+        let pks = pks.into_iter().map(|v| v.to_value()).collect();
+        self.with_related(RelWrite::<M, C>::new(
+            RelAction::Connect,
+            child_fk_col,
+            child_pk_col,
+            pks,
+            get_parent_pk,
+        ))
+    }
+
+    /// Disconnects the given child rows from the parent updated by this query.
+    pub fn disconnect<C: Model, P: IntoIterator<Item = V>, V: Encodable>(
+        self,
+        get_parent_pk: fn(&M) -> Value,
+        child_fk_col: &'static str,
+        child_pk_col: &'static str,
+        pks: P,
+    ) -> Self {
+        let pks = pks.into_iter().map(|v| v.to_value()).collect();
+        self.with_related(RelWrite::<M, C>::new(
+            RelAction::Disconnect,
+            child_fk_col,
+            child_pk_col,
+            pks,
+            get_parent_pk,
+        ))
+    }
+
+    /// Replaces the parent's connected child rows with the given set.
+    pub fn set_related<C: Model, P: IntoIterator<Item = V>, V: Encodable>(
+        self,
+        get_parent_pk: fn(&M) -> Value,
+        child_fk_col: &'static str,
+        child_pk_col: &'static str,
+        pks: P,
+    ) -> Self {
+        let pks = pks.into_iter().map(|v| v.to_value()).collect();
+        self.with_related(RelWrite::<M, C>::new(
+            RelAction::Set,
+            child_fk_col,
+            child_pk_col,
+            pks,
+            get_parent_pk,
+        ))
+    }
+
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> Result<CompiledSql, Error> {
         if !self.all_rows && matches!(self.filter.node, FilterNode::And(ref v) if v.is_empty()) {
@@ -1846,35 +1918,51 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
     ///
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exec(self) -> Result<u64, Error> {
-        if self.m2m.is_some() && self.sets.is_empty() {
-            // No parent columns to update; just run the many-to-many write
-            // inside a transaction.
-            return self.exec_m2m_only().await;
-        }
+        let has_nested = self.m2m.is_some() || !self.rel.is_empty();
 
-        let compiled = self.to_sql()?;
-        if self.m2m.is_none() {
+        if !has_nested {
+            let compiled = self.to_sql()?;
             return self.pool.execute_raw(compiled.sql, compiled.binds).await;
         }
 
-        let tx = crate::tx::Tx::begin(self.pool).await?;
-        let parent_count = tx.execute_raw(compiled.sql, compiled.binds).await?;
-        let m2m_count = self.apply_m2m(&tx).await?;
-        tx.commit().await?;
-        Ok(parent_count + m2m_count)
-    }
-
-    async fn apply_m2m(self, exec: &dyn Executor) -> Result<u64, Error> {
-        let Some(m2m) = self.m2m else {
-            return Ok(0);
-        };
-
         if !self.all_rows && matches!(self.filter.node, FilterNode::And(ref v) if v.is_empty()) {
             return Err(Error::Message(
-                "m2m update has no filter; call .all_rows() to update every row".into(),
+                "nested update has no filter; call .all_rows() to target every row".into(),
             ));
         }
 
+        let tx = crate::tx::Tx::begin(self.pool).await?;
+
+        let mut total = 0u64;
+        if !self.sets.is_empty() {
+            let compiled = self.to_sql()?;
+            total += tx.execute_raw(compiled.sql, compiled.binds).await?;
+        }
+
+        let parents = self.fetch_parents(&tx).await?;
+        if !self.rel.is_empty() && parents.len() != 1 {
+            return Err(Error::Message(
+                "one-to-many nested writes require exactly one parent row".into(),
+            ));
+        }
+
+        for rel in &self.rel {
+            let parent_pk = rel.parent_pk(&parents[0]);
+            total += rel.execute_update(&tx, parent_pk).await?;
+        }
+
+        if let Some(ref m2m) = self.m2m {
+            for parent in &parents {
+                let pk = m2m.parent_pk(parent);
+                total += m2m.execute_update(&tx, pk).await?;
+            }
+        }
+
+        tx.commit().await?;
+        Ok(total)
+    }
+
+    async fn fetch_parents(&self, exec: &dyn Executor) -> Result<Vec<M>, Error> {
         let dialect = exec.dialect();
         let compiled = select::<M>(
             dialect,
@@ -1887,21 +1975,7 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
             false,
         );
         let batch = exec.fetch_all_raw(compiled.sql, compiled.binds).await?;
-        let parents = crate::executor::decode_rows::<M>(batch)?;
-
-        let mut total = 0u64;
-        for parent in parents {
-            let pk = m2m.parent_pk(&parent);
-            total += m2m.execute_update(exec, pk).await?;
-        }
-        Ok(total)
-    }
-
-    async fn exec_m2m_only(self) -> Result<u64, Error> {
-        let tx = crate::tx::Tx::begin(self.pool).await?;
-        let m2m_count = self.apply_m2m(&tx).await?;
-        tx.commit().await?;
-        Ok(m2m_count)
+        crate::executor::decode_rows::<M>(batch)
     }
 }
 
@@ -1922,6 +1996,7 @@ pub struct DeleteQuery<'db, M: Model, S = UnfilteredDelete> {
     pool: &'db Pool,
     filter: Filter<M>,
     all_rows: bool,
+    cascade: Vec<Arc<dyn AnyRelDelete<M>>>,
     _state: PhantomData<fn() -> S>,
     _marker: PhantomData<fn() -> M>,
 }
@@ -1934,6 +2009,7 @@ impl<'db, M: Model> DeleteQuery<'db, M, UnfilteredDelete> {
             pool,
             filter: Filter::new(FilterNode::And(Vec::new())),
             all_rows: false,
+            cascade: Vec::new(),
             _state: PhantomData,
             _marker: PhantomData,
         }
@@ -1945,6 +2021,7 @@ impl<'db, M: Model> DeleteQuery<'db, M, UnfilteredDelete> {
             pool: self.pool,
             filter: self.filter.and(f),
             all_rows: false,
+            cascade: self.cascade,
             _state: PhantomData,
             _marker: PhantomData,
         }
@@ -1964,9 +2041,22 @@ impl<'db, M: Model> DeleteQuery<'db, M, UnfilteredDelete> {
             pool: self.pool,
             filter: self.filter,
             all_rows: true,
+            cascade: self.cascade,
             _state: PhantomData,
             _marker: PhantomData,
         }
+    }
+
+    /// Cascades this delete to child rows according to the given referential
+    /// action.
+    ///
+    /// `child_fk_col` is the child's foreign-key column that references this
+    /// model's primary key. This must match the `onDelete` declared in the
+    /// schema for the relation.
+    pub fn cascade<C: Model>(mut self, child_fk_col: &'static str, action: DeleteAction) -> Self {
+        self.cascade
+            .push(Arc::new(DeleteCascade::<C>::new(child_fk_col, action)));
+        self
     }
 }
 
@@ -1987,6 +2077,14 @@ impl<'db, M: Model> DeleteQuery<'db, M, FilteredDelete> {
         }
     }
 
+    /// Cascades this delete to child rows according to the given referential
+    /// action.
+    pub fn cascade<C: Model>(mut self, child_fk_col: &'static str, action: DeleteAction) -> Self {
+        self.cascade
+            .push(Arc::new(DeleteCascade::<C>::new(child_fk_col, action)));
+        self
+    }
+
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> Result<CompiledSql, Error> {
         if !self.all_rows && matches!(self.filter.node, FilterNode::And(ref v) if v.is_empty()) {
@@ -2005,7 +2103,28 @@ impl<'db, M: Model> DeleteQuery<'db, M, FilteredDelete> {
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exec(self) -> Result<u64, Error> {
         let compiled = self.to_sql()?;
-        self.pool.execute_raw(compiled.sql, compiled.binds).await
+        if self.cascade.is_empty() {
+            return self.pool.execute_raw(compiled.sql, compiled.binds).await;
+        }
+
+        let tx = crate::tx::Tx::begin(self.pool).await?;
+        let parent_subquery = self.parent_subquery()?;
+
+        let mut total = 0u64;
+        for cascade in &self.cascade {
+            total += cascade.execute_delete(&tx, parent_subquery.clone()).await?;
+        }
+        total += tx.execute_raw(compiled.sql, compiled.binds).await?;
+        tx.commit().await?;
+        Ok(total)
+    }
+
+    fn parent_subquery(&self) -> Result<CompiledSql, Error> {
+        let pk_col = Column::<M, Value>::new(M::TABLE, M::PRIMARY_KEY);
+        SelectQuery::<M>::new(self.pool)
+            .filter(self.filter.clone())
+            .columns(pk_col)
+            .to_sql()
     }
 }
 

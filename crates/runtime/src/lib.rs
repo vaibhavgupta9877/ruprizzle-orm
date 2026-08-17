@@ -48,6 +48,7 @@ pub mod order;
 pub mod page;
 pub mod pool;
 pub mod query;
+pub mod rel;
 pub mod related;
 #[cfg(feature = "sqlite-rusqlite")]
 pub mod rusqlite;
@@ -100,6 +101,7 @@ pub use query::{
     AggregateQuery, DeleteQuery, GroupedQuery, InsertManyQuery, InsertQuery, NestedSetter,
     SelectQuery, SetOp, SetOpQuery, UpdateQuery,
 };
+pub use rel::{DeleteAction, DeleteCascade, RelAction, RelWrite};
 pub use related::Related;
 pub use ruprizzle_macros::raw;
 pub use serde;
