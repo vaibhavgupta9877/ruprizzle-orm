@@ -20,9 +20,9 @@ the wire protocol and pooling; we do not write a driver.
 
 ## Status
 
-`0.1.1-beta.1` is published on crates.io. The core P0–P8 implementation is
+`0.4.0-beta.2` is published on crates.io. The core P0–P8 implementation is
 complete and the public API is now stabilising; the production-readiness assessment
-has been refreshed for `0.1.1-beta.1`. See the
+has been refreshed for `0.4.0-beta.2`. See the
 [implementation plan](../ProjectPlan/ImplementationPlan/MasterPlan.md) for the phase state
 and the [production-readiness plan](../ProjectPlan/ProductionReadinessPlan.md) for the
 assessment.
@@ -125,13 +125,15 @@ prototyping invocation into CI.
 
 ## Why another Rust ORM?
 
-| Feature | ruprizzle | Diesel | SeaORM | sqlx |
-|---|---|---|---|---|
-| Schema-first code generation | ✅ | partial | ❌ | ❌ |
-| Type-safe nested `include` | ✅ | ❌ | partial | ❌ |
-| SQL-first query API | ✅ | ❌ | ❌ | ✅ |
-| Migrations from schema diff | ✅ | ❌ | partial | ❌ |
-| Compile-time query checking | planned | ✅ | ❌ | ✅ |
+| Feature | ruprizzle | Diesel | SeaORM | sqlx | prax | Prisma | Drizzle |
+|---|---|---|---|---|---|---|---|
+| Schema-first code generation | ✅ | partial | ❌ | ❌ | ✅ | ✅ | ❌ |
+| Type-safe nested `include` | ✅ | ❌ | partial | ❌ | ✅ | ✅ | ✅ |
+| SQL-first query API | ✅ | ❌ | ❌ | ✅ | partial | partial | ✅ |
+| Migrations from schema diff | ✅ | ❌ | partial | ❌ | ✅ | ✅ | partial |
+| Compile-time query checking | planned | ✅ | ❌ | ✅ | ✅ | N/A | ❌ |
+| Native driver backends (no `sqlx::Any`) | ✅ | ✅ | ❌ | N/A | ✅ | ❌ | ❌ |
+| Advanced SQL (CTEs, subqueries, set ops) | ✅ | partial | partial | ✅ | partial | partial | partial |
 
 The trade-off is intentional: ruprizzle targets teams that want a single source
 of truth in the schema file, compile-time type safety across relations, and the
