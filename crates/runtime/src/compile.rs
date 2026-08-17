@@ -48,10 +48,9 @@ impl CompiledSql {
                     j += 1;
                 }
                 if j > i + 1 {
-                    let n = std::str::from_utf8(&bytes[i + 1..j])
-                        .unwrap()
-                        .parse::<usize>()
-                        .unwrap();
+                    let n = bytes[i + 1..j]
+                        .iter()
+                        .fold(0usize, |acc, b| acc * 10 + (b - b'0') as usize);
                     let _ = write!(sql, "${}", n + offset);
                     i = j;
                     continue;
@@ -1447,10 +1446,9 @@ impl<'d> Compiler<'d> {
                     j += 1;
                 }
                 if j > i + 1 {
-                    let n = std::str::from_utf8(&bytes[i + 1..j])
-                        .unwrap()
-                        .parse::<usize>()
-                        .unwrap();
+                    let n = bytes[i + 1..j]
+                        .iter()
+                        .fold(0usize, |acc, b| acc * 10 + (b - b'0') as usize);
                     self.sql.push_str(&self.dialect.placeholder(offset + n - 1));
                     i = j;
                     continue;

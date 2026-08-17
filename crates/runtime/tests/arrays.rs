@@ -3,6 +3,8 @@
 use ruprizzle::{Column, Executor, InsertQuery, Model, Pool, SelectQuery, connect};
 use sqlx::Row;
 
+static FILE_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 #[derive(Debug, Clone, PartialEq, Default)]
 struct Article {
     id: i64,
@@ -108,7 +110,11 @@ async fn fresh_pool() -> (Pool, bool) {
     } else {
         let dir = std::env::current_dir().unwrap().join("target/runtime-test");
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join(format!("arrays_{}.sqlite", std::process::id()));
+        let path = dir.join(format!(
+            "arrays_{}_{}.sqlite",
+            std::process::id(),
+            FILE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
         let file = path.to_str().unwrap().replace('\\', "/");
         let driver = if std::env::var("RUPRIZZLE_TEST_RUSQLITE").is_ok() {
             "&driver=rusqlite"

@@ -1043,8 +1043,11 @@ fn resolve_through_relations(
     // the join model.
     let mut groups: IndexMap<(Option<String>, ModelName), Vec<Side>> = IndexMap::new();
     for side in sides {
+        let Some(join_model) = side.join_model.clone() else {
+            continue;
+        };
         groups
-            .entry((side.rel_name.clone(), side.join_model.clone().unwrap()))
+            .entry((side.rel_name.clone(), join_model))
             .or_default()
             .push(side);
     }
@@ -1052,7 +1055,7 @@ fn resolve_through_relations(
     for group in groups.into_values() {
         if group.len() != 4 {
             diags.push(SchemaError::InvalidJoinModel {
-                through: group[0].join_model.as_ref().unwrap().to_string(),
+                through: group[0].join_model.as_ref().map(ToString::to_string).unwrap_or_default(),
                 owner: group[0].model.to_string(),
                 target: group[0].target.to_string(),
                 advice: Some("a many-to-many through model needs two endpoint list fields and two join foreign keys".to_owned()),
@@ -1066,7 +1069,11 @@ fn resolve_through_relations(
 
         if lists.len() != 2 || fks.len() != 2 {
             diags.push(SchemaError::InvalidJoinModel {
-                through: group[0].join_model.as_ref().unwrap().to_string(),
+                through: group[0]
+                    .join_model
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_default(),
                 owner: group[0].model.to_string(),
                 target: group[0].target.to_string(),
                 advice: Some(

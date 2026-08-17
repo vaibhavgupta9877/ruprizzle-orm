@@ -147,10 +147,9 @@ impl<'a> Planner<'a> {
     }
 
     fn model(&self, name: &ModelName) -> &Model {
-        self.next
-            .models
-            .get(name)
-            .expect("model referenced by change must exist in target schema")
+        self.next.models.get(name).unwrap_or_else(|| {
+            unreachable!("model referenced by change must exist in target schema")
+        })
     }
 
     fn enums_to_create(&self) -> Vec<Stmt> {
@@ -187,7 +186,11 @@ impl<'a> Planner<'a> {
         self.filter(|c| matches!(c, Change::AddEnumVariant { .. }))
             .flat_map(|c| match c {
                 Change::AddEnumVariant { enum_, variant } => {
-                    let e = self.next.enums.get(enum_).expect("enum must exist");
+                    let e = self
+                        .next
+                        .enums
+                        .get(enum_)
+                        .unwrap_or_else(|| unreachable!("enum must exist"));
                     self.dialect.alter_enum_add_variant(e, variant)
                 }
                 _ => Vec::new(),
@@ -561,7 +564,11 @@ fn fk_cycles(schema: &Schema) -> Vec<HashSet<ModelName>> {
         if scc.len() > 1 {
             cycles.push(scc);
         } else {
-            let model = scc.iter().next().cloned().unwrap();
+            let model = scc
+                .iter()
+                .next()
+                .cloned()
+                .unwrap_or_else(|| unreachable!("single-element SCC must have one model"));
             if graph
                 .get(&model)
                 .is_some_and(|targets| targets.contains(&model))
@@ -633,7 +640,9 @@ fn strongconnect(
     if lowlinks[v] == indices[v] {
         let mut scc = HashSet::new();
         loop {
-            let w = stack.pop().unwrap();
+            let w = stack
+                .pop()
+                .unwrap_or_else(|| unreachable!("stack must not be empty inside an SCC"));
             on_stack.remove(&w);
             let done = &w == v;
             scc.insert(w);

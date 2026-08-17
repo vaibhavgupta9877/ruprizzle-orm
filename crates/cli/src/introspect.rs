@@ -83,25 +83,25 @@ fn relation_specs(tables: &[Table], model_names: &HashMap<String, String>) -> Ve
             let target_model = &model_names[&foreign_key.target_table];
             let mut owner_field = lower_first(target_model);
             if !used
-                .get_mut(&table.name)
-                .unwrap()
+                .entry(table.name.clone())
+                .or_default()
                 .insert(owner_field.clone())
             {
                 owner_field = format!("{}_by_{}", owner_field, field_name(&foreign_key.columns[0]));
-                used.get_mut(&table.name)
-                    .unwrap()
+                used.entry(table.name.clone())
+                    .or_default()
                     .insert(owner_field.clone());
             }
             let owner_model = &model_names[&table.name];
             let mut inverse_field = field_name(&table.name);
             if !used
-                .get_mut(&foreign_key.target_table)
-                .unwrap()
+                .entry(foreign_key.target_table.clone())
+                .or_default()
                 .insert(inverse_field.clone())
             {
                 inverse_field.push_str("_relation");
-                used.get_mut(&foreign_key.target_table)
-                    .unwrap()
+                used.entry(foreign_key.target_table.clone())
+                    .or_default()
                     .insert(inverse_field.clone());
             }
             specs.push(RelationSpec {
