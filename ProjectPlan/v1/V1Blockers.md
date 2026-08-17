@@ -1,8 +1,8 @@
 # ruprizzle-orm v1.0.0 readiness analysis
 
-**Date:** 2026-08-17  
+**Date:** 2026-08-17 (updated)  
 **Branch:** `dev-v0-2`  
-**HEAD:** `facf6d5`  
+**HEAD:** `dcc74a6`  
 **Workspace version:** `0.1.1-beta.1`  
 **Assessor:** Devin (live build, lint, test, deny, doc, public-api)
 
@@ -30,12 +30,12 @@ After the build breaks and the advisory are fixed, the next sensible milestone i
 
 | # | Blocker | Status | Commit |
 |---|---------|--------|--------|
-| 1 | `cargo fmt --all --check` | **fixed** | TBD |
-| 2 | `tests/integration/tests/diagnostics_snapshot.rs` stale `SchemaError` | **fixed** | — |
-| 3 | `cargo clippy --workspace --all-targets` / `cargo xtask harden` | **fixed** | — |
-| 4 | `cargo deny` `RUSTSEC-2023-0071` | **fixed** (exception with reason) | — |
-| 5 | rustdoc warnings | **fixed** | — |
-| 6 | PostgreSQL / `sqlx::Any` benchmark fix | **fixed** | — |
+| 1 | `cargo fmt --all --check` | **fixed** | `4250db8` |
+| 2 | `tests/integration/tests/diagnostics_snapshot.rs` stale `SchemaError` | **fixed** | `042354d` |
+| 3 | `cargo clippy --workspace --all-targets` / `cargo xtask harden` | **fixed** | `6677b8b` |
+| 4 | `cargo deny` `RUSTSEC-2023-0071` | **fixed** (exception with reason) | `4c8c106` |
+| 5 | rustdoc warnings | **fixed** | `79341a4` |
+| 6 | PostgreSQL / `sqlx::Any` benchmark fix | **fixed** | `7c26aa4` |
 
 ---
 
@@ -63,31 +63,18 @@ The mechanical build/test gates are now green at HEAD, so the W0 hardening signa
 
 ### 2.1 Two mechanical build failures
 
-1. `cargo fmt --all --check` is red. The diff is purely in `crates/runtime/examples/cross_orm_bench.rs` (import order and line-wrapping).
-2. `tests/integration/tests/diagnostics_snapshot.rs` still uses `SchemaError::ScalarListUnsupported`:
+1. `cargo fmt --all --check` — fixed in `4250db8`.
+2. `tests/integration/tests/diagnostics_snapshot.rs` stale `SchemaError::ScalarListUnsupported` — fixed in `042354d`.
 
-   ```rust
-   SchemaError::ScalarListUnsupported {
-       found: "String".into(),
-       span: span_of("title").into(),
-   },
-   ```
-
-   This variant no longer exists in `crates/core/src/diagnostic.rs` — it was removed when scalar arrays became a supported feature. This is a stale unit-test reference; the fix is either to remove the case or replace it with the current diagnostic for the same scenario.
-
-Because of this one file, `cargo clippy --workspace --all-targets` and `cargo xtask harden` both fail. This single issue is what makes the tip unpublishable as any kind of release.
+Both mechanical build failures are resolved; `cargo clippy --workspace --all-targets` and `cargo xtask harden` are green.
 
 ### 2.2 Dependency security advisory
 
-`cargo deny check advisories` reports `RUSTSEC-2023-0071` against `rsa 0.9.10`, which is pulled in transitively by `sqlx-mysql 0.8.6` (`deny.toml`). The advisory has no safe upgrade available. For an alpha/beta, this can be documented/excepted; for a stable v1.0.0, having a known crypto timing-side-channel in the dependency tree is a real issue. Options are:
-
-- Wait for an `rsa` / `sqlx` patch.
-- Add a `cargo-deny` advisory exception only for MySQL and document the risk.
-- Accept that MySQL support cannot be called production-grade until the dependency is fixed.
+`RUSTSEC-2023-0071` against `rsa 0.9.10` (pulled in by `sqlx-mysql 0.8.6`) is now documented and excepted in `deny.toml` (`4c8c106`). `cargo deny check` passes. For a stable v1.0.0, this should be revisited when a patched `rsa`/`sqlx` release is available; until then, MySQL support should not be marketed as production-grade.
 
 ### 2.3 Documentation warnings
 
-`cargo doc` currently produces rustdoc warnings (broken/redundant intra-doc links in `crates/runtime/src/compile.rs`, `executor.rs`, `filter.rs`). The CI `docs` job runs with `RUSTDOCFLAGS: -D warnings` (`.github/workflows/ci.yml`), so the docs job would fail on CI even if local `cargo doc` exits 0.
+Rustdoc warnings in `crates/runtime/src/compile.rs`, `executor.rs`, and `filter.rs` were fixed in `79341a4`. `cargo doc --workspace --no-deps` now exits cleanly.
 
 ### 2.4 v1.0 process is not complete
 
@@ -233,9 +220,9 @@ Based on these numbers, assuming the measured versions hold and no major upstrea
 
 ### 6.3 Where the problem shows up
 
-The `end_to_end` benchmark in `crates/runtime/benches/end_to_end/main.rs` explicitly constructs an `sqlx::Any` pool and wraps it as `ruprizzle::Pool::Any` (`crates/runtime/benches/end_to_end/main.rs` lines 195–214). The numbers in `docs/Performance.md` come from that `Any` comparison. This is an accurate like-for-like measurement against `sqlx::Any`, but it is **not** representative of the default runtime path. Users who call `ruprizzle::connect` on a Postgres URL are already on the native path.
+The `end_to_end` benchmark in `crates/runtime/benches/end_to_end/main.rs` previously constructed an `sqlx::Any` pool and wrapped it as `ruprizzle::Pool::Any`. This has been changed in `7c26aa4` to use `ruprizzle::connect_with` and a matching native `sqlx::Postgres` pool for the hand-written baseline. `docs/Performance.md` and `docs/KnownLimitations.md` have been updated to explain that the default `postgres://` path uses native `sqlx::Postgres`.
 
-### 6.4 Proposed fix steps
+### 6.4 Completed fix steps
 
 1. **Update the `end_to_end` benchmark to use the default connection path.**
    - Replace the manual `sqlx::any::AnyPoolOptions` construction with `ruprizzle::connect_with(&url, &config)`.
@@ -269,15 +256,15 @@ The `end_to_end` benchmark in `crates/runtime/benches/end_to_end/main.rs` explic
 
 ## 7. What I recommend before any v1.0.0
 
-1. **Fix the two mechanical blockers right now**:
-   - Run `cargo fmt --all` and commit.
-   - Update or remove the `SchemaError::ScalarListUnsupported` case.
-2. **Fix the rustdoc warnings** (`compile.rs`, `executor.rs`, `filter.rs`) so `RUSTDOCFLAGS="-D warnings"` is green.
-3. **Decide on `RUSTSEC-2023-0071` / `rsa`**: either wait for a patch, add a documented `cargo-deny` exception, or explicitly scope MySQL support as "not recommended for security-sensitive deployments" until the advisory is resolved.
-4. **Re-run `cargo xtask harden` and `cargo deny check`** and confirm green.
+Mechanical and documentation blockers are now resolved. The next work is release-process and assurance.
+
+1. ✅ **Fix the two mechanical blockers** — done in `4250db8` and `042354d`.
+2. ✅ **Fix the rustdoc warnings** — done in `79341a4`; `RUSTDOCFLAGS="-D warnings"` is green.
+3. ✅ **Decide on `RUSTSEC-2023-0071` / `rsa`** — documented exception added in `4c8c106`. Revisit before marketing MySQL as production-grade.
+4. ✅ **Re-run `cargo xtask harden` and `cargo deny check`** — confirmed green on `dev-v0-2`.
 5. **Run the 48-hour soak** and record the result in `docs/SoakReport.md`.
-6. **Complete and record the runtime mutation-testing baseline** (the migrate baseline is already at a poor 25 %; either improve tests or document it as a known gap).
-7. **Bump the version to the next pre-1.0 milestone** (`0.3.0-beta.1` or `0.4.0-beta.1` depending on how you want to version W1–W5 completion) and publish that.
+6. **Complete and record the runtime mutation-testing baseline**; `ruprizzle-migrate` is at ~25 % (document as a known gap or improve coverage).
+7. **Bump the version to the next pre-1.0 milestone** (`0.3.0-beta.1` or `0.4.0-beta.1`) and publish it.
 8. **Cut `1.0.0-rc.1`**, run a minimum two-week feedback window, get at least one external project to upgrade and report back, then re-score production readiness against the RC.
 9. Only then cut and publish `1.0.0`.
 
