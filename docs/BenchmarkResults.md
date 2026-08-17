@@ -158,6 +158,7 @@ Query construction remains a sub-microsecond win for ruprizzle (rusqlite); the b
 
 - [Performance](performance.md) — Postgres vs `sqlx` measurements and the `sqlx::Any` text-marshalling note.
 - [Known limitations](KnownLimitations.md) — honest boundaries of the alpha.
+- [Feature master comparison](FeaturesMasterComparison.md) — feature and architecture comparison across all ORMs, including the extended benchmark table.
 - `ProjectPlan/ImplementationPlan/ImplPlan09TestingRelease.md` — original testing-and-benchmark plan.
 
 ## Benchmark run: 2026-08-13 07:25 UTC
