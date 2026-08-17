@@ -6,6 +6,8 @@
 use std::path::Path;
 use std::process::{Command, ExitCode};
 
+mod bench_compile;
+
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 use syn::{BinOp, Expr, ExprBinary, ExprIndex, ExprUnary, ItemFn, ItemMod, UnOp};
@@ -20,6 +22,10 @@ const TASKS: &[(&str, &str)] = &[
     (
         "bench-client",
         "regenerate the end_to_end benchmark client from schema.ruprizzle",
+    ),
+    (
+        "bench-compile",
+        "run the generated-client compile-time benchmark",
     ),
     ("harden", "pre-release hardening checks"),
     (
@@ -82,6 +88,7 @@ fn main() -> ExitCode {
         Some("docs") => run_all(&["docs"]),
         Some("examples") => run_examples(),
         Some("bench-client") => run_bench_client(),
+        Some("bench-compile") => bench_compile::bench_compile(),
         Some("harden") => run_harden(),
         Some("release") => run_release(&rest),
         other => {
