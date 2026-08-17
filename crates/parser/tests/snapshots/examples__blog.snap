@@ -10,6 +10,7 @@ expression: schema
     "url": {
       "Env": "DATABASE_URL"
     },
+    "extensions": [],
     "span": {
       "start": 203,
       "end": 280
@@ -79,6 +80,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 541,
@@ -101,6 +103,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 585,
@@ -123,6 +126,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 615,
@@ -149,6 +153,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 636,
@@ -185,6 +190,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 673,
@@ -209,6 +215,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 693,
@@ -231,6 +238,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 750,
@@ -251,12 +259,15 @@ expression: schema
       "indexes": [
         {
           "db_name": "users_email_idx",
-          "fields": [
+          "targets": [
             {
-              "field": "email",
-              "order": "Asc"
+              "Field": [
+                "email",
+                "Asc"
+              ]
             }
           ],
+          "where_clause": null,
           "span": {
             "start": 809,
             "end": 825
@@ -292,6 +303,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 901,
@@ -323,6 +335,7 @@ expression: schema
             },
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 944,
@@ -345,6 +358,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 982,
@@ -371,6 +385,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1003,
@@ -393,6 +408,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1042,
@@ -431,6 +447,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1081,
@@ -455,6 +472,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1171,
@@ -475,16 +493,21 @@ expression: schema
       "indexes": [
         {
           "db_name": "posts_author_id_published_idx",
-          "fields": [
+          "targets": [
             {
-              "field": "authorId",
-              "order": "Asc"
+              "Field": [
+                "authorId",
+                "Asc"
+              ]
             },
             {
-              "field": "published",
-              "order": "Asc"
+              "Field": [
+                "published",
+                "Asc"
+              ]
             }
           ],
+          "where_clause": null,
           "span": {
             "start": 1230,
             "end": 1260

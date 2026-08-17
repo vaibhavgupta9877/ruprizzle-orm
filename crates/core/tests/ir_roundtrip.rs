@@ -7,7 +7,7 @@
 use indexmap::IndexMap;
 use ruprizzle_core::ir::{
     Datasource, DatasourceUrl, DefaultFn, DefaultValue, EnumDef, EnumVariant, Field, FieldAttrs,
-    FieldKind, Generator, IR_VERSION, IndexDef, IndexField, Literal, Model, PrimaryKey, Provider,
+    FieldKind, Generator, IR_VERSION, IndexDef, IndexTarget, Literal, Model, PrimaryKey, Provider,
     ReferentialAction, RelationKind, RelationRef, ResolvedRelation, ScalarType, Schema, SortOrder,
 };
 use ruprizzle_core::names::{EnumName, FieldName, ModelName};
@@ -21,6 +21,7 @@ fn field(name: &str, column: &str, kind: FieldKind) -> Field {
         optional: false,
         default: None,
         attrs: FieldAttrs::default(),
+        generated: None,
         docs: None,
         span: Span::new(0, 1),
     }
@@ -147,10 +148,8 @@ fn blog_schema() -> Schema {
             },
             indexes: vec![IndexDef {
                 db_name: "users_email_idx".to_owned(),
-                fields: vec![IndexField {
-                    field: FieldName::new("email"),
-                    order: SortOrder::Asc,
-                }],
+                targets: vec![IndexTarget::Field(FieldName::new("email"), SortOrder::Asc)],
+                where_clause: None,
                 span: Span::new(80, 95),
             }],
             uniques: vec![],
@@ -182,6 +181,7 @@ fn blog_schema() -> Schema {
             name: "db".to_owned(),
             provider: Provider::Postgres,
             url: DatasourceUrl::Env("DATABASE_URL".to_owned()),
+            extensions: Vec::new(),
             span: Span::new(0, 4),
         },
         generator: Generator::default(),

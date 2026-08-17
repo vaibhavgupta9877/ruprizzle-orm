@@ -21,7 +21,7 @@ datasource = { kw_datasource ~ ident ~ "{" ~ config_kv* ~ "}" }
 generator  = { kw_generator ~ ident ~ "{" ~ config_kv* ~ "}" }
 
 config_kv    = { ident ~ "=" ~ config_value }
-config_value = _{ env_call | string | boolean | number }
+config_value = _{ env_call | string | boolean | number | array }
 env_call     = { kw_env ~ "(" ~ string ~ ")" }
 
 // --- enums -----------------------------------------------------------------

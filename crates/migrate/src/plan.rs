@@ -118,22 +118,25 @@ impl<'a> Planner<'a> {
             stmts.extend(self.defer_preamble());
         }
 
+        stmts.extend(self.extensions_to_create());
         stmts.extend(self.enums_to_create());
         stmts.extend(self.enum_variants_to_add());
         stmts.extend(self.models_to_create());
         stmts.extend(self.columns_to_add());
         stmts.extend(self.columns_to_rename());
         stmts.extend(self.columns_to_alter());
-        stmts.extend(self.uniques_to_add());
-        stmts.extend(self.indexes_to_create());
-        stmts.extend(self.foreign_keys_to_add());
+        // Drop dependent objects before recreating them with new definitions.
         stmts.extend(self.foreign_keys_to_drop());
         stmts.extend(self.indexes_to_drop());
         stmts.extend(self.uniques_to_drop());
+        stmts.extend(self.uniques_to_add());
+        stmts.extend(self.indexes_to_create());
+        stmts.extend(self.foreign_keys_to_add());
         stmts.extend(self.columns_to_drop());
         stmts.extend(self.models_to_drop());
         stmts.extend(self.enum_variants_to_drop());
         stmts.extend(self.enums_to_drop());
+        stmts.extend(self.extensions_to_drop());
 
         if needs_defer {
             stmts.extend(self.defer_postamble());
@@ -150,6 +153,38 @@ impl<'a> Planner<'a> {
         self.next.models.get(name).unwrap_or_else(|| {
             unreachable!("model referenced by change must exist in target schema")
         })
+    }
+
+    fn extensions_to_create(&self) -> Vec<Stmt> {
+        if self.down || self.dialect.name() != "postgres" {
+            return Vec::new();
+        }
+        let prev: std::collections::HashSet<_> = self.prev.datasource.extensions.iter().collect();
+        self.next
+            .datasource
+            .extensions
+            .iter()
+            .filter(|e| !prev.contains(*e))
+            .map(|e| Stmt::new(format!("CREATE EXTENSION IF NOT EXISTS {e};")))
+            .collect()
+    }
+
+    fn extensions_to_drop(&self) -> Vec<Stmt> {
+        if !self.down || self.dialect.name() != "postgres" {
+            return Vec::new();
+        }
+        let next: std::collections::HashSet<_> = self.next.datasource.extensions.iter().collect();
+        self.prev
+            .datasource
+            .extensions
+            .iter()
+            .filter(|e| !next.contains(*e))
+            .map(|e| {
+                Stmt::new(format!("DROP EXTENSION IF EXISTS {e};"))
+                    .destructive()
+                    .non_transactional()
+            })
+            .collect()
     }
 
     fn enums_to_create(&self) -> Vec<Stmt> {
@@ -518,6 +553,7 @@ fn fallback_field(name: &FieldName, column: &str) -> Field {
         optional: true,
         default: None,
         attrs: Default::default(),
+        generated: None,
         docs: None,
         span: Default::default(),
     }

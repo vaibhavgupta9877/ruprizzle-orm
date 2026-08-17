@@ -28,9 +28,9 @@ use indexmap::map::Entry;
 use ruprizzle_core::diagnostic::{Diagnostics, SchemaError};
 use ruprizzle_core::ir::{
     Datasource, DatasourceUrl, DefaultFn, DefaultValue, EnumDef, EnumVariant, Field, FieldAttrs,
-    FieldKind, Generator, IndexDef, IndexField, Literal, Model, NativeType, PrimaryKey, Provider,
-    ReferentialAction, RelationKind, RelationRef, ResolvedRelation, ScalarType, Schema, SortOrder,
-    UniqueDef,
+    FieldKind, GeneratedClause, GeneratedKind, Generator, IndexDef, IndexTarget, Literal, Model,
+    NativeType, PrimaryKey, Provider, ReferentialAction, RelationKind, RelationRef,
+    ResolvedRelation, ScalarType, Schema, SortOrder, UniqueDef,
 };
 use ruprizzle_core::names::{EnumName, FieldName, ModelName};
 use ruprizzle_core::span::Span;
@@ -190,10 +190,22 @@ fn lower_datasource(ast: &Ast, diags: &mut Diagnostics) -> Datasource {
         }
     };
 
+    let extensions = block
+        .get("extensions")
+        .and_then(|e| e.value.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+
     Datasource {
         name: block.name.clone(),
         provider,
         url,
+        extensions,
         span: block.span,
     }
 }
@@ -233,6 +245,7 @@ fn fallback_datasource() -> Datasource {
         name: "db".to_owned(),
         provider: Provider::Postgres,
         url: DatasourceUrl::Env("DATABASE_URL".to_owned()),
+        extensions: Vec::new(),
         span: Span::EMPTY,
     }
 }
@@ -399,6 +412,8 @@ fn lower_field(
         .attr("default")
         .and_then(|a| lower_default(a, &kind, enums, diags));
 
+    let generated = generated_clause(decl);
+
     check_attribute_targets(decl, &kind, diags);
 
     Field {
@@ -408,9 +423,43 @@ fn lower_field(
         optional: decl.arity == Arity::Optional,
         default,
         attrs,
+        generated,
         docs: decl.docs.clone(),
         span: decl.span,
     }
+}
+
+fn generated_clause(decl: &FieldDecl) -> Option<GeneratedClause> {
+    let attr = decl.attr("generated")?;
+    let s = attr.first_positional().and_then(Value::as_str)?;
+    let s = s.trim();
+    let expr_start = s.find('(').and_then(|start| {
+        let inner = &s[start + 1..];
+        let mut depth = 1usize;
+        let mut end = None;
+        for (i, c) in inner.char_indices() {
+            match c {
+                '(' => depth += 1,
+                ')' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        end = Some(i);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        end.map(|e| (start, start + 1 + e))
+    })?;
+    let expr = s[expr_start.0 + 1..expr_start.1].trim().to_owned();
+    let tail = s[expr_start.1 + 1..].trim().to_lowercase();
+    let kind = if tail.contains("virtual") {
+        GeneratedKind::Virtual
+    } else {
+        GeneratedKind::Stored
+    };
+    Some(GeneratedClause { expr, kind })
 }
 
 /// Resolves the written type name to a scalar, an enum, or a relation (V02).
@@ -527,7 +576,7 @@ fn check_attribute_targets(decl: &FieldDecl, kind: &FieldKind, diags: &mut Diagn
         if matches!(kind, FieldKind::List(_) | FieldKind::Relation(_)) {
             diags.push(SchemaError::InvalidAttributeTarget {
                 attribute: attr.path.clone(),
-                found: described,
+                found: described.clone(),
                 advice: Some(
                     "native database types apply to columns; put it on the foreign key field"
                         .into(),
@@ -535,6 +584,15 @@ fn check_attribute_targets(decl: &FieldDecl, kind: &FieldKind, diags: &mut Diagn
                 span: attr.span.into(),
             });
         }
+    }
+
+    if decl.has_attr("generated") && matches!(kind, FieldKind::List(_) | FieldKind::Relation(_)) {
+        diags.push(SchemaError::InvalidAttributeTarget {
+            attribute: "generated".to_owned(),
+            found: described,
+            advice: Some("`@generated` columns must be scalar or enum fields".into()),
+            span: decl.attr("generated").map_or(decl.span, |a| a.span).into(),
+        });
     }
 }
 
@@ -733,20 +791,6 @@ fn field_list(attr: &Attr) -> Vec<FieldName> {
         .unwrap_or_default()
 }
 
-/// Column names for a list of fields, falling back to the field name when the
-/// field does not exist — V11 reports that separately, and a placeholder keeps
-/// the derived constraint name readable in the meantime.
-fn columns_of(fields: &[FieldName], model_fields: &IndexMap<FieldName, Field>) -> Vec<String> {
-    fields
-        .iter()
-        .map(|f| {
-            model_fields
-                .get(f.as_str())
-                .map_or_else(|| f.to_string(), |field| field.column.clone())
-        })
-        .collect()
-}
-
 fn lower_indexes(
     decl: &ModelDecl,
     table: &str,
@@ -756,20 +800,18 @@ fn lower_indexes(
         .iter()
         .filter(|a| a.path == "index")
         .map(|attr| {
-            let names = field_list(attr);
-            let columns = columns_of(&names, fields);
+            let targets = index_targets(attr);
+            let columns = target_columns(&targets, fields);
             IndexDef {
                 db_name: attr
                     .named("map")
                     .and_then(Value::as_str)
                     .map_or_else(|| naming::index_name(table, &columns), str::to_owned),
-                fields: names
-                    .into_iter()
-                    .map(|field| IndexField {
-                        field,
-                        order: SortOrder::Asc,
-                    })
-                    .collect(),
+                targets,
+                where_clause: attr
+                    .named("where")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
                 span: attr.span,
             }
         })
@@ -785,16 +827,51 @@ fn lower_uniques(
         .iter()
         .filter(|a| a.path == "unique")
         .map(|attr| {
-            let names = field_list(attr);
-            let columns = columns_of(&names, fields);
+            let targets = index_targets(attr);
+            let columns = target_columns(&targets, fields);
             UniqueDef {
                 db_name: attr
                     .named("map")
                     .and_then(Value::as_str)
                     .map_or_else(|| naming::unique_name(table, &columns), str::to_owned),
-                fields: names,
+                targets,
                 span: attr.span,
             }
+        })
+        .collect()
+}
+
+/// The `[...]` first positional argument of an `@@index` or `@@unique`.
+fn index_targets(attr: &Attr) -> Vec<IndexTarget> {
+    attr.first_positional()
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|v| match v {
+                    Value::Ident(name, _) => {
+                        Some(IndexTarget::Field(FieldName::new(name), SortOrder::Asc))
+                    }
+                    Value::Str(s, _) if s.starts_with('(') => {
+                        Some(IndexTarget::Expression(s.clone()))
+                    }
+                    Value::Str(s, _) => Some(IndexTarget::Field(FieldName::new(s), SortOrder::Asc)),
+                    _ => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Physical column names or verbatim expressions for index-target naming.
+fn target_columns(targets: &[IndexTarget], fields: &IndexMap<FieldName, Field>) -> Vec<String> {
+    targets
+        .iter()
+        .map(|t| match t {
+            IndexTarget::Field(name, _) => fields
+                .get(name.as_str())
+                .map_or_else(|| name.to_string(), |f| f.column.clone()),
+            IndexTarget::Expression(expr) => expr.clone(),
         })
         .collect()
 }
@@ -1176,10 +1253,13 @@ fn build_relation(
         };
         let is_key = target_model.primary_key.fields.contains(name);
         let is_unique = f.attrs.is_unique
-            || target_model
-                .uniques
-                .iter()
-                .any(|u| u.fields.len() == 1 && u.fields[0] == *name);
+            || target_model.uniques.iter().any(|u| {
+                u.targets.len() == 1
+                    && matches!(
+                        &u.targets[0],
+                        IndexTarget::Field(field_name, _) if field_name == name
+                    )
+            });
         if !is_key && !is_unique {
             diags.push(SchemaError::InvalidRelationTarget {
                 model: owner.model.to_string(),

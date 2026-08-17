@@ -2,7 +2,7 @@
 
 use ruprizzle_core::SchemaError;
 use ruprizzle_core::ir::{
-    DefaultFn, DefaultValue, Field, FieldKind, IndexDef, Literal, Model, Provider, RelationKind,
+    DefaultFn, DefaultValue, Field, FieldKind, Literal, Model, Provider, RelationKind,
     ResolvedRelation, ScalarType, Schema, SortOrder,
 };
 
@@ -337,6 +337,8 @@ pub(crate) struct ColumnSpec {
     pub unique: bool,
     /// Whether the column has an identity clause.
     pub identity: bool,
+    /// An optional generated-column clause.
+    pub generated: Option<ruprizzle_core::ir::GeneratedClause>,
     /// An optional `CHECK` constraint.
     pub check: Option<String>,
 }
@@ -361,6 +363,14 @@ impl ColumnSpec {
         // `PRIMARY KEY` below.
         if self.identity && dialect.name() != "sqlite" && dialect.name() != "mysql" {
             parts.push(identity_clause(dialect));
+        }
+
+        if let Some(ref g) = self.generated {
+            let kind = match g.kind {
+                ruprizzle_core::ir::GeneratedKind::Virtual => "VIRTUAL",
+                ruprizzle_core::ir::GeneratedKind::Stored => "STORED",
+            };
+            parts.push(format!("GENERATED ALWAYS AS ({}) {}", g.expr, kind));
         }
 
         if self.not_null {
@@ -440,6 +450,7 @@ pub(crate) fn column_spec(
         primary_key: f.attrs.is_id,
         unique: f.attrs.is_unique && !f.attrs.is_id,
         identity,
+        generated: f.generated.clone(),
         check,
     })
 }
@@ -587,7 +598,7 @@ pub(crate) fn create_table_body(
 
     // Table-level unique constraints.
     for u in &m.uniques {
-        let cols = quote_field_columns(dialect, m, &u.fields).join(", ");
+        let cols = render_index_targets(dialect, m, &u.targets);
         columns.push(format!(
             "CONSTRAINT {} UNIQUE ({})",
             dialect.quote_ident(&u.db_name),
@@ -616,20 +627,28 @@ pub(crate) fn quote_field_columns(
         .collect()
 }
 
-/// Renders an index with sort order.
-pub(crate) fn render_index_columns(dialect: &dyn DbDialect, m: &Model, ix: &IndexDef) -> String {
-    ix.fields
+/// Renders the targets of an index or unique constraint.
+pub(crate) fn render_index_targets(
+    dialect: &dyn DbDialect,
+    m: &Model,
+    targets: &[ruprizzle_core::ir::IndexTarget],
+) -> String {
+    use ruprizzle_core::ir::IndexTarget;
+    targets
         .iter()
-        .map(|idx_field| {
-            let col = m
-                .fields
-                .get(idx_field.field.as_str())
-                .map_or_else(|| idx_field.field.to_string(), |f| f.column.clone());
-            let quoted = dialect.quote_ident(&col);
-            match idx_field.order {
-                SortOrder::Asc => quoted,
-                SortOrder::Desc => format!("{quoted} DESC"),
+        .map(|target| match target {
+            IndexTarget::Field(name, order) => {
+                let col = m
+                    .fields
+                    .get(name.as_str())
+                    .map_or_else(|| name.to_string(), |f| f.column.clone());
+                let quoted = dialect.quote_ident(&col);
+                match order {
+                    SortOrder::Asc => quoted,
+                    SortOrder::Desc => format!("{quoted} DESC"),
+                }
             }
+            IndexTarget::Expression(expr) => expr.clone(),
         })
         .collect::<Vec<_>>()
         .join(", ")

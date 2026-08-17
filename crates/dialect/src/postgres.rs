@@ -1,13 +1,15 @@
 //! PostgreSQL dialect.
 
+use std::fmt::Write as _;
+
 use ruprizzle_core::ir::{
     EnumDef, Field, FieldKind, IndexDef, Model, RelationKind, ResolvedRelation, ScalarType, Schema,
     UniqueDef,
 };
 
 use crate::common::{
-    base_column_type, create_table_body, default_sql, fk_constraint_sql, quote_field_columns,
-    render_index_columns, rust_type_for,
+    base_column_type, create_table_body, default_sql, fk_constraint_sql, render_index_targets,
+    rust_type_for,
 };
 use crate::{Capabilities, DbDialect, DialectError, JsonSupport, RustType, Stmt};
 
@@ -144,13 +146,18 @@ impl DbDialect for PostgresDialect {
     }
 
     fn create_index(&self, m: &Model, ix: &IndexDef) -> Vec<Stmt> {
-        let cols = render_index_columns(self, m, ix);
-        vec![Stmt::new(format!(
-            "CREATE INDEX {} ON {} ({});",
+        let cols = render_index_targets(self, m, &ix.targets);
+        let mut sql = format!(
+            "CREATE INDEX {} ON {} ({})",
             self.quote_ident(&ix.db_name),
             self.quote_ident(&m.table),
             cols
-        ))]
+        );
+        if let Some(ref w) = ix.where_clause {
+            let _ = write!(sql, " WHERE {w}");
+        }
+        sql.push(';');
+        vec![Stmt::new(sql)]
     }
 
     fn drop_index(&self, _table: &str, name: &str) -> Vec<Stmt> {
@@ -163,7 +170,7 @@ impl DbDialect for PostgresDialect {
     fn add_unique(&self, m: &Model, uq: &UniqueDef) -> Vec<Stmt> {
         let table = self.quote_ident(&m.table);
         let name = self.quote_ident(&uq.db_name);
-        let cols = quote_field_columns(self, m, &uq.fields).join(", ");
+        let cols = render_index_targets(self, m, &uq.targets);
         vec![Stmt::new(format!(
             "ALTER TABLE {table} ADD CONSTRAINT {name} UNIQUE ({cols});"
         ))]
@@ -262,6 +269,7 @@ impl DbDialect for PostgresDialect {
             deferrable_fks: true,
             json_type: JsonSupport::Native,
             max_query_params: 65_535,
+            postgis: false,
             window_functions: true,
         }
     }

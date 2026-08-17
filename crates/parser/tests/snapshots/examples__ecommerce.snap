@@ -10,6 +10,7 @@ expression: schema
     "url": {
       "Env": "DATABASE_URL"
     },
+    "extensions": [],
     "span": {
       "start": 396,
       "end": 473
@@ -97,6 +98,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 679,
@@ -119,6 +121,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 723,
@@ -141,6 +144,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 753,
@@ -177,6 +181,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 773,
@@ -201,6 +206,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 794,
@@ -248,6 +254,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 873,
@@ -270,6 +277,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 916,
@@ -301,6 +309,7 @@ expression: schema
             },
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 945,
@@ -323,6 +332,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": "Exact, because floating point money is a bug waiting for an audit.",
           "span": {
             "start": 983,
@@ -359,6 +369,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1074,
@@ -406,6 +417,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1115,
@@ -432,6 +444,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1163,
@@ -454,6 +467,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1207,
@@ -492,6 +506,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1253,
@@ -528,6 +543,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1349,
@@ -552,6 +568,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1375,
@@ -572,16 +589,21 @@ expression: schema
       "indexes": [
         {
           "db_name": "orders_customer_id_status_idx",
-          "fields": [
+          "targets": [
             {
-              "field": "customerId",
-              "order": "Asc"
+              "Field": [
+                "customerId",
+                "Asc"
+              ]
             },
             {
-              "field": "status",
-              "order": "Asc"
+              "Field": [
+                "status",
+                "Asc"
+              ]
             }
           ],
+          "where_clause": null,
           "span": {
             "start": 1437,
             "end": 1466
@@ -615,6 +637,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1521,
@@ -653,6 +676,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1559,
@@ -675,6 +699,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1646,
@@ -713,6 +738,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1686,
@@ -739,6 +765,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1776,
@@ -761,6 +788,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": "Copied at purchase time: the product price may change afterwards.",
           "span": {
             "start": 1809,

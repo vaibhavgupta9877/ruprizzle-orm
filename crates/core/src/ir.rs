@@ -120,6 +120,8 @@ pub struct Datasource {
     pub provider: Provider,
     /// Where the connection string comes from.
     pub url: DatasourceUrl,
+    /// `PostgreSQL` extensions to create before any other objects.
+    pub extensions: Vec<String>,
     /// Source location of the `datasource` block.
     pub span: Span,
 }
@@ -301,6 +303,8 @@ pub struct Field {
     pub default: Option<DefaultValue>,
     /// Remaining attributes: identity, uniqueness, rename hints, and so on.
     pub attrs: FieldAttrs,
+    /// A generated-column clause, if given (`@generated`).
+    pub generated: Option<GeneratedClause>,
     /// Doc comments, emitted as rustdoc on the generated struct field.
     pub docs: Option<String>,
     /// Source location of the field.
@@ -487,6 +491,24 @@ pub struct FieldAttrs {
     pub renamed_from: Option<String>,
 }
 
+/// A generated column's storage behaviour.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GeneratedKind {
+    /// `GENERATED ALWAYS AS (...) VIRTUAL`.
+    Virtual,
+    /// `GENERATED ALWAYS AS (...) STORED`.
+    Stored,
+}
+
+/// A `@generated(...)` column specification.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedClause {
+    /// The SQL expression used to compute the column.
+    pub expr: String,
+    /// Whether the value is computed on read (`Virtual`) or written (`Stored`).
+    pub kind: GeneratedKind,
+}
+
 /// A dialect-specific column type override, e.g. `@db.VarChar(200)`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NativeType {
@@ -527,20 +549,22 @@ impl PrimaryKey {
 pub struct IndexDef {
     /// Physical index name, derived or explicit.
     pub db_name: String,
-    /// Indexed columns, in index order — which determines what the index can
+    /// Indexed targets, in index order — which determines what the index can
     /// serve, so it is never sorted.
-    pub fields: Vec<IndexField>,
+    pub targets: Vec<IndexTarget>,
+    /// Optional partial-index predicate (`WHERE` clause).
+    pub where_clause: Option<String>,
     /// Source location of the declaration.
     pub span: Span,
 }
 
-/// One column within an index, with its sort direction.
+/// What an index or unique constraint entry names: a field or an expression.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IndexField {
-    /// The indexed field.
-    pub field: FieldName,
-    /// Sort direction for this column within the index.
-    pub order: SortOrder,
+pub enum IndexTarget {
+    /// A model field, optionally with a sort direction.
+    Field(FieldName, SortOrder),
+    /// A raw SQL expression, rendered verbatim.
+    Expression(String),
 }
 
 /// Sort direction.
@@ -558,8 +582,8 @@ pub enum SortOrder {
 pub struct UniqueDef {
     /// Physical constraint name, derived or explicit.
     pub db_name: String,
-    /// Columns covered by the constraint, in declaration order.
-    pub fields: Vec<FieldName>,
+    /// Targets covered by the constraint, in declaration order.
+    pub targets: Vec<IndexTarget>,
     /// Source location of the declaration.
     pub span: Span,
 }

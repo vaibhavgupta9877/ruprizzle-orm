@@ -273,6 +273,7 @@ mod tests {
                     is_id: true,
                     ..FieldAttrs::default()
                 },
+                generated: None,
                 docs: None,
                 span: Span::EMPTY,
             },
@@ -286,6 +287,7 @@ mod tests {
                 optional: false,
                 default: None,
                 attrs: FieldAttrs::default(),
+                generated: None,
                 docs: None,
                 span: Span::EMPTY,
             },

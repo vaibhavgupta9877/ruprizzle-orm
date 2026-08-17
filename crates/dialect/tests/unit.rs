@@ -321,3 +321,37 @@ fn invalid_native_type_produces_error() {
     let result = pg.column_type(email);
     assert!(result.is_err());
 }
+
+#[test]
+fn postgres_renders_partial_expression_indexes_and_generated_columns() {
+    let source = r#"
+        datasource db {
+            provider   = "postgres"
+            url        = env("DATABASE_URL")
+            extensions = ["uuid-ossp"]
+        }
+
+        model User {
+            id         Uuid    @id @default(uuid7())
+            first_name String
+            last_name  String
+            full_name  String? @generated("always as (first_name || ' ' || last_name) stored")
+
+            @@index([first_name, last_name], where: "last_name IS NOT NULL")
+            @@unique(["(coalesce(first_name, ''))"])
+        }
+    "#;
+    let schema = parse("test", source).unwrap();
+    let dialect = PostgresDialect;
+    let user = schema.model("User").unwrap();
+
+    let table = &dialect.create_table(&schema, user)[0].sql;
+    assert!(table.contains("GENERATED ALWAYS AS (first_name || ' ' || last_name) STORED"));
+
+    let index = &dialect.create_index(user, &user.indexes[0])[0].sql;
+    assert!(index.contains("CREATE INDEX"));
+    assert!(index.contains("WHERE last_name IS NOT NULL"));
+
+    let unique = &dialect.add_unique(user, &user.uniques[0])[0].sql;
+    assert!(unique.contains("(coalesce(first_name, ''))"));
+}

@@ -214,12 +214,20 @@ fn scalar_changed(prev: &FieldKind, next: &FieldKind) -> bool {
 
 fn diff_indexes(model: &ModelName, prev: &Model, next: &Model, changes: &mut Vec<Change>) {
     for ix in &next.indexes {
-        if !prev.indexes.iter().any(|p| p.db_name == ix.db_name) {
+        if !prev
+            .indexes
+            .iter()
+            .any(|p| p.db_name == ix.db_name && p == ix)
+        {
             changes.push(Change::CreateIndex(model.clone(), ix.clone()));
         }
     }
     for ix in &prev.indexes {
-        if !next.indexes.iter().any(|n| n.db_name == ix.db_name) {
+        if !next
+            .indexes
+            .iter()
+            .any(|n| n.db_name == ix.db_name && n == ix)
+        {
             changes.push(Change::DropIndex(model.clone(), ix.db_name.clone()));
         }
     }
@@ -227,12 +235,20 @@ fn diff_indexes(model: &ModelName, prev: &Model, next: &Model, changes: &mut Vec
 
 fn diff_uniques(model: &ModelName, prev: &Model, next: &Model, changes: &mut Vec<Change>) {
     for uq in &next.uniques {
-        if !prev.uniques.iter().any(|p| p.db_name == uq.db_name) {
+        if !prev
+            .uniques
+            .iter()
+            .any(|p| p.db_name == uq.db_name && p == uq)
+        {
             changes.push(Change::AddUnique(model.clone(), uq.clone()));
         }
     }
     for uq in &prev.uniques {
-        if !next.uniques.iter().any(|n| n.db_name == uq.db_name) {
+        if !next
+            .uniques
+            .iter()
+            .any(|n| n.db_name == uq.db_name && n == uq)
+        {
             changes.push(Change::DropUnique(model.clone(), uq.db_name.clone()));
         }
     }

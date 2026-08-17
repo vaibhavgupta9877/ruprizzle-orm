@@ -588,7 +588,7 @@ The table below cross-checks every limitation/priority in
 - Consumes: schema IR `IndexDef` with a new `where_clause: Option<String>`.
 - Produces: `CREATE INDEX ... WHERE <where_clause>` on Postgres/SQLite.
 
-- [ ] **Step 1: Extend IR**
+- [x] **Step 1: Extend IR**
   - In `crates/core/src/ir.rs`:
     ```rust
     pub struct IndexDef {
@@ -599,20 +599,20 @@ The table below cross-checks every limitation/priority in
     }
     ```
 
-- [ ] **Step 2: Parse `@@index([...], where: "...")`**
+- [x] **Step 2: Parse `@@index([...], where: "...")`**
   - In the parser, accept a named argument `where` on `@@index` and store it.
 
-- [ ] **Step 3: Render `WHERE` clause**
+- [x] **Step 3: Render `WHERE` clause**
   - In `crates/dialect/src/postgres.rs` and `crates/dialect/src/sqlite.rs`, append
     `WHERE {where_clause}` to `create_index` when present.
   - In `crates/dialect/src/mysql.rs`, reject with `DialectError` because MySQL
     does not support partial indexes.
 
-- [ ] **Step 4: Update migration diff**
+- [x] **Step 4: Update migration diff**
   - In `crates/migrate/src/diff.rs` (or wherever index diffs live), compare
     `where_clause` and emit drop/re-create when it changes.
 
-- [ ] **Step 5: Test and commit**
+- [x] **Step 5: Test and commit**
   - Add a snapshot test in `crates/migrate/tests` or `tests/integration`.
   - `git commit -m "feat(schema): partial indexes with @@index where clause"`
 
@@ -628,7 +628,7 @@ The table below cross-checks every limitation/priority in
 - Consumes: `IndexDef` where entries may be field names or SQL expressions.
 - Produces: `CREATE INDEX ... ON table (expression)`.
 
-- [ ] **Step 1: Extend IR with expression targets**
+- [x] **Step 1: Extend IR with expression targets**
   - In `crates/core/src/ir.rs`:
     ```rust
     pub enum IndexTarget {
@@ -644,15 +644,15 @@ The table below cross-checks every limitation/priority in
     }
     ```
 
-- [ ] **Step 2: Parse `@@index(["(lower(email))"])` and `@@unique(["(coalesce(a,b))"])`**
+- [x] **Step 2: Parse `@@index(["(lower(email))"])` and `@@unique(["(coalesce(a,b))"])`**
   - A string that starts with `(` is treated as an expression; otherwise it is a
     field name.
 
-- [ ] **Step 3: Render expressions**
+- [x] **Step 3: Render expressions**
   - In `create_index` and `add_unique`, render expression targets verbatim and
     field targets as quoted column names.
 
-- [ ] **Step 4: Test and commit**
+- [x] **Step 4: Test and commit**
   - `git commit -m "feat(schema): expression indexes and unique constraints"`
 
 ### Task E.3: Generated columns
@@ -670,7 +670,7 @@ The table below cross-checks every limitation/priority in
 - Produces: `GENERATED ALWAYS AS (...) STORED/VIRTUAL` columns; generated
   columns are read-only in the query builder.
 
-- [ ] **Step 1: Extend IR**
+- [x] **Step 1: Extend IR**
   - In `crates/core/src/ir.rs`:
     ```rust
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -687,21 +687,21 @@ The table below cross-checks every limitation/priority in
     ```
     Add `pub generated: Option<GeneratedClause>` to `Field`.
 
-- [ ] **Step 2: Parse `@generated(...)`**
+- [x] **Step 2: Parse `@generated(...)`**
   - Syntax: `@generated("always as (lower(first_name || ' ' || last_name)) stored")`.
   - Lower to `GeneratedClause { expr, kind }`.
 
-- [ ] **Step 3: Render in dialects**
+- [x] **Step 3: Render in dialects**
   - PostgreSQL: `col TYPE GENERATED ALWAYS AS (expr) STORED`.
   - MySQL: same.
   - SQLite: same (3.31+).
 
-- [ ] **Step 4: Codegen read-only**
+- [x] **Step 4: Codegen read-only**
   - In `crates/codegen/src/emit.rs`, omit generated columns from the
     `InsertQuery`/`UpdateQuery` setters but include them in `SelectQuery`
     projections.
 
-- [ ] **Step 5: Test and commit**
+- [x] **Step 5: Test and commit**
   - `git commit -m "feat(schema): generated columns"`
 
 ### Task E.4: PostgreSQL extensions
@@ -716,21 +716,21 @@ The table below cross-checks every limitation/priority in
 - Consumes: `datasource db { extensions = ["uuid-ossp", "postgis"] }`.
 - Produces: `CREATE EXTENSION IF NOT EXISTS ...` in migration plan.
 
-- [ ] **Step 1: Extend IR and parser**
+- [x] **Step 1: Extend IR and parser**
   - Add `pub extensions: Vec<String>` to `Datasource`.
   - Parse `extensions = ["..."]` in the datasource block.
 
-- [ ] **Step 2: Emit in migration plan**
+- [x] **Step 2: Emit in migration plan**
   - In `crates/migrate/src/planner.rs`, at the start of a Postgres migration,
     emit `CREATE EXTENSION IF NOT EXISTS {ext};` for each listed extension.
   - On down migrations, emit `DROP EXTENSION IF EXISTS {ext};` only if no other
     schema objects depend on it (best effort).
 
-- [ ] **Step 3: Add extension capability flags**
+- [x] **Step 3: Add extension capability flags**
   - In `crates/dialect/src/postgres.rs` `Capabilities`, add
     `postgis: bool` (default false). This is used later by PostGIS support.
 
-- [ ] **Step 4: Test and commit**
+- [x] **Step 4: Test and commit**
   - `git commit -m "feat(migrate): CREATE EXTENSION from datasource extensions"`
 
 ---

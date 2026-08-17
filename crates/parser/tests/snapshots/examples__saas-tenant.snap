@@ -10,6 +10,7 @@ expression: schema
     "url": {
       "Env": "DATABASE_URL"
     },
+    "extensions": [],
     "span": {
       "start": 206,
       "end": 281
@@ -88,6 +89,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 463,
@@ -110,6 +112,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 511,
@@ -136,6 +139,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 545,
@@ -158,6 +162,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": "Free-form tenant configuration; genuinely schemaless, so `Json` earns it.",
           "span": {
             "start": 586,
@@ -194,6 +199,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 686,
@@ -218,6 +224,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 712,
@@ -265,6 +272,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 880,
@@ -287,6 +295,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 930,
@@ -309,6 +318,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 966,
@@ -345,6 +355,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1015,
@@ -369,6 +380,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1043,
@@ -416,6 +428,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1177,
@@ -438,6 +451,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1228,
@@ -476,6 +490,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1272,
@@ -498,6 +513,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1365,
@@ -536,6 +552,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1413,
@@ -562,6 +579,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1510,
@@ -584,6 +602,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 1572,
@@ -604,12 +623,15 @@ expression: schema
       "indexes": [
         {
           "db_name": "memberships_account_id_idx",
-          "fields": [
+          "targets": [
             {
-              "field": "accountId",
-              "order": "Asc"
+              "Field": [
+                "accountId",
+                "Asc"
+              ]
             }
           ],
+          "where_clause": null,
           "span": {
             "start": 1665,
             "end": 1685
@@ -619,9 +641,19 @@ expression: schema
       "uniques": [
         {
           "db_name": "memberships_org_id_account_id_key",
-          "fields": [
-            "orgId",
-            "accountId"
+          "targets": [
+            {
+              "Field": [
+                "orgId",
+                "Asc"
+              ]
+            },
+            {
+              "Field": [
+                "accountId",
+                "Asc"
+              ]
+            }
           ],
           "span": {
             "start": 1633,

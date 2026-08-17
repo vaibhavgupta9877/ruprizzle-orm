@@ -11,8 +11,8 @@ use ruprizzle_core::ir::{
 };
 
 use crate::common::{
-    base_column_type, column_spec, create_table_body, fk_constraint_sql, quote_field_columns,
-    render_index_columns, rust_type_for,
+    base_column_type, column_spec, create_table_body, fk_constraint_sql, render_index_targets,
+    rust_type_for,
 };
 use crate::{Capabilities, DbDialect, DialectError, JsonSupport, RustType, Stmt};
 
@@ -120,7 +120,13 @@ impl DbDialect for MySqlDialect {
     }
 
     fn create_index(&self, m: &Model, ix: &IndexDef) -> Vec<Stmt> {
-        let cols = render_index_columns(self, m, ix);
+        if ix.where_clause.is_some() {
+            return vec![Stmt::new(format!(
+                "-- error: partial indexes are not supported on MySQL ({})",
+                ix.db_name
+            ))];
+        }
+        let cols = render_index_targets(self, m, &ix.targets);
         vec![Stmt::new(format!(
             "CREATE INDEX {} ON {} ({});",
             self.quote_ident(&ix.db_name),
@@ -140,7 +146,7 @@ impl DbDialect for MySqlDialect {
     fn add_unique(&self, m: &Model, uq: &UniqueDef) -> Vec<Stmt> {
         let table = self.quote_ident(&m.table);
         let name = self.quote_ident(&uq.db_name);
-        let cols = quote_field_columns(self, m, &uq.fields).join(", ");
+        let cols = render_index_targets(self, m, &uq.targets);
         vec![Stmt::new(format!(
             "CREATE UNIQUE INDEX {name} ON {table} ({cols});"
         ))]
@@ -240,6 +246,7 @@ impl DbDialect for MySqlDialect {
             deferrable_fks: false,
             json_type: JsonSupport::Native,
             max_query_params: 65_535,
+            postgis: false,
             window_functions: true,
         }
     }
