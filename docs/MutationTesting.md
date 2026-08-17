@@ -43,6 +43,17 @@ Run: `cargo mutants -p ruprizzle-migrate --jobs 4 --minimum-test-timeout 5`
 | Timeouts | 11 |
 | Mutation score | ~25.2% |
 
+A re-run on 2026-08-17 with the current source found:
+
+| Metric | Count |
+|--------|-------|
+| Mutants generated | 606 |
+| Caught (killed) | 14 |
+| Missed (survived) | 33 |
+| Unviable | 557 |
+| Timeouts | 2 |
+| Mutation score | **~28.6 %** (14 / 49) |
+
 The high `missed` count means many unit tests in `crates/migrate` are passing
 without asserting on the value being produced. Examples of surviving mutants
 include:
