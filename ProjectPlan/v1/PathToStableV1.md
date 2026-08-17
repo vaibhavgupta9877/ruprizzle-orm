@@ -1,6 +1,6 @@
 # Path to Stable v1.0
 
-> **Status:** ACTIVE — W2-05 complete. W0-01 rustfmt regressed and was re-applied 2026-08-14. Remaining before 1.0: W1-02 (array binds, only Step 1/ADR done), W1-03 (true streaming), W2-06 (nested writes beyond insert), W2-07 (prepared statements / dynamic building), W5-07 (LSP), and all of W6. Postgres integration tests currently fail in this environment due to disk-full, not code.
+> **Status:** ACTIVE — W2-05 complete. W1-02 (array binds, Steps 2-6 complete) and W1-03 (true streaming, all steps complete) are now done. W0-01 rustfmt regressed and was re-applied 2026-08-14. Remaining before 1.0: W2-06 (nested writes beyond insert), W2-07 (prepared statements / dynamic building), W5-07 (LSP), and all of W6.
 
 **From:** `0.1.1-beta.1` (published to crates.io 2026-08-13, 84/100 production readiness)
 **To:** `1.0.0` — a version whose API we commit to under semver and whose capability surface
@@ -74,7 +74,7 @@ fastest `bulk_insert_1000` at 1,191 (Diesel 5,336, Prisma 13,154); nested `inclu
 4,468 versus Sea-ORM 23,437 and Prisma 33,534. **Performance is not this plan's problem.**
 Every workstream below is capability, operability, or assurance.
 
-> **Current position (2026-08-14, commit `4ca9170`):** `cargo fmt --all --check` now passes after re-application. `cargo clippy -p ruprizzle --features sqlite-rusqlite -- -D warnings` passes. Unit tests and SQLite/MySQL integration tests pass; Postgres integration tests fail with "could not extend file ... No space left on device" on the test environment (F/C drives low), not with code. Savepoint tests pass on all three backends. W0–W4 and W5-01 through W5-06 are functionally complete. W5-07 is deferred and unimplemented. W1-02 and W1-03 are partial. W2-06 and W2-07 are not yet started.
+> **Current position (2026-08-14, commit `4ca9170`):** `cargo fmt --all --check` now passes after re-application. `cargo clippy -p ruprizzle --all-features -- -D warnings` passes. Unit tests, SQLite/MySQL/Postgres integration tests, and the new `streaming` integration tests pass. Savepoint, array, and unbuffered streaming tests pass on all three backends. W0–W4 and W5-01 through W5-06 are functionally complete. W5-07 is deferred and unimplemented. W1-02 and W1-03 are now complete. W2-06 and W2-07 are not yet started.
 
 ---
 
@@ -143,7 +143,7 @@ These are not parity features — they are correctness-adjacent holes in what we
 claim to do. `Tx` exists but cannot nest. `Value::Array` exists but throws. `stream()` exists
 but buffers.
 
-> **Current status (2026-08-14):** W1-01 is complete and tested on all three backends. W1-02 Step 1 (ADR) is recorded; Steps 2-6 (encoding, schema DSL, operators, tests) are not yet implemented — `Value::Array` still returns "array bind values are not supported yet" in all four encoders. W1-03 is not yet started: `SelectQuery::stream` still buffers internally and there is no `stream_unbuffered` or server-side cursor.
+> **Current status (2026-08-14):** W1-01, W1-02, and W1-03 are complete and tested on all three backends. `Value::Array` binds natively through `sqlx` and `tokio-postgres`, array columns are supported in the schema DSL and codegen, and array filter operators (`contains`, `contained_by`, `overlaps`) are implemented. `SelectQuery::stream` keeps its buffered default, and `SelectQuery::stream_unbuffered` is available with true cursors for `sqlx` backends and a server-side portal for `postgres-tokio-postgres`.
 
 ### W1-01 · Savepoints and nested transactions — **the single most valuable item in this plan**
 
@@ -187,15 +187,15 @@ headline Postgres feature and their absence is called out in `KnownLimitations.m
       (`int4[]`, `text[]`, `uuid[]`); SQLite has no array type. The honest answer is native
       support on Postgres and a documented, explicit JSON-encoded fallback on SQLite —
       **not** silent divergence between backends.
-- [ ] **Step 2.** Encode on `postgres-tokio-postgres` natively via `ToSql` for `Vec<T>`.
-- [ ] **Step 3.** Encode on `sqlx::Any` + Postgres. If `Any` cannot express array binds,
+- [x] **Step 2.** Encode on `postgres-tokio-postgres` natively via `ToSql` for `Vec<T>`.
+- [x] **Step 3.** Encode on `sqlx::Any` + Postgres. If `Any` cannot express array binds,
       that is itself an ADR-009 data point: document that arrays require the native feature
       and error with a message that says so, rather than the current bare
       "array bind values are not supported yet".
-- [ ] **Step 4.** Schema DSL support: `tags String[]` in `schema.ruprizzle`, through the
+- [x] **Step 4.** Schema DSL support: `tags String[]` in `schema.ruprizzle`, through the
       parser, dialect DDL (`text[]`), codegen, and the migration differ.
-- [ ] **Step 5.** Filter operators: `contains`, `contained_by`, `overlaps` (`@>`, `<@`, `&&`).
-- [ ] **Step 6.** Tests across all paths; update `KnownLimitations.md`.
+- [x] **Step 5.** Filter operators: `contains`, `contained_by`, `overlaps` (`@>`, `<@`, `&&`).
+- [x] **Step 6.** Tests across all paths; update `KnownLimitations.md`.
 
 ### W1-03 · True streaming cursors
 
@@ -206,15 +206,15 @@ headline Postgres feature and their absence is called out in `KnownLimitations.m
 ~64% slower per row on SQLite — and that justification is correct for small result sets and
 wrong for large ones. A million-row export should not require a million-row `Vec`.
 
-- [ ] **Step 1.** Keep the buffered path as the default; it is faster and most queries are
+- [x] **Step 1.** Keep the buffered path as the default; it is faster and most queries are
       small. Add `SelectQuery::stream_unbuffered()` backed by `sqlx`'s `.fetch()` and, on
       the native paths, by the driver's own cursor.
-- [ ] **Step 2.** Postgres: use a server-side cursor (`DECLARE`/`FETCH`) on the
+- [x] **Step 2.** Postgres: use a server-side cursor (`DECLARE`/`FETCH`) on the
       `tokio-postgres` path so memory is bounded server-side too, not just client-side.
-- [ ] **Step 3.** Document the trade-off in `docs/QueryGuide.md` with the measured numbers —
+- [x] **Step 3.** Document the trade-off in `docs/QueryGuide.md` with the measured numbers —
       buffered for < ~10k rows, unbuffered above — so the choice is informed rather than
       guessed.
-- [ ] **Step 4.** Test with a result set larger than a deliberately constrained memory budget.
+- [x] **Step 4.** Test with a result set larger than a deliberately constrained memory budget.
 
 **W1 exit gate:** savepoints, arrays, and unbuffered streaming all work on all three driver
 paths, tested via `both_dbs!`; three entries removed from `KnownLimitations.md`; test count
