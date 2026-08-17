@@ -517,7 +517,6 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 - Many-to-many implicit join tables (explicit join model works today; see ADR-006).
 - Raw-SQL compile-time verification (`sqlx::query!` style).
 - Full LSP for the schema DSL.
-- Connection pool metrics.
 - Docs site and generated-crate compile-time automation.
 
 See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md), the [production-readiness plan](ProjectPlan/ProductionReadinessPlan.md), and the [decisions log](ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md) for the full phase-by-phase state, production assessment, and ADRs.
@@ -533,7 +532,7 @@ This is an honest beta. The boundaries are documented so you can decide whether 
 - **Compile-time query checking** (`sqlx-data.json` / offline mode) is not implemented.
 - **No LSP** yet; syntax highlighting is available as a TextMate grammar.
 - **`Decimal` on SQLite** is stored as text.
-- **SQLite `Json`** is stored as text and cannot be queried with JSON operators.
+- **SQLite `Json`** is stored as TEXT, but JSON1 `json_extract`, `json_type`, and `json_set` are supported; containment (`@>`) is approximated because JSON1 has no containment operator.
 - **Polymorphic relations, recursive loading beyond depth 2, soft deletes, JSON path querying, full-text search, and PostGIS types** are deferred to 0.2+.
 
 See [docs/KnownLimitations.md](docs/KnownLimitations.md) for the full list and [docs/MigratingFrom.md](docs/MigratingFrom.md) for cheat-sheets when moving from Diesel, SeaORM, or sqlx.

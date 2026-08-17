@@ -9,8 +9,6 @@ whether the tool is right for your project.
 - **Heuristic renames** are suggested automatically. Add `@renamedFrom` to
   confirm or ignore the prompt; the diff never renames silently.
 - **`db push`** does not write migration files and is only for prototyping.
-- **Compile-time query checking** (`sqlx-data.json` / `offline` mode) is not
-  implemented.
 - **No LSP** yet; syntax highlighting is available as a TextMate grammar.
 - **`Decimal` on SQLite** is stored as text. If you need real decimal math on
   SQLite, use `String` and parse in application code.
@@ -44,9 +42,21 @@ whether the tool is right for your project.
   because a transaction holds a single connection and a streaming cursor would
   prevent any other statement from running on it.
 
-## Deferrals to 0.2
+## Deferred to v1.1
 
-- Full LSP (completion, diagnostics, go-to-definition).
+- **Compile-time query checking** (`sqlx-data.json` / offline mode) is not yet
+  implemented.
+
+## Deferred to v1.2+
+
+- Full-text search.
+- PostGIS / geospatial types.
+- Soft deletes.
+- Polymorphic relations.
+- Implicit many-to-many join tables (explicit join model works today; see
+  ADR-006).
+- Recursive tree helpers (ancestors/descendants beyond the current
+  depth-limited include).
 - Support for additional databases (MSSQL).
 
 ## When to choose something else
