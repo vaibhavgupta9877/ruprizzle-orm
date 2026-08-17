@@ -18,7 +18,7 @@ seconds the harness prints:
 - pool size, idle, in-use, and waiter counts
 - process RSS in bytes
 
-## Smoke run (10 s, 8 workers)
+## Smoke run (10 s, 8 workers) — before key-cycle fix
 
 ```text
 soak health: elapsed=15.9074ms ops=2 errors=0 size=4 idle=0 in_use=4 waiters=0 memory_bytes=15462400
@@ -39,6 +39,48 @@ soak finished: 113078 operations, 28266 rows remaining
 ```
 
 Again zero errors and stable memory.
+
+## Smoke run (10 s, 8 workers) — after key-cycle fix
+
+`crates/runtime/tests/soak.rs` was fixed so each key goes through a full
+`INSERT → UPDATE → SELECT → DELETE` cycle. This keeps the table size bounded
+and makes the `UPDATE`/`SELECT`/`DELETE` operations meaningful.
+
+```text
+soak health: elapsed=145.2µs ops=0 errors=0 size=4 idle=0 in_use=4 waiters=0 memory_bytes=10383360
+soak health: elapsed=5.0034805s ops=3648 errors=0 size=4 idle=0 in_use=4 waiters=0 memory_bytes=10952704
+soak health: elapsed=10.0111943s ops=6943 errors=0 size=4 idle=0 in_use=4 waiters=0 memory_bytes=10952704
+soak health: elapsed=10s ops=6951 errors=0 size=4 idle=3 in_use=1 waiters=0 memory_bytes=10977280
+soak finished: 6951 operations, 6 rows remaining
+```
+
+The fixed run shows zero errors, stable memory (≈ 10.5 MiB), and a bounded
+row count (6 rows = ~3 per in-flight worker) instead of unbounded growth.
+
+## 48-hour run (in progress)
+
+A 48-hour SQLite `rusqlite` soak was started on 2026-08-17 19:09 UTC with the
+following configuration:
+
+```text
+RUST_LOG=info
+RUST_BACKTRACE=1
+RUPRIZZLE_SOAK_DURATION_SECONDS=172800
+RUPRIZZLE_SOAK_WORKERS=8
+cargo test -p ruprizzle --test soak --features sqlite-rusqlite --release -- sqlite --nocapture
+```
+
+The live log is at `local/soak-48h/soak-48h.err` (stderr carries the health
+lines). The process is expected to finish at approximately 2026-08-19 19:09 UTC.
+Initial health lines (first 10 s of the run):
+
+```text
+soak health: elapsed=3.586ms ops=0 errors=0 size=4 idle=0 in_use=4 waiters=0 memory_bytes=10596352
+soak health: elapsed=5.0038624s ops=3440 errors=0 size=4 idle=0 in_use=4 waiters=0 memory_bytes=10932224
+soak health: elapsed=10.0008979s ops=6779 errors=0 size=4 idle=0 in_use=4 waiters=0 memory_bytes=10940416
+```
+
+The final summary should be appended here once the run completes.
 
 ## 48-hour run instructions
 

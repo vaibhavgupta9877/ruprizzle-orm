@@ -71,9 +71,14 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
             let mut local = 0u64;
             while start.elapsed() < duration {
                 local += 1;
-                let key = format!("w{w}-k{local}");
-                let value = format!("v-{local}");
-                let sql = match local % 4 {
+                // Each key is inserted, updated, selected, and deleted in a
+                // four-operation cycle so the table size stays bounded and the
+                // load is genuinely mixed.
+                let cycle = (local - 1) >> 2;
+                let op = (local - 1) & 3;
+                let key = format!("w{w}-k{cycle}");
+                let value = format!("v-{cycle}");
+                let sql = match op {
                     0 => "INSERT INTO soak_kv (k, v) VALUES ($1, $2)",
                     1 => "UPDATE soak_kv SET v = $2 WHERE k = $1",
                     2 => "SELECT v FROM soak_kv WHERE k = $1",

@@ -24,6 +24,9 @@ __pycache__/
 # Transient test directories created by tempfile under local/deep-tests/db
 local/deep-tests/db/.tmp*/
 
+# 48-hour soak test logs (long-running; not committed)
+local/soak-48h/
+
 # Proptest regression artefacts
 *.proptest-regressions
 
