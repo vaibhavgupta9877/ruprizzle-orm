@@ -29,6 +29,8 @@ local/soak-48h/
 
 # Mutation testing output (large, regenerated)
 local/mutants*/
+local/mutants-*.log
+local/mutants-*.err
 
 # Proptest regression artefacts
 *.proptest-regressions
