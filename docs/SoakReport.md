@@ -57,7 +57,7 @@ soak finished: 6951 operations, 6 rows remaining
 The fixed run shows zero errors, stable memory (≈ 10.5 MiB), and a bounded
 row count (6 rows = ~3 per in-flight worker) instead of unbounded growth.
 
-## 48-hour run (in progress)
+## 48-hour run (stopped early due to SQLite lock contention)
 
 A 48-hour SQLite `rusqlite` soak was started on 2026-08-17 19:09 UTC with the
 following configuration:
@@ -70,17 +70,22 @@ RUPRIZZLE_SOAK_WORKERS=8
 cargo test -p ruprizzle --test soak --features sqlite-rusqlite --release -- sqlite --nocapture
 ```
 
-The live log is at `local/soak-48h/soak-48h.err` (stderr carries the health
-lines). The process is expected to finish at approximately 2026-08-19 19:09 UTC.
-Initial health lines (first 10 s of the run):
+The process was stopped at 2026-08-17 19:56 UTC after approximately 47 minutes
+because the error count was climbing monotonically:
 
 ```text
-soak health: elapsed=3.586ms ops=0 errors=0 size=4 idle=0 in_use=4 waiters=0 memory_bytes=10596352
-soak health: elapsed=5.0038624s ops=3440 errors=0 size=4 idle=0 in_use=4 waiters=0 memory_bytes=10932224
-soak health: elapsed=10.0008979s ops=6779 errors=0 size=4 idle=0 in_use=4 waiters=0 memory_bytes=10940416
+soak health: elapsed=2790.0010417s ops=384624 errors=304 size=4 idle=0 in_use=4 waiters=0 memory_bytes=3031040
+soak health: elapsed=2835.0050862s ops=385688 errors=316 size=4 idle=0 in_use=4 waiters=0 memory_bytes=3031040
 ```
 
-The final summary should be appended here once the run completes.
+`memory_bytes` was stable and `waiters` stayed at 0, but the sustained
+`database is locked` / `busy timeout` errors from the native `rusqlite` backend
+under concurrent writers show that the `INSERT → UPDATE → SELECT → DELETE` cycle
+exposes a backend-specific concurrency issue not covered by the smoke run. The
+W4 exit-gate 48-hour run is therefore **not yet passing** for the `rusqlite`
+backend. The SQLite `sqlx` backend smoke run still passes, so this is specific
+to the native `rusqlite` driver path. The final summary will be updated once a
+fixed configuration completes the full 48 hours.
 
 ## 48-hour run instructions
 

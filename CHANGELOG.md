@@ -30,6 +30,30 @@ A beta milestone that closes the remaining alpha.3 beta blockers: clippy warning
 - Moved `crates/dialect/tests/conformance.rs` into `tests/integration/tests/dialect_conformance.rs` and removed the `ruprizzle-testkit` dev-dependency from `ruprizzle-dialect` so the crate can be packaged and published.
 - Published `ruprizzle-core`, `ruprizzle-parser`, `ruprizzle-dialect`, `ruprizzle-macros`, `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, and `ruprizzle-cli` version `0.1.1-beta.1` to crates.io.
 
+## [0.4.0-beta.2] - 2026-08-17
+
+### Fixed
+
+- `crates/runtime/tests/soak.rs` now logs per-operation errors, making it
+  possible to diagnose SQLite `database is locked` failures in long soak runs.
+
+### Changed
+
+- `ruprizzle-testkit` is now a path-only dev-dependency in `crates/runtime`, so
+  `cargo publish` for the runtime crate does not require the unpublished
+  `ruprizzle-testkit` to exist on crates.io.
+- Bumped the workspace version to `0.4.0-beta.2` and published all crates.
+
+### Documentation
+
+- `docs/SoakReport.md` now records the 48-hour `rusqlite` soak as stopped early
+  due to sustained `database is locked` / busy-timeout errors under concurrent
+  writers.
+- `docs/MutationTesting.md` now records the `ruprizzle-migrate` mutation
+  baseline (28.6 % score) and documents the in-progress runtime baseline.
+- `ProjectPlan/v1/V1Blockers.md` updated with the current status of the 48-hour
+  soak and mutation testing gates.
+
 ## [0.4.0-beta.1] - 2026-08-17
 
 Pre-1.0 milestone covering W2 (query surface), W3 (migrations/CLI), and W5

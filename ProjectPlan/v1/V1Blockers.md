@@ -262,9 +262,9 @@ Mechanical and documentation blockers are now resolved. The next work is release
 2. ✅ **Fix the rustdoc warnings** — done in `79341a4`; `RUSTDOCFLAGS="-D warnings"` is green.
 3. ✅ **Decide on `RUSTSEC-2023-0071` / `rsa`** — documented exception added in `4c8c106`. Revisit before marketing MySQL as production-grade.
 4. ✅ **Re-run `cargo xtask harden` and `cargo deny check`** — confirmed green on `dev-v0-2`.
-5. 🔄 **Run the 48-hour soak** and record the result in `docs/SoakReport.md` — started on 2026-08-17 19:09 UTC (process `soak-753643a75bae20f4`, PID 31764); expected completion 2026-08-19 19:09 UTC. See `docs/SoakReport.md`.
+5. ❌ **Run the 48-hour soak** and record the result in `docs/SoakReport.md` — started on 2026-08-17 19:09 UTC; stopped at 2026-08-17 19:56 UTC after ~47 min due to sustained SQLite `database is locked` / busy-timeout errors under concurrent `rusqlite` writers. See `docs/SoakReport.md` for the failing log and the next steps to fix the `rusqlite` backend before the gate can pass.
 6. 🔄 **Complete and record the runtime mutation-testing baseline** — a full `cargo mutants -p ruprizzle` run is in progress (1684 mutants, 4 jobs, started 2026-08-17). `ruprizzle-migrate` baseline is now recorded: 14 caught / 33 missed / 2 timeouts out of 606 mutants, ~28.6 % mutation score; documented as a known gap in `docs/MutationTesting.md`.
-7. ✅ **Bump the version to the next pre-1.0 milestone and publish** — bumped to `0.4.0-beta.1` and published all crates to crates.io.
+7. ✅ **Bump the version to the next pre-1.0 milestone and publish** — bumped to `0.4.0-beta.2` and published all crates to crates.io.
 8. **Cut `1.0.0-rc.1`**, run a minimum two-week feedback window, get at least one external project to upgrade and report back, then re-score production readiness against the RC.
 9. Only then cut and publish `1.0.0`.
 

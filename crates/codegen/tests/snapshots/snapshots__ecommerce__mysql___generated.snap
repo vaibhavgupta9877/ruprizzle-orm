@@ -6,4 +6,4 @@ expression: content
 /// Schema hash, used to detect stale generated code.
 pub const SCHEMA_HASH: &str = "73904a1a46a6d4dda7c64f229aa7647eab501c0c119ef3278d6beef560acba61";
 /// ruprizzle version that generated this code.
-pub const RUPRIZZLE_VERSION: &str = "0.4.0-beta.1";
+pub const RUPRIZZLE_VERSION: &str = "0.4.0-beta.2";
