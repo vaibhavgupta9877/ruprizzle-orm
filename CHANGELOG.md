@@ -42,7 +42,10 @@ A beta milestone that closes the remaining alpha.3 beta blockers: clippy warning
 - `ruprizzle-testkit` is now a path-only dev-dependency in `crates/runtime`, so
   `cargo publish` for the runtime crate does not require the unpublished
   `ruprizzle-testkit` to exist on crates.io.
-- Bumped the workspace version to `0.4.0-beta.2` and published all crates.
+- Bumped the workspace version to `0.4.0-beta.2` and published all crates
+  (`ruprizzle-core`, `ruprizzle-parser`, `ruprizzle-dialect`, `ruprizzle-macros`,
+  `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, `ruprizzle-cli`) to
+  crates.io.
 
 ### Documentation
 
