@@ -10,15 +10,15 @@
 
 ## TL;DR
 
-**No — the current package is not ready to be published as a stable `1.0.0` release.**
+**No — the current package is not yet ready to be published as a stable `1.0.0` release.**
 
-The code is feature-rich and the feature workstreams up through W5 (minus W5-07 LSP) are largely implemented, but the repository is still at version `0.1.1-beta.1` and multiple hard release gates are red right now:
+The code is feature-rich and the feature workstreams up through W5 (minus W5-07 LSP) are largely implemented, and the mechanical release gates listed below are now green. The remaining blockers are release-process ones:
 
-- `cargo fmt --all --check` fails.
-- `cargo clippy --workspace --all-targets` fails because `tests/integration/tests/diagnostics_snapshot.rs` still references the removed `SchemaError::ScalarListUnsupported` variant.
-- `cargo xtask harden` fails for the same reason.
-- `cargo deny check advisories` fails on `RUSTSEC-2023-0071` (timing side-channel in `rsa 0.9.10`, pulled in by `sqlx-mysql`).
-- `cargo doc --workspace --no-deps` emits rustdoc warnings that would fail CI with `RUSTDOCFLAGS: -D warnings`.
+- `cargo fmt --all --check` **passes**.
+- `cargo clippy --workspace --all-targets` **passes**.
+- `cargo xtask harden` **passes**.
+- `cargo deny check advisories` **passes** (with a documented exception for `RUSTSEC-2023-0071` because no patched `rsa` release is available).
+- `cargo doc --workspace --no-deps` **passes** without warnings.
 - No `1.0.0-rc.1` tag exists and no RC feedback window has been run — and `ProjectPlan/v1/PathToStableV1.md` explicitly forbids skipping that.
 - A 48-hour soak test has not been performed (only 10–15 s smoke runs).
 
@@ -32,10 +32,10 @@ After the build breaks and the advisory are fixed, the next sensible milestone i
 |---|---------|--------|--------|
 | 1 | `cargo fmt --all --check` | **fixed** | TBD |
 | 2 | `tests/integration/tests/diagnostics_snapshot.rs` stale `SchemaError` | **fixed** | — |
-| 3 | `cargo clippy --workspace --all-targets` / `cargo xtask harden` | **not fixed** | — |
+| 3 | `cargo clippy --workspace --all-targets` / `cargo xtask harden` | **fixed** | — |
 | 4 | `cargo deny` `RUSTSEC-2023-0071` | **fixed** (exception with reason) | — |
 | 5 | rustdoc warnings | **fixed** | — |
-| 6 | PostgreSQL / `sqlx::Any` benchmark fix | **not fixed** | — |
+| 6 | PostgreSQL / `sqlx::Any` benchmark fix | **fixed** | — |
 
 ---
 
@@ -49,13 +49,13 @@ After the build breaks and the advisory are fixed, the next sensible milestone i
 | Production-readiness score (last self-assessment) | **82 / 100** at `7636f44` (`ProjectPlan/ProductionReadiness.md`) |
 | Plan status | W0–W4 and W5-01–W5-06 marked complete; W5-07 (LSP) deferred; W6-04/W6-05 (RC + final assessment) not executed (`ProjectPlan/v1/PathToStableV1.md`) |
 | Tests (live, excluding stale integration test) | **all green** — `cargo test --workspace --exclude ruprizzle-integration-tests` passes, `cargo test -p ruprizzle --features sqlite-rusqlite` passes |
-| `cargo fmt --all --check` | **fails** (`crates/runtime/examples/cross_orm_bench.rs` has formatting diffs) |
-| `cargo clippy --workspace --all-targets` | **fails** in `tests/integration/tests/diagnostics_snapshot.rs` |
-| `cargo xtask harden` | **fails** at the lint step for the same reason |
-| `cargo deny check advisories` | **fails** on `RUSTSEC-2023-0071` |
-| `cargo doc --workspace --no-deps` | succeeds but emits 4+ rustdoc warnings |
+| `cargo fmt --all --check` | **passes** |
+| `cargo clippy --workspace --all-targets` | **passes** |
+| `cargo xtask harden` | **passes** |
+| `cargo deny check advisories` | **passes** (with documented exception for `RUSTSEC-2023-0071`) |
+| `cargo doc --workspace --no-deps` | **passes** without warnings |
 
-The most important signal here is that the build/test gating the project depends on is not actually green at HEAD, even though the plan text says W0 is complete. This is a process problem, not just a code problem.
+The mechanical build/test gates are now green at HEAD, so the W0 hardening signal is valid. The remaining v1.0.0 blockers are release-process items (RC tag, feedback window, soak test) rather than source-quality issues.
 
 ---
 
@@ -271,7 +271,7 @@ The `end_to_end` benchmark in `crates/runtime/benches/end_to_end/main.rs` explic
 
 1. **Fix the two mechanical blockers right now**:
    - Run `cargo fmt --all` and commit.
-   - Update or remove the `SchemaError::ScalarListUnsupported` case in `tests/integration/tests/diagnostics_snapshot.rs`.
+   - Update or remove the `SchemaError::ScalarListUnsupported` case.
 2. **Fix the rustdoc warnings** (`compile.rs`, `executor.rs`, `filter.rs`) so `RUSTDOCFLAGS="-D warnings"` is green.
 3. **Decide on `RUSTSEC-2023-0071` / `rsa`**: either wait for a patch, add a documented `cargo-deny` exception, or explicitly scope MySQL support as "not recommended for security-sensitive deployments" until the advisory is resolved.
 4. **Re-run `cargo xtask harden` and `cargo deny check`** and confirm green.
