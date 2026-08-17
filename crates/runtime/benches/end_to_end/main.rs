@@ -92,37 +92,39 @@ fn bulk_insert_sql(table: &str, columns: &[&str], rows: usize, returning: &[&str
     sql
 }
 
-async fn setup(pool: &ruprizzle::Pool) {
-    sqlx::query("DROP TABLE IF EXISTS bench_rows, bench_bulk, bench_parents, bench_children, bench_grandchildren")
-        .execute(pool)
+async fn setup(sqlx_pool: &sqlx::Pool<sqlx::Postgres>) {
+    sqlx::query::<sqlx::Postgres>("DROP TABLE IF EXISTS bench_rows, bench_bulk, bench_parents, bench_children, bench_grandchildren")
+        .execute(sqlx_pool)
         .await
         .expect("drop");
-    sqlx::query(
+    sqlx::query::<sqlx::Postgres>(
         "CREATE TABLE bench_rows (id BIGINT PRIMARY KEY, name TEXT NOT NULL, n BIGINT NOT NULL)",
     )
-    .execute(pool)
+    .execute(sqlx_pool)
     .await
     .expect("create bench_rows");
-    sqlx::query(
+    sqlx::query::<sqlx::Postgres>(
         "CREATE TABLE bench_bulk (id BIGINT PRIMARY KEY, name TEXT NOT NULL, n BIGINT NOT NULL)",
     )
-    .execute(pool)
+    .execute(sqlx_pool)
     .await
     .expect("create bench_bulk");
-    sqlx::query("CREATE TABLE bench_parents (id BIGINT PRIMARY KEY, name TEXT NOT NULL)")
-        .execute(pool)
-        .await
-        .expect("create bench_parents");
-    sqlx::query(
+    sqlx::query::<sqlx::Postgres>(
+        "CREATE TABLE bench_parents (id BIGINT PRIMARY KEY, name TEXT NOT NULL)",
+    )
+    .execute(sqlx_pool)
+    .await
+    .expect("create bench_parents");
+    sqlx::query::<sqlx::Postgres>(
         "CREATE TABLE bench_children (id BIGINT PRIMARY KEY, parent_id BIGINT NOT NULL, name TEXT NOT NULL)",
     )
-    .execute(pool)
+    .execute(sqlx_pool)
     .await
     .expect("create bench_children");
-    sqlx::query(
+    sqlx::query::<sqlx::Postgres>(
         "CREATE TABLE bench_grandchildren (id BIGINT PRIMARY KEY, child_id BIGINT NOT NULL, name TEXT NOT NULL)",
     )
-    .execute(pool)
+    .execute(sqlx_pool)
     .await
     .expect("create bench_grandchildren");
 
@@ -130,19 +132,19 @@ async fn setup(pool: &ruprizzle::Pool) {
         .map(|i| (i, format!("row-{i}"), i * 2))
         .collect();
     let sql = bulk_insert_sql("bench_rows", &["id", "name", "n"], rows.len(), &[]);
-    let mut q = sqlx::query(&sql);
+    let mut q = sqlx::query::<sqlx::Postgres>(&sql);
     for (id, name, n) in &rows {
         q = q.bind(*id).bind(name).bind(*n);
     }
-    q.execute(pool).await.expect("seed bench_rows");
+    q.execute(sqlx_pool).await.expect("seed bench_rows");
 
     let parents: Vec<(i64, String)> = (1..=PARENTS).map(|i| (i, format!("parent-{i}"))).collect();
     let parent_sql = bulk_insert_sql("bench_parents", &["id", "name"], parents.len(), &[]);
-    let mut q = sqlx::query(&parent_sql);
+    let mut q = sqlx::query::<sqlx::Postgres>(&parent_sql);
     for (id, name) in &parents {
         q = q.bind(*id).bind(name);
     }
-    q.execute(pool).await.expect("seed bench_parents");
+    q.execute(sqlx_pool).await.expect("seed bench_parents");
 
     let children: Vec<(i64, i64, String)> = (1..=PARENTS * CHILDREN_PER_PARENT)
         .map(|i| {
@@ -156,11 +158,11 @@ async fn setup(pool: &ruprizzle::Pool) {
         children.len(),
         &[],
     );
-    let mut q = sqlx::query(&child_sql);
+    let mut q = sqlx::query::<sqlx::Postgres>(&child_sql);
     for (id, parent_id, name) in &children {
         q = q.bind(*id).bind(*parent_id).bind(name);
     }
-    q.execute(pool).await.expect("seed bench_children");
+    q.execute(sqlx_pool).await.expect("seed bench_children");
 
     let grandchildren: Vec<(i64, i64, String)> =
         (1..=PARENTS * CHILDREN_PER_PARENT * GRANDCHILDREN_PER_CHILD)
@@ -175,11 +177,13 @@ async fn setup(pool: &ruprizzle::Pool) {
         grandchildren.len(),
         &[],
     );
-    let mut q = sqlx::query(&grandchild_sql);
+    let mut q = sqlx::query::<sqlx::Postgres>(&grandchild_sql);
     for (id, child_id, name) in &grandchildren {
         q = q.bind(*id).bind(*child_id).bind(name);
     }
-    q.execute(pool).await.expect("seed bench_grandchildren");
+    q.execute(sqlx_pool)
+        .await
+        .expect("seed bench_grandchildren");
 }
 
 fn bench_end_to_end(c: &mut Criterion) {
@@ -192,27 +196,22 @@ fn bench_end_to_end(c: &mut Criterion) {
     let mut config = PoolConfig::default();
     config.min_connections = 4;
     config.max_connections = 4;
-    let any = match rt.block_on(async {
-        sqlx::any::install_default_drivers();
-        sqlx::any::AnyPoolOptions::new()
-            .max_connections(config.max_connections)
-            .min_connections(config.min_connections)
-            .acquire_timeout(config.acquire_timeout)
-            .idle_timeout(config.idle_timeout)
-            .max_lifetime(config.max_lifetime)
-            .test_before_acquire(config.test_before_acquire)
-            .connect(&url)
-            .await
-    }) {
+    let pool = match rt.block_on(ruprizzle::connect_with(&url, &config)) {
         Ok(p) => p,
         Err(e) => {
             eprintln!("skipping end_to_end benches: could not connect to `{url}`: {e}");
             return;
         }
     };
-    let pool = ruprizzle::Pool::Any(any);
+    let sqlx_pool = match &pool {
+        ruprizzle::Pool::Postgres(p) => p.clone(),
+        _ => {
+            eprintln!("skipping end_to_end benches: `{url}` did not yield a native Postgres pool");
+            return;
+        }
+    };
 
-    rt.block_on(setup(&pool));
+    rt.block_on(setup(&sqlx_pool));
 
     let db = Db::from_pool(pool.clone());
 
@@ -223,12 +222,13 @@ fn bench_end_to_end(c: &mut Criterion) {
     group.bench_function("sqlx_single_row_by_pk", |b| {
         b.iter(|| {
             rt.block_on(async {
-                let _: (i64, String, i64) =
-                    sqlx::query_as("SELECT id, name, n FROM bench_rows WHERE id = $1")
-                        .bind(500i64)
-                        .fetch_one(&pool)
-                        .await
-                        .expect("fetch");
+                let _: (i64, String, i64) = sqlx::query_as::<sqlx::Postgres, _>(
+                    "SELECT id, name, n FROM bench_rows WHERE id = $1",
+                )
+                .bind(500i64)
+                .fetch_one(&sqlx_pool)
+                .await
+                .expect("fetch");
             });
         });
     });
@@ -253,8 +253,8 @@ fn bench_end_to_end(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let rows: Vec<(i64, String, i64)> =
-                    sqlx::query_as("SELECT id, name, n FROM bench_rows")
-                        .fetch_all(&pool)
+                    sqlx::query_as::<sqlx::Postgres, _>("SELECT id, name, n FROM bench_rows")
+                        .fetch_all(&sqlx_pool)
                         .await
                         .expect("fetch");
                 assert_eq!(rows.len(), 1_000);
@@ -277,8 +277,8 @@ fn bench_end_to_end(c: &mut Criterion) {
         let parent_sql = "SELECT id, name FROM bench_parents".to_string();
         b.iter(|| {
             rt.block_on(async {
-                let parents: Vec<(i64, String)> = sqlx::query_as(&parent_sql)
-                    .fetch_all(&pool)
+                let parents: Vec<(i64, String)> = sqlx::query_as::<sqlx::Postgres, _>(&parent_sql)
+                    .fetch_all(&sqlx_pool)
                     .await
                     .expect("fetch parents");
                 let parent_ids: Vec<i64> = parents.iter().map(|p| p.0).collect();
@@ -289,12 +289,12 @@ fn bench_end_to_end(c: &mut Criterion) {
                     "parent_id",
                     parent_ids.len(),
                 );
-                let mut q = sqlx::query_as::<_, (i64, i64, String)>(&children_sql);
+                let mut q = sqlx::query_as::<sqlx::Postgres, (i64, i64, String)>(&children_sql);
                 for id in &parent_ids {
                     q = q.bind(*id);
                 }
                 let children: Vec<(i64, i64, String)> =
-                    q.fetch_all(&pool).await.expect("fetch children");
+                    q.fetch_all(&sqlx_pool).await.expect("fetch children");
 
                 let child_ids: Vec<i64> = children.iter().map(|c| c.0).collect();
                 let grandchildren_sql = in_sql(
@@ -303,12 +303,13 @@ fn bench_end_to_end(c: &mut Criterion) {
                     "child_id",
                     child_ids.len(),
                 );
-                let mut q = sqlx::query_as::<_, (i64, i64, String)>(&grandchildren_sql);
+                let mut q =
+                    sqlx::query_as::<sqlx::Postgres, (i64, i64, String)>(&grandchildren_sql);
                 for id in &child_ids {
                     q = q.bind(*id);
                 }
                 let grandchildren: Vec<(i64, i64, String)> =
-                    q.fetch_all(&pool).await.expect("fetch grandchildren");
+                    q.fetch_all(&sqlx_pool).await.expect("fetch grandchildren");
 
                 let mut child_map: HashMap<i64, Vec<(i64, i64, String)>> = HashMap::new();
                 let mut grandchild_map: HashMap<i64, Vec<(i64, i64, String)>> = HashMap::new();
@@ -387,15 +388,15 @@ fn bench_end_to_end(c: &mut Criterion) {
     group.bench_function("sqlx_bulk_insert_10000", |b| {
         b.iter(|| {
             rt.block_on(async {
-                sqlx::query("TRUNCATE TABLE bench_bulk")
-                    .execute(&pool)
+                sqlx::query::<sqlx::Postgres>("TRUNCATE TABLE bench_bulk")
+                    .execute(&sqlx_pool)
                     .await
                     .expect("truncate");
-                let mut q = sqlx::query_as::<_, (i64, String, i64)>(&bulk_sql);
+                let mut q = sqlx::query_as::<sqlx::Postgres, (i64, String, i64)>(&bulk_sql);
                 for row in &bulk_data {
                     q = q.bind(row.id).bind(row.name.as_str()).bind(row.n);
                 }
-                let rows: Vec<(i64, String, i64)> = q.fetch_all(&pool).await.expect("insert");
+                let rows: Vec<(i64, String, i64)> = q.fetch_all(&sqlx_pool).await.expect("insert");
                 assert_eq!(rows.len(), 10_000);
             });
         });
@@ -404,8 +405,8 @@ fn bench_end_to_end(c: &mut Criterion) {
     group.bench_function("ruprizzle_bulk_insert_10000", |b| {
         b.iter(|| {
             rt.block_on(async {
-                sqlx::query("TRUNCATE TABLE bench_bulk")
-                    .execute(&pool)
+                sqlx::query::<sqlx::Postgres>("TRUNCATE TABLE bench_bulk")
+                    .execute(&sqlx_pool)
                     .await
                     .expect("truncate");
                 let rows: Vec<crate::BenchBulk> =

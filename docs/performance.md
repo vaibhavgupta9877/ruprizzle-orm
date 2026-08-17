@@ -5,6 +5,11 @@ for the same operations, because ruprizzle sits on top of `sqlx`. The
 interesting number is therefore our overhead, not our speed versus another ORM
 on different hardware.
 
+The benchmark uses `ruprizzle::connect_with` for the ruprizzle side and a
+matching native `sqlx::Postgres` pool for the hand-written baseline. This is the
+same path a normal `postgres://` URL takes by default, and it avoids the
+additional text-marshalling cost of the generic `sqlx::Any` driver.
+
 Run it with:
 
 ```bash
@@ -29,7 +34,8 @@ to disable the fast path entirely.
 ## P8-02 thresholds and measured results
 
 Measured on a single workstation (Intel Core Ultra 7 265K, 20 logical cores,
-32 GB RAM) against a local PostgreSQL database using `sqlx::Any`.
+32 GB RAM) against a local PostgreSQL database using native `sqlx::Postgres`
+(via `ruprizzle::connect_with`).
 
 | Benchmark | Hand-written sqlx | ruprizzle | Acceptance | Status |
 |---|---|---|---|---|
@@ -43,11 +49,10 @@ instance; the previous run was blocked by a tmpfs WAL-space exhaustion.
 
 On this run the 1 000-row and single-row selects are both above the 5% parity
 target. The 2-level include and bulk insert are within their thresholds. The
-single/1 000-row overhead is likely dominated by `sqlx::Any` text marshalling
-and the extra row-by-row decoding in the ORM path; the 2-level include grouping
-has improved substantially. P8-02 measures this overhead against the thresholds;
-actually optimising the remaining per-row decode cost belongs to a separate work
-item.
+single/1 000-row overhead is likely dominated by the extra row-by-row decoding
+in the ORM path; the 2-level include grouping has improved substantially.
+P8-02 measures this overhead against the thresholds; actually optimising the
+remaining per-row decode cost belongs to a separate work item.
 
 ## Prepared statements
 
@@ -72,9 +77,12 @@ parameters, `prepare()` removes that per-call compilation cost.
 
 `sqlx::Any` serialises `Uuid`, `Decimal`, `DateTime`, `Date`, `Time` and `Json`
 to text on every outbound bind and parses them from text on every inbound row.
-That cost is real and unquantified in the current numbers because the bench
-schema uses `BIGINT` and `TEXT` columns. In a real workload with rich types the
-gap between ruprizzle and hand-written sqlx is expected to be dominated by this
-`Any` driver behaviour, not by the ORM layer. If you profile, compare against
-hand-written `sqlx::query` using the same `Any` driver; switching to a
-driver-specific pool would remove this cost for both paths.
+That cost is real, but the default `postgres://` connection path uses the native
+`sqlx::Postgres` driver and binds rich types directly, so most Postgres users
+are not affected. The cost only applies if you explicitly construct
+`Pool::Any(...)` or use a generic `Any` URL.
+
+In a real workload with rich types the gap between ruprizzle and hand-written
+sqlx is expected to be dominated by the ORM decode path, not by driver
+marshalling, as long as the native driver is selected. If you profile, compare
+against hand-written `sqlx::query` using the same native `sqlx::Postgres` pool.

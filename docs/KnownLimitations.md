@@ -25,9 +25,12 @@ whether the tool is right for your project.
 - **Rich types through `sqlx::Any` are limited.** On SQLite, `Uuid`,
   `Decimal`, `DateTime`, `Date`, `Time`, and `Json` round-trip as text. The
   `sqlite-rusqlite` feature parses them from text at decode time, which is
-  faster but still stores them as text in the database. On Postgres, the
-  `postgres-tokio-postgres` feature decodes native types directly; without it,
-  `sqlx::Any` may not decode several rich types. See
+  faster but still stores them as text in the database. On Postgres, the default
+  `postgres://` connection uses the native `sqlx::Postgres` driver and binds
+  rich types directly, so `sqlx::Any` text marshalling only applies if you
+  explicitly construct `Pool::Any(...)` or use a non-default URL. The
+  `postgres-tokio-postgres` feature is available as an additional native driver
+  with its own performance characteristics. See
   [ADR-009](../ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md).
 - **`SelectQuery::stream` is buffered, not a true cursor.** The current
   implementation buffers the full result set and yields decoded rows. Using
