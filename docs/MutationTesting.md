@@ -60,22 +60,32 @@ asserting the actual behaviour.
 
 ### `crates/runtime` (`ruprizzle`)
 
-`cargo mutants -p ruprizzle --list` reports **1004 mutants** in the runtime crate.
+`cargo mutants -p ruprizzle --list` currently reports **1684 mutants** in the
+runtime crate (the previous 1004 count was from an earlier feature set).
 
 A full local run is expensive: the default copy-per-mutant mode recompiles the
-runtime integration tests for each of the 1004 mutants (many hours on a
-single-core path), and `--in-place` on Windows can fail to overwrite mapped
-source files. The baseline is therefore generated in CI
-(`.github/workflows/mutants.yml`), which shards the runtime run across four
-parallel jobs.
+runtime integration tests for each mutant (many hours on a single-core path),
+and `--in-place` on Windows can fail to overwrite mapped source files. The
+baseline is therefore generated in CI (`.github/workflows/mutants.yml`), which
+shards the runtime run across four parallel jobs.
 
-For an abbreviated local run:
+A local unsharded run was started on 2026-08-17 with:
 
 ```bash
 RUST_BACKTRACE=0 RUPRIZZLE_SOAK_DURATION_SECONDS=0 cargo mutants -p ruprizzle --jobs 4 --minimum-test-timeout 30 --output local/mutants-runtime
 ```
 
-The full runtime baseline will be recorded here once the CI run completes.
+The live log is at `local/mutants-runtime.log`. Results will be recorded here
+once the run completes.
+
+## Known gap: `ruprizzle-migrate` mutation coverage
+
+`ruprizzle-migrate` currently has very poor mutation coverage. A local run
+started on 2026-08-17 shows a large number of surviving mutants in
+`Change::description`, `diff_enums`, `diff_columns`, `diff_relations`,
+`diff_indexes`, `split_statements`, and `Migrator::apply_all`. The live log is
+at `local/mutants-migrate.log`. Fixing this is deferred to the W6 hardening
+cycle; for the `0.4.0-beta.1` milestone it is documented as a known gap.
 
 ## Next steps
 

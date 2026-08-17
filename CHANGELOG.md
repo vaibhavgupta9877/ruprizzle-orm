@@ -32,6 +32,10 @@ A beta milestone that closes the remaining alpha.3 beta blockers: clippy warning
 
 ## [0.4.0-beta.1] - 2026-08-17
 
+Pre-1.0 milestone covering W2 (query surface), W3 (migrations/CLI), and W5
+(operability). The runtime, CLI, migration, and codegen crates are now
+competitive with Prisma/Drizzle on the measured feature set.
+
 ### Fixed
 
 - **Transaction lifecycle on the native drivers (pre-v1 Phase 1).** Neither hand-written
@@ -130,6 +134,7 @@ A beta milestone that closes the remaining alpha.3 beta blockers: clippy warning
 - CI: stale `generated-code-lint` job (which asserted the code generator was still unimplemented) replaced with the working `generated-code` gate.
 - CI: `cargo-deny-action` pinned to `v2.1.1` to avoid the positional-argument regression in `v2.1.0`.
 - Docs: security advisory reporting link in `ProductionReadinessPlan.md` now points at the real repository.
+- Published `ruprizzle-core`, `ruprizzle-parser`, `ruprizzle-dialect`, `ruprizzle-macros`, `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, and `ruprizzle-cli` version `0.4.0-beta.1` to crates.io.
 
 ## [0.1.0-alpha.2] - 2026-08-10
 

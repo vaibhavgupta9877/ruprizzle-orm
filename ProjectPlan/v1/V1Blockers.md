@@ -263,8 +263,8 @@ Mechanical and documentation blockers are now resolved. The next work is release
 3. ✅ **Decide on `RUSTSEC-2023-0071` / `rsa`** — documented exception added in `4c8c106`. Revisit before marketing MySQL as production-grade.
 4. ✅ **Re-run `cargo xtask harden` and `cargo deny check`** — confirmed green on `dev-v0-2`.
 5. 🔄 **Run the 48-hour soak** and record the result in `docs/SoakReport.md` — started on 2026-08-17 19:09 UTC (process `soak-753643a75bae20f4`, PID 31764); expected completion 2026-08-19 19:09 UTC. See `docs/SoakReport.md`.
-6. **Complete and record the runtime mutation-testing baseline**; `ruprizzle-migrate` is at ~25 % (document as a known gap or improve coverage).
-7. **Bump the version to the next pre-1.0 milestone** (`0.3.0-beta.1` or `0.4.0-beta.1`) and publish it.
+6. 🔄 **Complete and record the runtime mutation-testing baseline** — a full `cargo mutants -p ruprizzle` run is in progress (1684 mutants, 4 jobs, started 2026-08-17). `ruprizzle-migrate` coverage is documented as a known gap; see `docs/MutationTesting.md`.
+7. ✅ **Bump the version to the next pre-1.0 milestone and publish** — bumped to `0.4.0-beta.1` and published all crates to crates.io.
 8. **Cut `1.0.0-rc.1`**, run a minimum two-week feedback window, get at least one external project to upgrade and report back, then re-score production readiness against the RC.
 9. Only then cut and publish `1.0.0`.
 
