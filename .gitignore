@@ -27,6 +27,9 @@ local/deep-tests/db/.tmp*/
 # 48-hour soak test logs (long-running; not committed)
 local/soak-48h/
 
+# Mutation testing output (large, regenerated)
+local/mutants*/
+
 # Proptest regression artefacts
 *.proptest-regressions
 
