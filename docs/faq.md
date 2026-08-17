@@ -8,7 +8,7 @@ SQL. It targets Postgres and SQLite from day one.
 
 ## Is it production-ready?
 
-Not yet. The current release is `0.1.1-beta.1`. The API will change, and the
+Not yet. The current release is `0.4.0-beta.2`. The API will change, and the
 [known limitations](KnownLimitations.md) are documented explicitly.
 
 ## How is it different from Diesel or SeaORM?
@@ -52,7 +52,7 @@ Open an issue on the [GitHub repository](https://github.com/vaibhavgupta9877/rup
       "name": "Is it production-ready?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Not yet. The current release is 0.1.1-beta.1. The API will change, and the known limitations are documented explicitly."
+        "text": "Not yet. The current release is 0.4.0-beta.2. The API will change, and the known limitations are documented explicitly."
       }
     },
     {

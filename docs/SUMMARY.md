@@ -13,4 +13,4 @@
 [Migrating from other ORMs](MigratingFrom.md)
 [FAQ](faq.md)
 [Architecture decision records](adr/index.md)
-[0.1.1-beta.1 announcement](announcement.md)
+[0.4.0-beta.2 announcement](announcement.md)

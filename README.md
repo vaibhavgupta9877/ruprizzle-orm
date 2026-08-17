@@ -13,7 +13,7 @@ A **schema-first ORM for Rust** that combines the best parts of Prisma and Drizz
 
 Postgres and SQLite are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver.
 
-> **Status:** `0.1.1-beta.1` is ready for beta. P0–P7 are complete; P8 (tests, benchmarks, docs site, crates.io release) is mostly complete and the public API is now stabilising. See [Known limitations](#known-limitations) for the honest boundaries of the beta.
+> **Status:** `0.4.0-beta.2` is ready for beta. P0–P7 are complete; P8 (tests, benchmarks, docs site, crates.io release) is mostly complete and the public API is now stabilising. See [Known limitations](#known-limitations) for the honest boundaries of the beta.
 
 ---
 
@@ -494,10 +494,9 @@ The end-to-end I/O benchmark is `cargo bench -p ruprizzle --bench end_to_end`; f
 
 ## Status and roadmap
 
-P0–P7 are complete, P8 is mostly complete (docs site / announcement pending), and `0.1.1-beta.1` is on crates.io. Remaining work before a stable 0.2:
+P0–P7 are complete, P8 is mostly complete (docs site pending), and `0.4.0-beta.2` is on crates.io. Remaining work before a stable 0.2:
 
 - Many-to-many implicit join tables (explicit join model works today).
-- Database introspection → schema (`db pull`).
 - Raw-SQL compile-time verification (`sqlx::query!` style).
 - Full LSP for the schema DSL.
 - Connection pool metrics.
