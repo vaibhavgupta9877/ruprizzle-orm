@@ -4,12 +4,17 @@
 Runs ruprizzle (sqlx + rusqlite), prax-orm, sea-orm, diesel, Drizzle and
 Prisma harnesses with warm-up + measurement trials, aggregates statistics,
 logs raw data, and updates docs/BenchmarkResults.md with the median numbers.
+
+When BENCH_PG_URL and/or BENCH_MYSQL_URL are set, the ruprizzle harness is
+also run against PostgreSQL and/or MySQL and a dedicated section is appended
+to the results document.
 """
 
 import json
 import math
 import os
 import re
+import shutil
 import statistics
 import subprocess
 import sys
@@ -28,9 +33,11 @@ MEASURE_TRIALS = int(os.environ.get("BENCH_TRIALS", "10"))
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NODE_DIR = REPO_ROOT / "local" / "cross-orm-bench" / "node"
 RUST_DIR = REPO_ROOT / "local" / "cross-orm-bench" / "rust"
+BENCH_DIR = REPO_ROOT / "local" / "cross-orm-bench"
 DOCS_PATH = REPO_ROOT / "docs" / "BenchmarkResults.md"
 DB_PATH = NODE_DIR / "bench.sqlite3"
 RUST_EXE = REPO_ROOT / "target" / "release" / "examples" / "cross_orm_bench.exe"
+SEED_PY = BENCH_DIR / "seed.py"
 
 DRIVER_ORDER = [
     "ruprizzle (sqlx)",
@@ -41,6 +48,12 @@ DRIVER_ORDER = [
     "prisma",
     "drizzle",
 ]
+
+BACKEND_ENV_VARS = {
+    "postgres": "BENCH_PG_URL",
+    "mysql": "BENCH_MYSQL_URL",
+    "sqlite": "BENCH_SQLITE_PATH",
+}
 
 
 @dataclass
@@ -117,6 +130,26 @@ def seed_db() -> None:
     time.sleep(0.5)
 
 
+def seed_backend(backend: str) -> bool:
+    """Seed the requested backend, returning True if it was seeded.
+
+    Falls back gracefully (with a printed warning) if the required CLI is
+    not installed, so the benchmark run can continue on SQLite.
+    """
+    if backend == "sqlite":
+        seed_db()
+        return True
+
+    cli = "psql" if backend == "postgres" else "mysql"
+    if not shutil.which(cli):
+        print(f"warning: {cli} not found; skipping {backend} backend")
+        return False
+
+    print(f"Seeding {backend}...")
+    run_cmd([sys.executable, str(SEED_PY), backend], cwd=REPO_ROOT)
+    return True
+
+
 def generate_prisma_client() -> None:
     print("Generating Prisma client...")
     run_cmd("npx prisma generate", cwd=NODE_DIR, shell=True)
@@ -129,16 +162,22 @@ def read_json(path: Path) -> List[dict]:
 
 
 def run_rust_trials(
-    env_extra: Dict[str, str] | None, results_json: str, label: str
+    env_extra: Dict[str, str] | None,
+    results_json: str,
+    label: str,
+    *,
+    results_dir: Path = NODE_DIR,
+    seed_before_each: bool = True,
 ) -> List[List[dict]]:
-    seed_db()
+    if seed_before_each:
+        seed_db()
     trials: List[List[dict]] = []
     for i in range(WARMUP_TRIALS + MEASURE_TRIALS):
         trial_label = "warmup" if i < WARMUP_TRIALS else f"measure-{i - WARMUP_TRIALS + 1}"
         print(f"  ruprizzle ({label}) {trial_label}")
         run_cmd([str(RUST_EXE)], cwd=REPO_ROOT, env_extra=env_extra)
         if i >= WARMUP_TRIALS:
-            trials.append(read_json(NODE_DIR / results_json))
+            trials.append(read_json(results_dir / results_json))
         if i < WARMUP_TRIALS + MEASURE_TRIALS - 1:
             time.sleep(0.2)
     return trials
@@ -465,6 +504,106 @@ def write_markdown(
         f.write("\n".join(section))
 
 
+def write_backend_markdown(
+    path: Path,
+    backend: str,
+    label: str,
+    combined: Dict[str, Dict[str, float]],
+) -> None:
+    """Append a backend-specific (Postgres/MySQL) section to the docs file."""
+
+    def m(op: str) -> str:
+        row = combined.get(op, {})
+        v = row.get("median", 0.0)
+        if v == 0:
+            return "—"
+        return f"{v:,.1f}"
+
+    end_to_end_ops = [
+        "select_by_pk",
+        "find_many_1000",
+        "find_filtered_ordered",
+        "find_filtered_paginated",
+        "find_in_list",
+        "find_complex_filter",
+        "count_filtered",
+        "exists_filtered",
+        "include_posts",
+        "include_author",
+        "include_posts_and_comments",
+        "include_posts_with_tags",
+        "find_popular_posts",
+        "prepared_select_by_pk",
+        "stream_find_many_1000",
+        "bulk_insert_1000",
+    ]
+    query_construction_ops = [
+        "to_sql_select_by_pk",
+        "to_sql_select_filter_order",
+        "to_sql_select_in_list",
+        "to_sql_select_complex_filter",
+        "to_sql_select_paginated",
+        "to_sql_prepared_select_by_pk",
+        "prepared_rebind_select_by_pk",
+        "to_sql_conditional_filter",
+        "to_sql_select_with_cte",
+        "to_sql_select_with_recursive_cte",
+        "to_sql_set_union",
+        "to_sql_select_with_join",
+        "to_sql_select_exists_subquery",
+        "to_sql_select_in_subquery",
+        "to_sql_nested_insert",
+        "to_sql_nested_update",
+    ]
+
+    header = f"| Operation | {label} |"
+    separator = "|---|---|"
+
+    def make_table(ops: List[str]) -> str:
+        rows = [header, separator]
+        for op in ops:
+            rows.append(f"| `{op}` | {m(op)} |")
+        return "\n".join(rows)
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    section = [
+        "",
+        f"## Benchmark run: {timestamp} ({backend})",
+        "",
+        f"### Environment ({backend})",
+        "",
+        f"- **Warm-up trials:** {WARMUP_TRIALS}",
+        f"- **Measured trials:** {MEASURE_TRIALS}",
+        "- **Dataset:**",
+        "  - 1,000 users",
+        "  - 20 categories",
+        "  - 10,000 posts",
+        "  - 50,000 comments",
+        "  - 100 tags",
+        "  - 30,000 post_tags",
+        "  - 5,000 followers",
+        "  - 20,000 likes",
+        "",
+        "### End-to-end results",
+        "",
+        "All times are microseconds per operation (lower is better).",
+        "",
+        make_table(end_to_end_ops),
+        "",
+        "### Query construction (no I/O)",
+        "",
+        make_table(query_construction_ops),
+        "",
+    ]
+
+    if not path.exists():
+        path.write_text("# Cross-ORM benchmark results\n\n", encoding="utf-8")
+
+    with open(path, "a", encoding="utf-8") as f:
+        f.write("\n".join(section))
+
+
 def write_median_trial(
     driver: str, trials: List[List[dict]], path: Path
 ) -> None:
@@ -546,6 +685,31 @@ def main() -> int:
         else:
             filename = f"{driver}-results.json"
         write_median_trial(driver, trials, NODE_DIR / filename)
+
+    # Run the ruprizzle harness against PostgreSQL and/or MySQL when configured.
+    for backend in ("postgres", "mysql"):
+        env_var = BACKEND_ENV_VARS[backend]
+        url = os.environ.get(env_var)
+        if not url:
+            continue
+        if not seed_backend(backend):
+            continue
+
+        label = f"ruprizzle ({backend})"
+        print(f"Running {backend} ruprizzle trials...")
+        results_dir = BENCH_DIR / backend
+        trials = run_rust_trials(
+            {env_var: url},
+            "ruprizzle-results.json",
+            backend,
+            results_dir=results_dir,
+            seed_before_each=False,
+        )
+        backend_combined = aggregate(trials)
+        write_backend_markdown(DOCS_PATH, backend, label, backend_combined)
+        backend_median_path = results_dir / "ruprizzle-results.json"
+        write_median_trial(label, trials, backend_median_path)
+        print(f"  Wrote {backend_median_path}")
 
     print(f"\nWrote:")
     print(f"  {out_dir / 'raw_results.json'}")
