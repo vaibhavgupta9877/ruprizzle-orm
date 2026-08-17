@@ -18,8 +18,10 @@ whether the tool is right for your project.
   `json_extract`, `json_type`, and `json_set`. JSON containment (`@>`) is only
   a partial key-existence approximation because SQLite JSON1 has no containment
   operator.
-- **Postgres arrays** cannot be used as bind values. `Value::Array` is rejected
-  at runtime.
+- **Array columns (`T[]`)** are supported for scalar and enum types. PostgreSQL
+  stores them as native arrays; SQLite and MySQL store them as JSON text using
+  the dialect's JSON facilities. Array filter operators (`contains`,
+  `contained_by`, `overlaps`) are implemented across all three backends.
 - **Rich types through `sqlx::Any` are limited.** On SQLite, `Uuid`,
   `Decimal`, `DateTime`, `Date`, `Time`, and `Json` round-trip as text. The
   `sqlite-rusqlite` feature parses them from text at decode time, which is
