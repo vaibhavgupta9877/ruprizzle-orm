@@ -89,9 +89,11 @@ impl RusqlitePool {
                     reason: e.to_string(),
                 })?;
 
-                // Use a short busy timeout so concurrent writers wait instead
-                // of immediately returning SQLITE_BUSY.
-                conn.busy_timeout(Duration::from_secs(5)).map_err(|e| {
+                // Use a long busy timeout so concurrent writers wait through
+                // WAL checkpoints and transient contention rather than returning
+                // SQLITE_BUSY. This is the primary defence against the `database
+                // is locked` errors seen during long-running `rusqlite` soaks.
+                conn.busy_timeout(Duration::from_secs(60)).map_err(|e| {
                     Error::ConnectionFailure {
                         reason: e.to_string(),
                     }

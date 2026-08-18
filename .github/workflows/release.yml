@@ -45,6 +45,10 @@ jobs:
       - run: sleep 30
       - run: cargo publish -p ruprizzle-macros --no-verify
       - run: sleep 30
+      - run: cargo publish -p ruprizzle-check --no-verify
+      - run: sleep 30
+      - run: cargo publish -p ruprizzle-lsp --no-verify
+      - run: sleep 30
       - run: cargo publish -p ruprizzle --no-verify
       - run: sleep 30
       - run: cargo publish -p ruprizzle-migrate --no-verify
