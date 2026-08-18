@@ -1,0 +1,36 @@
+flowchart LR
+    classDef done fill:#90EE90,stroke:#006400,stroke-width:2px,color:#000
+    classDef inprogress fill:#FFD700,stroke:#B8860B,stroke-width:2px,color:#000
+    classDef pending fill:#FFB6C1,stroke:#8B0000,stroke-width:2px,color:#000
+
+    subgraph W0["W0 · Hardening"]
+        FMT["cargo fmt/clippy"]
+        TEST["cargo test --workspace"]
+        DOC["cargo doc"]
+        DENY["cargo deny"]
+    end
+
+    subgraph W4["W4 · Assurance"]
+        FUZZ["cargo-fuzz targets"]
+        SOAK1H["1h rusqlite soak<br/>84.2M ops / 0 errors"]
+        SOAK48H["48h rusqlite soak<br/>in progress"]
+    end
+
+    subgraph W6["W6 · Release"]
+        TAG["1.0.0-rc.1 tag"]
+        DRY["cargo xtask release<br/>dry-run"]
+        LIVE["Publish 1.0.0-rc.1<br/>to crates.io"]
+        FB["2-week RC feedback<br/>window"]
+        SCORE["Re-score ≥92/100"]
+        V1["Cut 1.0.0"]
+    end
+
+    FMT --> TEST --> DOC --> DENY --> FUZZ --> SOAK1H --> SOAK48H
+    SOAK48H --> SCORE
+    DRY --> LIVE
+    TAG --> LIVE
+    SCORE --> LIVE --> FB --> V1
+
+    class FMT,TEST,DOC,DENY,FUZZ,SOAK1H,TAG,DRY done
+    class SOAK48H inprogress
+    class LIVE,FB,SCORE,V1 pending
