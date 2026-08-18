@@ -9,7 +9,11 @@ whether the tool is right for your project.
 - **Heuristic renames** are suggested automatically. Add `@renamedFrom` to
   confirm or ignore the prompt; the diff never renames silently.
 - **`db push`** does not write migration files and is only for prototyping.
-- **No LSP** yet; syntax highlighting is available as a TextMate grammar.
+- **LSP for `schema.ruprizzle`** is available via `ruprizzle-lsp` and the VS Code
+  extension in `editor/`. Syntax highlighting is also available as a TextMate
+  grammar.
+- **Offline query checking** (`ruprizzle check`) is available using query
+  manifests captured at test time. See [ADR-012](adr/ADR-012-OfflineQueryChecking.md).
 - **`Decimal` on SQLite** is stored as text by the default `sqlx::Any` path.
   The `sqlite-rusqlite` feature parses it back from text at decode time, which
   removes the `sqlx::Any` text round-trip but still stores it as text on disk.
@@ -45,11 +49,6 @@ whether the tool is right for your project.
   typically small). `stream_unbuffered` must not be used inside a transaction,
   because a transaction holds a single connection and a streaming cursor would
   prevent any other statement from running on it.
-
-## Deferred to v1.1
-
-- **Compile-time query checking** (`sqlx-data.json` / offline mode) is not yet
-  implemented.
 
 ## Deferred to v1.2+
 
