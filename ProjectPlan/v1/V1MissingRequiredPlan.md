@@ -897,15 +897,15 @@ specific files to touch, so the implementer does not start from a blank page.
 
 Before any release phase:
 
-- [ ] `cargo fmt --all --check` passes.
-- [ ] `cargo clippy --workspace --all-targets -- -D warnings` passes.
-- [ ] `cargo test --workspace` passes.
-- [ ] `cargo xtask harden` passes.
-- [ ] `cargo deny check advisories` passes.
-- [ ] `cargo doc --workspace --no-deps` has no warnings.
-- [ ] `docs/KnownLimitations.md` contains only deliberate design positions,
+- [x] `cargo fmt --all --check` passes.
+- [x] `cargo clippy --workspace --all-targets -- -D warnings` passes.
+- [x] `cargo test --workspace` passes.
+- [x] `cargo xtask harden` passes.
+- [x] `cargo deny check advisories` passes.
+- [x] `cargo doc --workspace --no-deps` has no warnings.
+- [x] `docs/KnownLimitations.md` contains only deliberate design positions,
       not "not implemented yet."
-- [ ] `docs/FeaturesMasterComparison.md` matches the target state for the phase.
+- [x] `docs/FeaturesMasterComparison.md` matches the target state for the phase.
 
 ## Self-Review
 
