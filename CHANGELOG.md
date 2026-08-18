@@ -8,11 +8,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Docs
 
-- Refreshed `README.md`, `docs/README.md`, `docs/announcement.md`, `docs/faq.md`, `docs/SUMMARY.md`, `docs/Operations.md`, `docs/BenchmarkResults.md`, `docs/performance.md`, and `docs/FeaturesMasterComparison.md` to the `0.4.0-beta.2` release.
+- Refreshed `README.md`, `docs/README.md`, `docs/announcement.md`, `docs/faq.md`, `docs/SUMMARY.md`, and `docs/Operations.md` to the `1.0.0-rc.1` release.
 - Extended `docs/FeaturesMasterComparison.md` with all 16 end-to-end and 16 query-construction benchmark operations, a new "Advanced query builder & SQL features" table, and an updated best-fit summary.
 - Added prax, Prisma, and Drizzle columns and new feature rows to the high-level comparison in `docs/README.md`.
 - Fixed and cross-linked internal markdown links across `README.md`, `docs/README.md`, `docs/SUMMARY.md`, `docs/announcement.md`, `docs/BenchmarkResults.md`, `docs/FeaturesMasterComparison.md`, `docs/KnownLimitations.md`, and `ProjectPlan/Enhancements/Performance/Enhancements1.md`.
 
+
+## [1.0.0-rc.1] - 2026-08-19
+
+### Added
+
+- MySQL / MariaDB dialect and driver path through `sqlx`.
+- `ruprizzle-lsp` language server and VS Code extension in `editor/`.
+- `ruprizzle check` for offline / compile-time query checking.
+- Aggregates, `GROUP BY` / `HAVING`, explicit `JOIN`s, CTEs, set operations,
+  `EXISTS`/`IN` subqueries, JSON path operators, array operators, prepared
+  statements, and nested writes in the query builder.
+- Many-to-many relation support through explicit join models.
+- `db pull`, `db seed`, `migrate squash`, `migrate resolve`, and `migrate reset`
+  CLI commands.
+- Native `tokio-postgres` and `rusqlite` driver feature flags.
+- Metrics export behind the `metrics` feature.
+
+### Changed
+
+- Workspace version bumped to `1.0.0-rc.1`.
+- Public API reviewed and frozen for the 1.0 line.
+
+### Docs
+
+- Refreshed README, docs README, announcement, FAQ, SUMMARY, and Operations for
+  `1.0.0-rc.1`.
+- Added `ProjectPlan/v1/V1DocsFirstShipPlan.md` for the v1 docs + release
+  roadmap.
 
 ## [0.4.0-beta.2] - 2026-08-17
 
@@ -216,7 +244,8 @@ Initial alpha release of **ruprizzle-orm**: a schema-first ORM for Rust. Write a
 
 See `docs/KnownLimitations.md` for the full list.
 
-[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.4.0-beta.2...HEAD
+[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.0-rc.1...HEAD
+[1.0.0-rc.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.4.0-beta.2...v1.0.0-rc.1
 [0.4.0-beta.2]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.4.0-beta.1...v0.4.0-beta.2
 [0.4.0-beta.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.1-beta.1...v0.4.0-beta.1
 [0.1.1-beta.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.0-alpha.2...v0.1.1-beta.1
