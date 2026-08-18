@@ -291,6 +291,8 @@ fn run_harden() -> ExitCode {
         "ruprizzle-parser",
         "ruprizzle-dialect",
         "ruprizzle-macros",
+        "ruprizzle-check",
+        "ruprizzle-lsp",
         "ruprizzle",
         "ruprizzle-migrate",
         "ruprizzle-codegen",
