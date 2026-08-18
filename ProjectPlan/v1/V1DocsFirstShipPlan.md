@@ -104,13 +104,13 @@
 - Produces: a note in this plan's task list or in `docs/SoakReport.md` about
   whether the two logged errors are acceptable.
 
-- [ ] **Step 1: Confirm the soak process is still alive.**
+- [x] **Step 1: Confirm the soak process is still alive.**
   ```powershell
   tasklist | findstr soak
   ```
   Expected: `soak-9c6b6ecac4cbf8a3.exe` is still running.
 
-- [ ] **Step 2: Read the error context.**
+- [x] **Step 2: Read the error context.**
   ```powershell
   Get-Content 'logs/soak-48h-rusqlite.err' | Select-String -Pattern 'soak op error|panicked' -Context 3,3
   ```
@@ -118,20 +118,20 @@
   (`Insufficient system resources exist to complete the requested service`) while
   printing to stderr. These are not ruprizzle logic failures.
 
-- [ ] **Step 3: Determine whether the run is still useful.**
+- [x] **Step 3: Determine whether the run is still useful.**
   - If `errors` stays at 2 and `memory_bytes` is stable, the run can continue to
     the full 48 hours and the errors can be footnoted as environmental.
   - If `errors` climbs, or if `memory_bytes` grows without bound, stop the run and
     investigate before restarting.
 
-- [ ] **Step 4: Record the current `ProductionReadiness.md` diff.**
+- [x] **Step 4: Record the current `ProductionReadiness.md` diff.**
   ```bash
   git diff -- ProjectPlan/ProductionReadiness.md
   ```
   Expected: A one-line score change from 86 to 87 and a wording change to
   "RC tagged, mechanically green, 48-hour soak in progress".
 
-- [ ] **Step 5: Decide whether to keep the diff.**
+- [x] **Step 5: Decide whether to keep the diff.**
   - If the score change is intentional, stage and commit it separately from the
     docs work.
   - If the score should wait for the final soak, `git checkout --
@@ -154,7 +154,7 @@
 - Produces: `README.md` no longer claims `0.4.0-beta.2` or missing MySQL / query
   checking.
 
-- [ ] **Step 1: Replace the status paragraph.**
+- [x] **Step 1: Replace the status paragraph.**
   Old (lines 17–18):
   ```markdown
   > **Status:** `0.4.0-beta.2` is published on crates.io. P0–P8 are complete, the public API is stabilising, and a native `rusqlite` SQLite backend is available behind the `sqlite-rusqlite` feature. See [Known limitations](#known-limitations) for the honest boundaries of the beta.
@@ -168,7 +168,7 @@
   > policy.
   ```
 
-- [ ] **Step 2: Update the backends line.**
+- [x] **Step 2: Update the backends line.**
   Old (line 16):
   ```markdown
   Postgres, SQLite, and MySQL/MariaDB are supported from day one behind a `DbDialect` trait, so more backends are additive.
@@ -176,7 +176,7 @@
   New (already correct, only remove "from day one" if it appears twice elsewhere):
   Keep as is. Also update the backend line in `docs/README.md`.
 
-- [ ] **Step 3: Update the comparison table.**
+- [x] **Step 3: Update the comparison table.**
   Old (line 439):
   ```markdown
   | **Compile-time query checking** | planned | ✅ | ❌ | ✅ | ✅ | N/A | ❌ |
@@ -186,7 +186,7 @@
   | **Compile-time query checking** | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ❌ |
   ```
 
-- [ ] **Step 4: Update the crate table version note.**
+- [x] **Step 4: Update the crate table version note.**
   Old (line 459):
   ```markdown
   The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`0.4.0-beta.2` at the time of writing).
@@ -196,11 +196,11 @@
   The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.0.0-rc.1` at the time of writing).
   ```
 
-- [ ] **Step 5: Verify internal links still resolve.**
+- [x] **Step 5: Verify internal links still resolve.**
   Run: `cargo xtask ci` or at least `cargo xtask docs`.
   Expected: PASS.
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
   ```bash
   git add README.md
   git commit -m "docs: update README to 1.0.0-rc.1 status and feature claims"
@@ -220,7 +220,7 @@
 - Consumes: `README.md` changes from Task 1.1.
 - Produces: consistent 1.0.0-rc.1 messaging in the mdBook landing page.
 
-- [ ] **Step 1: Update the backends line.**
+- [x] **Step 1: Update the backends line.**
   Old (line 17):
   ```markdown
   Postgres and SQLite are supported from day one behind a dialect trait, so more
@@ -232,7 +232,7 @@
   trait, so more backends are additive.
   ```
 
-- [ ] **Step 2: Update the status block.**
+- [x] **Step 2: Update the status block.**
   Old (lines 21–28):
   ```markdown
   `0.4.0-beta.2` is published on crates.io. The core P0–P8 implementation is
@@ -252,10 +252,10 @@
   [Known limitations](KnownLimitations.md) for deliberate boundaries.
   ```
 
-- [ ] **Step 3: Update the comparison table.**
+- [x] **Step 3: Update the comparison table.**
   Change the `Compile-time query checking` row from `planned` to `✅`.
 
-- [ ] **Step 4: Update the crate table version note and add missing crates.**
+- [x] **Step 4: Update the crate table version note and add missing crates.**
   Old (lines 145–153):
   ```markdown
   || `crates/core`    | IR, spans, diagnostics | ✅ P0 |
@@ -281,10 +281,10 @@
   || `crates/testkit` | Dual-database test harness | ✅ P0 |
   ```
 
-- [ ] **Step 5: Run `mdbook build` and `cargo xtask docs`.**
+- [x] **Step 5: Run `mdbook build` and `cargo xtask docs`.**
   Expected: no warnings.
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
   ```bash
   git add docs/README.md
   git commit -m "docs: update docs/README for 1.0.0-rc.1 and missing crates"
@@ -303,7 +303,7 @@
 - Produces: a release-announcement document suitable for copying into a blog
   post / GitHub release notes.
 
-- [ ] **Step 1: Replace the file content with the following markdown.**
+- [x] **Step 1: Replace the file content with the following markdown.**
   ```markdown
   # ruprizzle-orm 1.0.0-rc.1
 
@@ -406,7 +406,7 @@
   sequence.
   ```
 
-- [ ] **Step 2: Update `docs/SUMMARY.md`.**
+- [x] **Step 2: Update `docs/SUMMARY.md`.**
   Change the line:
   ```markdown
   [0.4.0-beta.2 announcement](announcement.md)
@@ -416,10 +416,10 @@
   [1.0.0-rc.1 announcement](announcement.md)
   ```
 
-- [ ] **Step 3: Run `mdbook build` and fix any warnings.**
+- [x] **Step 3: Run `mdbook build` and fix any warnings.**
   Expected: PASS.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
   ```bash
   git add docs/announcement.md docs/SUMMARY.md
   git commit -m "docs: rewrite announcement for 1.0.0-rc.1"
@@ -436,7 +436,7 @@
 - Consumes: `docs/KnownLimitations.md`, `docs/Stability.md`, `Cargo.toml` version.
 - Produces: an up-to-date FAQ with JSON-LD FAQPage markup.
 
-- [ ] **Step 1: Replace the file content with the following markdown.**
+- [x] **Step 1: Replace the file content with the following markdown.**
   ```markdown
   # Frequently asked questions
 
@@ -562,9 +562,9 @@
   </script>
   ```
 
-- [ ] **Step 2: Run `mdbook build`.** Expected: PASS.
+- [x] **Step 2: Run `mdbook build`.** Expected: PASS.
 
-- [ ] **Step 3: Commit.**
+- [x] **Step 3: Commit.**
   ```bash
   git add docs/faq.md
   git commit -m "docs: rewrite FAQ for 1.0.0-rc.1 and MySQL support"
@@ -582,7 +582,7 @@
 - Consumes: the new docs created in Phase 1 (quickstart, query guide, etc.).
 - Produces: a table of contents that matches the shipped docs.
 
-- [ ] **Step 1: Update `book.toml` description.**
+- [x] **Step 1: Update `book.toml` description.**
   Old:
   ```toml
   description = "Documentation for ruprizzle-orm, a schema-first ORM for Rust with typed queries, automatic migrations, and Postgres/SQLite support."
@@ -592,7 +592,7 @@
   description = "Documentation for ruprizzle-orm, a schema-first ORM for Rust with typed queries, automatic migrations, and PostgreSQL/MySQL/SQLite support."
   ```
 
-- [ ] **Step 2: Update `docs/SUMMARY.md`.**
+- [x] **Step 2: Update `docs/SUMMARY.md`.**
   Replace the current content with:
   ```markdown
   # Summary
@@ -615,9 +615,9 @@
   [1.0.0-rc.1 announcement](announcement.md)
   ```
 
-- [ ] **Step 3: Run `mdbook build`.** Expected: PASS.
+- [x] **Step 3: Run `mdbook build`.** Expected: PASS.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
   ```bash
   git add docs/SUMMARY.md book.toml
   git commit -m "docs: update mdbook summary and description for 1.0.0-rc.1"
@@ -634,7 +634,7 @@
 - Consumes: `Cargo.toml` version.
 - Produces: no stale version pins in the operations guide.
 
-- [ ] **Step 1: Update the Prometheus example dependency.**
+- [x] **Step 1: Update the Prometheus example dependency.**
   Old:
   ```toml
   ruprizzle = { version = "0.4.0-beta.2", features = ["metrics"] }
@@ -644,13 +644,13 @@
   ruprizzle = { version = "1.0.0-rc.1", features = ["metrics"] }
   ```
 
-- [ ] **Step 2: Check for any other `0.4.0-beta.2` strings in `docs/`.**
+- [x] **Step 2: Check for any other `0.4.0-beta.2` strings in `docs/`.**
   ```bash
   grep -R "0.4.0-beta.2" docs/
   ```
   Expected: only inside `docs/known-limitations.md` stub if present, or none.
 
-- [ ] **Step 3: Commit.**
+- [x] **Step 3: Commit.**
   ```bash
   git add docs/Operations.md
   git commit -m "docs: remove stale 0.4.0-beta.2 pin from Operations.md"
@@ -667,7 +667,7 @@
 - Consumes: `docs/SoakReport.md`, `ProjectPlan/v1/PathToStableV1.md`, `Cargo.toml`.
 - Produces: a release section that matches the RC.
 
-- [ ] **Step 1: Insert the following section immediately below `## [Unreleased]`.**
+- [x] **Step 1: Insert the following section immediately below `## [Unreleased]`.**
   ```markdown
   ## [1.0.0-rc.1] - 2026-08-19
 
@@ -710,10 +710,10 @@
     revisit once a patched `rsa` / `sqlx` release is available.
   ```
 
-- [ ] **Step 2: Run `cargo xtask ci`.** Expected: PASS (docs are not code, but
+- [x] **Step 2: Run `cargo xtask ci`.** Expected: PASS (docs are not code, but
   ensures nothing broke).
 
-- [ ] **Step 3: Commit.**
+- [x] **Step 3: Commit.**
   ```bash
   git add CHANGELOG.md
   git commit -m "docs: add 1.0.0-rc.1 section to CHANGELOG"
@@ -732,7 +732,7 @@
 - Consumes: `examples/blog` from Task 3.1 (or create it first).
 - Produces: a five-minute tutorial that produces a working project.
 
-- [ ] **Step 1: Replace the file content with the following markdown.**
+- [x] **Step 1: Replace the file content with the following markdown.**
   The snippets below use `my-app` and assume a user installing from crates.io.
   Keep the file self-contained; do not require the user to read other guides.
   ```markdown
@@ -900,9 +900,9 @@
   - [Relations guide](RelationsGuide.md)
   ```
 
-- [ ] **Step 2: Verify `mdbook build` and `cargo doc --workspace --no-deps`.** Expected: PASS.
+- [x] **Step 2: Verify `mdbook build` and `cargo doc --workspace --no-deps`.** Expected: PASS.
 
-- [ ] **Step 3: Commit.**
+- [x] **Step 3: Commit.**
   ```bash
   git add docs/quickstart.md
   git commit -m "docs: rewrite quickstart as a full runnable tutorial"
@@ -921,7 +921,7 @@
   `Value`), `docs/known-limitations.md`.
 - Produces: a single guide that demonstrates every public query-builder feature.
 
-- [ ] **Step 1: Structure the guide with these sections, in order.**
+- [x] **Step 1: Structure the guide with these sections, in order.**
   Keep the existing sections for Select, Filters, Projections, Insert, Update,
   Delete, Pagination, Transactions, and Savepoints. Add or expand the following:
 
@@ -956,7 +956,7 @@
   15. **Raw SQL escape hatch** — `raw!` macro and `RawFragment`.
   16. **SQL transparency** — `.to_sql()` on every builder.
 
-- [ ] **Step 2: Add the following representative snippets inside the matching
+- [x] **Step 2: Add the following representative snippets inside the matching
   sections.**
   Each snippet is a concrete, compile-shaped example using the `db::user` /
   `db::post` models from the quickstart. Wrap long examples in `rust,ignore` if
@@ -1169,15 +1169,15 @@
   println!("{sql}");
   ```
 
-- [ ] **Step 3: Verify the snippets compile (as far as the docs permit).**
+- [x] **Step 3: Verify the snippets compile (as far as the docs permit).**
   - For snippets that cannot be fully compiled without a real generated client,
     mark them `rust,ignore` and add a comment above explaining why.
   - For snippets that can compile inside `examples/blog`, copy them into
     `examples/blog/src/main.rs` and run `cargo build -p blog-example` (see Task 3.1).
 
-- [ ] **Step 4: Run `mdbook build` and `cargo doc --workspace --no-deps`.** Expected: PASS.
+- [x] **Step 4: Run `mdbook build` and `cargo doc --workspace --no-deps`.** Expected: PASS.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
   ```bash
   git add docs/QueryGuide.md
   git commit -m "docs: expand QueryGuide with full 1.0 query surface and examples"
@@ -1195,7 +1195,7 @@
   `crates/runtime/tests/nested_writes.rs`, `docs/QueryGuide.md`.
 - Produces: a guide that covers relation loading and relation mutation.
 
-- [ ] **Step 1: Keep the existing sections and add the following new sections.**
+- [x] **Step 1: Keep the existing sections and add the following new sections.**
 
   1. **One-to-many / many-to-one** (existing; keep).
   2. **Filtering included children** (existing; keep).
@@ -1208,7 +1208,7 @@
   9. **`some` / `every` / `none` relation filters** (already partly covered; expand).
   10. **Why this avoids N+1** (existing; keep).
 
-- [ ] **Step 2: Add these representative snippets.**
+- [x] **Step 2: Add these representative snippets.**
 
   **Many-to-many attach:**
   ```rust
@@ -1272,9 +1272,9 @@
       .await?;
   ```
 
-- [ ] **Step 3: Run `mdbook build` and `cargo doc --workspace --no-deps`.** Expected: PASS.
+- [x] **Step 3: Run `mdbook build` and `cargo doc --workspace --no-deps`.** Expected: PASS.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
   ```bash
   git add docs/RelationsGuide.md
   git commit -m "docs: expand RelationsGuide with nested writes, m2m, and self-referential relations"
@@ -1292,7 +1292,7 @@
   `docs/KnownLimitations.md`.
 - Produces: a complete migrations and seeding guide.
 
-- [ ] **Step 1: Keep the existing "two commands" and "development workflow" and add
+- [x] **Step 1: Keep the existing "two commands" and "development workflow" and add
   the following sections.**
 
   1. **The two commands** (existing; keep).
@@ -1311,7 +1311,7 @@
   14. **Mutual foreign-key cycles** (existing; keep).
   15. **SQLite migration notes** (existing; keep).
 
-- [ ] **Step 2: Add the following representative snippets.**
+- [x] **Step 2: Add the following representative snippets.**
 
   **Introspection:**
   ```bash
@@ -1358,9 +1358,9 @@
   `migrate deploy` never diffs or writes migration files; it only applies pending
   `up.sql` files transactionally.
 
-- [ ] **Step 3: Run `mdbook build` and `cargo doc --workspace --no-deps`.** Expected: PASS.
+- [x] **Step 3: Run `mdbook build` and `cargo doc --workspace --no-deps`.** Expected: PASS.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
   ```bash
   git add docs/MigrationsGuide.md
   git commit -m "docs: expand MigrationsGuide with seed, pull, squash, resolve, and CI workflow"
@@ -1378,7 +1378,7 @@
   `crates/dialect/src/lib.rs`, `docs/DialectNotes.md`.
 - Produces: a single reference for every `schema.ruprizzle` construct.
 
-- [ ] **Step 1: Replace the file with the following structure, keeping existing
+- [x] **Step 1: Replace the file with the following structure, keeping existing
   content where it is still correct and filling the gaps.**
 
   1. **Preamble** — link to `DialectNotes.md` for backend-specific mappings.
@@ -1410,7 +1410,7 @@
       verify exact syntax.
   15. **Naming and mapping** — identifier rules, `@@map`, `@map`.
 
-- [ ] **Step 2: Add these concrete examples.**
+- [x] **Step 2: Add these concrete examples.**
   ```prisma
   datasource db {
     provider = "postgres"
@@ -1454,9 +1454,9 @@
   }
   ```
 
-- [ ] **Step 3: Run `mdbook build` and `cargo doc --workspace --no-deps`.** Expected: PASS.
+- [x] **Step 3: Run `mdbook build` and `cargo doc --workspace --no-deps`.** Expected: PASS.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
   ```bash
   git add docs/SchemaReference.md
   git commit -m "docs: expand SchemaReference with full DSL and native type coverage"
@@ -1480,10 +1480,10 @@
 - Consumes: `Cargo.toml` workspace version, `examples/blog/schema.ruprizzle`.
 - Produces: a project that CI can build and users can run.
 
-- [ ] **Step 1: Use the existing `examples/blog/schema.ruprizzle` (do not modify).**
+- [x] **Step 1: Use the existing `examples/blog/schema.ruprizzle` (do not modify).**
   Read it first to know the generated module shape.
 
-- [ ] **Step 2: Create `examples/blog/Cargo.toml`.**
+- [x] **Step 2: Create `examples/blog/Cargo.toml`.**
   ```toml
   [package]
   name = "blog-example"
@@ -1497,12 +1497,12 @@
   dotenvy = "0.15"
   ```
 
-- [ ] **Step 3: Create `examples/blog/.env.example`.**
+- [x] **Step 3: Create `examples/blog/.env.example`.**
   ```bash
   DATABASE_URL="postgres://user:password@localhost:5432/blog_example?sslmode=disable"
   ```
 
-- [ ] **Step 4: Create `examples/blog/src/main.rs`.**
+- [x] **Step 4: Create `examples/blog/src/main.rs`.**
   This should be a self-contained script that:
   - loads `.env` via `dotenvy`,
   - connects,
@@ -1569,14 +1569,14 @@
   Note: verify the exact `PostInsert` and `author` field names from the generated
   `examples/blog/src/db` module (after `ruprizzle generate`) and adjust the snippet.
 
-- [ ] **Step 5: Add `examples/blog` to the workspace `members`.**
+- [x] **Step 5: Add `examples/blog` to the workspace `members`.**
   In root `Cargo.toml`:
   ```toml
   members = ["crates/*", "tests/integration", "local/deep-tests", "xtask", "examples/blog"]
   ```
   This ensures `cargo xtask ci` and `cargo build --workspace` compile it.
 
-- [ ] **Step 6: Create `examples/blog/README.md`.**
+- [x] **Step 6: Create `examples/blog/README.md`.**
   ```markdown
   # Blog example
 
@@ -1591,7 +1591,7 @@
   4. Run `cargo run`.
   ```
 
-- [ ] **Step 7: Generate the client and build the example.**
+- [x] **Step 7: Generate the client and build the example.**
   ```powershell
   $env:DATABASE_URL="postgres://..."
   ruprizzle generate
@@ -1599,7 +1599,7 @@
   ```
   Expected: PASS.
 
-- [ ] **Step 8: Commit.**
+- [x] **Step 8: Commit.**
   ```bash
   git add examples/blog Cargo.toml
   git commit -m "docs: add runnable examples/blog project and include it in the workspace"
@@ -1618,32 +1618,32 @@
 - Consumes: updated docs and `examples/blog`.
 - Produces: a clean docs build.
 
-- [ ] **Step 1: Run `mdbook build`.**
+- [x] **Step 1: Run `mdbook build`.**
   ```bash
   mdbook build
   ```
   Expected: no warnings or errors.
 
-- [ ] **Step 2: Run `cargo doc --workspace --no-deps` with warnings denied.**
+- [x] **Step 2: Run `cargo doc --workspace --no-deps` with warnings denied.**
   ```powershell
   $env:RUSTDOCFLAGS="-D warnings"
   cargo doc --workspace --no-deps
   ```
   Expected: PASS.
 
-- [ ] **Step 3: Run `cargo xtask examples`.**
+- [~] **Step 3: Run `cargo xtask examples`.**
   ```bash
   cargo xtask examples
   ```
   Expected: PASS.
 
-- [ ] **Step 4: Run `cargo xtask ci`.**
+- [~] **Step 4: Run `cargo xtask ci`.**
   ```bash
   cargo xtask ci
   ```
   Expected: PASS.
 
-- [ ] **Step 5: Fix any warnings and commit.**
+- [x] **Step 5: Fix any warnings and commit.**
   Use one or more fixup commits, then squash if the user prefers.
 
 ---
