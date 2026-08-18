@@ -262,7 +262,7 @@ Mechanical and documentation blockers are now resolved. The next work is release
 2. ✅ **Fix the rustdoc warnings** — done in `79341a4`; `RUSTDOCFLAGS="-D warnings"` is green.
 3. ✅ **Decide on `RUSTSEC-2023-0071` / `rsa`** — documented exception added in `4c8c106`. Revisit before marketing MySQL as production-grade.
 4. ✅ **Re-run `cargo xtask harden` and `cargo deny check`** — confirmed green on `dev-v0-2`.
-5. 🔄 **Run the 48-hour soak** and record the result in `docs/SoakReport.md` — the root cause of the earlier `database is locked` / busy-timeout errors under concurrent `rusqlite` writers has been fixed; 60-second and 1-hour validation runs are now clean, and the full 48-hour run is the remaining W4-02 gate.
+5. 🔄 **Run the 48-hour soak** and record the result in `docs/SoakReport.md` — the root cause of the earlier `database is locked` / busy-timeout errors under concurrent `rusqlite` writers has been fixed; 60-second and 1-hour validation runs are now clean, and the full 48-hour run was started on 2026-08-18 14:50 UTC and is the remaining W4-02 gate.
 6. 🔄 **Complete and record the runtime mutation-testing baseline** — a full `cargo mutants -p ruprizzle` run is in progress (1684 mutants, 4 jobs, started 2026-08-17). `ruprizzle-migrate` baseline is now recorded: 14 caught / 33 missed / 2 timeouts out of 606 mutants, ~28.6 % mutation score; documented as a known gap in `docs/MutationTesting.md`.
 7. ✅ **Bump the workspace version to `1.0.0-rc.1`** — completed; tag and crates.io publish are pending the W4-02 48-hour soak gate.
 8. **Cut `1.0.0-rc.1`**, run a minimum two-week feedback window, get at least one external project to upgrade and report back, then re-score production readiness against the RC.

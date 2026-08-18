@@ -245,6 +245,8 @@ status, and every `schema.ruprizzle` file in the repository (`examples/*/schema.
 | Harden | `cargo xtask harden` | ✅ Panic, arithmetic/indexing, injection, `cargo-deny` green |
 | Native rusqlite smoke | `cargo test -p ruprizzle --test soak --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite' --release -- sqlite` | ✅ 60 s, 0 errors |
 | Native rusqlite 1-hour | `... RUPRIZZLE_SOAK_DURATION_SECONDS=3600 ...` | ✅ 3600 s, 84,242,039 ops, 0 errors |
+| Native rusqlite 48-hour | `... RUPRIZZLE_SOAK_DURATION_SECONDS=172800 ...` | 🔄 Started 2026-08-18 14:50 UTC, logs in `logs/soak-48h-rusqlite.*` |
+| Release dry-run | `cargo xtask release` | ✅ All 8 crates package cleanly |
 
 ### Remaining v1.0.0 blockers
 

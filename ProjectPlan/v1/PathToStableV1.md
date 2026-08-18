@@ -439,9 +439,9 @@ sqlite-rusqlite --bench concurrency` all pass.
       structurally unlikely to find. **3 days.** *(finding #8)*
 - [~] **W4-02 · Soak test.** 48 hours of sustained mixed load with connection churn and a
       forced failover, tracking memory, file descriptors, and pool health. The harness and
-      smoke runs are in place, and the native `rusqlite` backend has passed 60-second and
-      1-hour validation with zero `database is locked` errors. The full 48-hour run is the
-      final remaining gate before `1.0.0-rc.1`. **3 days.**
+      smoke runs are in place, the native `rusqlite` backend has passed 60-second and
+      1-hour validation with zero `database is locked` errors, and the 48-hour run was
+      started on 2026-08-18 14:50 UTC. **3 days.**
 - [x] **W4-03 · Feature-combination CI matrix.** Formalise W0-03 into a real matrix across
       the three driver paths and both databases. **0.5 day.**
 - [x] **W4-04 · Justify or remove the `grammar.rs` panic sites.** 27 of 29. Either a comment

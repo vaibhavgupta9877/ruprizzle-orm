@@ -138,7 +138,19 @@ test soak_mixed_load_with_connection_churn::sqlite ... ok
 
 The run completed with zero `database is locked` errors and a stable working-set
 memory footprint, so the 60-second fix has been promoted to a 1-hour validation.
-The 48-hour W4-02 gate is the next step.
+
+The 48-hour W4-02 gate was started on 2026-08-18 14:50 UTC:
+
+```powershell
+$env:RUPRIZZLE_TEST_RUSQLITE=1
+$env:RUST_BACKTRACE=1
+$env:RUPRIZZLE_SOAK_DURATION_SECONDS=172800
+$env:RUPRIZZLE_SOAK_WORKERS=8
+cargo test -p ruprizzle --test soak --features "sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite" --release -- sqlite --nocapture
+```
+
+It is running detached; logs are in `logs/soak-48h-rusqlite.log` and
+`logs/soak-48h-rusqlite.err`. The result will be recorded here when it finishes.
 
 ## 48-hour run instructions
 
