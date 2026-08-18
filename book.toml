@@ -4,7 +4,6 @@ authors = ["Vaibhav Gupta"]
 description = "Documentation for ruprizzle-orm, a schema-first ORM for Rust with typed queries, automatic migrations, and PostgreSQL/MySQL/SQLite support."
 src = "docs"
 language = "en"
-multilingual = false
 
 [build]
 build-dir = "book"

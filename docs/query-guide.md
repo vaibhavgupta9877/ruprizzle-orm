@@ -31,7 +31,7 @@ println!("{sql}");
 ## Filters
 
 - Equality: `user::EMAIL.eq(...)`
-- Inequality: `user::EMAIL.not_eq(...)`
+- Inequality: `user::EMAIL.ne(...)`
 - Ordering: `user::AGE.gt(18)`, `.gte(18)`, `.lt(18)`, `.lte(18)`
 - String: `user::EMAIL.starts_with("alice@")`, `.ends_with("@example.com")`, `.contains("acme")`
 - Null: `user::PHONE.is_null()`, `.is_not_null()`

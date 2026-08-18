@@ -30,11 +30,11 @@
 | Phase | Status | Notes |
 |---|---|---|
 | Phase 0 — Stabilize context | completed | 48-hour soak process `soak-9c6b6ecac4cbf8a3.exe` is alive; 2 errors classified as environmental (Windows `disk I/O error` and `os error 1450` printing to stderr); memory stable at ~7 MiB. Uncommitted `ProjectPlan/ProductionReadiness.md` diff committed. |
-| Phase 1 — Version/stale-claim cleanup | in progress (Task 1.1) |  |
-| Phase 2 — Core usage guides | pending |  |
-| Phase 3 — Runnable example project | pending |  |
-| Phase 4 — Doc verification | pending |  |
-| Phase 5 — Release finalization | pending | blocked on 48-hour soak completion |
+| Phase 1 — Version/stale-claim cleanup | completed | README.md, docs/README.md, announcement, FAQ, SUMMARY, book.toml, Operations, CHANGELOG updated to 1.0.0-rc.1. |
+| Phase 2 — Core usage guides | completed | QueryGuide.md and RelationsGuide.md expanded with all required sections and snippets. |
+| Phase 3 — Runnable example project | completed | `examples/blog/` created with Cargo.toml, .env.example, README, and src/main.rs. |
+| Phase 4 — Doc verification | completed | `mdbook build`, `cargo doc`, `cargo xtask fmt`, and `cargo xtask lint` pass. `cargo xtask test` blocked by an environmental Postgres `No space left on device` failure; Rust unit tests pass. |
+| Phase 5 — Release finalization | pending | blocked on 48-hour soak completion, rescoring, RC publish, and GA cut. |
 
 ---
 
