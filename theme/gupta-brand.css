@@ -1,0 +1,592 @@
+/*
+ * Gupta Technologies brand system for ruprizzle-orm mdBook.
+ *
+ * Derived from https://www.guptatechnologies.in
+ * Palette, typography and visual language: cream paper, near-black ink,
+ * brass/gold accent, data-cyan/azure/violet technical accents, and a
+ * schematic-engineering grid.
+ */
+
+/* ------------------------------------------------------------------
+   1. Brand tokens
+   ------------------------------------------------------------------ */
+
+:root {
+  /* Surface */
+  --gt-paper: #f4f1ea;
+  --gt-paper-soft: #faf8f3;
+  --gt-paper-elevated: #ebe7de;
+
+  /* Ink */
+  --gt-ink: #14130f;
+  --gt-ink-muted: #4a5560;
+
+  /* Accents */
+  --gt-brass: #a8924f;
+  --gt-brass-lite: #cdbb83;
+  --gt-brass-glow: rgba(168, 146, 79, 0.25);
+  --gt-data-cyan: #2f6f74;
+  --gt-azure: #3f5b71;
+  --gt-violet: #6c5d83;
+  --gt-line: rgba(20, 19, 15, 0.10);
+
+  /* Code surfaces */
+  --gt-code-bg-light: #faf8f3;
+  --gt-code-bg-dark: #1a1916;
+
+  /* Typography */
+  --gt-font-display: "Fraunces", "Times New Roman", Georgia, serif;
+  --gt-font-sans: "Inter", "Geist", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --gt-font-mono: "IBM Plex Mono", "Source Code Pro", Consolas, "Ubuntu Mono", Menlo, "DejaVu Sans Mono", monospace;
+
+  /* Micro layout */
+  --gt-radius: 6px;
+  --gt-radius-sm: 4px;
+  --gt-transition: 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ------------------------------------------------------------------
+   2. Light theme (default for mdBook `.light`)
+   ------------------------------------------------------------------ */
+
+.light,
+html:not(.js) {
+  /* Core page */
+  --bg: var(--gt-paper);
+  --fg: var(--gt-ink);
+
+  /* Sidebar */
+  --sidebar-bg: var(--gt-paper-soft);
+  --sidebar-fg: var(--gt-ink);
+  --sidebar-non-existant: var(--gt-ink-muted);
+  --sidebar-active: var(--gt-brass);
+  --sidebar-spacer: var(--gt-line);
+
+  /* Scrollbar */
+  --scrollbar: var(--gt-ink-muted);
+
+  /* Icons / chrome */
+  --icons: var(--gt-ink-muted);
+  --icons-hover: var(--gt-brass);
+
+  /* Links */
+  --links: var(--gt-data-cyan);
+
+  /* Inline code */
+  --inline-code-color: var(--gt-data-cyan);
+
+  /* Popups */
+  --theme-popup-bg: var(--gt-paper);
+  --theme-popup-border: var(--gt-line);
+  --theme-hover: var(--gt-paper-elevated);
+
+  /* Blockquotes */
+  --quote-bg: rgba(47, 111, 116, 0.06);
+  --quote-border: var(--gt-data-cyan);
+
+  /* Warnings / admonitions */
+  --warning-border: var(--gt-brass);
+  --blockquote-note-color: var(--gt-data-cyan);
+  --blockquote-tip-color: #4a7c59;
+  --blockquote-important-color: var(--gt-violet);
+  --blockquote-warning-color: var(--gt-brass);
+  --blockquote-caution-color: #a94442;
+
+  /* Tables */
+  --table-border-color: var(--gt-line);
+  --table-header-bg: var(--gt-paper-elevated);
+  --table-alternate-bg: rgba(168, 146, 79, 0.05);
+
+  /* Search */
+  --searchbar-border-color: var(--gt-line);
+  --searchbar-bg: var(--gt-paper-soft);
+  --searchbar-fg: var(--gt-ink);
+  --searchbar-shadow-color: var(--gt-brass-glow);
+  --searchresults-header-fg: var(--gt-ink-muted);
+  --searchresults-border-color: var(--gt-line);
+  --searchresults-li-bg: rgba(47, 111, 116, 0.08);
+  --search-mark-bg: var(--gt-brass-lite);
+
+  /* Misc */
+  --color-scheme: light;
+  --footnote-highlight: var(--gt-azure);
+  --sidebar-header-border-color: var(--gt-brass);
+  --copy-button-filter: invert(37%) sepia(8%) saturate(1400%) hue-rotate(5deg) brightness(92%) contrast(88%);
+  --copy-button-filter-hover: invert(56%) sepia(25%) saturate(650%) hue-rotate(5deg) brightness(92%) contrast(88%);
+
+  --gt-code-bg: var(--gt-code-bg-light);
+}
+
+/* ------------------------------------------------------------------
+   3. Dark themes (shared brand dark for ayu / coal / navy / rust)
+   ------------------------------------------------------------------ */
+
+.ayu,
+.coal,
+.navy,
+.rust {
+  /* Core page */
+  --bg: #14130f;
+  --fg: #ece7da;
+
+  /* Sidebar */
+  --sidebar-bg: #1a1916;
+  --sidebar-fg: #ece7da;
+  --sidebar-non-existant: #7a8594;
+  --sidebar-active: #c4b274;
+  --sidebar-spacer: rgba(236, 231, 218, 0.10);
+
+  /* Scrollbar */
+  --scrollbar: #7a8594;
+
+  /* Icons / chrome */
+  --icons: #7a8594;
+  --icons-hover: #c4b274;
+
+  /* Links */
+  --links: #5fa9ad;
+
+  /* Inline code */
+  --inline-code-color: #5fa9ad;
+
+  /* Popups */
+  --theme-popup-bg: #1a1916;
+  --theme-popup-border: rgba(236, 231, 218, 0.10);
+  --theme-hover: #2a2824;
+
+  /* Blockquotes */
+  --quote-bg: rgba(95, 169, 173, 0.08);
+  --quote-border: #5fa9ad;
+
+  /* Warnings / admonitions */
+  --warning-border: #c4b274;
+  --blockquote-note-color: #5fa9ad;
+  --blockquote-tip-color: #7ab88a;
+  --blockquote-important-color: #a994c1;
+  --blockquote-warning-color: #c4b274;
+  --blockquote-caution-color: #d97265;
+
+  /* Tables */
+  --table-border-color: rgba(236, 231, 218, 0.10);
+  --table-header-bg: #2a2824;
+  --table-alternate-bg: rgba(196, 178, 116, 0.05);
+
+  /* Search */
+  --searchbar-border-color: rgba(236, 231, 218, 0.10);
+  --searchbar-bg: #1a1916;
+  --searchbar-fg: #ece7da;
+  --searchbar-shadow-color: rgba(196, 178, 116, 0.25);
+  --searchresults-header-fg: #7a8594;
+  --searchresults-border-color: rgba(236, 231, 218, 0.10);
+  --searchresults-li-bg: rgba(95, 169, 173, 0.10);
+  --search-mark-bg: #e5d4a3;
+
+  /* Misc */
+  --color-scheme: dark;
+  --footnote-highlight: #84a3bd;
+  --sidebar-header-border-color: #c4b274;
+  --copy-button-filter: invert(60%) sepia(8%) saturate(700%) hue-rotate(180deg) brightness(95%) contrast(90%);
+  --copy-button-filter-hover: invert(75%) sepia(25%) saturate(600%) hue-rotate(5deg) brightness(95%) contrast(90%);
+
+  --gt-code-bg: var(--gt-code-bg-dark);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.js) {
+    --bg: #14130f;
+    --fg: #ece7da;
+    --sidebar-bg: #1a1916;
+    --sidebar-fg: #ece7da;
+    --sidebar-non-existant: #7a8594;
+    --sidebar-active: #c4b274;
+    --sidebar-spacer: rgba(236, 231, 218, 0.10);
+    --scrollbar: #7a8594;
+    --icons: #7a8594;
+    --icons-hover: #c4b274;
+    --links: #5fa9ad;
+    --inline-code-color: #5fa9ad;
+    --theme-popup-bg: #1a1916;
+    --theme-popup-border: rgba(236, 231, 218, 0.10);
+    --theme-hover: #2a2824;
+    --quote-bg: rgba(95, 169, 173, 0.08);
+    --quote-border: #5fa9ad;
+    --warning-border: #c4b274;
+    --blockquote-note-color: #5fa9ad;
+    --blockquote-tip-color: #7ab88a;
+    --blockquote-important-color: #a994c1;
+    --blockquote-warning-color: #c4b274;
+    --blockquote-caution-color: #d97265;
+    --table-border-color: rgba(236, 231, 218, 0.10);
+    --table-header-bg: #2a2824;
+    --table-alternate-bg: rgba(196, 178, 116, 0.05);
+    --searchbar-border-color: rgba(236, 231, 218, 0.10);
+    --searchbar-bg: #1a1916;
+    --searchbar-fg: #ece7da;
+    --searchbar-shadow-color: rgba(196, 178, 116, 0.25);
+    --searchresults-header-fg: #7a8594;
+    --searchresults-border-color: rgba(236, 231, 218, 0.10);
+    --searchresults-li-bg: rgba(95, 169, 173, 0.10);
+    --search-mark-bg: #e5d4a3;
+    --color-scheme: dark;
+    --footnote-highlight: #84a3bd;
+    --sidebar-header-border-color: #c4b274;
+    --gt-code-bg: var(--gt-code-bg-dark);
+  }
+}
+
+/* ------------------------------------------------------------------
+   4. Global typography
+   ------------------------------------------------------------------ */
+
+html {
+  font-family: var(--gt-font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--gt-font-display);
+  font-weight: 500;
+  color: var(--fg);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+h1 { font-size: 3.2rem; }
+h2 { font-size: 2.6rem; }
+h3 { font-size: 2.1rem; }
+h4 { font-size: 1.8rem; }
+h5 { font-size: 1.55rem; }
+h6 { font-size: 1.4rem; }
+
+.content p,
+.content li,
+.content td,
+.content th,
+.content dd,
+.content dt {
+  line-height: 1.7;
+  color: var(--fg);
+}
+
+/* ------------------------------------------------------------------
+   5. Schematic grid background
+   ------------------------------------------------------------------ */
+
+.page-wrapper::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-image:
+    linear-gradient(to right, var(--gt-line) 0, var(--gt-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--gt-line) 0, var(--gt-line) 1px, transparent 1px);
+  background-size: 4rem 4rem;
+  opacity: 0.22;
+  mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 75%);
+}
+
+/* ------------------------------------------------------------------
+   6. Menu bar
+   ------------------------------------------------------------------ */
+
+#mdbook-menu-bar,
+#mdbook-menu-bar-hover-placeholder {
+  height: 56px;
+}
+
+#mdbook-menu-bar {
+  background-color: var(--bg);
+  border-block-end: 1px solid var(--gt-line);
+  box-shadow: 0 1px 2px var(--gt-line);
+}
+
+#mdbook-menu-bar .icon-button,
+#mdbook-menu-bar .fa-svg {
+  color: var(--icons);
+  transition: color var(--gt-transition);
+}
+
+#mdbook-menu-bar .icon-button:hover,
+#mdbook-menu-bar .fa-svg:hover {
+  color: var(--icons-hover);
+}
+
+.menu-title {
+  font-family: var(--gt-font-display);
+  font-size: 1.7rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+}
+
+/* ------------------------------------------------------------------
+   7. Sidebar / table of contents
+   ------------------------------------------------------------------ */
+
+.sidebar {
+  border-inline-end: 1px solid var(--gt-line);
+  background-color: var(--sidebar-bg);
+}
+
+.sidebar-iframe-inner {
+  background-color: var(--sidebar-bg);
+}
+
+.chapter li a {
+  color: var(--sidebar-fg);
+  transition: color var(--gt-transition);
+  border-radius: var(--gt-radius-sm);
+  padding: 0.2rem 0.4rem;
+  margin-inline-start: -0.4rem;
+}
+
+.chapter li a:hover,
+.chapter li a.active {
+  color: var(--sidebar-active);
+  background-color: rgba(168, 146, 79, 0.08);
+}
+
+.chapter li.chapter-item {
+  line-height: 1.6em;
+  margin-block-start: 0.4em;
+}
+
+.chapter li.header-item {
+  font-family: var(--gt-font-mono);
+  text-transform: uppercase;
+  font-size: 0.78em;
+  letter-spacing: 0.12em;
+  color: var(--gt-brass);
+  margin-block-end: 0.6em;
+  margin-block-start: 1.4em;
+}
+
+/* ------------------------------------------------------------------
+   8. Links
+   ------------------------------------------------------------------ */
+
+#mdbook-searchresults a,
+.content a:link,
+.content a:visited,
+a > .hljs {
+  color: var(--links);
+  text-decoration: underline;
+  text-decoration-color: var(--gt-brass);
+  text-underline-offset: 0.15em;
+  text-decoration-thickness: 1px;
+  transition: color var(--gt-transition), text-decoration-color var(--gt-transition);
+}
+
+#mdbook-searchresults a:hover,
+.content a:hover,
+a:hover > .hljs {
+  color: var(--gt-brass);
+  text-decoration-color: var(--gt-brass);
+}
+
+/* ------------------------------------------------------------------
+   9. Inline and block code
+   ------------------------------------------------------------------ */
+
+code {
+  font-family: var(--gt-font-mono) !important;
+}
+
+:not(pre):not(a) > code,
+:not(pre):not(a) > .hljs {
+  background-color: rgba(47, 111, 116, 0.08);
+  color: var(--inline-code-color);
+  padding: 0.15em 0.4em;
+  border-radius: var(--gt-radius-sm);
+  font-size: 0.9em;
+}
+
+pre > code {
+  display: block;
+  background-color: var(--gt-code-bg);
+  border: 1px solid var(--gt-line);
+  border-radius: var(--gt-radius);
+  padding: 1.2rem;
+  font-size: 0.85em;
+  line-height: 1.6;
+  box-shadow: inset 0 0 0 1px var(--gt-line);
+}
+
+pre > .buttons button {
+  border-color: var(--gt-line);
+  background-color: var(--gt-paper-soft);
+  color: var(--gt-ink-muted);
+  border-radius: var(--gt-radius-sm);
+  transition: color var(--gt-transition), background-color var(--gt-transition), border-color var(--gt-transition);
+}
+
+pre > .buttons button:hover {
+  color: var(--gt-brass);
+  background-color: var(--gt-paper-elevated);
+  border-color: var(--gt-brass);
+}
+
+.ayu pre > code,
+.coal pre > code,
+.navy pre > code,
+.rust pre > code {
+  border-color: rgba(236, 231, 218, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(236, 231, 218, 0.10);
+}
+
+/* ------------------------------------------------------------------
+   10. Blockquotes & admonitions
+   ------------------------------------------------------------------ */
+
+blockquote {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  background-color: var(--quote-bg);
+  border-inline-start: 4px solid var(--quote-border);
+  border-block: none;
+  border-radius: 0 var(--gt-radius) var(--gt-radius) 0;
+  font-style: normal;
+}
+
+.blockquote-tag {
+  border-inline-start-width: 4px;
+  padding: 0.75rem 0 0.75rem 1.25rem;
+  border-radius: 0 var(--gt-radius) var(--gt-radius) 0;
+}
+
+.blockquote-tag-title {
+  font-family: var(--gt-font-display);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------
+   11. Tables
+   ------------------------------------------------------------------ */
+
+table thead {
+  background-color: var(--table-header-bg);
+}
+
+table th {
+  font-family: var(--gt-font-display);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+table td,
+table th {
+  border: 1px solid var(--table-border-color);
+  padding: 0.75rem 1rem;
+}
+
+table tbody tr:nth-child(2n) {
+  background-color: var(--table-alternate-bg);
+}
+
+/* ------------------------------------------------------------------
+   12. Search
+   ------------------------------------------------------------------ */
+
+#mdbook-searchbar {
+  border: 1px solid var(--searchbar-border-color);
+  border-radius: var(--gt-radius);
+  background-color: var(--searchbar-bg);
+  color: var(--searchbar-fg);
+  font-family: var(--gt-font-sans);
+  transition: box-shadow var(--gt-transition), border-color var(--gt-transition);
+}
+
+#mdbook-searchbar:focus,
+#mdbook-searchbar.active {
+  outline: none;
+  border-color: var(--gt-brass);
+  box-shadow: 0 0 0 3px var(--gt-brass-glow);
+}
+
+#mdbook-searchresults a:hover {
+  color: var(--gt-brass);
+}
+
+/* ------------------------------------------------------------------
+   13. Theme popup
+   ------------------------------------------------------------------ */
+
+.theme-popup {
+  background-color: var(--theme-popup-bg);
+  border: 1px solid var(--theme-popup-border);
+  border-radius: var(--gt-radius);
+  box-shadow: var(--shadow-md);
+}
+
+.theme-popup .theme:hover {
+  background-color: var(--theme-hover);
+  color: var(--fg);
+}
+
+/* ------------------------------------------------------------------
+   14. Navigation arrows
+   ------------------------------------------------------------------ */
+
+.nav-chapters {
+  color: var(--fg);
+  background-color: var(--sidebar-bg);
+  border-radius: var(--gt-radius);
+  border: 1px solid var(--gt-line);
+  transition: color var(--gt-transition), background-color var(--gt-transition), border-color var(--gt-transition);
+}
+
+.nav-chapters:hover {
+  color: var(--gt-brass);
+  background-color: var(--theme-hover);
+  border-color: var(--gt-brass);
+  text-decoration: none;
+}
+
+/* ------------------------------------------------------------------
+   15. Misc / fine tuning
+   ------------------------------------------------------------------ */
+
+.page-wrapper {
+  background-color: var(--bg);
+}
+
+.content {
+  padding-top: 1rem;
+}
+
+.content h1:first-of-type {
+  margin-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--gt-line);
+}
+
+.kbd,
+kbd {
+  font-family: var(--gt-font-mono);
+  background-color: var(--gt-paper-elevated);
+  border: 1px solid var(--gt-line);
+  border-radius: var(--gt-radius-sm);
+  box-shadow: 0 1px 0 var(--gt-line);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gt-brass);
+}

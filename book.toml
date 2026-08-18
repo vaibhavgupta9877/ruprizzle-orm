@@ -12,3 +12,4 @@ build-dir = "book"
 site-url = "https://vaibhavgupta9877.github.io/ruprizzle-orm/"
 git-repository-url = "https://github.com/vaibhavgupta9877/ruprizzle-orm"
 edit-url-template = "https://github.com/vaibhavgupta9877/ruprizzle-orm/edit/main/docs/{path}"
+additional-css = ["theme/gupta-brand.css"]
