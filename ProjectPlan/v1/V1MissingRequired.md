@@ -1,3 +1,11 @@
+> **Note (2026-08-18):** This research document was produced when the repository
+> was at `0.1.1-beta.1`. Many of the gaps it identifies (LSP, compile-time query
+> checking, MySQL support, partial/expression indexes, generated columns, PostgreSQL
+> extensions, migration squashing, and more) have since been implemented for v1.0.
+> Treat the detailed findings as historical context, and use `PathToStableV1.md`,
+> `docs/FeaturesMasterComparison.md`, and `docs/KnownLimitations.md` for the current
+> state.
+
 You were right. I found the actual project and analyzed the **real `ruprizzle` project by Vaibhav Gupta (`vaibhavgupta9877`)**, rather than conflating it with Prisma Client Rust.
 
 The correct repository is [`vaibhavgupta9877/ruprizzle-orm`](https://github.com/vaibhavgupta9877/ruprizzle-orm?utm_source=chatgpt.com). It is a schema-first Rust ORM whose architecture explicitly combines **Prisma-style declarative schema/code generation with Drizzle-style SQL transparency**, and its runtime is built on SQLx rather than a separate query engine. ([GitHub][1])

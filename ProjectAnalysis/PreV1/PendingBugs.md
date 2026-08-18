@@ -1,3 +1,5 @@
+> **Note (2026-08-18):** This analysis was performed against `0.1.1-beta.1`. The bugs marked fixed below were addressed during the v1.0 push, and the pool/metrics diagnostics have since been updated. Treat this document as historical context and use current `cargo test` and `cargo xtask harden` results as the source of truth for the current tree.
+
 # Pending Bugs — Pre-v1 Analysis
 
 **Analysed:** `0.1.1-beta.1` (commit `c3ef7f0` + `af3ce27`)

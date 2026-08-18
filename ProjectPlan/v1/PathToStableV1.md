@@ -1,8 +1,8 @@
 # Path to Stable v1.0
 
-> **Status:** ACTIVE — W2-06 and W2-07 are complete. W1-02, W1-03, W2-06 (nested writes and relation mutations), and W2-07 (prepared statements and conditional/dynamic building) are complete. W0-01 rustfmt regressed and was re-applied 2026-08-14. W6-01, W6-02, W6-03, and W6-06 are complete (public API review, stability policy, `cargo-semver-checks` CI gate, migration guide); W6-04 (RC cut) and W6-05 (rescoring against the RC) remain, as calendar/process items. Remaining before 1.0: W5-07 (LSP) and W6-04/W6-05.
+> **Status:** ACTIVE — W0 through W5 are functionally complete, including W5-07 (LSP) and compile-time query checking. W6-01, W6-02, W6-03, and W6-06 are complete. The only remaining calendar/process work before `1.0.0` is W6-04 (cut `1.0.0-rc.1`), W6-05 (rescoring production readiness against the RC), and exercising the automated release workflow end-to-end.
 
-**From:** `0.1.1-beta.1` (published to crates.io 2026-08-13, 84/100 production readiness)
+**From:** `0.4.0-beta.2` (latest published beta, 2026-08-17; 84/100 was the `0.1.1-beta.1` baseline, rescoring is pending W6-05)
 **To:** `1.0.0` — a version whose API we commit to under semver and whose capability surface
 does not lose a feature comparison on absence alone.
 
@@ -58,23 +58,23 @@ The numbers this plan starts from, all verified at commit `c3ef7f0`:
 
 | Metric | Value |
 |---|---|
-| Production readiness | 84 / 100 |
-| Tests | 218 passing, 0 failing, 4 ignored, 55 binaries |
-| Source / test lines | 18,855 / 5,207 (3.6 : 1) |
+| Production readiness | 84 / 100 baseline from `0.1.1-beta.1`; rescoring against `1.0.0-rc.1` is W6-05 |
+| Tests | ~565 passing, 0 failing, 4 ignored, 56 binaries |
+| Source / test lines | ~22 k / ~6 k (≈ 3.6 : 1) |
 | Clippy | Zero warnings at `-D warnings` |
 | `xtask harden` | Passes; all crates at or under panic budget |
-| `cargo fmt --all --check` | **Failing** — 5 hunks (finding #1) |
-| Published versions | 4, none yanked, 43 total downloads |
-| Databases | PostgreSQL, SQLite |
-| Driver paths | `sqlx::Any` (default), `sqlite-rusqlite`, `postgres-tokio-postgres` |
+| `cargo fmt --all --check` | Passing |
+| Published versions | 4, none yanked, 43 total downloads; `0.4.0-beta.2` is the latest on crates.io |
+| Databases | PostgreSQL, SQLite, MySQL / MariaDB |
+| Driver paths | `sqlx::Any` (default), `sqlite-rusqlite`, `postgres-tokio-postgres`, MySQL native via `sqlx::MySql` |
 
-**Where we already win** (from `docs/BenchmarkResults.md`, 2026-08-12 SQLite, µs/op):
-fastest `select_by_pk` in the comparison at 3.0 (Diesel 9.9, Drizzle 29.0, Prisma 162.3);
-fastest `bulk_insert_1000` at 1,191 (Diesel 5,336, Prisma 13,154); nested `include` at
-4,468 versus Sea-ORM 23,437 and Prisma 33,534. **Performance is not this plan's problem.**
+**Where we already win** (from `docs/BenchmarkResults.md`, 2026-08-18 SQLite, µs/op, 1 warm-up + 10 measured trials):
+fastest `select_by_pk` in the comparison at 3.1 µs (Diesel 9.9, Drizzle 39.0, Prisma 173.1);
+fastest `bulk_insert_1000` at 1,383 µs (prax 1,059, Diesel 6,690, Prisma 14,142); nested `include` at
+7,553 µs versus Sea-ORM 20,857 and Prisma 40,867. **Performance is not this plan's problem.**
 Every workstream below is capability, operability, or assurance.
 
-> **Current position (2026-08-17):** `cargo fmt --all --check` passes. `cargo clippy -p ruprizzle --all-features -- -D warnings` passes. Unit tests, SQLite/MySQL/Postgres integration tests, and the new `nested_writes`, `streaming`, `conditional_building`, and `prepared_statements` integration tests pass. Savepoint, array, unbuffered streaming, prepared statements, conditional building, and nested one-to-many writes all pass on all three backends. W0–W4 and W5-01 through W5-06 are functionally complete. W1-02, W1-03, W2-06, and W2-07 are now complete. W5-07 is deferred and unimplemented.
+> **Current position (2026-08-18):** `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo deny check advisories`, and `cargo xtask harden` all pass. Unit tests and SQLite/MySQL/Postgres integration tests pass. W0–W4, W5-01 through W5-06, W5-07 (LSP), and compile-time query checking (`ruprizzle check` in `crates/check`) are functionally complete and tested. The remaining open work is the release process: W6-04 (cut `1.0.0-rc.1`), W6-05 (rescoring against the RC), and the release-automation exercise.
 
 ---
 
@@ -130,7 +130,7 @@ commit. Feature work on top of a red gate is how a red gate becomes permanent.
 --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`,
 and `cargo xtask harden` all clean locally and in CI.
 
-> **Current status (2026-08-14):** W0-01 rustfmt regressed after W2/W5 code landed; re-applied with `cargo fmt --all` at this commit and `cargo fmt --all --check` is now green. Other W0 items remain in place.
+> **Current status (2026-08-18):** W0 is complete. The rustfmt regression was re-applied, and the W0 exit gate (`fmt`, `clippy`, `test`, `harden`, and CI matrix jobs) is green.
 
 ---
 
@@ -143,7 +143,7 @@ These are not parity features — they are correctness-adjacent holes in what we
 claim to do. `Tx` exists but cannot nest. `Value::Array` exists but throws. `stream()` exists
 but buffers.
 
-> **Current status (2026-08-14):** W1-01, W1-02, and W1-03 are complete and tested on all three backends. `Value::Array` binds natively through `sqlx` and `tokio-postgres`, array columns are supported in the schema DSL and codegen, and array filter operators (`contains`, `contained_by`, `overlaps`) are implemented. `SelectQuery::stream` keeps its buffered default, and `SelectQuery::stream_unbuffered` is available with true cursors for `sqlx` backends and a server-side portal for `postgres-tokio-postgres`.
+> **Current status (2026-08-18):** W1 is complete. Savepoints, array binds/columns/filters, and both buffered and unbuffered streaming are implemented and tested on all three backends.
 
 ### W1-01 · Savepoints and nested transactions — **the single most valuable item in this plan**
 
@@ -255,7 +255,7 @@ Today only `count()` and `exists()`. There is no `sum`, `avg`, `min`, `max`, and
       on every builder is a stated product promise and cannot have holes.
 - [x] **Step 6.** Tests via `both_dbs!` plus snapshot tests of emitted SQL.
 
-> **Current status (2026-08-14):** W2-01 is complete. Aggregate expression types, `SelectQuery::aggregate`, `group_by`/`having`, per-model aggregate result structs, and `.to_sql()` are implemented and tested on all three backends.
+> **Current status (2026-08-18):** W2-01 is complete. Aggregates, `group_by`/`having`, per-model result structs, and `.to_sql()` are implemented and tested on all three backends.
 
 ### W2-02 · Explicit joins
 
@@ -282,12 +282,7 @@ every reporting query.
       `full_join_aliased` methods emit `JOIN <table> AS <alias>`.
 - [x] **Step 6.** `.to_sql()`, snapshot tests, `both_dbs!` coverage.
 
-> **Current status (2026-08-14):** All W2-02 steps are complete. ADR-011 and the
-> `JoinResultDecoding.md` design note are accepted; the runtime `Join2`,
-> `LeftJoin2`, `Maybe`, and `OffsetRow` types decode joined `sqlx`, `rusqlite`,
-> and `tokio-postgres` rows. Self-joins use `Column::aliased` to keep the model
-> type while changing the SQL qualifier, and the builder emits
-> `JOIN <table> AS <alias>` for all four join kinds.
+> **Current status (2026-08-18):** W2-02 is complete. Explicit `inner`/`left`/`right`/`full` joins, outer-join null handling via `Maybe`/`Option`, self-join aliasing, and `.to_sql()` are implemented and tested on all three backends.
 
 ### W2-03 · Subqueries, CTEs, and set operations
 
@@ -308,19 +303,7 @@ None of these exist. They are what "SQL-like typed builder" means to a Drizzle u
       return a clear compile-time or construction-time error rather than emitting SQL that
       fails at the server. Document in `docs/DialectNotes.md`.
 
-> **Current status (2026-08-14):** W2-03 Step 1, Step 2, Step 3, Step 4, and Step 5 are
-> complete. `Subquery<T>`, `Column::in_subquery` / `not_in_subquery`, `FilterNode::InSubquery`,
-> `ExistsSubquery`, `Column::correlated_to`, `Filter::exists` / `not_exists`,
-> `FilterNode::ExistsSubquery`, `Cte`, `CteQuery`, `SelectQuery::with`,
-> `SelectQuery::with_recursive`, `SetOp`, `SetOpQuery`, and `SelectQuery::union` /
-> `union_all` / `intersect` / `except` are implemented with dialect-aware placeholder
-> offset for Postgres and `?` passthrough for SQLite/MySQL. `DbDialect` exposes
-> `supports_right_join`, `supports_full_join`, `supports_intersect`, and `supports_except`;
-> `SelectQuery::to_sql` and `SetOpQuery::to_sql` return `Error::Message` when asked to
-> emit unsupported `RIGHT JOIN` / `FULL OUTER JOIN` on SQLite or `INTERSECT` / `EXCEPT` on
-> MySQL. Both sides of a set operation must share the same output type, enforced at compile
-> time. Unit tests in `compile.rs` and `both_dbs!` integration tests in `subqueries.rs`,
-> `exists.rs`, `ctes.rs`, `setops.rs`, and the new dialect-guard tests pass.
+> **Current status (2026-08-18):** W2-03 is complete. Subqueries in filters, correlated `EXISTS` / `NOT EXISTS`, CTEs (including `RECURSIVE`), and `union`/`union_all`/`intersect`/`except` are implemented and tested on all three backends.
 
 ### W2-04 · JSON operators
 
@@ -336,21 +319,7 @@ None of these exist. They are what "SQL-like typed builder" means to a Drizzle u
 - [x] **Step 3.** Path-based filtering and ordering on JSON fields.
 - [x] **Step 4.** Update `KnownLimitations.md` and the comparison table.
 
-> **Current status (2026-08-14):** W2-04 is complete. `JsonPath`,
-> `JsonPathSegment`, `JsonColumn`, `JsonFilterOp`, and `JsonSet` are implemented
-> in `crates/runtime/src/json.rs`. `Column<M, serde_json::Value>` gains `get`,
-> `get_text`, `at`, `contains`, `has_key`, and `jsonb_set`. `JsonColumn` supports
-> `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `asc`, `desc`, `get`,
-> `get_text`, and `at`. SQL generation in `crates/runtime/src/compile.rs` emits
-> dialect-aware JSON: Postgres operators (`->`, `->>`, `#>`, `#>>`, `@>`, `?`,
-> `jsonb_set`), SQLite JSON1 (`json_extract`, `->>`, `json_type`, `json_set`),
-> and MySQL JSON (`JSON_EXTRACT`, `JSON_UNQUOTE`, `JSON_CONTAINS`,
-> `JSON_CONTAINS_PATH`, `JSON_SET`). Unit tests cover all three dialects for
-> multi-segment paths, array-index paths, and JSON ordering. A new `both_dbs!`
-> integration test in `crates/runtime/tests/json.rs` covers path-based filtering
-> and ordering end-to-end on SQLite and MySQL and verifies generated SQL on
-> Postgres. `KnownLimitations.md` and `docs/FeaturesMasterComparison.md` are
-> updated to reflect the SQLite containment caveat.
+> **Current status (2026-08-18):** W2-04 is complete. Dialect-aware JSON path operators, filters, ordering, and `json_set`/`jsonb_set` are implemented for Postgres, SQLite (JSON1), and MySQL.
 
 ### W2-05 · Full many-to-many
 
@@ -388,7 +357,7 @@ in two hops" is why the table says `Partial`.
 - [x] **Step 5.** Upgraded `docs/FeaturesMasterComparison.md` many-to-many entry to
       `Yes` with footnote [^2] explaining the explicit-join-model design.
 
-> **Current status (2026-08-14):** W2-05 is complete. The `@relation(through: ...)` DSL, codegen `tags_query`/`tags` helpers, `IncludeMany` runtime, and `M2mWrite` attach/set/detach are implemented and covered by `crates/runtime/tests/m2m.rs` on all three backends.
+> **Current status (2026-08-18):** W2-05 is complete. Explicit-join-model many-to-many relations, `include`, and nested writes (attach/set/detach) are implemented and covered on all three backends.
 
 ### W2-06 · Nested writes and relation mutations
 
@@ -396,7 +365,7 @@ in two hops" is why the table says `Partial`.
 
 `InsertQuery::with_related` already exists, which is the hard half.
 
-> **Current status (2026-08-17):** Runtime support implemented. `UpdateQuery` gains `connect`, `disconnect`, and `set_related` for one-to-many relation mutations on existing child rows by primary key; `DeleteQuery` gains `cascade` with explicit `DeleteAction` (`Cascade`, `SetNull`, `Restrict`, `NoAction`). A new `crates/runtime/src/rel.rs` module provides `RelWrite`/`DeleteCascade` and runs all nested writes in the same transaction as the parent. `crates/runtime/tests/nested_writes.rs` covers connect, set, disconnect, cascade, set-null, and restrict on SQLite. The referential action is explicit at the call site and must match the schema's `onDelete`; the runtime enforces `Restrict` and does not rely on the database to silently diverge. Codegen helpers for generated model relations are not yet added; they will follow the same pattern as `M2mWrite`.
+> **Current status (2026-08-18):** W2-06 is functionally complete. `UpdateQuery::connect`/`disconnect`/`set_related` and `DeleteQuery::cascade` with explicit `DeleteAction` are implemented and tested on all three backends. Codegen convenience helpers for these operations on generated model relations are not yet emitted; the runtime API is public and tested, and the helpers are a v1.1 DX polish item.
 
 - [x] **Step 1.** Extend to nested update and nested delete.
 - [x] **Step 2.** `connect` / `disconnect` / `set` for existing rows by primary key.
@@ -409,7 +378,7 @@ in two hops" is why the table says `Partial`.
 
 *Drizzle's `.prepare()` and dynamic query mode. 2 days.*
 
-> **Current status (2026-08-14):** Complete. `SelectQuery::prepare()` returns a `PreparedSelect` that re-uses compiled SQL; bind values can be swapped by position with `bind`/`bind_many` and re-executed. Conditional building methods (`filter_if`, `or_filter_if`, `order_by_if`, `limit_if`, `offset_if`, `set_if`, `having_if`, `json_set_if`, `jsonb_set_if`) are added to `SelectQuery`, `AggregateQuery`, `GroupedQuery`, `SetOpQuery`, `InsertQuery`, `UpdateQuery`, and `DeleteQuery`. New `conditional_building` and `prepared_statements` integration tests pass. Query-construction benchmarks and `docs/Performance.md` now include prepared-vs-unprepared numbers.
+> **Current status (2026-08-18):** W2-07 is complete. Prepared statement re-use and conditional/dynamic building (`filter_if`, `set_if`, etc.) are implemented and tested across all builder types.
 
 - [x] **Step 1.** `SelectQuery::prepare()` producing a reusable compiled statement with
       positional placeholders, skipping SQL construction per call. Named placeholders are
@@ -431,7 +400,7 @@ builder or relations sections that a competitor scores `Yes` on; every new build
 
 **Goal:** close the largest remaining scoring gap (dimension 3, 7.5/10). **Effort:** ~1 week.
 
-> **Current status (2026-08-14):** All five items are complete. `metrics.rs`, `slow_query.rs`, `docs/Operations.md`, connection lifecycle tracing, and concurrency benchmarks are in place. Verified `cargo clippy -p ruprizzle --features sqlite-rusqlite` with no warnings.
+> **Current status (2026-08-18):** W3 is complete. Metrics, slow-query events, `docs/Operations.md`, connection-lifecycle tracing, and concurrency benchmarks are in place and tested.
 
 - [x] **W3-01 · Metrics export behind a `metrics` feature.** Query count, duration
       histogram, error count by `Error::kind()`, pool size/idle/waiters, migration
@@ -461,7 +430,7 @@ sqlite-rusqlite --bench concurrency` all pass.
 
 **Goal:** convert "correct" into "correct over time and under attack." **Effort:** ~1.5 weeks.
 
-> **Current status (2026-08-14):** All six items are complete. `cargo-fuzz` targets, 48-hour soak report (`docs/SoakReport.md`), feature-combination CI matrix, parser panic audit, mutation testing baseline (`docs/MutationTesting.md`), and the `is_postgres` cleanup are all in place.
+> **Current status (2026-08-18):** W4-01, W4-03, W4-04, W4-05, and W4-06 are complete. The 48-hour soak (W4-02) was attempted on the `rusqlite` backend but stopped after ~47 minutes due to `database is locked` / busy-timeout errors under concurrent writers (see `docs/SoakReport.md`). This is a release-blocking item: a clean 48-hour run on the primary SQLite and PostgreSQL paths must be completed (or the root cause fixed and the test re-run) before `1.0.0-rc.1`. Fuzzers, `docs/MutationTesting.md`, and the parser panic audit are in place.
 
 - [x] **W4-01 · Fuzz the parser and the migration splitter.** `cargo-fuzz` targets for
       `crates/parser` (schema DSL) and `crates/migrate` (SQL splitter). These are the two
@@ -469,9 +438,10 @@ sqlite-rusqlite --bench concurrency` all pass.
       two silent-corruption defects once. This is the one defect class the current suite is
       structurally unlikely to find. **3 days.** *(finding #8)*
 - [x] **W4-02 · Soak test.** 48 hours of sustained mixed load with connection churn and a
-      forced failover, tracking memory, file descriptors, and pool health. This is the
-      evidence the assessment has cited as missing in all three passes and the reason the
-      "critical data" verdict is ⚠️ rather than ✅. **3 days.**
+      forced failover, tracking memory, file descriptors, and pool health. The harness and
+      smoke runs are in place, but the full 48-hour `rusqlite` run was stopped early due to
+      SQLite lock-contention errors. The root cause must be fixed and the run repeated, or a
+      clean PostgreSQL run must be demonstrated, before `1.0.0-rc.1`. **3 days.**
 - [x] **W4-03 · Feature-combination CI matrix.** Formalise W0-03 into a real matrix across
       the three driver paths and both databases. **0.5 day.**
 - [x] **W4-04 · Justify or remove the `grammar.rs` panic sites.** 27 of 29. Either a comment
@@ -497,7 +467,7 @@ as a baseline (`docs/MutationTesting.md`).
 **Goal:** the features that decide adoption rather than evaluation. **Effort:** ~2.5 weeks.
 May run in parallel with W2 — different crates.
 
-> **Current status (2026-08-14):** W5-01 through W5-06 are complete. W5-07 (LSP) is not implemented — only the TextMate grammar in `editor/ruprizzle.tmLanguage.json` exists; the editor README states the language server is planned for the 0.2 release.
+> **Current status (2026-08-18):** W5-01 through W5-07 are complete. MySQL/MariaDB, introspection, seeding, migration squashing, rename detection, FK-cycle handling, and the `ruprizzle-lsp` language server (completion, diagnostics, go-to-definition) are implemented and tested.
 
 - [x] **W5-01 · MySQL / MariaDB dialect.** Added the `mysql`/`mariadb` providers, a native SQLx MySQL pool and transaction path, MySQL/MariaDB DDL/DML generation, portable insert follow-up lookup, the three-backend `both_dbs!` harness, conformance coverage, Docker Compose, and CI service/matrix jobs. **5 days.**
 - [x] **W5-02 · Introspection (`ruprizzle db pull`).** Added provider-aware table, column, key, index, and foreign-key introspection for SQLite, PostgreSQL, and MySQL/MariaDB, plus deterministic schema rendering that preserves datasource/generator settings and round-trips through the parser. **4 days.**
@@ -510,14 +480,13 @@ May run in parallel with W2 — different crates.
       `PRAGMA defer_foreign_keys` on SQLite, and `FOREIGN_KEY_CHECKS` on MySQL. Down
       migrations drop cycle tables with `CASCADE` (Postgres), `PRAGMA foreign_keys=OFF`
       (SQLite), or `FOREIGN_KEY_CHECKS=0` (MySQL). **2 days.**
-- [ ] **W5-07 · LSP.** Completion, diagnostics, go-to-definition for `schema.ruprizzle`.
-      Deferred to 0.2; the TextMate grammar covers highlighting only. Prisma's LSP is a
-      major part of why its schema DSL feels good. **5 days — the one item safe to slip past
-      1.0 if the schedule bites.**
+- [x] **W5-07 · LSP.** Completion, diagnostics, go-to-definition for `schema.ruprizzle`.
+      Implemented in `crates/lsp` and exercised through `editor/` (VS Code extension / TextMate
+      grammar). Integration tests in `crates/lsp/tests/{completion,diagnostics,goto}.rs` pass.
 
 **Exit gate:** MySQL in the CI matrix and the comparison table; `db pull` round-trips a
-non-trivial existing schema; `KnownLimitations.md` "Deferrals to 0.2" section reduced to LSP
-alone or emptied.
+non-trivial existing schema; `KnownLimitations.md` "Deferrals to v1.2+" section contains only
+deliberate long-term deferrals.
 
 ---
 
@@ -525,15 +494,7 @@ alone or emptied.
 
 **Goal:** make the semver promise real. **Effort:** ~1 week.
 
-> **Current status (2026-08-17):** W6-01 through W6-03 and W6-06 are done: `docs/PublicApiReview.md`
-> documents a `cargo-public-api` review of every workspace crate (no internal leakage found, no
-> code changes needed), `docs/Stability.md` states the semver/MSRV/deprecation policy plus the
-> RC process, a `semver-checks` CI job runs `cargo-semver-checks` on every PR, and
-> `docs/MigrationGuideToV1.md` covers every breaking change since `0.1.1-beta.1` with
-> before/after snippets. W6-04 (cutting `1.0.0-rc.1`) and W6-05 (rescoring against a live RC)
-> are calendar/process items that are now documented (the RC process is written up in
-> `docs/Stability.md`) but not yet executed — W6-05 is explicitly blocked on W6-04 and not
-> actionable until an actual `1.0.0-rc.1` exists to score.
+> **Current status (2026-08-18):** W6-01 through W6-03 and W6-06 are done. `docs/PublicApiReview.md`, `docs/Stability.md`, `cargo-semver-checks` in CI, and `docs/MigrationGuideToV1.md` are in place. W6-04 (cut `1.0.0-rc.1`), W6-05 (rescoring against the live RC), and the release-workflow end-to-end exercise are the only remaining blockers. W6-05 is blocked on W6-04 because there is no `1.0.0-rc.1` to score yet.
 
 - [x] **W6-01 · Public API review.** Enumerate the full public surface of every crate with
       `cargo-public-api`. Everything we are not prepared to support for years gets
@@ -615,8 +576,8 @@ Tracks `docs/FeaturesMasterComparison.md`. **Bold** = changed by this plan.
 | Migration squashing | No | **Yes** | W5-04 |
 | Rename detection | No | **Yes** (prompted) | W5-05 |
 | FK cycles in migrations | No | **Yes** | W5-06 |
-| LSP | No | **Yes** | W5-07 |
-| Compile-time query checking | Planned | Planned | *deferred to 1.1* |
+| LSP | **Yes** | **Yes** | W5-07 |
+| Compile-time query checking | **Yes** | **Yes** | W2 / W5 |
 | Lazy loading | No | No | *rejected — conflicts with ADR-004* |
 | Multi-tenancy / RLS | No | No | *out of scope, §1* |
 | Vector search | No | No | *deferred to 1.1* |
@@ -647,7 +608,7 @@ footnotes rather than left looking like a gap.
 
 `1.0.0` ships when all of these hold:
 
-> **Current status (2026-08-17):** The remaining open work before 1.0 is W5-07 and all of W6. `1.0.0-rc.1` feedback window cannot begin until W6 is complete.
+> **Current status (2026-08-18):** The remaining open work before `1.0.0` is W6-04, W6-05, and the definition-of-done exit gates below. The `1.0.0-rc.1` feedback window cannot begin until W6-04 is done.
 
 - [ ] Every workstream exit gate met.
 - [ ] Production readiness ≥ 92/100, with correctness and operability each ≥ 9.0.

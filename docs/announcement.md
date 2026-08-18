@@ -71,9 +71,9 @@ See [known-limitations](KnownLimitations.md) for the full list. Highlights:
 
 - Heuristic renames are suggested automatically; use `@renamedFrom` to confirm.
 - `db push` does not write migration files and is only for prototyping.
-- Compile-time query checking (`sqlx-data.json` / offline mode) is not implemented.
-- No LSP yet.
-- `Decimal` and `Json` on SQLite are stored as text.
+- Compile-time query checking (`ruprizzle check` / query manifests) is implemented.
+- LSP for `schema.ruprizzle` is available as `ruprizzle-lsp` and in the `editor/` VS Code extension.
+- `Decimal` and `Json` on SQLite are stored as text; JSON1 path operators and filters work.
 
 ## Performance notes
 

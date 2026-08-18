@@ -1,3 +1,5 @@
+> **Note (2026-08-18):** This assessment is a historical snapshot of `0.1.1-beta.1` at `7636f44`. The repository has since moved to `0.4.0-beta.2` and most of the findings below have been addressed. The current v1.0 readiness state is tracked in `ProjectPlan/v1/PathToStableV1.md`, `ProjectPlan/v1/V1Blockers.md`, and `ProjectPlan/v1/V1MissingRequired.md`.
+
 # Production Readiness Assessment — ruprizzle-orm
 
 **Version assessed:** `0.1.1-beta.1` (workspace version unchanged), branch `dev-v0-2`

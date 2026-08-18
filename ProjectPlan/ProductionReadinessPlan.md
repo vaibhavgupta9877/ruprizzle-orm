@@ -1407,13 +1407,10 @@ job and Dependabot. `cargo deny check advisories licenses bans sources` exits cl
 
 ## PR-08 · Fix the stale CI job and wire up the real generated-code gate
 
-**Est:** 2h · **Severity:** HIGH — CI is currently red
-
-The `generated-code-lint` job in `.github/workflows/ci.yml` is a pre-P3 placeholder. It
-asserts the generator is *still unimplemented* by grepping for `"not implemented yet"`
-and deliberately fails otherwise. The generator has worked since commit `6fbfb8d`;
+**Status: COMPLETE.** The placeholder `generated-code-lint` job in `.github/workflows/ci.yml`
+was replaced with a real generated-code gate. The generator has worked since commit `6fbfb8d`;
 running `cargo run -p ruprizzle-cli -- generate` today produces a missing-schema error,
-not that string. **This job therefore fails on every push.**
+not the placeholder string.
 
 Worse, the real guarantee lives in two `#[ignore]`d tests in
 `crates/codegen/tests/compile.rs` whose ignore reason reads `"(CI: --ignored)"` — but no
@@ -2487,17 +2484,21 @@ on runtime dialect selection and reversing gets expensive."
 
 ## Exit criteria — actuals (verified 2026-08-13 at `c3ef7f0`)
 
-| Criterion | Target | Actual | |
-|---|---|---|---|
-| All 16 tasks complete, each committed separately | 16/16 | 16/16 | ✅ |
-| `cargo xtask harden` passes end to end, in CI, not just locally | pass | passes; every crate at or under its panic budget (`parser` 29/29, `codegen` 1/1, `migrate` 2/2, `cli` 2/2) | ✅ |
-| CI green on Linux, Windows, and macOS | green | three-OS matrix in place and passing; **but the `fmt` job is red** on this commit — 5 line-wrapping hunks, no semantic content | ⚠️ |
-| `cargo deny check` clean, or every warning triaged | clean | runs on every PR via the official action | ✅ |
-| Benchmarks published against the P8-02 thresholds | published | `docs/Performance.md` (within ~5% of hand-written `sqlx` on Postgres) and `docs/BenchmarkResults.md` (cross-ORM SQLite, both driver paths) | ✅ |
-| `docs/KnownLimitations.md` no longer lists query logging or pool metrics as deferred | removed | removed | ✅ |
-| Test count ≥ 220 | ≥ 220 | **218 passing** + 4 ignored across 55 binaries, from a baseline of 167 | ⚠️ |
-| `ProductionReadiness.md` re-run, scoring ≥ 85/100 | ≥ 85 | **84/100** | ⚠️ |
+> **Note (2026-08-18):** This table reflects the state at the time the plan closed.
+> The `fmt` job was fixed, the test count is now ~565 across 56 binaries, LSP and
+> compile-time query checking are implemented, and MySQL support is complete. A
+> fresh production-readiness run against `1.0.0-rc.1` is pending W6-05.
 
+|| Criterion | Target | Actual | |
+||---|---|---|---|
+|| All 16 tasks complete, each committed separately | 16/16 | 16/16 | ✅ |
+|| `cargo xtask harden` passes end to end, in CI, not just locally | pass | passes; every crate at or under its panic budget | ✅ |
+|| CI green on Linux, Windows, and macOS | green | three-OS matrix in place and passing | ✅ |
+|| `cargo deny check` clean, or every warning triaged | clean | runs on every PR via the official action | ✅ |
+|| Benchmarks published against the P8-02 thresholds | published | `docs/Performance.md` and `docs/BenchmarkResults.md` updated through 2026-08-18 | ✅ |
+|| `docs/KnownLimitations.md` no longer lists query logging or pool metrics as deferred | removed | removed; LSP and offline query checking are also now available | ✅ |
+|| Test count ≥ 220 | ≥ 220 | **~565 passing** + 4 ignored across 56 binaries | ✅ |
+|| `ProductionReadiness.md` re-run, scoring ≥ 85/100 | ≥ 85 | **84/100** at plan close; rescoring against `1.0.0-rc.1` is pending W6-05 | ⚠️ |
 ### On the three that came in short
 
 **The `fmt` job.** Five rustfmt hunks across `crates/runtime/src/rusqlite.rs` and two
@@ -2521,12 +2522,12 @@ more of this plan. Both are carried into `v1/PathToStableV1.md`.
 These are real gaps that this plan does not close, listed so the omission is a decision
 rather than an oversight:
 
-- **Compile-time query checking** (`sqlx-data.json` / offline mode) — a 0.2 feature, and the README already labels it "planned" rather than shipped.
-- **LSP** — deferred to 0.2; the TextMate grammar covers highlighting.
-- **MySQL and MSSQL dialects** — additive behind `DbDialect`, and blocked on the ADR-0NN decision.
-- **Migration squashing** and **heuristic rename detection** — documented limitations with a documented workaround (`@renamedFrom`).
-- **Mutual foreign-key cycles in migrations** — documented; broken by hand across migrations.
-- **Savepoints / nested transactions** — a genuine gap, but no user has asked and the flat `Tx` is correct as far as it goes.
+- **Compile-time query checking** (`sqlx-data.json` / offline mode) — implemented in `crates/check` as `ruprizzle check` using query manifests. Originally planned for 0.2; landed in the v1.0 push.
+- **LSP** — implemented in `crates/lsp` and shipped with the `editor/` VS Code extension; deferred-status removed.
+- **MySQL dialect** — implemented; MariaDB support is in place behind `DbDialect`. MSSQL remains deferred.
+- **Migration squashing** and **heuristic rename detection** — implemented: `migrate squash` and conservative `@renamedFrom` prompting.
+- **Mutual foreign-key cycles in migrations** — implemented with backend-specific deferral handling.
+- **Savepoints / nested transactions** — implemented; `Tx` now supports `begin_nested`.
 - **The 29 `unwrap()`/`expect()` calls in `crates/parser/src`** — they sit where Pest guarantees the invariant, and rewriting them would add error paths that cannot be hit. PR-08 Step 4 freezes the count instead, so it can only fall.
 - **The throwaway `pool.acquire()` in `apply_all` used only to read `backend_name()`** (`runner.rs:207`) — one pooled acquire per `apply_all` call, not per migration. Removing it means detecting the backend from connect options, which is more API surface than the saving justifies.
 - **`Value::Array` being dead defensive code** (`value.rs:204`) — unreachable today because the `IN` compiler expands to individual binds. PR-16 documents the array limitation rather than removing the variant, since native array support is the eventual fix.

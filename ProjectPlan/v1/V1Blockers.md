@@ -1,9 +1,9 @@
 # ruprizzle-orm v1.0.0 readiness analysis
 
-**Date:** 2026-08-17 (updated)  
+**Date:** 2026-08-18 (updated)  
 **Branch:** `dev-v0-2`  
-**HEAD:** `dcc74a6`  
-**Workspace version:** `0.1.1-beta.1`  
+**HEAD:** current `dev-v0-2`  
+**Workspace version:** `0.4.0-beta.2`  
 **Assessor:** Devin (live build, lint, test, deny, doc, public-api)
 
 ---
@@ -12,7 +12,7 @@
 
 **No — the current package is not yet ready to be published as a stable `1.0.0` release.**
 
-The code is feature-rich and the feature workstreams up through W5 (minus W5-07 LSP) are largely implemented, and the mechanical release gates listed below are now green. The remaining blockers are release-process ones:
+The code is feature-rich and the workstreams up through W5 (including W5-07 LSP and compile-time query checking) are implemented. The mechanical release gates below are green. The remaining blockers are release-process and assurance ones:
 
 - `cargo fmt --all --check` **passes**.
 - `cargo clippy --workspace --all-targets` **passes**.
@@ -20,9 +20,9 @@ The code is feature-rich and the feature workstreams up through W5 (minus W5-07 
 - `cargo deny check advisories` **passes** (with a documented exception for `RUSTSEC-2023-0071` because no patched `rsa` release is available).
 - `cargo doc --workspace --no-deps` **passes** without warnings.
 - No `1.0.0-rc.1` tag exists and no RC feedback window has been run — and `ProjectPlan/v1/PathToStableV1.md` explicitly forbids skipping that.
-- A 48-hour soak test has not been performed (only 10–15 s smoke runs).
+- A clean 48-hour soak test has not yet been completed. The `rusqlite` run was stopped after ~47 minutes due to SQLite lock-contention errors (see `docs/SoakReport.md`).
 
-After the build breaks and the advisory are fixed, the next sensible milestone is probably `0.4.0-beta.1` (or `0.3.0-beta.1` at minimum), then a real `1.0.0-rc.1` with at least a two-week feedback period before `1.0.0`.
+`0.4.0-beta.2` is published on crates.io. The next milestone is a real `1.0.0-rc.1` with at least a two-week feedback period before `1.0.0`, after the 48-hour soak issue is resolved.
 
 ---
 
@@ -43,11 +43,11 @@ After the build breaks and the advisory are fixed, the next sensible milestone i
 
 | Item | Current value |
 |------|--------------|
-| Version | `0.1.1-beta.1` (`Cargo.toml` workspace package) |
+| Version | `0.4.0-beta.2` (`Cargo.toml` workspace package) |
 | Branch | `dev-v0-2` |
 | Tags | none (no `1.0.0-rc.1`) |
-| Production-readiness score (last self-assessment) | **82 / 100** at `7636f44` (`ProjectPlan/ProductionReadiness.md`) |
-| Plan status | W0–W4 and W5-01–W5-06 marked complete; W5-07 (LSP) deferred; W6-04/W6-05 (RC + final assessment) not executed (`ProjectPlan/v1/PathToStableV1.md`) |
+| Production-readiness score (last self-assessment) | **82 / 100** at `7636f44` (`ProjectPlan/ProductionReadiness.md`); rescoring is pending `1.0.0-rc.1` |
+| Plan status | W0–W5 marked complete; W6-04/W6-05 (RC + final assessment) not executed; W4-02 48-hour soak incomplete (`ProjectPlan/v1/PathToStableV1.md`) |
 | Tests (live, excluding stale integration test) | **all green** — `cargo test --workspace --exclude ruprizzle-integration-tests` passes, `cargo test -p ruprizzle --features sqlite-rusqlite` passes |
 | `cargo fmt --all --check` | **passes** |
 | `cargo clippy --workspace --all-targets` | **passes** |

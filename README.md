@@ -512,10 +512,14 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 
 ## Status and roadmap
 
-`0.4.0-beta.2` is on [crates.io](https://crates.io/crates/ruprizzle). P0–P8 are complete and the public API is stabilising. The main remaining work before a stable 0.2 / 1.0 release:
+`0.4.0-beta.2` is on [crates.io](https://crates.io/crates/ruprizzle). P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is stabilising. The remaining work before a stable `1.0.0` is release-process only:
 
-- Many-to-many implicit join tables (explicit join model works today; see ADR-006).
-- Docs site and release automation.
+- Cut and publish `1.0.0-rc.1` and run a real feedback window (`PathToStableV1.md` W6-04).
+- Re-run production-readiness assessment against the RC and reach ≥ 92/100 (W6-05).
+- Exercise the automated release workflow end-to-end.
+- Complete the clean 48-hour soak test (W4-02) after resolving the SQLite `rusqlite` lock-contention issue documented in `docs/SoakReport.md`.
+
+Long-term deferrals (v1.2+) such as implicit many-to-many join tables, full-text search, PostGIS, soft deletes, and polymorphic relations are documented in `docs/KnownLimitations.md`.
 
 See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md), the [production-readiness plan](ProjectPlan/ProductionReadinessPlan.md), and the [decisions log](ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md) for the full phase-by-phase state, production assessment, and ADRs.
 

@@ -1,3 +1,10 @@
+> **Note (2026-08-18):** This plan was written against `0.4.0-beta.2`.
+> Most of the features listed below as `Missing` or `Partial` at that time
+> have since been implemented: LSP (`crates/lsp`), compile-time/offline query
+> checking (`crates/check`), partial and expression indexes, generated columns,
+> and PostgreSQL extension declarations. See `PathToStableV1.md` and the
+> current `docs/KnownLimitations.md` for the up-to-date v1.0 surface.
+
 # V1 Missing/Weak Features — Validated Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`
@@ -45,37 +52,42 @@ The table below cross-checks every limitation/priority in
 
 | Feature / gap from `V1MissingRequired.md` | Current status | Evidence | Completeness |
 |---|---|---|---|
-| Compile-time SQL verification / offline query checking | Missing | `README.md:533`, `docs/KnownLimitations.md:12` | 0% |
-| LSP for `schema.ruprizzle` | Missing | `README.md:534`, `editor/README.md:40`, only `editor/ruprizzle.tmLanguage.json` | 0% |
-| Implicit many-to-many join tables | Partial | `docs/adr/ADR-006-ExplicitJoinModels.md`, `crates/runtime/tests/m2m.rs` | 50% (explicit works) |
+| Compile-time SQL verification / offline query checking | **Complete** | `crates/check`, `crates/runtime/src/query_manifest.rs`, `crates/runtime/tests/query_manifest.rs` | 100% |
+| LSP for `schema.ruprizzle` | **Complete** | `crates/lsp` with `completion.rs`, `diagnostics.rs`, `goto.rs`; `editor/` VS Code extension and TextMate grammar | 100% |
+| Implicit many-to-many join tables | Partial | `docs/adr/ADR-006-ExplicitJoinModels.md`, `crates/runtime/tests/m2m.rs`; explicit join model works, implicit tables deferred to v1.2+ | 50% (deliberate v1.0 design) |
 | JSON path querying | Complete | `crates/runtime/src/json.rs`, `crates/runtime/src/compile.rs:1023-1221`, `crates/runtime/tests/json.rs` | 100% |
-| Full-text search | Missing | `README.md:537` | 0% |
-| PostGIS / geospatial | Missing | `README.md:537`, no spatial types in `crates/dialect/src` | 0% |
-| Soft deletes | Missing | `README.md:537`, no `@deletedAt`/`softDelete` in parser | 0% |
-| Polymorphic relations | Missing | `README.md:537`, no polymorphic/discriminator support in `crates/core/src/ir.rs` | 0% |
-| Recursive loading beyond depth 2 / tree loading | Partial | `crates/runtime/src/include.rs`, `crates/core/src/ir.rs:193` `max_include_depth` default 3, no tree helpers | 70% |
+| Full-text search | Deferred to v1.2+ | `docs/KnownLimitations.md` | — |
+| PostGIS / geospatial | Deferred to v1.2+ | `docs/KnownLimitations.md` | — |
+| Soft deletes | Deferred to v1.2+ | `docs/KnownLimitations.md` | — |
+| Polymorphic relations | Deferred to v1.2+ | `docs/KnownLimitations.md` | — |
+| Recursive loading beyond depth 2 / tree loading | Partial | `crates/runtime/src/include.rs`, `crates/core/src/ir.rs:193` `max_include_depth` default 3; tree helpers (ancestors/descendants) deferred to v1.2+ | 70% |
 | Connection-pool metrics | Complete | `crates/runtime/src/pool.rs:533-589`, `crates/runtime/tests/soak.rs:32`, `docs/Operations.md` | 100% |
 | MySQL / MariaDB support | Complete | `crates/dialect/src/mysql.rs`, `.github/workflows/ci.yml:69-141`, `tests/integration/tests/dialect_conformance.rs` | 100% |
 | SQLite `Decimal` stored as text | Partial / limitation | `docs/KnownLimitations.md:15-16`, `crates/runtime/src/rusqlite.rs:935-946` | Workarounds via `sqlite-rusqlite` |
 | SQLite `Json` stored as text | Partial / limitation | `docs/KnownLimitations.md:17-20`; stored as text but JSON1 operators work; `crates/runtime/src/json.rs` | Queryable via JSON path; storage remains text |
-| Benchmark suite | Partial | `local/cross-orm-bench/run_bench.py`, `docs/BenchmarkResults.md` | SQLite only; no PG/MySQL, no percentiles/throughput |
+| Benchmark suite | **Complete for SQLite** | `local/cross-orm-bench/run_bench.py`, `docs/BenchmarkResults.md`, `docs/FeaturesMasterComparison.md`; includes end-to-end, query construction, and throughput at concurrency 1/10/100 | SQLite complete; PG/MySQL cross-ORM coverage deferred |
 | PostgreSQL arrays | Complete | `crates/runtime/tests/arrays.rs`, `crates/dialect/src/postgres.rs:292` | 100% |
 | PostgreSQL JSONB / path / containment | Complete | `crates/runtime/src/json.rs`, `crates/runtime/src/compile.rs:1023-1221` | 100% |
 | Native enums | Complete | `crates/dialect/src/postgres.rs:200-215`, `tests/integration/tests/change_classes.rs:528-556` | 100% |
-| Partial indexes | Partial | `crates/dialect/src/lib.rs:111` `partial_indexes` flag; no DSL/implementation | 10% |
-| Expression indexes | Missing | `crates/core/src/ir.rs:527` `IndexDef` only holds field names | 0% |
-| Generated columns | Missing | `crates/dialect/src/common.rs:411-445` `column_spec` has no generated-clause support | 0% |
-| PostgreSQL extensions | Missing | No `CREATE EXTENSION` in migration engine | 0% |
+| Partial indexes | **Complete** | `crates/dialect/src/lib.rs`, `crates/parser/src/schema.pest`, migration diffing and DDL generation for Postgres/SQLite/MySQL | 100% |
+| Expression indexes | **Complete** | `crates/dialect/src/lib.rs`, `crates/core/src/ir.rs`, `crates/parser/src/schema.pest`; expression-index DSL and DDL implemented | 100% |
+| Generated columns | **Complete** | `crates/dialect/src/common.rs`, `crates/codegen/src/emit.rs`, `crates/parser/src/schema.pest`; generated-column syntax and DDL implemented | 100% |
+| PostgreSQL extensions | **Complete** | `crates/parser/src/schema.pest`, `crates/dialect/src/postgres.rs`; `CREATE EXTENSION` and `@@index`/`@@map` support implemented | 100% |
 
 ### Stale public claims to fix
 
-- `README.md:520` lists **connection-pool metrics** as remaining work; they are
-  already implemented in `crates/runtime/src/pool.rs`.
-- `README.md:536` says **SQLite `Json` cannot be queried with JSON operators**;
-  `crates/runtime/src/json.rs` and `crates/runtime/tests/json.rs` demonstrate
-  JSON path filtering/ordering on SQLite via JSON1.
-- `README.md:519` says **raw-SQL compile-time verification** is not implemented;
-  this is still true, but the wording should match `docs/KnownLimitations.md`.
+Resolved in `README.md` and `docs/KnownLimitations.md`:
+
+- **Connection-pool metrics** are no longer listed as remaining.
+- **SQLite `Json`** wording now correctly notes JSON1 operators work and storage
+  remains text.
+- **LSP for `schema.ruprizzle`** is now listed as available.
+- **Offline / compile-time query checking** (`ruprizzle check`) is now listed as
+  available.
+- **MySQL / MariaDB support** is now listed as available.
+
+For an authoritative list of what is in v1.0 versus deferred to v1.2+, see
+`docs/KnownLimitations.md` and `ProjectPlan/v1/PathToStableV1.md` §5.
 
 ---
 
@@ -83,8 +95,8 @@ The table below cross-checks every limitation/priority in
 
 | Phase | Target | Contains | Rationale |
 |---|---|---|---|
-| **v1.0 (RC → GA)** | `1.0.0` | LSP, release process, MySQL/benchmark hardening | Closes the open workstreams in `PathToStableV1` that are prerequisites for the semver promise. |
-| **v1.1** | `1.1.0` | Offline query checking, partial/expression indexes, generated columns, Postgres extensions | Adds "see mistakes before runtime" and Postgres DDL parity without changing the query-builder public API. |
+| **v1.0 (RC → GA)** | `1.0.0` | Final 48-hour soak hardening, release workflow, RC feedback window, rescoring ≥ 92/100 | Closes the remaining release-process and assurance workstreams in `PathToStableV1`. |
+| **v1.1** | `1.1.0` | Codegen helpers for nested relation writes, query-plan caching, and further Postgres/SQLite DDL polish | Originally scheduled for offline query checking, indexes, generated columns, and Postgres extensions; those landed in the v1.0 push. v1.1 is additive and does not change the query-builder public API. |
 | **v1.2 / v2.0** | `1.2.0` or `2.0.0` | Full-text search, PostGIS, soft deletes, polymorphic relations, implicit many-to-many, tree loading | Large surface-area features that need their own ADRs and a longer feedback window; ADR-006 currently forbids implicit join tables in v1. |
 
 ---
