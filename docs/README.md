@@ -126,7 +126,7 @@ prototyping invocation into CI.
 ## Why another Rust ORM?
 
 | Feature | ruprizzle | Diesel | SeaORM | sqlx | prax | Prisma | Drizzle |
-|---|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|
 | Schema-first code generation | ✅ | partial | ❌ | ❌ | ✅ | ✅ | ❌ |
 | Type-safe nested `include` | ✅ | ❌ | partial | ❌ | ✅ | ✅ | ✅ |
 | SQL-first query API | ✅ | ❌ | ❌ | ✅ | partial | partial | ✅ |
@@ -142,7 +142,7 @@ ability to drop down to raw SQL without leaving the query builder.
 ## Repository layout
 
 | Crate | Role | Phase |
-|---|---|---|---|
+|---|---|---|
 | `crates/core`    | IR, spans, diagnostics | ✅ P0 |
 | `crates/parser`  | Schema DSL → validated IR | ✅ P1 |
 | `crates/dialect` | `DbDialect` trait, Postgres + MySQL + SQLite | ✅ P2 |
