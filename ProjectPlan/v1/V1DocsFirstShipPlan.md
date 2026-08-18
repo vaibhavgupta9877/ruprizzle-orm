@@ -25,6 +25,19 @@
 
 ---
 
+## Execution status
+
+| Phase | Status | Notes |
+|---|---|---|
+| Phase 0 — Stabilize context | completed | 48-hour soak process `soak-9c6b6ecac4cbf8a3.exe` is alive; 2 errors classified as environmental (Windows `disk I/O error` and `os error 1450` printing to stderr); memory stable at ~7 MiB. Uncommitted `ProjectPlan/ProductionReadiness.md` diff committed. |
+| Phase 1 — Version/stale-claim cleanup | in progress (Task 1.1) |  |
+| Phase 2 — Core usage guides | pending |  |
+| Phase 3 — Runnable example project | pending |  |
+| Phase 4 — Doc verification | pending |  |
+| Phase 5 — Release finalization | pending | blocked on 48-hour soak completion |
+
+---
+
 ## Global Constraints
 
 - Branch: `dev-v0-2` (repository default per `AGENTS.md`). Do not switch branches
