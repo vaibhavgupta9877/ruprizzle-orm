@@ -14,18 +14,18 @@ A schema-first ORM for Rust that combines the best parts of Prisma and Drizzle:
   `.to_sql()` on every builder so you always know what is being sent to the
   database.
 
-Postgres and SQLite are supported from day one behind a dialect trait, so more
+PostgreSQL, MySQL/MariaDB, and SQLite 3+ are supported behind a dialect trait, so more
 backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for
 the wire protocol and pooling; we do not write a driver.
 
 ## Status
 
-`0.4.0-beta.2` is published on crates.io. The core P0–P8 implementation is
-complete and the public API is now stabilising; the production-readiness assessment
-has been refreshed for `0.4.0-beta.2`. See the
-[implementation plan](../ProjectPlan/ImplementationPlan/MasterPlan.md) for the phase state
-and the [production-readiness plan](../ProjectPlan/ProductionReadinessPlan.md) for the
-assessment.
+`1.0.0-rc.1` is tagged and staged. The core P0–P8 implementation is complete,
+MySQL/MariaDB support is shipped, and the public API is frozen for the 1.0 line.
+The production-readiness assessment is in W6-05 (rescoring against the live RC)
+and the 48-hour soak is the final W4-02 gate. See [Stability](Stability.md) for
+the semver policy and [Known limitations](KnownLimitations.md) for deliberate
+boundaries.
 
 ## Quick example
 
@@ -111,7 +111,7 @@ mod db;
 ## Workflow
 
 | Step | Command |
-|---|---|
+|---|---|---|
 | Scaffold a project | `ruprizzle init --provider postgres\|sqlite` |
 | Generate the client | `ruprizzle generate` |
 | Auto-watch in dev | `ruprizzle generate --watch` |
@@ -126,12 +126,12 @@ prototyping invocation into CI.
 ## Why another Rust ORM?
 
 | Feature | ruprizzle | Diesel | SeaORM | sqlx | prax | Prisma | Drizzle |
-|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|---|
 | Schema-first code generation | ✅ | partial | ❌ | ❌ | ✅ | ✅ | ❌ |
 | Type-safe nested `include` | ✅ | ❌ | partial | ❌ | ✅ | ✅ | ✅ |
 | SQL-first query API | ✅ | ❌ | ❌ | ✅ | partial | partial | ✅ |
 | Migrations from schema diff | ✅ | ❌ | partial | ❌ | ✅ | ✅ | partial |
-| Compile-time query checking | planned | ✅ | ❌ | ✅ | ✅ | N/A | ❌ |
+| Compile-time query checking | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ❌ |
 | Native driver backends (no `sqlx::Any`) | ✅ | ✅ | ❌ | N/A | ✅ | ❌ | ❌ |
 | Advanced SQL (CTEs, subqueries, set ops) | ✅ | partial | partial | ✅ | partial | partial | partial |
 
@@ -142,12 +142,14 @@ ability to drop down to raw SQL without leaving the query builder.
 ## Repository layout
 
 | Crate | Role | Phase |
-|---|---|---|
+|---|---|---|---|
 | `crates/core`    | IR, spans, diagnostics | ✅ P0 |
 | `crates/parser`  | Schema DSL → validated IR | ✅ P1 |
-| `crates/dialect` | `DbDialect` trait, Postgres + SQLite | ✅ P2 |
+| `crates/dialect` | `DbDialect` trait, Postgres + MySQL + SQLite | ✅ P2 |
 | `crates/codegen` | IR → Rust source | ✅ P3 |
 | `crates/runtime` | `ruprizzle`, the crate your app depends on | ✅ P4 |
 | `crates/migrate` | Snapshot, diff, plan, apply | ✅ P6 |
 | `crates/cli`     | The `ruprizzle` binary | ✅ P7 |
+| `crates/lsp`     | Language server for `schema.ruprizzle` | ✅ P8 |
+| `crates/check`   | Offline / compile-time query checking | ✅ P8 |
 | `crates/testkit` | Dual-database test harness | ✅ P0 |
