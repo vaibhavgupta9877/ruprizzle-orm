@@ -497,14 +497,14 @@ Measured locally during development (no I/O for construction benchmarks):
 | Query construction (filter + order, no I/O) | ~1.8 µs |
 | Codegen, 50-model schema | ~16 ms |
 
-The latest cross-ORM SQLite run (2026-08-17, 16:55 UTC, 1 warm-up + 10 measured trials, medians) is in [`docs/BenchmarkResults.md`](docs/BenchmarkResults.md) and the human-readable summary is in [`local/cross-orm-bench/BENCHMARKS.log`](local/cross-orm-bench/BENCHMARKS.log). Highlights:
+The latest cross-ORM SQLite run (2026-08-18, 06:04 UTC, 1 warm-up + 10 measured trials, medians) is in [`docs/BenchmarkResults.md`](docs/BenchmarkResults.md) and the human-readable summary is in [`local/cross-orm-bench/BENCHMARKS.log`](local/cross-orm-bench/BENCHMARKS.log). Highlights:
 
 | Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | fastest comparison |
 |---|---|---|---|
-| `select_by_pk` | 27.9 µs | **3.1 µs** | Diesel 10.0 µs, Drizzle 38.3 µs, Prisma 182.9 µs |
-| `find_many_1000` | 1,741.1 µs | **385.8 µs** | Diesel 297.4 µs, Drizzle 414.2 µs, Sea-ORM 1,616.5 µs |
-| `include_posts` | 22,881.2 µs | **7,545.5 µs** | Diesel 3,647.4 µs, prax 11,712.9 µs, Sea-ORM 20,333.5 µs |
-| `bulk_insert_1000` | 2,099.7 µs | 1,395.0 µs | **prax 1,174.6 µs**, Drizzle 8,536.1 µs, Sea-ORM 5,031.3 µs |
+| `select_by_pk` | 25.1 µs | **3.1 µs** | Diesel 9.9 µs, Drizzle 39.0 µs, Prisma 173.1 µs |
+| `find_many_1000` | 1,634.4 µs | **386.3 µs** | Diesel 305.4 µs, Drizzle 409.9 µs, Sea-ORM 1,559.1 µs |
+| `include_posts` | 21,139.9 µs | **7,553.3 µs** | Diesel 3,627.0 µs, prax 10,741.2 µs, Sea-ORM 20,856.5 µs |
+| `bulk_insert_1000` | 1,912.4 µs | 1,383.1 µs | **prax 1,059.0 µs**, Drizzle 9,069.6 µs, Sea-ORM 6,027.3 µs |
 
 The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchronous native `rusqlite` crate and is enabled with the `sqlite-rusqlite` feature. Postgres still uses `sqlx` in both variants. For the Postgres-vs-sqlx overhead report and the `sqlx::Any` text-marshalling note, see [docs/performance.md](docs/performance.md). Generated-crate compile-time benchmarks are automated via `cargo xtask bench-compile`.
 

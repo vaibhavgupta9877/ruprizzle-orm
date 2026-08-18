@@ -5,7 +5,7 @@ and the measured SQLite numbers. It is intended as a reference for choosing a
 tool, not as a definitive ranking.
 
 > **Caveats:** Feature claims are based on public documentation and the version
-> measured in `docs/BenchmarkResults.md` (2026-08-17). Maturity and exact feature
+> measured in `docs/BenchmarkResults.md` (2026-08-18). Maturity and exact feature
 > availability can change quickly, especially for alpha/early projects. Always
 > verify against the upstream docs for your specific use case.
 
@@ -140,49 +140,49 @@ variants.
 ## Measured SQLite benchmark (µs/op)
 
 Numbers are from the latest `local/cross-orm-bench/BENCHMARKS.log`
-(2026-08-17, 1 warm-up + 10 measured trials, medians reported; lower is better).
+(2026-08-18, 1 warm-up + 10 measured trials, medians reported; lower is better).
 
 ### End-to-end operations
 
 | Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
 |---|---|---|---|---|---|---|---|
-| `select_by_pk` | 27.9 | 3.1 | 22.5 | 76.8 | 10.0 | 182.9 | 38.3 |
-| `find_many_1000` | 1,741.1 | 385.8 | 771.0 | 1,616.5 | 297.4 | 2,935.7 | 414.2 |
-| `find_filtered_ordered` | 1,918.1 | 569.6 | 966.1 | 1,669.8 | 433.8 | 3,358.3 | 506.7 |
-| `find_filtered_paginated` | 412.9 | 312.6 | 371.2 | 426.0 | 307.9 | 666.1 | 360.0 |
-| `find_in_list` | 125.6 | 29.5 | 101.0 | 129.4 | 39.9 | 427.7 | 101.9 |
-| `find_complex_filter` | 324.8 | 166.8 | 256.8 | 343.9 | 172.2 | 838.5 | 229.3 |
-| `count_filtered` | 39.6 | 20.6 | 40.7 | 81.3 | 25.9 | 178.9 | 47.7 |
-| `exists_filtered` | 18.5 | 2.7 | 19.3 | 57.9 | 9.8 | 157.7 | 42.4 |
-| `include_posts` | 22,881.2 | 7,545.5 | 11,712.9 | 20,333.5 | 3,647.4 | 44,300.7 | 186,014.4 |
-| `include_author` | 23,033.2 | 7,332.0 | 9,596.4 | 20,500.2 | 3,362.5 | 86,517.4 | 16,450.2 |
-| `include_posts_and_comments` | 136,207.9 | 57,665.9 | 44,929.0 | 110,745.1 | 20,997.0 | 267,560.2 | 9,098,301.2 |
-| `include_posts_with_tags` | 57,895.0 | 27,607.2 | 27,132.6 | 54,141.4 | 8,209.3 | 276,963.6 | 36,364.1 |
-| `find_popular_posts` | 1,579.2 | 1,268.0 | 2,221.2 | 1,564.6 | 1,296.9 | 2,662.8 | 5,553.4 |
-| `prepared_select_by_pk` | 20.5 | 2.3 | 5.3 | 60.2 | 10.2 | 165.5 | 14.8 |
-| `stream_find_many_1000` | 2,096.7 | 706.5 | 58.1 | 2,576.9 | 231.7 | 2,659.3 | 330.7 |
-| `bulk_insert_1000` | 2,099.7 | 1,395.0 | 1,174.6 | 5,031.3 | 6,619.3 | 13,236.6 | 8,536.1 |
+| `select_by_pk` | 25.1 | 3.1 | 17.9 | 66.8 | 9.9 | 173.1 | 39.0 |
+| `find_many_1000` | 1,634.4 | 386.3 | 741.9 | 1,559.1 | 305.4 | 2,820.7 | 409.9 |
+| `find_filtered_ordered` | 1,797.4 | 565.4 | 925.6 | 1,603.9 | 425.3 | 3,225.3 | 504.7 |
+| `find_filtered_paginated` | 386.1 | 300.0 | 361.7 | 455.4 | 307.9 | 629.8 | 357.0 |
+| `find_in_list` | 107.7 | 30.0 | 98.8 | 130.7 | 39.6 | 404.2 | 99.0 |
+| `find_complex_filter` | 314.2 | 162.1 | 251.8 | 340.4 | 164.2 | 774.0 | 228.6 |
+| `count_filtered` | 40.1 | 20.3 | 44.4 | 91.3 | 25.7 | 170.1 | 45.8 |
+| `exists_filtered` | 20.7 | 2.7 | 22.1 | 70.0 | 9.6 | 151.4 | 41.6 |
+| `include_posts` | 21,139.9 | 7,553.3 | 10,741.2 | 20,856.5 | 3,627.0 | 40,867.0 | 188,946.9 |
+| `include_author` | 20,764.9 | 7,122.6 | 8,779.8 | 20,716.5 | 3,285.4 | 78,985.7 | 16,595.5 |
+| `include_posts_and_comments` | 131,693.4 | 59,759.2 | 41,534.5 | 114,364.3 | 20,605.2 | 251,942.4 | 9,214,149.0 |
+| `include_posts_with_tags` | 54,108.5 | 28,362.6 | 24,896.2 | 54,784.9 | 8,156.6 | 280,121.6 | 37,234.5 |
+| `find_popular_posts` | 1,458.4 | 1,266.3 | 2,058.7 | 1,671.5 | 1,275.6 | 2,805.2 | 5,655.4 |
+| `prepared_select_by_pk` | 24.6 | 2.3 | 4.9 | 84.7 | 10.0 | 194.2 | 14.9 |
+| `stream_find_many_1000` | 2,296.3 | 705.6 | 57.1 | 1,807.1 | 225.6 | 3,290.1 | 327.0 |
+| `bulk_insert_1000` | 1,912.4 | 1,383.1 | 1,059.0 | 6,027.3 | 6,689.7 | 14,142.5 | 9,069.6 |
 
 ### Query construction (no I/O)
 
 | Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
 |---|---|---|---|---|---|---|---|
-| `to_sql_select_by_pk` | 0.6 | 0.6 | 0.4 | 7.4 | 0.7 | 0.1 | 11.8 |
-| `to_sql_select_filter_order` | 1.6 | 1.6 | 1.2 | 12.2 | 1.0 | 0.1 | 17.2 |
-| `to_sql_select_in_list` | 2.3 | 2.4 | 4.5 | 25.6 | 2.7 | 0.7 | 40.3 |
-| `to_sql_select_complex_filter` | 1.8 | 1.9 | 1.6 | 14.2 | 1.1 | 0.1 | 19.1 |
-| `to_sql_select_paginated` | 1.5 | 1.5 | 1.1 | 11.8 | 1.0 | 0.1 | 17.7 |
-| `to_sql_prepared_select_by_pk` | 0.6 | 0.6 | 0.4 | 2.7 | 0.7 | 0.1 | 11.7 |
+| `to_sql_select_by_pk` | 0.7 | 0.7 | 0.4 | 7.6 | 0.7 | 0.1 | 11.6 |
+| `to_sql_select_filter_order` | 1.7 | 1.7 | 1.1 | 12.3 | 1.0 | 0.1 | 17.1 |
+| `to_sql_select_in_list` | 2.5 | 2.5 | 4.3 | 25.8 | 2.7 | 0.7 | 39.4 |
+| `to_sql_select_complex_filter` | 2.0 | 2.0 | 1.5 | 14.3 | 1.1 | 0.1 | 19.8 |
+| `to_sql_select_paginated` | 1.7 | 1.7 | 1.1 | 11.8 | 1.0 | 0.1 | 18.2 |
+| `to_sql_prepared_select_by_pk` | 0.7 | 0.7 | 0.4 | 2.7 | 0.8 | 0.1 | 11.9 |
 | `prepared_rebind_select_by_pk` | 0.0 | 0.0 | 0.1 | 0.1 | 0.2 | 0.1 | 0.1 |
-| `to_sql_conditional_filter` | 0.8 | 0.8 | 0.4 | 8.3 | 0.8 | 0.3 | 14.6 |
-| `to_sql_select_with_cte` | 1.6 | 1.6 | 0.8 | 15.3 | 0.2 | 0.1 | 35.6 |
-| `to_sql_select_with_recursive_cte` | 2.3 | 2.4 | 0.5 | 20.8 | 0.2 | 0.1 | 0.1 |
-| `to_sql_set_union` | 1.6 | 1.4 | 0.9 | 13.7 | 1.1 | 0.1 | 26.0 |
-| `to_sql_select_with_join` | 0.9 | 0.9 | 0.1 | 9.0 | 1.1 | 0.1 | 29.0 |
-| `to_sql_select_exists_subquery` | 1.0 | 1.1 | 0.1 | 14.4 | 1.1 | 0.1 | 24.0 |
-| `to_sql_select_in_subquery` | 1.4 | 1.4 | 0.1 | 10.5 | 0.8 | 0.1 | 18.6 |
-| `to_sql_nested_insert` | 1.2 | 1.2 | 0.4 | 0.0 | 0.5 | 0.1 | 19.8 |
-| `to_sql_nested_update` | 0.8 | 0.8 | 0.3 | 0.0 | 0.3 | 0.1 | 17.4 |
+| `to_sql_conditional_filter` | 1.0 | 1.0 | 0.4 | 9.1 | 0.8 | 0.3 | 15.3 |
+| `to_sql_select_with_cte` | 1.9 | 1.9 | 0.8 | 19.1 | 0.2 | 0.1 | 36.5 |
+| `to_sql_select_with_recursive_cte` | 2.8 | 2.8 | 0.5 | 25.6 | 0.2 | 0.1 | 0.1 |
+| `to_sql_set_union` | 1.8 | 1.6 | 0.9 | 17.1 | 1.1 | 0.1 | 27.3 |
+| `to_sql_select_with_join` | 1.0 | 1.0 | 0.1 | 11.4 | 1.1 | 0.1 | 30.1 |
+| `to_sql_select_exists_subquery` | 1.3 | 1.3 | 0.1 | 18.0 | 1.1 | 0.1 | 24.3 |
+| `to_sql_select_in_subquery` | 1.7 | 1.7 | 0.1 | 13.1 | 0.8 | 0.1 | 19.1 |
+| `to_sql_nested_insert` | 1.3 | 1.4 | 0.4 | 0.0 | 0.6 | 0.1 | 20.3 |
+| `to_sql_nested_update` | 0.9 | 1.0 | 0.3 | 0.0 | 0.3 | 0.1 | 17.6 |
 
 ## Best-fit summary
 

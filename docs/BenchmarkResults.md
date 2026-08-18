@@ -494,3 +494,107 @@ All times are microseconds per operation (lower is better).
 | `to_sql_select_in_subquery` | 1.4 | 1.4 | 0.1 | 10.5 | 0.8 | 0.1 | 18.6 |
 | `to_sql_nested_insert` | 1.2 | 1.2 | 0.4 | 0.0 | 0.5 | 0.1 | 19.8 |
 | `to_sql_nested_update` | 0.8 | 0.8 | 0.3 | 0.0 | 0.3 | 0.1 | 17.4 |
+
+## Benchmark run: 2026-08-18 06:04 UTC
+
+### Environment
+
+- **Warm-up trials:** 1
+- **Measured trials:** 10
+- **Concurrency levels:** [1, 10, 100]
+- **Duration per throughput run:** 5.0s
+- **Dataset:**
+  - 1,000 users
+  - 20 categories
+  - 10,000 posts
+  - 50,000 comments
+  - 100 tags
+  - 30,000 post_tags
+  - 5,000 followers
+  - 20,000 likes
+
+### End-to-end results
+
+All times are microseconds per operation (lower is better).
+
+| Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
+|---|---|---|---|---|---|---|---|
+| `select_by_pk` | 25.1 | 3.1 | 17.9 | 66.8 | 9.9 | 173.1 | 39.0 |
+| `find_many_1000` | 1,634.4 | 386.3 | 741.9 | 1,559.1 | 305.4 | 2,820.7 | 409.9 |
+| `find_filtered_ordered` | 1,797.4 | 565.4 | 925.6 | 1,603.9 | 425.3 | 3,225.3 | 504.7 |
+| `find_filtered_paginated` | 386.1 | 300.0 | 361.7 | 455.4 | 307.9 | 629.8 | 357.0 |
+| `find_in_list` | 107.7 | 30.0 | 98.8 | 130.7 | 39.6 | 404.2 | 99.0 |
+| `find_complex_filter` | 314.2 | 162.1 | 251.8 | 340.4 | 164.2 | 774.0 | 228.6 |
+| `count_filtered` | 40.1 | 20.3 | 44.4 | 91.3 | 25.7 | 170.1 | 45.8 |
+| `exists_filtered` | 20.7 | 2.7 | 22.1 | 70.0 | 9.6 | 151.4 | 41.6 |
+| `include_posts` | 21,139.9 | 7,553.3 | 10,741.2 | 20,856.5 | 3,627.0 | 40,867.0 | 188,946.9 |
+| `include_author` | 20,764.9 | 7,122.6 | 8,779.8 | 20,716.5 | 3,285.4 | 78,985.7 | 16,595.5 |
+| `include_posts_and_comments` | 131,693.4 | 59,759.2 | 41,534.5 | 114,364.3 | 20,605.2 | 251,942.4 | 9,214,149.0 |
+| `include_posts_with_tags` | 54,108.5 | 28,362.6 | 24,896.2 | 54,784.9 | 8,156.6 | 280,121.6 | 37,234.5 |
+| `find_popular_posts` | 1,458.4 | 1,266.3 | 2,058.7 | 1,671.5 | 1,275.6 | 2,805.2 | 5,655.4 |
+| `prepared_select_by_pk` | 24.6 | 2.3 | 4.9 | 84.7 | 10.0 | 194.2 | 14.9 |
+| `stream_find_many_1000` | 2,296.3 | 705.6 | 57.1 | 1,807.1 | 225.6 | 3,290.1 | 327.0 |
+| `bulk_insert_1000` | 1,912.4 | 1,383.1 | 1,059.0 | 6,027.3 | 6,689.7 | 14,142.5 | 9,069.6 |
+
+### Query construction (no I/O)
+
+| Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
+|---|---|---|---|---|---|---|---|
+| `to_sql_select_by_pk` | 0.7 | 0.7 | 0.4 | 7.6 | 0.7 | 0.1 | 11.6 |
+| `to_sql_select_filter_order` | 1.7 | 1.7 | 1.1 | 12.3 | 1.0 | 0.1 | 17.1 |
+| `to_sql_select_in_list` | 2.5 | 2.5 | 4.3 | 25.8 | 2.7 | 0.7 | 39.4 |
+| `to_sql_select_complex_filter` | 2.0 | 2.0 | 1.5 | 14.3 | 1.1 | 0.1 | 19.8 |
+| `to_sql_select_paginated` | 1.7 | 1.7 | 1.1 | 11.8 | 1.0 | 0.1 | 18.2 |
+| `to_sql_prepared_select_by_pk` | 0.7 | 0.7 | 0.4 | 2.7 | 0.8 | 0.1 | 11.9 |
+| `prepared_rebind_select_by_pk` | 0.0 | 0.0 | 0.1 | 0.1 | 0.2 | 0.1 | 0.1 |
+| `to_sql_conditional_filter` | 1.0 | 1.0 | 0.4 | 9.1 | 0.8 | 0.3 | 15.3 |
+| `to_sql_select_with_cte` | 1.9 | 1.9 | 0.8 | 19.1 | 0.2 | 0.1 | 36.5 |
+| `to_sql_select_with_recursive_cte` | 2.8 | 2.8 | 0.5 | 25.6 | 0.2 | 0.1 | 0.1 |
+| `to_sql_set_union` | 1.8 | 1.6 | 0.9 | 17.1 | 1.1 | 0.1 | 27.3 |
+| `to_sql_select_with_join` | 1.0 | 1.0 | 0.1 | 11.4 | 1.1 | 0.1 | 30.1 |
+| `to_sql_select_exists_subquery` | 1.3 | 1.3 | 0.1 | 18.0 | 1.1 | 0.1 | 24.3 |
+| `to_sql_select_in_subquery` | 1.7 | 1.7 | 0.1 | 13.1 | 0.8 | 0.1 | 19.1 |
+| `to_sql_nested_insert` | 1.3 | 1.4 | 0.4 | 0.0 | 0.6 | 0.1 | 20.3 |
+| `to_sql_nested_update` | 0.9 | 1.0 | 0.3 | 0.0 | 0.3 | 0.1 | 17.6 |
+
+### Latency percentiles (ruprizzle sqlx)
+
+| Operation | p50 | p95 | p99 |
+|---|---|---|---|
+| `select_by_pk` | 25.1 | 32.5 | 33.5 |
+| `find_many_1000` | 1,634.4 | 1,701.2 | 1,725.8 |
+| `find_filtered_ordered` | 1,797.4 | 1,863.1 | 1,863.7 |
+| `find_filtered_paginated` | 386.1 | 407.9 | 408.7 |
+| `find_in_list` | 107.7 | 122.2 | 125.4 |
+| `find_complex_filter` | 314.2 | 338.3 | 342.2 |
+| `count_filtered` | 40.1 | 48.2 | 49.8 |
+| `exists_filtered` | 20.7 | 30.8 | 33.0 |
+| `include_posts` | 21,139.9 | 23,082.5 | 23,460.9 |
+| `include_author` | 20,764.9 | 21,973.5 | 22,057.2 |
+| `include_posts_and_comments` | 131,693.4 | 138,897.9 | 139,415.8 |
+| `include_posts_with_tags` | 54,108.5 | 57,747.5 | 57,792.9 |
+| `find_popular_posts` | 1,458.4 | 1,482.6 | 1,484.6 |
+| `prepared_select_by_pk` | 24.6 | 32.3 | 32.7 |
+| `stream_find_many_1000` | 2,296.3 | 2,385.9 | 2,397.2 |
+| `bulk_insert_1000` | 1,912.4 | 2,980.8 | 3,497.2 |
+| `to_sql_select_by_pk` | 0.7 | 0.7 | 0.7 |
+| `to_sql_select_filter_order` | 1.7 | 1.7 | 1.8 |
+| `to_sql_select_in_list` | 2.5 | 2.5 | 2.6 |
+| `to_sql_select_complex_filter` | 2.0 | 2.1 | 2.2 |
+| `to_sql_select_paginated` | 1.7 | 1.8 | 1.9 |
+| `to_sql_prepared_select_by_pk` | 0.7 | 0.7 | 0.7 |
+| `prepared_rebind_select_by_pk` | 0.0 | 0.0 | 0.0 |
+| `to_sql_conditional_filter` | 1.0 | 1.0 | 1.0 |
+| `to_sql_select_with_cte` | 1.9 | 1.9 | 1.9 |
+| `to_sql_select_with_recursive_cte` | 2.8 | 2.9 | 2.9 |
+| `to_sql_set_union` | 1.8 | 1.8 | 1.8 |
+| `to_sql_select_with_join` | 1.0 | 1.0 | 1.0 |
+| `to_sql_select_exists_subquery` | 1.3 | 1.4 | 1.4 |
+| `to_sql_select_in_subquery` | 1.7 | 1.7 | 1.7 |
+| `to_sql_nested_insert` | 1.3 | 1.4 | 1.4 |
+| `to_sql_nested_update` | 0.9 | 1.0 | 1.0 |
+
+### Throughput (ops/sec)
+
+| Backend | Concurrency | select_by_pk | find_many_1000 | bulk_insert_1000 |
+|---|---|---|---|---|
