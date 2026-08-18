@@ -78,17 +78,41 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
                 let op = (local - 1) & 3;
                 let key = format!("w{w}-k{cycle}");
                 let value = format!("v-{cycle}");
-                let sql = match op {
-                    0 => "INSERT INTO soak_kv (k, v) VALUES ($1, $2)",
-                    1 => "UPDATE soak_kv SET v = $2 WHERE k = $1",
-                    2 => "SELECT v FROM soak_kv WHERE k = $1",
-                    _ => "DELETE FROM soak_kv WHERE k = $1",
+                let (sql, binds) = match op {
+                    0 => (
+                        "INSERT INTO soak_kv (k, v) VALUES ($1, $2)",
+                        vec![
+                            ruprizzle::Encodable::to_value(&key),
+                            ruprizzle::Encodable::to_value(&value),
+                        ],
+                    ),
+                    1 => (
+                        "UPDATE soak_kv SET v = $2 WHERE k = $1",
+                        vec![
+                            ruprizzle::Encodable::to_value(&key),
+                            ruprizzle::Encodable::to_value(&value),
+                        ],
+                    ),
+                    2 => (
+                        "SELECT v FROM soak_kv WHERE k = $1",
+                        vec![ruprizzle::Encodable::to_value(&key)],
+                    ),
+                    _ => (
+                        "DELETE FROM soak_kv WHERE k = $1",
+                        vec![ruprizzle::Encodable::to_value(&key)],
+                    ),
                 };
-                let binds = vec![
-                    ruprizzle::Encodable::to_value(&key),
-                    ruprizzle::Encodable::to_value(&value),
-                ];
-                if let Err(e) = pool.execute_raw(sql.to_owned().into(), binds).await {
+                let res = match op {
+                    2 => pool
+                        .fetch_all_raw(sql.to_owned().into(), binds)
+                        .await
+                        .map(|_| ()),
+                    _ => pool
+                        .execute_raw(sql.to_owned().into(), binds)
+                        .await
+                        .map(|_| ()),
+                };
+                if let Err(e) = res {
                     eprintln!("soak op error: {e}");
                     errors.fetch_add(1, Ordering::Relaxed);
                 }

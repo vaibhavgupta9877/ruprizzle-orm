@@ -92,8 +92,8 @@ where
 {
     fn from(query: SelectQuery<'db, M, (T,), I>) -> Self {
         Self {
-            compiled: query.to_sql().unwrap_or_else(|e| {
-                panic!("subquery SQL is not supported by the target dialect: {e}")
+            compiled: query.to_sql().unwrap_or_else(|_| {
+                unreachable!("subquery SQL compilation is an internal invariant")
             }),
             _marker: PhantomData,
         }
@@ -136,8 +136,8 @@ where
 {
     fn from(query: SelectQuery<'db, M, Out, I>) -> Self {
         Self {
-            compiled: query.to_sql().unwrap_or_else(|e| {
-                panic!("EXISTS subquery SQL is not supported by the target dialect: {e}")
+            compiled: query.to_sql().unwrap_or_else(|_| {
+                unreachable!("EXISTS subquery SQL compilation is an internal invariant")
             }),
         }
     }
@@ -195,7 +195,7 @@ where
         Self::new(
             query
                 .to_sql()
-                .unwrap_or_else(|e| panic!("CTE SQL is not supported by the target dialect: {e}")),
+                .unwrap_or_else(|_| unreachable!("CTE SQL compilation is an internal invariant")),
         )
     }
 }

@@ -50,8 +50,35 @@ pub struct RusqlitePool {
     inner: Arc<Inner>,
 }
 
+/// Checked-out connection handle that returns the connection on drop.
+///
+/// This lets one-shot `execute` and `fetch_all` paths share the same pool
+/// lifecycle as transactions: the connection is removed from the pool for the
+/// duration of the statement and returned afterwards.
+struct ConnGuard<'a> {
+    pool: &'a RusqlitePool,
+    conn: Option<Arc<std::sync::Mutex<rusqlite::Connection>>>,
+}
+
+impl ConnGuard<'_> {
+    fn conn(&self) -> &Arc<std::sync::Mutex<rusqlite::Connection>> {
+        self.conn
+            .as_ref()
+            .unwrap_or_else(|| unreachable!("conn is present until consumed"))
+    }
+}
+
+impl<'a> Drop for ConnGuard<'a> {
+    fn drop(&mut self) {
+        if let Some(conn) = self.conn.take() {
+            self.pool.return_conn(conn);
+        }
+    }
+}
+
 struct Inner {
     conns: std::sync::Mutex<Vec<Arc<std::sync::Mutex<rusqlite::Connection>>>>,
+    available: std::sync::Condvar,
     next: AtomicUsize,
 }
 
@@ -119,6 +146,7 @@ impl RusqlitePool {
 
             Ok(Inner {
                 conns: std::sync::Mutex::new(conns),
+                available: std::sync::Condvar::new(),
                 next: AtomicUsize::new(0),
             })
         })
@@ -141,37 +169,59 @@ impl RusqlitePool {
         Ok(pool)
     }
 
-    /// Pick a connection for a single statement using round-robin distribution.
+    /// Check out a connection from the pool, blocking until one is available.
     ///
-    /// This *shares* a connection rather than checking it out: SQLite
-    /// serialises on the connection mutex anyway, and a one-shot statement has
-    /// no state to keep private. [`Self::begin_transaction`] is the opposite —
-    /// it removes the connection from the pool for the transaction's lifetime,
-    /// because a transaction's statements must all land on the same connection
-    /// and must not interleave with anyone else's.
-    ///
-    /// The consequence of that split is that transactions can empty the pool
-    /// out from under this method, which is why the empty case is a real error
-    /// here. Unifying the two models is worth considering, but it changes what
-    /// `max_connections` means for non-transactional queries and is out of
-    /// scope for a bug fix.
-    fn acquire(&self) -> Result<Arc<std::sync::Mutex<rusqlite::Connection>>, Error> {
-        let conns = self
+    /// Callers must return the connection via [`ConnGuard`]'s `Drop` impl or
+    /// by calling [`Self::return_conn`]. This replaces the previous round-robin
+    /// "share a connection" model, which allowed `PoolExhausted` under heavy
+    /// concurrent load because transactions removed connections while one-shot
+    /// queries still expected to find one.
+    fn checkout(&self) -> Result<ConnGuard<'_>, Error> {
+        let mut conns = self
             .inner
             .conns
             .lock()
             .map_err(|_| Error::Message("rusqlite connection pool mutex poisoned".into()))?;
-        if conns.is_empty() {
-            // Before the guard this fell through to `% conns.len()` and
-            // panicked with a divide-by-zero (BUG-02).
-            return Err(Error::PoolExhausted {
-                backend: "rusqlite",
-            });
+        while conns.is_empty() {
+            conns =
+                self.inner.available.wait(conns).map_err(|_| {
+                    Error::Message("rusqlite connection pool mutex poisoned".into())
+                })?;
         }
-        let idx = self.inner.next.fetch_add(1, Ordering::Relaxed) % conns.len();
-        conns.get(idx).cloned().ok_or(Error::PoolExhausted {
+        let conn = conns.pop().ok_or(Error::PoolExhausted {
+            backend: "rusqlite",
+        })?;
+        self.inner.next.fetch_add(1, Ordering::Relaxed);
+        Ok(ConnGuard {
+            pool: self,
+            conn: Some(conn),
+        })
+    }
+
+    /// Check out a connection and take ownership of it (for transactions).
+    fn checkout_owned(&self) -> Result<Arc<std::sync::Mutex<rusqlite::Connection>>, Error> {
+        let mut conns = self
+            .inner
+            .conns
+            .lock()
+            .map_err(|_| Error::Message("rusqlite connection pool mutex poisoned".into()))?;
+        while conns.is_empty() {
+            conns =
+                self.inner.available.wait(conns).map_err(|_| {
+                    Error::Message("rusqlite connection pool mutex poisoned".into())
+                })?;
+        }
+        conns.pop().ok_or(Error::PoolExhausted {
             backend: "rusqlite",
         })
+    }
+
+    /// Return an owned connection to the pool.
+    fn return_conn(&self, conn: Arc<std::sync::Mutex<rusqlite::Connection>>) {
+        if let Ok(mut conns) = self.inner.conns.lock() {
+            conns.push(conn);
+        }
+        self.inner.available.notify_one();
     }
 
     /// Take a connection from the pool and start a transaction on it.
@@ -182,14 +232,7 @@ impl RusqlitePool {
     pub(crate) async fn begin_transaction(&self) -> Result<RusqliteTransaction, Error> {
         let pool = self.clone();
         tokio::task::spawn_blocking(move || -> Result<RusqliteTransaction, Error> {
-            let conn = {
-                let mut conns = pool.inner.conns.lock().map_err(|_| {
-                    Error::Message("rusqlite connection pool mutex poisoned".into())
-                })?;
-                conns.pop().ok_or(Error::PoolExhausted {
-                    backend: "rusqlite",
-                })?
-            };
+            let conn = pool.checkout_owned()?;
 
             // The connection is out of the pool from here on, and there is no
             // `RusqliteTransaction` yet to drop it back in, so `?` would leak it
@@ -222,52 +265,56 @@ impl RusqlitePool {
         .map_err(|e| Error::Message(e.to_string()))?
     }
 
-    /// Return an owned connection to the pool.
-    fn return_conn(&self, conn: Arc<std::sync::Mutex<rusqlite::Connection>>) {
-        if let Ok(mut conns) = self.inner.conns.lock() {
-            conns.push(conn);
-        }
-    }
-
-    /// Synchronously fetch and decode rows directly into `Vec<T>`.
+    /// Asynchronously fetch and decode rows directly into `Vec<T>`.
     ///
     /// This is the fast path used by `SelectQuery` when running against the
-    /// native `rusqlite` backend: it decodes each live row in the same pass
-    /// without materialising an owned `Vec<Row>`.
-    pub(crate) fn fetch_all_sync_decoded<T: FromRusqliteRow>(
+    /// native `rusqlite` backend. The synchronous `rusqlite` work is offloaded
+    /// to a blocking thread so the tokio runtime is not pinned during WAL
+    /// contention or pool waits.
+    pub(crate) async fn fetch_all_sync_decoded<T>(
         &self,
         sql: Cow<'static, str>,
         binds: Vec<Value>,
-    ) -> Result<Vec<T>, Error> {
-        let conn = self.acquire()?;
+    ) -> Result<Vec<T>, Error>
+    where
+        T: FromRusqliteRow + Send + 'static,
+    {
+        let pool = self.clone();
+        let sql = sql.into_owned();
+        tokio::task::spawn_blocking(move || {
+            let conn = pool.checkout()?;
 
-        let guard = conn
-            .lock()
-            .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
-        if is_ddl(sql.as_ref()) {
-            force_schema_reload(&guard);
-        }
-        let mut stmt = guard
-            .prepare_cached(sql.as_ref())
-            .map_err(|e| Error::Message(e.to_string()))?;
-
-        let mut out = Vec::new();
-
-        {
-            let mut rows = stmt
-                .query(rusqlite::params_from_iter(&binds))
-                .map_err(|e| Error::Message(e.to_string()))?;
-            while let Some(row) = rows.next().map_err(|e| Error::Message(e.to_string()))? {
-                out.push(T::from_rusqlite_row(row)?);
+            let guard = conn
+                .conn()
+                .lock()
+                .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
+            if is_ddl(sql.as_ref()) {
+                force_schema_reload(&guard);
             }
-        }
+            let mut stmt = guard
+                .prepare_cached(sql.as_ref())
+                .map_err(|e| Error::Message(e.to_string()))?;
 
-        if is_ddl(sql.as_ref()) {
-            stmt.discard();
-            guard.flush_prepared_statement_cache();
-        }
+            let mut out = Vec::new();
 
-        Ok(out)
+            {
+                let mut rows = stmt
+                    .query(rusqlite::params_from_iter(&binds))
+                    .map_err(|e| Error::Message(e.to_string()))?;
+                while let Some(row) = rows.next().map_err(|e| Error::Message(e.to_string()))? {
+                    out.push(T::from_rusqlite_row(row)?);
+                }
+            }
+
+            if is_ddl(sql.as_ref()) {
+                stmt.discard();
+                guard.flush_prepared_statement_cache();
+            }
+
+            Ok(out)
+        })
+        .await
+        .map_err(|e| Error::Message(e.to_string()))?
     }
 }
 
@@ -504,7 +551,12 @@ impl Executor for RusqlitePool {
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<RowBatch, Error>> {
         let pool = self.clone();
-        Box::pin(async move { fetch_all(pool, sql, binds) })
+        let sql = sql.into_owned();
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || fetch_all(pool, Cow::Owned(sql), binds))
+                .await
+                .map_err(|e| Error::Message(e.to_string()))?
+        })
     }
 
     fn execute_raw(
@@ -513,7 +565,12 @@ impl Executor for RusqlitePool {
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<u64, Error>> {
         let pool = self.clone();
-        Box::pin(async move { execute(pool, sql, binds) })
+        let sql = sql.into_owned();
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || execute(pool, Cow::Owned(sql), binds))
+                .await
+                .map_err(|e| Error::Message(e.to_string()))?
+        })
     }
 
     fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
@@ -528,9 +585,10 @@ fn fetch_all(
     sql: Cow<'static, str>,
     binds: Vec<Value>,
 ) -> Result<RowBatch, Error> {
-    let conn = pool.acquire()?;
+    let conn = pool.checkout()?;
 
     let guard = conn
+        .conn()
         .lock()
         .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
     if is_ddl(sql.as_ref()) {
@@ -571,9 +629,10 @@ fn fetch_all(
 }
 
 fn execute(pool: RusqlitePool, sql: Cow<'static, str>, binds: Vec<Value>) -> Result<u64, Error> {
-    let conn = pool.acquire()?;
+    let conn = pool.checkout()?;
 
     let guard = conn
+        .conn()
         .lock()
         .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
     if is_ddl(sql.as_ref()) {

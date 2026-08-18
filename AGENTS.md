@@ -19,8 +19,17 @@
   ```
 
 - Run the ruprizzle test suite (including rusqlite tests):
+  ```powershell
+  $env:RUPRIZZLE_TEST_RUSQLITE=1
+  cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'
   ```
-  cargo test -p ruprizzle --features sqlite-rusqlite
+
+- Run the native `rusqlite` soak test:
+  ```powershell
+  $env:RUPRIZZLE_TEST_RUSQLITE=1
+  $env:RUPRIZZLE_SOAK_DURATION_SECONDS=3600
+  $env:RUPRIZZLE_SOAK_WORKERS=8
+  cargo test -p ruprizzle --test soak --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite' --release -- sqlite --nocapture
   ```
 
 ## Default branch

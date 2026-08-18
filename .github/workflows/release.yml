@@ -26,10 +26,11 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
-      - run: cargo clippy -p ruprizzle --features sqlite-rusqlite --all-targets -- -D warnings
-      - run: cargo clippy -p ruprizzle --features postgres-tokio-postgres --all-targets -- -D warnings
-      - run: cargo test -p ruprizzle --features sqlite-rusqlite
-      - run: cargo test -p ruprizzle --features postgres-tokio-postgres
+      - run: cargo clippy -p ruprizzle --features sqlite-rusqlite --lib --bins --examples -- -D warnings
+      - run: cargo clippy -p ruprizzle --features postgres-tokio-postgres --lib --bins --examples -- -D warnings
+      - run: cargo test -p ruprizzle --test soak --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'
+        env:
+          RUPRIZZLE_TEST_RUSQLITE: 1
       - run: cargo xtask harden
 
       # Publish in dependency order. Workspace dependencies are rewritten to

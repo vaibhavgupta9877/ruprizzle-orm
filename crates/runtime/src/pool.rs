@@ -475,6 +475,7 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
                 .row_buffer_size(config.row_buffer_size as usize)
                 .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
                 .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+                .busy_timeout(Duration::from_secs(30))
                 .statement_cache_capacity(256)
                 .pragma("cache_size", "-64000")
                 .pragma("mmap_size", "268435456")

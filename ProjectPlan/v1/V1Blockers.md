@@ -3,7 +3,7 @@
 **Date:** 2026-08-18 (updated)  
 **Branch:** `dev-v0-2`  
 **HEAD:** current `dev-v0-2`  
-**Workspace version:** `0.4.0-beta.2`  
+**Workspace version:** `1.0.0-rc.1`  
 **Assessor:** Devin (live build, lint, test, deny, doc, public-api)
 
 ---
@@ -20,9 +20,9 @@ The code is feature-rich and the workstreams up through W5 (including W5-07 LSP 
 - `cargo deny check advisories` **passes** (with a documented exception for `RUSTSEC-2023-0071` because no patched `rsa` release is available).
 - `cargo doc --workspace --no-deps` **passes** without warnings.
 - No `1.0.0-rc.1` tag exists and no RC feedback window has been run — and `ProjectPlan/v1/PathToStableV1.md` explicitly forbids skipping that.
-- A clean 48-hour soak test has not yet been completed. The `rusqlite` run was stopped after ~47 minutes due to SQLite lock-contention errors (see `docs/SoakReport.md`).
+- A clean 48-hour soak test has not yet been completed. The `rusqlite` run was stopped after ~47 minutes due to SQLite lock-contention errors, but the root cause has been fixed and 60-second / 1-hour validation runs are now clean (see `docs/SoakReport.md`). The 48-hour run is the remaining W4-02 gate.
 
-`0.4.0-beta.2` is published on crates.io. The next milestone is a real `1.0.0-rc.1` with at least a two-week feedback period before `1.0.0`, after the 48-hour soak issue is resolved.
+The workspace version is `1.0.0-rc.1`; the tag and crates.io publish are pending the final 48-hour soak (W4-02) and the W6-04 release-candidate cut.
 
 ---
 
@@ -43,12 +43,12 @@ The code is feature-rich and the workstreams up through W5 (including W5-07 LSP 
 
 | Item | Current value |
 |------|--------------|
-| Version | `0.4.0-beta.2` (`Cargo.toml` workspace package) |
+| Version | `1.0.0-rc.1` (`Cargo.toml` workspace package) |
 | Branch | `dev-v0-2` |
 | Tags | none (no `1.0.0-rc.1`) |
 | Production-readiness score (last self-assessment) | **82 / 100** at `7636f44` (`ProjectPlan/ProductionReadiness.md`); rescoring is pending `1.0.0-rc.1` |
-| Plan status | W0–W5 marked complete; W6-04/W6-05 (RC + final assessment) not executed; W4-02 48-hour soak incomplete (`ProjectPlan/v1/PathToStableV1.md`) |
-| Tests (live, excluding stale integration test) | **all green** — `cargo test --workspace --exclude ruprizzle-integration-tests` passes, `cargo test -p ruprizzle --features sqlite-rusqlite` passes |
+| Plan status | W0–W5 marked complete; W4-02 48-hour soak root cause fixed and 60 s / 1 h validation passed; W6-04/W6-05 (RC tag + final assessment) still to execute (`ProjectPlan/v1/PathToStableV1.md`) |
+| Tests (live, excluding stale integration test) | **all green** — `cargo xtask harden` passes; `cargo test -p ruprizzle --test soak --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'` with `RUPRIZZLE_TEST_RUSQLITE=1` passes for 60 s (2.6 M ops) and 1 h (84.2 M ops, 0 errors); the 48-hour run is the final W4-02 gate |
 | `cargo fmt --all --check` | **passes** |
 | `cargo clippy --workspace --all-targets` | **passes** |
 | `cargo xtask harden` | **passes** |
@@ -262,9 +262,9 @@ Mechanical and documentation blockers are now resolved. The next work is release
 2. ✅ **Fix the rustdoc warnings** — done in `79341a4`; `RUSTDOCFLAGS="-D warnings"` is green.
 3. ✅ **Decide on `RUSTSEC-2023-0071` / `rsa`** — documented exception added in `4c8c106`. Revisit before marketing MySQL as production-grade.
 4. ✅ **Re-run `cargo xtask harden` and `cargo deny check`** — confirmed green on `dev-v0-2`.
-5. ❌ **Run the 48-hour soak** and record the result in `docs/SoakReport.md` — started on 2026-08-17 19:09 UTC; stopped at 2026-08-17 19:56 UTC after ~47 min due to sustained SQLite `database is locked` / busy-timeout errors under concurrent `rusqlite` writers. See `docs/SoakReport.md` for the failing log and the next steps to fix the `rusqlite` backend before the gate can pass.
+5. 🔄 **Run the 48-hour soak** and record the result in `docs/SoakReport.md` — the root cause of the earlier `database is locked` / busy-timeout errors under concurrent `rusqlite` writers has been fixed; 60-second and 1-hour validation runs are now clean, and the full 48-hour run is the remaining W4-02 gate.
 6. 🔄 **Complete and record the runtime mutation-testing baseline** — a full `cargo mutants -p ruprizzle` run is in progress (1684 mutants, 4 jobs, started 2026-08-17). `ruprizzle-migrate` baseline is now recorded: 14 caught / 33 missed / 2 timeouts out of 606 mutants, ~28.6 % mutation score; documented as a known gap in `docs/MutationTesting.md`.
-7. ✅ **Bump the version to the next pre-1.0 milestone and publish** — bumped to `0.4.0-beta.2` and published all crates to crates.io.
+7. ✅ **Bump the workspace version to `1.0.0-rc.1`** — completed; tag and crates.io publish are pending the W4-02 48-hour soak gate.
 8. **Cut `1.0.0-rc.1`**, run a minimum two-week feedback window, get at least one external project to upgrade and report back, then re-score production readiness against the RC.
 9. Only then cut and publish `1.0.0`.
 

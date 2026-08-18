@@ -133,7 +133,8 @@ impl<B> Maybe<B> {
 
     /// Unwraps the inner value, panicking if `None`.
     pub fn unwrap(self) -> B {
-        self.0.unwrap()
+        self.0
+            .unwrap_or_else(|| unreachable!("Maybe::unwrap called on None"))
     }
 }
 

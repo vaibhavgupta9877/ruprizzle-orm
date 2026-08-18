@@ -561,7 +561,8 @@ where
         #[cfg(feature = "sqlite-rusqlite")]
         let mut counts: Vec<(i64,)> = if let Some(pool) = self.exec.as_rusqlite() {
             self.exec.on_query();
-            pool.fetch_all_sync_decoded::<(i64,)>(compiled.sql, compiled.binds)?
+            pool.fetch_all_sync_decoded::<(i64,)>(compiled.sql, compiled.binds)
+                .await?
         } else {
             let batch = self
                 .exec
@@ -604,7 +605,9 @@ where
         {
             if let Some(pool) = self.exec.as_rusqlite() {
                 self.exec.on_query();
-                let rows = pool.fetch_all_sync_decoded::<(i64,)>(compiled.sql, compiled.binds)?;
+                let rows = pool
+                    .fetch_all_sync_decoded::<(i64,)>(compiled.sql, compiled.binds)
+                    .await?;
                 return Ok(!rows.is_empty());
             }
         }
@@ -689,7 +692,9 @@ where
         #[cfg(feature = "sqlite-rusqlite")]
         if let Some(pool) = self.exec.as_rusqlite() {
             self.exec.on_query();
-            return pool.fetch_all_sync_decoded::<Out>(compiled.sql, compiled.binds);
+            return pool
+                .fetch_all_sync_decoded::<Out>(compiled.sql, compiled.binds)
+                .await;
         }
 
         let batch = self
@@ -793,7 +798,8 @@ where
         #[cfg(feature = "sqlite-rusqlite")]
         let v: Vec<Out> = if let Some(pool) = self.exec.as_rusqlite() {
             self.exec.on_query();
-            pool.fetch_all_sync_decoded::<Out>(compiled.sql, compiled.binds)?
+            pool.fetch_all_sync_decoded::<Out>(compiled.sql, compiled.binds)
+                .await?
         } else {
             let batch = self
                 .exec
@@ -1018,7 +1024,9 @@ where
         #[cfg(feature = "sqlite-rusqlite")]
         if let Some(pool) = self.exec.as_rusqlite() {
             self.exec.on_query();
-            return pool.fetch_all_sync_decoded::<Out>(compiled.sql, compiled.binds);
+            return pool
+                .fetch_all_sync_decoded::<Out>(compiled.sql, compiled.binds)
+                .await;
         }
 
         let batch = self
@@ -1128,7 +1136,9 @@ where
         #[cfg(feature = "sqlite-rusqlite")]
         if let Some(pool) = self.exec.as_rusqlite() {
             self.exec.on_query();
-            return pool.fetch_all_sync_decoded::<Out>(self.sql.clone(), self.binds.clone());
+            return pool
+                .fetch_all_sync_decoded::<Out>(self.sql.clone(), self.binds.clone())
+                .await;
         }
 
         let batch = self
@@ -1198,7 +1208,8 @@ where
         #[cfg(feature = "sqlite-rusqlite")]
         let mut rows: Vec<M> = if let Some(pool) = self.exec.as_rusqlite() {
             self.exec.on_query();
-            pool.fetch_all_sync_decoded::<M>(compiled.sql, compiled.binds)?
+            pool.fetch_all_sync_decoded::<M>(compiled.sql, compiled.binds)
+                .await?
         } else {
             let batch = self
                 .exec
@@ -1238,7 +1249,8 @@ where
         #[cfg(feature = "sqlite-rusqlite")]
         let mut rows: Vec<M> = if let Some(pool) = self.exec.as_rusqlite() {
             self.exec.on_query();
-            pool.fetch_all_sync_decoded::<M>(compiled.sql, compiled.binds)?
+            pool.fetch_all_sync_decoded::<M>(compiled.sql, compiled.binds)
+                .await?
         } else {
             let batch = self
                 .exec
@@ -2407,7 +2419,9 @@ where
         #[cfg(feature = "sqlite-rusqlite")]
         if let Some(pool) = self.exec.as_rusqlite() {
             self.exec.on_query();
-            return pool.fetch_all_sync_decoded::<R>(compiled.sql, compiled.binds);
+            return pool
+                .fetch_all_sync_decoded::<R>(compiled.sql, compiled.binds)
+                .await;
         }
 
         let batch = self
@@ -2432,7 +2446,8 @@ where
         #[cfg(feature = "sqlite-rusqlite")]
         let v: Vec<R> = if let Some(pool) = self.exec.as_rusqlite() {
             self.exec.on_query();
-            pool.fetch_all_sync_decoded::<R>(compiled.sql, compiled.binds)?
+            pool.fetch_all_sync_decoded::<R>(compiled.sql, compiled.binds)
+                .await?
         } else {
             let batch = self
                 .exec

@@ -2,7 +2,7 @@
 
 > **Status:** ACTIVE — W0 through W5 are functionally complete, including W5-07 (LSP) and compile-time query checking. W6-01, W6-02, W6-03, and W6-06 are complete. The only remaining calendar/process work before `1.0.0` is W6-04 (cut `1.0.0-rc.1`), W6-05 (rescoring production readiness against the RC), and exercising the automated release workflow end-to-end.
 
-**From:** `0.4.0-beta.2` (latest published beta, 2026-08-17; 84/100 was the `0.1.1-beta.1` baseline, rescoring is pending W6-05)
+**From:** `0.4.0-beta.2` (latest published beta, 2026-08-17) / `1.0.0-rc.1` staged; 84/100 was the `0.1.1-beta.1` baseline, rescoring is pending W6-05
 **To:** `1.0.0` — a version whose API we commit to under semver and whose capability surface
 does not lose a feature comparison on absence alone.
 
@@ -64,7 +64,7 @@ The numbers this plan starts from, all verified at commit `c3ef7f0`:
 | Clippy | Zero warnings at `-D warnings` |
 | `xtask harden` | Passes; all crates at or under panic budget |
 | `cargo fmt --all --check` | Passing |
-| Published versions | 4, none yanked, 43 total downloads; `0.4.0-beta.2` is the latest on crates.io |
+| Published versions | 4, none yanked, 43 total downloads; `0.4.0-beta.2` is the latest on crates.io; `1.0.0-rc.1` is staged in the workspace and pending the W4-02 48-hour soak gate |
 | Databases | PostgreSQL, SQLite, MySQL / MariaDB |
 | Driver paths | `sqlx::Any` (default), `sqlite-rusqlite`, `postgres-tokio-postgres`, MySQL native via `sqlx::MySql` |
 
@@ -430,18 +430,18 @@ sqlite-rusqlite --bench concurrency` all pass.
 
 **Goal:** convert "correct" into "correct over time and under attack." **Effort:** ~1.5 weeks.
 
-> **Current status (2026-08-18):** W4-01, W4-03, W4-04, W4-05, and W4-06 are complete. The 48-hour soak (W4-02) was attempted on the `rusqlite` backend but stopped after ~47 minutes due to `database is locked` / busy-timeout errors under concurrent writers (see `docs/SoakReport.md`). This is a release-blocking item: a clean 48-hour run on the primary SQLite and PostgreSQL paths must be completed (or the root cause fixed and the test re-run) before `1.0.0-rc.1`. Fuzzers, `docs/MutationTesting.md`, and the parser panic audit are in place.
+> **Current status (2026-08-18):** W4-01, W4-03, W4-04, W4-05, and W4-06 are complete. The root cause of the W4-02 `rusqlite` SQLite lock contention has been fixed: `rusqlite` connections now use a 60-second busy timeout, explicit WAL mode, a Condvar-based checkout pool, and all synchronous `rusqlite` work is dispatched through `tokio::task::spawn_blocking` so the async runtime is not pinned. A 60-second smoke run and a 1-hour extended run on the native `rusqlite` backend are now passing with zero errors (see `docs/SoakReport.md`). The full 48-hour run is the remaining W4-02 gate; it is scheduled to run next.
 
 - [x] **W4-01 · Fuzz the parser and the migration splitter.** `cargo-fuzz` targets for
       `crates/parser` (schema DSL) and `crates/migrate` (SQL splitter). These are the two
       hand-written scanners over untrusted-ish input, and the splitter has already produced
       two silent-corruption defects once. This is the one defect class the current suite is
       structurally unlikely to find. **3 days.** *(finding #8)*
-- [x] **W4-02 · Soak test.** 48 hours of sustained mixed load with connection churn and a
+- [~] **W4-02 · Soak test.** 48 hours of sustained mixed load with connection churn and a
       forced failover, tracking memory, file descriptors, and pool health. The harness and
-      smoke runs are in place, but the full 48-hour `rusqlite` run was stopped early due to
-      SQLite lock-contention errors. The root cause must be fixed and the run repeated, or a
-      clean PostgreSQL run must be demonstrated, before `1.0.0-rc.1`. **3 days.**
+      smoke runs are in place, and the native `rusqlite` backend has passed 60-second and
+      1-hour validation with zero `database is locked` errors. The full 48-hour run is the
+      final remaining gate before `1.0.0-rc.1`. **3 days.**
 - [x] **W4-03 · Feature-combination CI matrix.** Formalise W0-03 into a real matrix across
       the three driver paths and both databases. **0.5 day.**
 - [x] **W4-04 · Justify or remove the `grammar.rs` panic sites.** 27 of 29. Either a comment

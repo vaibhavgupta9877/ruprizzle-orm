@@ -349,7 +349,7 @@ impl TestDb {
                         sqlx::query("PRAGMA foreign_keys = ON")
                             .execute(&mut *conn)
                             .await?;
-                        sqlx::query("PRAGMA busy_timeout = 5000")
+                        sqlx::query("PRAGMA busy_timeout = 30000")
                             .execute(&mut *conn)
                             .await?;
                         Ok(())
@@ -394,7 +394,9 @@ impl TestDb {
             // Off by default in SQLite, which would make every foreign-key test
             // silently pass. Matches what the runtime will set in P4.
             .foreign_keys(true)
-            .busy_timeout(Duration::from_secs(5));
+            // Long timeout so concurrent writers wait through WAL checkpoints
+            // rather than returning SQLITE_BUSY during heavy mixed-load tests.
+            .busy_timeout(Duration::from_secs(30));
 
         let sqlite_pool = SqlitePoolOptions::new()
             .max_connections(4)
@@ -414,7 +416,7 @@ impl TestDb {
                     sqlx::query("PRAGMA foreign_keys = ON")
                         .execute(&mut *conn)
                         .await?;
-                    sqlx::query("PRAGMA busy_timeout = 5000")
+                    sqlx::query("PRAGMA busy_timeout = 30000")
                         .execute(&mut *conn)
                         .await?;
                     Ok(())
