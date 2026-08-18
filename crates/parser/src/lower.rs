@@ -434,7 +434,7 @@ fn generated_clause(decl: &FieldDecl) -> Option<GeneratedClause> {
     let s = attr.first_positional().and_then(Value::as_str)?;
     let s = s.trim();
     let expr_start = s.find('(').and_then(|start| {
-        let inner = &s[start + 1..];
+        let inner = s.get(start + 1..)?;
         let mut depth = 1usize;
         let mut end = None;
         for (i, c) in inner.char_indices() {
@@ -452,8 +452,16 @@ fn generated_clause(decl: &FieldDecl) -> Option<GeneratedClause> {
         }
         end.map(|e| (start, start + 1 + e))
     })?;
-    let expr = s[expr_start.0 + 1..expr_start.1].trim().to_owned();
-    let tail = s[expr_start.1 + 1..].trim().to_lowercase();
+    let expr = s
+        .get(expr_start.0 + 1..expr_start.1)
+        .unwrap_or("")
+        .trim()
+        .to_owned();
+    let tail = s
+        .get(expr_start.1 + 1..)
+        .unwrap_or("")
+        .trim()
+        .to_lowercase();
     let kind = if tail.contains("virtual") {
         GeneratedKind::Virtual
     } else {

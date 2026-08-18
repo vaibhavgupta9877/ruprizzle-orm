@@ -509,18 +509,18 @@ The table below cross-checks every limitation/priority in
 - Consumes: `BENCH_PG_URL`, `BENCH_MYSQL_URL`, `BENCH_SQLITE_PATH`.
 - Produces: benchmark results for Postgres and MySQL.
 
-- [ ] **Step 1: Add Docker services**
+- [x] **Step 1: Add Docker services**
   - `docker-compose.bench.yml` with PostgreSQL 17 and MySQL 8.4, both with a
     `ruprizzle_test` database and a `ruprizzle` user.
 
-- [ ] **Step 2: Extend `run_bench.py`**
+- [x] **Step 2: Extend `run_bench.py`**
   - Read `BENCH_PG_URL` and `BENCH_MYSQL_URL`; skip a backend if the env var is
     missing.
   - For each available backend, run the Rust harness (`cross_orm_bench.exe`) and
     Node harnesses that support that backend.
   - Append a "PostgreSQL" and a "MySQL" section to `docs/BenchmarkResults.md`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   - `git commit -m "bench: add Postgres and MySQL harnesses"`
 
 ### Task D.3: Percentile and throughput metrics
@@ -533,20 +533,20 @@ The table below cross-checks every limitation/priority in
 - Consumes: raw trial times from each harness.
 - Produces: p50/p95/p99 and req/s.
 
-- [ ] **Step 1: Add percentile computation**
+- [x] **Step 1: Add percentile computation**
   - Use `statistics.quantiles` or `numpy` if available; fallback to sorted-list
     interpolation.
   - Add `p50`, `p95`, `p99` to the per-operation result.
 
-- [ ] **Step 2: Add throughput**
+- [x] **Step 2: Add throughput**
   - Add a `BENCH_CONCURRENCY` env var (default 1, 10, 100).
   - Run each operation with `N` concurrent clients for a fixed duration and
     record operations/second.
 
-- [ ] **Step 3: Update `docs/BenchmarkResults.md` template**
+- [x] **Step 3: Update `docs/BenchmarkResults.md` template**
   - Add percentile and throughput tables.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   - `git commit -m "bench: percentile and throughput reporting"`
 
 ### Task D.4: Compile-time benchmark
@@ -559,15 +559,15 @@ The table below cross-checks every limitation/priority in
 - Consumes: generated 50/200 model schemas.
 - Produces: compile-time numbers.
 
-- [ ] **Step 1: Generate large schemas**
+- [x] **Step 1: Generate large schemas**
   - Add a script that creates synthetic `schema.ruprizzle` files with 50 and 200
     models, then runs `cargo build --release -p generated_client`.
 
-- [ ] **Step 2: Measure**
+- [x] **Step 2: Measure**
   - Use `time` or `cargo build --timings` to capture wall time and binary size.
   - Record in `docs/BenchmarkResults.md`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   - `git commit -m "bench: generated-client compile-time and binary size"`
 
 ---

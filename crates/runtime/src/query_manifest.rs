@@ -25,16 +25,14 @@ static RECORDING: OnceLock<Mutex<Vec<QueryEntry>>> = OnceLock::new();
 /// Record a query if `RUPRIZZLE_RECORD_QUERIES` is set.
 pub fn record(sql: String, source: Option<&'static str>, line: Option<u32>, dialect: &str) {
     if env::var("RUPRIZZLE_RECORD_QUERIES").is_ok() {
-        RECORDING
-            .get_or_init(Mutex::default)
-            .lock()
-            .expect("query manifest recorder mutex poisoned")
-            .push(QueryEntry {
+        if let Ok(mut guard) = RECORDING.get_or_init(Mutex::default).lock() {
+            guard.push(QueryEntry {
                 sql,
                 source,
                 line,
                 dialect: dialect.to_owned(),
             });
+        }
     }
 }
 
@@ -44,9 +42,9 @@ pub fn record(sql: String, source: Option<&'static str>, line: Option<u32>, dial
 #[doc(hidden)]
 pub fn clear() {
     if let Some(m) = RECORDING.get() {
-        m.lock()
-            .expect("query manifest recorder mutex poisoned")
-            .clear();
+        if let Ok(mut guard) = m.lock() {
+            guard.clear();
+        }
     }
 }
 
@@ -54,7 +52,8 @@ pub fn clear() {
 pub fn write_manifest<P: AsRef<Path>>(path: P) -> io::Result<()> {
     let entries = RECORDING
         .get()
-        .map(|m| m.lock().unwrap().clone())
+        .and_then(|m| m.lock().ok())
+        .map(|g| g.clone())
         .unwrap_or_default();
     let manifest = ruprizzle_check::QueryManifest {
         schema_hash: String::new(), // schema hash is computed by the caller of write_manifest
