@@ -15,7 +15,7 @@ It combines the best parts of Prisma and Drizzle:
 
 Postgres, SQLite, and MySQL/MariaDB are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver. A native `rusqlite` backend is also available for SQLite via the `sqlite-rusqlite` Cargo feature.
 
-> **Status:** `0.4.0-beta.2` is published on crates.io. P0–P8 are complete, the public API is stabilising, and a native `rusqlite` SQLite backend is available behind the `sqlite-rusqlite` feature. See [Known limitations](#known-limitations) for the honest boundaries of the beta.
+> **Status:** `1.0.0-rc.1` is the release candidate. P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is frozen for the 1.0 line. The 48-hour soak and crates.io publish are the remaining release-process gates. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
 
 ---
 
@@ -436,7 +436,7 @@ The table below focuses on the features that differentiate ruprizzle from the to
 | **SQL-first, visible query builder** | ✅ | partial | ❌ | ✅ | partial | partial | ✅ |
 | `.to_sql()` on every builder | ✅ | partial | ❌ | N/A | partial | partial | ✅ |
 | **Migrations from schema diff** | ✅ | ❌ | partial | ❌ | ✅ | ✅ | partial |
-| **Compile-time query checking** | planned | ✅ | ❌ | ✅ | ✅ | N/A | ❌ |
+| **Compile-time query checking** | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ❌ |
 | **No sidecar / no hidden engine** | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ |
 | **Native async / `await`** | ✅ | partial | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Postgres + SQLite + MySQL** | ✅ | ✅ | ✅ | ✅ | ✅ | partial | ✅ |
@@ -456,7 +456,7 @@ The table below focuses on the features that differentiate ruprizzle from the to
 
 ## Architecture and repository layout
 
-The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`0.4.0-beta.2` at the time of writing).
+The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.0.0-rc.1` at the time of writing).
 
 | Directory | Crate | Role | Ships to users? | Status |
 |---|---|---|---|---|
@@ -512,9 +512,9 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 
 ## Status and roadmap
 
-`0.4.0-beta.2` is on [crates.io](https://crates.io/crates/ruprizzle). P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is stabilising. The remaining work before a stable `1.0.0` is release-process only:
+`1.0.0-rc.1` is tagged and staged; the crates.io publish is pending the final 48-hour soak. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is frozen for the 1.0 line. The remaining work before a stable `1.0.0` is release-process only:
 
-- Cut and publish `1.0.0-rc.1` and run a real feedback window (`PathToStableV1.md` W6-04).
+- Publish `1.0.0-rc.1` to crates.io and run a real feedback window (`PathToStableV1.md` W6-04).
 - Re-run production-readiness assessment against the RC and reach ≥ 92/100 (W6-05).
 - Exercise the automated release workflow end-to-end.
 - Complete the clean 48-hour soak test (W4-02) after resolving the SQLite `rusqlite` lock-contention issue documented in `docs/SoakReport.md`.
