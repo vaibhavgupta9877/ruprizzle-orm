@@ -9,13 +9,21 @@ whether the tool is right for your project.
 - **Heuristic renames** are suggested automatically. Add `@renamedFrom` to
   confirm or ignore the prompt; the diff never renames silently.
 - **`db push`** does not write migration files and is only for prototyping.
-- **No LSP** yet; syntax highlighting is available as a TextMate grammar.
-- **`Decimal` on SQLite** is stored as text. If you need real decimal math on
-  SQLite, use `String` and parse in application code.
+- **LSP for `schema.ruprizzle`** is available via `ruprizzle-lsp` and the VS Code
+  extension in `editor/`. Syntax highlighting is also available as a TextMate
+  grammar.
+- **Offline query checking** (`ruprizzle check`) is available using query
+  manifests captured at test time. See [ADR-012](adr/ADR-012-OfflineQueryChecking.md).
+- **`Decimal` on SQLite** is stored as text by the default `sqlx::Any` path.
+  The `sqlite-rusqlite` feature parses it back from text at decode time, which
+  removes the `sqlx::Any` text round-trip but still stores it as text on disk.
+  If you need real decimal math on SQLite, use `Int` minor units (e.g. cents)
+  or a PostgreSQL backend.
 - **SQLite `Json`** is stored as text, but the JSON1 extension is used for
-  `json_extract`, `json_type`, and `json_set`. JSON containment (`@>`) is only
-  a partial key-existence approximation because SQLite JSON1 has no containment
-  operator.
+  `json_extract`, `json_type`, and `json_set`. The `sqlite-rusqlite` feature
+  also decodes `Json` without the `sqlx::Any` text round-trip. JSON containment
+  (`@>`) is only a partial key-existence approximation because SQLite JSON1 has
+  no containment operator.
 - **Array columns (`T[]`)** are supported for scalar and enum types. PostgreSQL
   stores them as native arrays; SQLite and MySQL store them as JSON text using
   the dialect's JSON facilities. Array filter operators (`contains`,
@@ -41,11 +49,6 @@ whether the tool is right for your project.
   typically small). `stream_unbuffered` must not be used inside a transaction,
   because a transaction holds a single connection and a streaming cursor would
   prevent any other statement from running on it.
-
-## Deferred to v1.1
-
-- **Compile-time query checking** (`sqlx-data.json` / offline mode) is not yet
-  implemented.
 
 ## Deferred to v1.2+
 

@@ -171,7 +171,9 @@ fn offline_schema_check(sql: &str, format_str: &syn::LitStr) -> Option<syn::Erro
         }
 
         if idx > 0
-            && is_table_context(&tokens[idx - 1])
+            && tokens
+                .get(idx - 1)
+                .is_some_and(|prev| is_table_context(prev))
             && !is_sql_keyword(token)
             && !looks_like_string_or_param(token)
         {

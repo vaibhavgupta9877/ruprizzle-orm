@@ -90,13 +90,17 @@ fn index_fields(model: &Model, diags: &mut Diagnostics) {
     };
 
     for index in &model.indexes {
-        for f in &index.fields {
-            check("index", f.field.as_str(), index.span);
+        for target in &index.targets {
+            if let ruprizzle_core::ir::IndexTarget::Field(name, _) = target {
+                check("index", name.as_str(), index.span);
+            }
         }
     }
     for unique in &model.uniques {
-        for f in &unique.fields {
-            check("unique", f.as_str(), unique.span);
+        for target in &unique.targets {
+            if let ruprizzle_core::ir::IndexTarget::Field(name, _) = target {
+                check("unique", name.as_str(), unique.span);
+            }
         }
     }
 }

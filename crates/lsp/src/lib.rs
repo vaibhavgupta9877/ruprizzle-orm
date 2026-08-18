@@ -181,7 +181,11 @@ impl LanguageServer for Backend {
         let text = text.clone();
         drop(docs);
 
-        let file_name = params.text_document_position_params.text_document.uri.path();
+        let file_name = params
+            .text_document_position_params
+            .text_document
+            .uri
+            .path();
         let schema = ruprizzle_parser::parse(file_name, &text).ok();
         let position = params.text_document_position_params.position;
 

@@ -29,7 +29,7 @@ fn offline_schema_validation() {
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::env::current_dir().unwrap());
         let schema = manifest_dir.join("tests/trybuild/offline/schema.ruprizzle");
-        let canonical = std::fs::canonicalize(&schema).unwrap_or_else(|_| schema);
+        let canonical = std::fs::canonicalize(&schema).unwrap_or(schema);
         let status = std::process::Command::new(std::env::current_exe().unwrap())
             .arg("offline_schema_validation")
             .arg("--exact")

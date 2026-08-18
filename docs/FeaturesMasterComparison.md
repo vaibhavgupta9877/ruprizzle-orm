@@ -62,9 +62,14 @@ variants.
 | Generated typed client | Yes | Yes | Yes | Partial | Partial | Yes | No |
 | Schema-first migrations (diff from schema) | Yes | Yes | Yes | Partial | No | Yes | Partial |
 | Introspection / codegen from existing DB | Yes (`db pull`) | Yes (`db pull`) | Partial | Yes | Partial (`print-schema`) | Yes | Yes |
-| Compile-time query checking | Planned | Planned | Yes | No | Yes | N/A | No |
+| Compile-time query checking | Yes (`ruprizzle check`) | Yes (`ruprizzle check`) | Yes | No | Yes | N/A | No |
 | Type-safe column tokens | Yes | Yes | Yes | Partial | Yes | Yes (generated types) | Yes (typed columns) |
 | Type-safe nested `include` | Yes | Yes | Yes | Partial | No | Yes | Yes |
+| LSP for schema DSL | Yes | Yes | No | No | No | Yes | No |
+| Partial indexes | Yes (Postgres / SQLite) | Yes (Postgres / SQLite) | Partial | No | Partial | Partial | No |
+| Expression indexes | Yes (Postgres / SQLite) | Yes (Postgres / SQLite) | Partial | No | Partial | No | No |
+| Generated columns | Yes (Postgres / SQLite) | Yes (Postgres / SQLite) | Partial | No | Partial | Partial | No |
+| PostgreSQL extensions from schema | Yes | Yes | No | No | No | Partial | No |
 | Enum code generation | Yes | Yes | Yes | Partial | Partial | Yes | Yes |
 | No runtime parser/codegen in dependency tree | Yes | Yes | Partial | Partial | Yes | No | Yes |
 
@@ -110,6 +115,7 @@ variants.
 | Drift detection | Yes | Yes | Partial | No | No | Partial | No |
 | Offline / embedded migrations | No | No | No | Partial | Yes | No | No |
 | Transactional migrations | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Generated-crate compile-time benchmark | Yes (`xtask bench-compile`) | Yes (`xtask bench-compile`) | No | No | No | No | No |
 
 ## Advanced query builder & SQL features
 
@@ -230,6 +236,11 @@ Numbers are from the latest `local/cross-orm-bench/BENCHMARKS.log`
    and SQLite (JSON1). Postgres and MySQL support full JSON containment (`@>`);
    SQLite approximates containment with a key-existence check because JSON1 has no
    containment operator. See `KnownLimitations.md`.
+
+9. **v1.1 features added to this comparison:** partial indexes, expression indexes,
+   generated columns, PostgreSQL extensions from `datasource`, `ruprizzle check`
+   offline query validation, the `ruprizzle-lsp` language server, and the
+   `xtask bench-compile` generated-crate compile-time benchmark.
 
 [^2]: ruprizzle's many-to-many support uses explicit join models (ADR-006). You
     model `PostTag` yourself, then declare `tags Tag[] @relation(through: PostTag)`

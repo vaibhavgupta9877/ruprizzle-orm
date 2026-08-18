@@ -433,14 +433,14 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
     let insert_fields: Vec<_> = model
         .fields
         .values()
-        .filter(|f| f.has_column())
+        .filter(|f| f.has_column() && f.generated.is_none())
         .map(|f| emit_insert_field(schema, model.name.as_str(), f))
         .collect();
 
     let update_fields: Vec<_> = model
         .fields
         .values()
-        .filter(|f| f.has_column())
+        .filter(|f| f.has_column() && f.generated.is_none())
         .map(|f| emit_update_field(schema, model.name.as_str(), f))
         .collect();
 
@@ -480,14 +480,14 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
     let insert_sets: Vec<_> = model
         .fields
         .values()
-        .filter(|f| f.has_column())
+        .filter(|f| f.has_column() && f.generated.is_none())
         .map(|f| emit_insert_set(schema, model, f))
         .collect();
 
     let insert_many_fields: Vec<_> = model
         .fields
         .values()
-        .filter(|f| f.has_column())
+        .filter(|f| f.has_column() && f.generated.is_none())
         .map(emit_insert_many_field)
         .collect();
 

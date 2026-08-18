@@ -1,7 +1,7 @@
 //! Go-to-definition for `schema.ruprizzle`.
 
-use ruprizzle_core::ir::Schema;
 use ruprizzle_core::Span;
+use ruprizzle_core::ir::Schema;
 use ruprizzle_parser::ast::Ast;
 use tower_lsp::lsp_types::{GotoDefinitionResponse, Location, Position, Range, Url};
 

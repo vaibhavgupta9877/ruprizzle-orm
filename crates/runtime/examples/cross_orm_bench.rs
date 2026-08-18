@@ -1,13 +1,17 @@
-//! Cross-ORM SQLite benchmark for ruprizzle.
+//! Cross-ORM benchmark for ruprizzle.
 #![allow(dead_code)]
 //!
-//! Compares against the same `bench.sqlite3` file used by the Prisma and
-//! Drizzle benchmarks in `local/cross-orm-bench/node`.
+//! Compares against the same dataset used by the Prisma and Drizzle
+//! benchmarks in `local/cross-orm-bench/node`.
+//!
+//! The backend is chosen, in order of precedence, from the `BENCH_PG_URL`,
+//! `BENCH_MYSQL_URL` or `BENCH_SQLITE_PATH` environment variables.
 //!
 //! Set `RUST_BENCH_DRIVER=rusqlite` to measure the native `rusqlite` backend;
-//! otherwise the default sqlx-backed SQLite driver is used.
+//! otherwise the default sqlx-backed driver is used.
 
 use std::borrow::Cow;
+use std::path::PathBuf;
 use std::time::Instant;
 
 use futures_util::StreamExt;
@@ -33,9 +37,36 @@ impl NestedSetter<User> for SetPosts {
     }
 }
 
-fn db_path() -> String {
-    std::env::var("BENCH_SQLITE_PATH")
-        .unwrap_or_else(|_| "local/cross-orm-bench/node/bench.sqlite3".to_string())
+fn backend() -> &'static str {
+    if std::env::var("BENCH_PG_URL").is_ok() {
+        "postgres"
+    } else if std::env::var("BENCH_MYSQL_URL").is_ok() {
+        "mysql"
+    } else {
+        "node"
+    }
+}
+
+fn db_url() -> String {
+    if let Ok(url) = std::env::var("BENCH_PG_URL") {
+        return url;
+    }
+    if let Ok(url) = std::env::var("BENCH_MYSQL_URL") {
+        return url;
+    }
+    let path = std::env::var("BENCH_SQLITE_PATH")
+        .unwrap_or_else(|_| "local/cross-orm-bench/node/bench.sqlite3".to_string());
+    let native = std::env::var("RUST_BENCH_DRIVER").is_ok_and(|v| v == "rusqlite");
+    let suffix = if native { "&driver=rusqlite" } else { "" };
+    format!("sqlite:///{}?mode=rwc{}", path, suffix)
+}
+
+fn results_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("BENCH_RESULTS_DIR") {
+        PathBuf::from(dir)
+    } else {
+        PathBuf::from(format!("local/cross-orm-bench/{}", backend()))
+    }
 }
 
 #[derive(Debug, Clone, Default, FromRow, Serialize)]
@@ -604,9 +635,7 @@ where
 #[tokio::main]
 async fn main() -> Result<(), ruprizzle::Error> {
     let native = std::env::var("RUST_BENCH_DRIVER").is_ok_and(|v| v == "rusqlite");
-    let suffix = if native { "&driver=rusqlite" } else { "" };
-    let path = db_path();
-    let url = format!("sqlite:///{}?mode=rwc{}", path, suffix);
+    let url = db_url();
     let pool = ruprizzle::connect(&url).await?;
 
     let count = SelectQuery::<User>::new(&pool).count().await?;
@@ -1255,7 +1284,11 @@ async fn main() -> Result<(), ruprizzle::Error> {
     } else {
         "ruprizzle-results.json"
     };
-    let path = std::path::Path::new(&path).parent().unwrap().join(filename);
+    let out_dir = results_dir();
+    tokio::fs::create_dir_all(&out_dir)
+        .await
+        .map_err(|e| ruprizzle::Error::Message(e.to_string()))?;
+    let path = out_dir.join(filename);
     tokio::fs::write(&path, serde_json::to_string_pretty(&results).unwrap())
         .await
         .expect("write results");

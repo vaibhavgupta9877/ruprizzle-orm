@@ -1,7 +1,7 @@
 //! Hover information for `schema.ruprizzle`.
 
-use ruprizzle_core::ir::Schema;
 use ruprizzle_core::Span;
+use ruprizzle_core::ir::Schema;
 use tower_lsp::lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind, Position};
 
 /// Build hover information for the symbol at `position`.

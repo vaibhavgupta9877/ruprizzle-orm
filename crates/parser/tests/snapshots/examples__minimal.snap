@@ -10,6 +10,7 @@ expression: schema
     "url": {
       "Env": "DATABASE_URL"
     },
+    "extensions": [],
     "span": {
       "start": 183,
       "end": 258
@@ -49,6 +50,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 383,
@@ -71,6 +73,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 421,
@@ -93,6 +96,7 @@ expression: schema
             "native_type": null,
             "renamed_from": null
           },
+          "generated": null,
           "docs": null,
           "span": {
             "start": 445,

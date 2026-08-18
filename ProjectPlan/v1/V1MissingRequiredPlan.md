@@ -481,22 +481,22 @@ The table below cross-checks every limitation/priority in
 - Consumes: `both_dbs!` macro, MySQL backend.
 - Produces: passing tests for upserts, arrays, rich types on MySQL.
 
-- [ ] **Step 1: Promote MySQL to the default `both_dbs!` set**
+- [x] **Step 1: Promote MySQL to the default `both_dbs!` set**
   - In `crates/testkit/src/lib.rs` or in a new `all_dbs!` macro, run tests on
     SQLite + PostgreSQL + MySQL when all three URLs are available.
 
-- [ ] **Step 2: Add MySQL-specific tests**
+- [x] **Step 2: Add MySQL-specific tests**
   - Upsert with `ON DUPLICATE KEY UPDATE`.
   - `String[]` stored as JSON and queried with `contains`/`overlaps`.
   - `Uuid` round-trip through `CHAR(36)`.
   - `Decimal` text fallback on MySQL? MySQL has `DECIMAL`; verify native.
 
-- [ ] **Step 3: Document limitations**
+- [x] **Step 3: Document limitations**
   - Add a section to `docs/DialectNotes.md` for MySQL: no `INTERSECT`/`EXCEPT`,
     no `RETURNING` (PK follow-up), no native enums (CHECK constraint),
     no `FULL OUTER JOIN`/`RIGHT JOIN` on older versions.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   - `git commit -m "test(mysql): conformance suite and dialect notes"`
 
 ### Task D.2: PostgreSQL and MySQL benchmarks
@@ -509,18 +509,18 @@ The table below cross-checks every limitation/priority in
 - Consumes: `BENCH_PG_URL`, `BENCH_MYSQL_URL`, `BENCH_SQLITE_PATH`.
 - Produces: benchmark results for Postgres and MySQL.
 
-- [ ] **Step 1: Add Docker services**
+- [x] **Step 1: Add Docker services**
   - `docker-compose.bench.yml` with PostgreSQL 17 and MySQL 8.4, both with a
     `ruprizzle_test` database and a `ruprizzle` user.
 
-- [ ] **Step 2: Extend `run_bench.py`**
+- [x] **Step 2: Extend `run_bench.py`**
   - Read `BENCH_PG_URL` and `BENCH_MYSQL_URL`; skip a backend if the env var is
     missing.
   - For each available backend, run the Rust harness (`cross_orm_bench.exe`) and
     Node harnesses that support that backend.
   - Append a "PostgreSQL" and a "MySQL" section to `docs/BenchmarkResults.md`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   - `git commit -m "bench: add Postgres and MySQL harnesses"`
 
 ### Task D.3: Percentile and throughput metrics
@@ -533,20 +533,20 @@ The table below cross-checks every limitation/priority in
 - Consumes: raw trial times from each harness.
 - Produces: p50/p95/p99 and req/s.
 
-- [ ] **Step 1: Add percentile computation**
+- [x] **Step 1: Add percentile computation**
   - Use `statistics.quantiles` or `numpy` if available; fallback to sorted-list
     interpolation.
   - Add `p50`, `p95`, `p99` to the per-operation result.
 
-- [ ] **Step 2: Add throughput**
+- [x] **Step 2: Add throughput**
   - Add a `BENCH_CONCURRENCY` env var (default 1, 10, 100).
   - Run each operation with `N` concurrent clients for a fixed duration and
     record operations/second.
 
-- [ ] **Step 3: Update `docs/BenchmarkResults.md` template**
+- [x] **Step 3: Update `docs/BenchmarkResults.md` template**
   - Add percentile and throughput tables.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   - `git commit -m "bench: percentile and throughput reporting"`
 
 ### Task D.4: Compile-time benchmark
@@ -559,15 +559,15 @@ The table below cross-checks every limitation/priority in
 - Consumes: generated 50/200 model schemas.
 - Produces: compile-time numbers.
 
-- [ ] **Step 1: Generate large schemas**
+- [x] **Step 1: Generate large schemas**
   - Add a script that creates synthetic `schema.ruprizzle` files with 50 and 200
     models, then runs `cargo build --release -p generated_client`.
 
-- [ ] **Step 2: Measure**
+- [x] **Step 2: Measure**
   - Use `time` or `cargo build --timings` to capture wall time and binary size.
   - Record in `docs/BenchmarkResults.md`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   - `git commit -m "bench: generated-client compile-time and binary size"`
 
 ---
@@ -588,7 +588,7 @@ The table below cross-checks every limitation/priority in
 - Consumes: schema IR `IndexDef` with a new `where_clause: Option<String>`.
 - Produces: `CREATE INDEX ... WHERE <where_clause>` on Postgres/SQLite.
 
-- [ ] **Step 1: Extend IR**
+- [x] **Step 1: Extend IR**
   - In `crates/core/src/ir.rs`:
     ```rust
     pub struct IndexDef {
@@ -599,20 +599,20 @@ The table below cross-checks every limitation/priority in
     }
     ```
 
-- [ ] **Step 2: Parse `@@index([...], where: "...")`**
+- [x] **Step 2: Parse `@@index([...], where: "...")`**
   - In the parser, accept a named argument `where` on `@@index` and store it.
 
-- [ ] **Step 3: Render `WHERE` clause**
+- [x] **Step 3: Render `WHERE` clause**
   - In `crates/dialect/src/postgres.rs` and `crates/dialect/src/sqlite.rs`, append
     `WHERE {where_clause}` to `create_index` when present.
   - In `crates/dialect/src/mysql.rs`, reject with `DialectError` because MySQL
     does not support partial indexes.
 
-- [ ] **Step 4: Update migration diff**
+- [x] **Step 4: Update migration diff**
   - In `crates/migrate/src/diff.rs` (or wherever index diffs live), compare
     `where_clause` and emit drop/re-create when it changes.
 
-- [ ] **Step 5: Test and commit**
+- [x] **Step 5: Test and commit**
   - Add a snapshot test in `crates/migrate/tests` or `tests/integration`.
   - `git commit -m "feat(schema): partial indexes with @@index where clause"`
 
@@ -628,7 +628,7 @@ The table below cross-checks every limitation/priority in
 - Consumes: `IndexDef` where entries may be field names or SQL expressions.
 - Produces: `CREATE INDEX ... ON table (expression)`.
 
-- [ ] **Step 1: Extend IR with expression targets**
+- [x] **Step 1: Extend IR with expression targets**
   - In `crates/core/src/ir.rs`:
     ```rust
     pub enum IndexTarget {
@@ -644,15 +644,15 @@ The table below cross-checks every limitation/priority in
     }
     ```
 
-- [ ] **Step 2: Parse `@@index(["(lower(email))"])` and `@@unique(["(coalesce(a,b))"])`**
+- [x] **Step 2: Parse `@@index(["(lower(email))"])` and `@@unique(["(coalesce(a,b))"])`**
   - A string that starts with `(` is treated as an expression; otherwise it is a
     field name.
 
-- [ ] **Step 3: Render expressions**
+- [x] **Step 3: Render expressions**
   - In `create_index` and `add_unique`, render expression targets verbatim and
     field targets as quoted column names.
 
-- [ ] **Step 4: Test and commit**
+- [x] **Step 4: Test and commit**
   - `git commit -m "feat(schema): expression indexes and unique constraints"`
 
 ### Task E.3: Generated columns
@@ -670,7 +670,7 @@ The table below cross-checks every limitation/priority in
 - Produces: `GENERATED ALWAYS AS (...) STORED/VIRTUAL` columns; generated
   columns are read-only in the query builder.
 
-- [ ] **Step 1: Extend IR**
+- [x] **Step 1: Extend IR**
   - In `crates/core/src/ir.rs`:
     ```rust
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -687,21 +687,21 @@ The table below cross-checks every limitation/priority in
     ```
     Add `pub generated: Option<GeneratedClause>` to `Field`.
 
-- [ ] **Step 2: Parse `@generated(...)`**
+- [x] **Step 2: Parse `@generated(...)`**
   - Syntax: `@generated("always as (lower(first_name || ' ' || last_name)) stored")`.
   - Lower to `GeneratedClause { expr, kind }`.
 
-- [ ] **Step 3: Render in dialects**
+- [x] **Step 3: Render in dialects**
   - PostgreSQL: `col TYPE GENERATED ALWAYS AS (expr) STORED`.
   - MySQL: same.
   - SQLite: same (3.31+).
 
-- [ ] **Step 4: Codegen read-only**
+- [x] **Step 4: Codegen read-only**
   - In `crates/codegen/src/emit.rs`, omit generated columns from the
     `InsertQuery`/`UpdateQuery` setters but include them in `SelectQuery`
     projections.
 
-- [ ] **Step 5: Test and commit**
+- [x] **Step 5: Test and commit**
   - `git commit -m "feat(schema): generated columns"`
 
 ### Task E.4: PostgreSQL extensions
@@ -716,21 +716,21 @@ The table below cross-checks every limitation/priority in
 - Consumes: `datasource db { extensions = ["uuid-ossp", "postgis"] }`.
 - Produces: `CREATE EXTENSION IF NOT EXISTS ...` in migration plan.
 
-- [ ] **Step 1: Extend IR and parser**
+- [x] **Step 1: Extend IR and parser**
   - Add `pub extensions: Vec<String>` to `Datasource`.
   - Parse `extensions = ["..."]` in the datasource block.
 
-- [ ] **Step 2: Emit in migration plan**
+- [x] **Step 2: Emit in migration plan**
   - In `crates/migrate/src/planner.rs`, at the start of a Postgres migration,
     emit `CREATE EXTENSION IF NOT EXISTS {ext};` for each listed extension.
   - On down migrations, emit `DROP EXTENSION IF EXISTS {ext};` only if no other
     schema objects depend on it (best effort).
 
-- [ ] **Step 3: Add extension capability flags**
+- [x] **Step 3: Add extension capability flags**
   - In `crates/dialect/src/postgres.rs` `Capabilities`, add
     `postgis: bool` (default false). This is used later by PostGIS support.
 
-- [ ] **Step 4: Test and commit**
+- [x] **Step 4: Test and commit**
   - `git commit -m "feat(migrate): CREATE EXTENSION from datasource extensions"`
 
 ---
@@ -881,14 +881,14 @@ specific files to touch, so the implementer does not start from a blank page.
 - Modify: `docs/KnownLimitations.md:15-34`
 - Modify: `docs/performance.md` (if relevant)
 
-- [ ] **Step 1: Document the recommended path**
+- [x] **Step 1: Document the recommended path**
   - State that `Decimal` and `Json` on SQLite are stored as text by the default
     `sqlx::Any` path and that `sqlite-rusqlite` parses them back at decode time
     without the `sqlx::Any` text round-trip.
   - Mention that exact decimal math on SQLite should use `Int` minor units or
     a PostgreSQL backend.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
   - `git commit -m "docs(sqlite): clarify rich-type storage and rusqlite workaround"`
 
 ---
@@ -897,15 +897,15 @@ specific files to touch, so the implementer does not start from a blank page.
 
 Before any release phase:
 
-- [ ] `cargo fmt --all --check` passes.
-- [ ] `cargo clippy --workspace --all-targets -- -D warnings` passes.
-- [ ] `cargo test --workspace` passes.
-- [ ] `cargo xtask harden` passes.
-- [ ] `cargo deny check advisories` passes.
-- [ ] `cargo doc --workspace --no-deps` has no warnings.
-- [ ] `docs/KnownLimitations.md` contains only deliberate design positions,
+- [x] `cargo fmt --all --check` passes.
+- [x] `cargo clippy --workspace --all-targets -- -D warnings` passes.
+- [x] `cargo test --workspace` passes.
+- [x] `cargo xtask harden` passes.
+- [x] `cargo deny check advisories` passes.
+- [x] `cargo doc --workspace --no-deps` has no warnings.
+- [x] `docs/KnownLimitations.md` contains only deliberate design positions,
       not "not implemented yet."
-- [ ] `docs/FeaturesMasterComparison.md` matches the target state for the phase.
+- [x] `docs/FeaturesMasterComparison.md` matches the target state for the phase.
 
 ## Self-Review
 

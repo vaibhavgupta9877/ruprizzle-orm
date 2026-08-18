@@ -506,7 +506,7 @@ The latest cross-ORM SQLite run (2026-08-17, 16:55 UTC, 1 warm-up + 10 measured 
 | `include_posts` | 22,881.2 µs | **7,545.5 µs** | Diesel 3,647.4 µs, prax 11,712.9 µs, Sea-ORM 20,333.5 µs |
 | `bulk_insert_1000` | 2,099.7 µs | 1,395.0 µs | **prax 1,174.6 µs**, Drizzle 8,536.1 µs, Sea-ORM 5,031.3 µs |
 
-The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchronous native `rusqlite` crate and is enabled with the `sqlite-rusqlite` feature. Postgres still uses `sqlx` in both variants. For the Postgres-vs-sqlx overhead report and the `sqlx::Any` text-marshalling note, see [docs/performance.md](docs/performance.md). Generated-crate compile-time benchmarks are not yet automated because they require a dedicated compile-time machine.
+The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchronous native `rusqlite` crate and is enabled with the `sqlite-rusqlite` feature. Postgres still uses `sqlx` in both variants. For the Postgres-vs-sqlx overhead report and the `sqlx::Any` text-marshalling note, see [docs/performance.md](docs/performance.md). Generated-crate compile-time benchmarks are automated via `cargo xtask bench-compile`.
 
 ---
 
@@ -515,9 +515,7 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 `0.4.0-beta.2` is on [crates.io](https://crates.io/crates/ruprizzle). P0–P8 are complete and the public API is stabilising. The main remaining work before a stable 0.2 / 1.0 release:
 
 - Many-to-many implicit join tables (explicit join model works today; see ADR-006).
-- Raw-SQL compile-time verification (`sqlx::query!` style).
-- Full LSP for the schema DSL.
-- Docs site and generated-crate compile-time automation.
+- Docs site and release automation.
 
 See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md), the [production-readiness plan](ProjectPlan/ProductionReadinessPlan.md), and the [decisions log](ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md) for the full phase-by-phase state, production assessment, and ADRs.
 
@@ -529,11 +527,22 @@ This is an honest beta. The boundaries are documented so you can decide whether 
 
 - **Heuristic renames** are suggested automatically; add `@renamedFrom` to confirm a data-preserving rename. The diff never guesses silently.
 - **`db push`** does not write migration files and is only for prototyping.
-- **Compile-time query checking** (`sqlx-data.json` / offline mode) is not implemented.
-- **No LSP** yet; syntax highlighting is available as a TextMate grammar.
-- **`Decimal` on SQLite** is stored as text.
-- **SQLite `Json`** is stored as TEXT, but JSON1 `json_extract`, `json_type`, and `json_set` are supported; containment (`@>`) is approximated because JSON1 has no containment operator.
-- **Polymorphic relations, recursive loading beyond depth 2, soft deletes, JSON path querying, full-text search, and PostGIS types** are deferred to 0.2+.
+- **LSP for `schema.ruprizzle`** is available via `ruprizzle-lsp` and the VS Code
+  extension in `editor/`. Syntax highlighting is also available as a TextMate
+  grammar.
+- **Offline query checking** (`ruprizzle check`) is available using query
+  manifests captured at test time.
+- **`Decimal` on SQLite** is stored as text by the default `sqlx::Any` path.
+  The `sqlite-rusqlite` feature parses it back from text at decode time. If
+  you need exact decimal math on SQLite, use `Int` minor units or a PostgreSQL
+  backend.
+- **SQLite `Json`** is stored as TEXT, but JSON1 `json_extract`, `json_type`,
+  and `json_set` are supported; the `sqlite-rusqlite` feature also decodes `Json`
+  without the `sqlx::Any` text round-trip. JSON containment (`@>`) is
+  approximated because JSON1 has no containment operator.
+- **Polymorphic relations, recursive tree loading beyond the current depth-limited
+  `include`, soft deletes, full-text search, and PostGIS types** are deferred to
+  0.2+.
 
 See [docs/KnownLimitations.md](docs/KnownLimitations.md) for the full list and [docs/MigratingFrom.md](docs/MigratingFrom.md) for cheat-sheets when moving from Diesel, SeaORM, or sqlx.
 

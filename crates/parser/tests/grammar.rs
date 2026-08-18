@@ -119,3 +119,45 @@ fn malformed_input_reports_a_location() {
     let line = src[..span.offset()].chars().filter(|&c| c == '\n').count() + 1;
     assert_eq!(line, 2, "syntax error should be on line 2");
 }
+
+#[test]
+fn extensions_are_a_config_value_array() {
+    let ast = parse(
+        r#"
+        datasource db {
+          provider   = "postgres"
+          url        = env("DATABASE_URL")
+          extensions = ["uuid-ossp", "postgis"]
+        }
+
+        model User {
+          id Uuid @id @default(uuid7())
+        }
+        "#,
+    );
+    let db = ast.datasources().next().unwrap();
+    let extensions = db.get("extensions").and_then(|e| e.value.as_array());
+    assert_eq!(extensions.map(<[Value]>::len), Some(2));
+}
+
+#[test]
+fn generated_columns_and_expression_indexes_parse() {
+    let src = r#"
+        datasource db {
+          provider = "postgres"
+          url      = env("DATABASE_URL")
+        }
+
+        model User {
+          id         Uuid    @id @default(uuid7())
+          first_name String
+          last_name  String
+          full_name  String? @generated("always as (first_name || ' ' || last_name) stored")
+
+          @@index([first_name, last_name], where: "last_name IS NOT NULL")
+          @@unique(["(coalesce(first_name, ''))"])
+        }
+    "#;
+    let result = parse_ast("grammar.rs", src);
+    assert!(result.is_ok(), "{:#?}", result.err());
+}

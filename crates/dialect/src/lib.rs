@@ -116,6 +116,8 @@ pub struct Capabilities {
     pub json_type: JsonSupport,
     /// Maximum number of bind parameters in a single statement.
     pub max_query_params: u32,
+    /// PostGIS extension is enabled.
+    pub postgis: bool,
     /// `ROW_NUMBER() OVER (PARTITION BY ...)` and friends are supported.
     ///
     /// The relation loader needs this to honour a per-parent `take` in a single

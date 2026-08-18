@@ -68,3 +68,17 @@ instead of emitting unsupported SQL:
 MySQL does not support `INTERSECT` or `EXCEPT`; MariaDB does not support
 `INTERSECT` or `EXCEPT` either. SQLite supports both but does not support
 `RIGHT JOIN` or `FULL OUTER JOIN`.
+
+## MySQL-specific notes
+
+- **No `RETURNING` clause.** Inserts and upserts rely on a primary-key follow-up
+  query or `LAST_INSERT_ID()` for auto-increment keys.
+- **No native `ENUM` types.** Enumerations are enforced with `CHECK` constraints.
+- **No `FULL OUTER JOIN` or `RIGHT JOIN` on older versions.** Prefer `LEFT JOIN`
+  or emulate with `UNION` where necessary.
+- **`String[]` is stored as `JSON`**. Array containment and overlap are implemented
+  with `JSON_CONTAINS` and `JSON_OVERLAPS`.
+- **`Uuid` is stored as `CHAR(36)`**; `Decimal` uses `DECIMAL(65,30)` (or a
+  narrower `DECIMAL(19,4)` when declared with `@db.Decimal(p,s)`).
+- **Upserts use `ON DUPLICATE KEY UPDATE`**, keyed on the primary key and unique
+  constraints.
