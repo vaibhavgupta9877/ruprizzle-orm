@@ -215,7 +215,7 @@ status, and every `schema.ruprizzle` file in the repository (`examples/*/schema.
 
 || Axis | Score | Grade |
 ||---|---|---|
-|| **Production readiness** | **86 / 100** | **B+ — RC-staged, mechanically green, one outstanding 48-hour soak gate** |
+|| **Production readiness** | **87 / 100** | **B+ — RC tagged, mechanically green, 48-hour soak in progress** |
 || Engineering craft | 90 / 100 | A− |
 
 ### Scorecard
