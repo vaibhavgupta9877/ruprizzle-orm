@@ -881,14 +881,14 @@ specific files to touch, so the implementer does not start from a blank page.
 - Modify: `docs/KnownLimitations.md:15-34`
 - Modify: `docs/performance.md` (if relevant)
 
-- [ ] **Step 1: Document the recommended path**
+- [x] **Step 1: Document the recommended path**
   - State that `Decimal` and `Json` on SQLite are stored as text by the default
     `sqlx::Any` path and that `sqlite-rusqlite` parses them back at decode time
     without the `sqlx::Any` text round-trip.
   - Mention that exact decimal math on SQLite should use `Int` minor units or
     a PostgreSQL backend.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
   - `git commit -m "docs(sqlite): clarify rich-type storage and rusqlite workaround"`
 
 ---

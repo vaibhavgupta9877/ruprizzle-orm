@@ -82,6 +82,12 @@ That cost is real, but the default `postgres://` connection path uses the native
 are not affected. The cost only applies if you explicitly construct
 `Pool::Any(...)` or use a generic `Any` URL.
 
+On SQLite, enable the `sqlite-rusqlite` feature and connect with
+`?driver=rusqlite` in the URL. This bypasses `sqlx::Any` text marshalling for
+`Uuid`, `Decimal`, `DateTime`, `Date`, `Time` and `Json` and decodes them from
+the native SQLite value directly. It is still stored as text in the database, so
+exact `Decimal` arithmetic should use `Int` minor units or a PostgreSQL backend.
+
 In a real workload with rich types the gap between ruprizzle and hand-written
 sqlx is expected to be dominated by the ORM decode path, not by driver
 marshalling, as long as the native driver is selected. If you profile, compare

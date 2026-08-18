@@ -10,12 +10,16 @@ whether the tool is right for your project.
   confirm or ignore the prompt; the diff never renames silently.
 - **`db push`** does not write migration files and is only for prototyping.
 - **No LSP** yet; syntax highlighting is available as a TextMate grammar.
-- **`Decimal` on SQLite** is stored as text. If you need real decimal math on
-  SQLite, use `String` and parse in application code.
+- **`Decimal` on SQLite** is stored as text by the default `sqlx::Any` path.
+  The `sqlite-rusqlite` feature parses it back from text at decode time, which
+  removes the `sqlx::Any` text round-trip but still stores it as text on disk.
+  If you need real decimal math on SQLite, use `Int` minor units (e.g. cents)
+  or a PostgreSQL backend.
 - **SQLite `Json`** is stored as text, but the JSON1 extension is used for
-  `json_extract`, `json_type`, and `json_set`. JSON containment (`@>`) is only
-  a partial key-existence approximation because SQLite JSON1 has no containment
-  operator.
+  `json_extract`, `json_type`, and `json_set`. The `sqlite-rusqlite` feature
+  also decodes `Json` without the `sqlx::Any` text round-trip. JSON containment
+  (`@>`) is only a partial key-existence approximation because SQLite JSON1 has
+  no containment operator.
 - **Array columns (`T[]`)** are supported for scalar and enum types. PostgreSQL
   stores them as native arrays; SQLite and MySQL store them as JSON text using
   the dialect's JSON facilities. Array filter operators (`contains`,
