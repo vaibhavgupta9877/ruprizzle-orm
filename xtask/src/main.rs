@@ -651,10 +651,16 @@ fn run_release(args: &[String]) -> ExitCode {
         .position(|a| a == "--from")
         .and_then(|i| args.get(i + 1))
         .map(String::as_str);
-    let mut flags = vec!["publish", "--no-verify"];
-    if !live {
-        flags.push("--dry-run");
-    }
+    // Dry-run only packages and lists the files that would be published; it
+    // does not verify against the registry because workspace-internal
+    // dependencies at the new version do not yet exist on crates.io.
+    // Live publish uses `--no-verify` for the same reason; `cargo xtask harden`
+    // already compiles, tests, and lints.
+    let flags = if live {
+        vec!["publish", "--no-verify"]
+    } else {
+        vec!["package", "--list"]
+    };
 
     // Dependency order for first-time publish. `parser` is a dev-dependency
     // of `dialect`, so it must be indexed before `dialect` can package.
