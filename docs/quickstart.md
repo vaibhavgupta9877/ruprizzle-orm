@@ -2,6 +2,16 @@
 
 From an empty directory to a working query in under five minutes.
 
+## Prerequisites
+
+- Rust 1.85 or later.
+- A running PostgreSQL, MySQL/MariaDB, or SQLite 3 database. SQLite needs no
+  server; just a writable file path.
+
+This guide uses PostgreSQL. To use SQLite, replace `--provider postgres` with
+`--provider sqlite` and set `DATABASE_URL` to a file path such as
+`sqlite://./dev.db`.
+
 ## 1. Install the CLI
 
 ```bash
@@ -17,26 +27,26 @@ ruprizzle init --provider postgres
 
 This creates:
 
-```
+```text
 my-app/
   schema.ruprizzle
   .env
   .gitignore
   migrations/
     README.md
+  src/
+    main.rs
 ```
 
-Open `.env` and update `DATABASE_URL` if your local Postgres is not on the
-default host:
+Open `.env` and update `DATABASE_URL`:
 
 ```bash
-DATABASE_URL="postgres://localhost:5432/postgres?sslmode=disable"
+DATABASE_URL="postgres://user:password@localhost:5432/my_app_db?sslmode=disable"
 ```
 
 ## 3. Edit the schema
 
-`schema.ruprizzle` is the single source of truth. A starter `User` model is
-already there, commented out. Replace it with:
+Replace `schema.ruprizzle` with:
 
 ```prisma
 datasource db {
@@ -62,20 +72,26 @@ model User {
 ruprizzle migrate dev --name init
 ```
 
-This diffs the (empty) database against the schema, writes a migration under
+This diffs the empty database against the schema, writes a migration under
 `migrations/`, applies it, and regenerates the client.
 
-## 5. Add the generated module
+## 5. Add dependencies
 
-`ruprizzle generate` writes to `src/db/`. Add it to `src/main.rs`:
-
-```rust
-mod db;
-
-use ruprizzle::prelude::*;
+```bash
+cargo add ruprizzle tokio --features tokio/full
 ```
 
-## 6. Run your first query
+Or edit `Cargo.toml`:
+
+```toml
+[dependencies]
+ruprizzle = "1.0.0-rc.1"
+tokio = { version = "1", features = ["full"] }
+```
+
+## 6. Write the first query
+
+Make `src/main.rs`:
 
 ```rust
 mod db;
@@ -84,7 +100,8 @@ mod db;
 async fn main() -> Result<(), ruprizzle::Error> {
     let db = db::Db::connect(&std::env::var("DATABASE_URL")?).await?;
 
-    db.user()
+    let alice = db
+        .user()
         .create(db::UserInsert {
             id: None,
             email: "alice@example.com".into(),
@@ -97,12 +114,20 @@ async fn main() -> Result<(), ruprizzle::Error> {
         .user()
         .find_many()
         .filter(db::user::EMAIL.ends_with("@example.com"))
+        .order_by(db::user::NAME.asc())
         .fetch_all()
         .await?;
 
-    println!("{users:?}");
+    println!("created: {:?}", alice);
+    println!("users: {:?}", users);
     Ok(())
 }
+```
+
+Run it:
+
+```bash
+cargo run
 ```
 
 ## 7. Iterate
@@ -111,6 +136,7 @@ Change `schema.ruprizzle` and run:
 
 ```bash
 ruprizzle migrate dev --name add_field
+ruprizzle generate
 ```
 
 Or, for live code generation while you edit:
@@ -119,8 +145,18 @@ Or, for live code generation while you edit:
 ruprizzle generate --watch
 ```
 
+## Common first errors
+
+- `Failed to acquire connection`: `DATABASE_URL` is wrong or the database is not
+  running.
+- `table users already exists`: the database already has a `users` table from a
+  previous prototype. Use `ruprizzle migrate reset --force` in development to
+  drop and re-apply, or delete `migrations/` and start fresh.
+- `no column named ...`: the generated client is stale. Run `ruprizzle generate`.
+
 ## Next steps
 
 - [Schema reference](SchemaReference.md)
 - [Query guide](QueryGuide.md)
 - [Migrations guide](MigrationsGuide.md)
+- [Relations guide](RelationsGuide.md)
