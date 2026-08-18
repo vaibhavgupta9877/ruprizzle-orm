@@ -6,6 +6,7 @@
 [Query guide](QueryGuide.md)
 [Relations guide](RelationsGuide.md)
 [Migrations guide](MigrationsGuide.md)
+[Examples](Examples.md)
 [Operations](Operations.md)
 [Dialect notes](DialectNotes.md)
 [Known limitations](KnownLimitations.md)
