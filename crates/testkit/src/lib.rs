@@ -144,7 +144,8 @@ enum Inner {
         sqlite_pool: SqlitePool,
         any_pool: AnyPool,
         // Held so the directory outlives the pool; removed on drop.
-        _dir: TempDir,
+        // `None` when a persistent path is supplied via `RUPRIZZLE_SOAK_DB_PATH`.
+        _dir: Option<TempDir>,
     },
 }
 
@@ -320,8 +321,17 @@ impl TestDb {
 
     #[allow(clippy::too_many_lines)]
     async fn connect_sqlite() -> std::result::Result<Self, TestDbError> {
-        let dir = tempfile::tempdir()?;
-        let path = dir.path().join("test.sqlite");
+        let (path, temp_dir) = if let Ok(p) = std::env::var("RUPRIZZLE_SOAK_DB_PATH") {
+            let path = std::path::PathBuf::from(p);
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            (path, None)
+        } else {
+            let dir = tempfile::tempdir()?;
+            let path = dir.path().join("test.sqlite");
+            (path, Some(dir))
+        };
         let file = path.to_str().unwrap().replace('\\', "/");
         let url = format!("sqlite:///{file}");
 
@@ -382,7 +392,7 @@ impl TestDb {
                 inner: Inner::Sqlite {
                     sqlite_pool,
                     any_pool,
-                    _dir: dir,
+                    _dir: temp_dir,
                 },
                 pool,
             });
@@ -435,7 +445,7 @@ impl TestDb {
             inner: Inner::Sqlite {
                 sqlite_pool,
                 any_pool,
-                _dir: dir,
+                _dir: temp_dir,
             },
             pool,
         })

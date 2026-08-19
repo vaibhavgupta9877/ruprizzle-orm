@@ -24,12 +24,13 @@
   cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'
   ```
 
-- Run the native `rusqlite` soak test:
+- Run the native `rusqlite` soak test (resumable, segmented 48-hour gate):
   ```powershell
-  $env:RUPRIZZLE_TEST_RUSQLITE=1
-  $env:RUPRIZZLE_SOAK_DURATION_SECONDS=3600
-  $env:RUPRIZZLE_SOAK_WORKERS=8
-  cargo test -p ruprizzle --test soak --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite' --release -- sqlite --nocapture
+  # One segment (6 hours by default; set RUPRIZZLE_SOAK_DURATION_SECONDS to override).
+  .\local\run-soak-segment.ps1
+
+  # Repeat the above command until it prints `soak finished`.
+  # State is kept in `local/soak-48h/soak-rusqlite.db`.
   ```
 
 ## Default branch

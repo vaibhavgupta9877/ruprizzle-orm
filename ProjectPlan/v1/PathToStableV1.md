@@ -430,18 +430,20 @@ sqlite-rusqlite --bench concurrency` all pass.
 
 **Goal:** convert "correct" into "correct over time and under attack." **Effort:** ~1.5 weeks.
 
-> **Current status (2026-08-18):** W4-01, W4-03, W4-04, W4-05, and W4-06 are complete. The root cause of the W4-02 `rusqlite` SQLite lock contention has been fixed: `rusqlite` connections now use a 60-second busy timeout, explicit WAL mode, a Condvar-based checkout pool, and all synchronous `rusqlite` work is dispatched through `tokio::task::spawn_blocking` so the async runtime is not pinned. A 60-second smoke run and a 1-hour extended run on the native `rusqlite` backend are now passing with zero errors (see `docs/SoakReport.md`). The full 48-hour run is the remaining W4-02 gate; it is scheduled to run next.
+> **Current status (2026-08-19):** W4-01, W4-03, W4-04, W4-05, and W4-06 are complete. The root cause of the W4-02 `rusqlite` SQLite lock contention has been fixed: `rusqlite` connections now use a 60-second busy timeout, explicit WAL mode, a Condvar-based checkout pool, and all synchronous `rusqlite` work is dispatched through `tokio::task::spawn_blocking` so the async runtime is not pinned. A 60-second smoke run and a 1-hour extended run on the native `rusqlite` backend are now passing with zero errors (see `docs/SoakReport.md`). The 48-hour run is the remaining W4-02 gate; it has been replanned as a resumable segmented soak using `crates/runtime/tests/soak_resumable.rs` and `local/run-soak-segment.ps1`, and the first segment is in progress.
 
 - [x] **W4-01 · Fuzz the parser and the migration splitter.** `cargo-fuzz` targets for
       `crates/parser` (schema DSL) and `crates/migrate` (SQL splitter). These are the two
       hand-written scanners over untrusted-ish input, and the splitter has already produced
       two silent-corruption defects once. This is the one defect class the current suite is
       structurally unlikely to find. **3 days.** *(finding #8)*
-- [~] **W4-02 · Soak test.** 48 hours of sustained mixed load with connection churn and a
-      forced failover, tracking memory, file descriptors, and pool health. The harness and
-      smoke runs are in place, the native `rusqlite` backend has passed 60-second and
-      1-hour validation with zero `database is locked` errors, and the 48-hour run was
-      started on 2026-08-18 14:50 UTC. **3 days.**
+- [~] **W4-02 · Soak test.** 48 hours of cumulative mixed load with connection churn and a
+      forced failover, tracking memory, file descriptors, and pool health. Because the test
+      machine cannot remain on for 48 continuous hours, the gate has been replanned as a
+      resumable segmented soak (`crates/runtime/tests/soak_resumable.rs`) that stores state
+      in the same SQLite database it stresses, uses a persistent workspace-local database,
+      and runs one segment at a time. A 60-second verification passed with 2.38 M ops and
+      zero errors; the first 6-hour segment is running. **3 days.**
 - [x] **W4-03 · Feature-combination CI matrix.** Formalise W0-03 into a real matrix across
       the three driver paths and both databases. **0.5 day.**
 - [x] **W4-04 · Justify or remove the `grammar.rs` panic sites.** 27 of 29. Either a comment

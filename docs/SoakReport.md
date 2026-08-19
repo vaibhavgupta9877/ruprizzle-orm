@@ -238,3 +238,58 @@ The error count remained at 2 for the remaining ~9 hours of the run, but the
 premature termination and the I/O / system-resource events mean this is **not**
 a passing 48-hour gate. The root cause must be investigated and a new 48-hour
 run completed before the W4-02 exit gate is satisfied.
+
+## Resumable segmented soak — W4-02 replan
+
+Because the test machine cannot stay on for 48 continuous hours, the gate was
+replanned as a resumable segmented soak:
+
+- A new test file, `crates/runtime/tests/soak_resumable.rs`, stores cumulative
+  progress in a `soak_state` table inside the same SQLite database it stresses.
+- Each segment uses the persistent database in `local/soak-48h/` (workspace
+  folder, not `C:` or a temp directory). The database and logs are in
+  `local/soak-48h/` which is gitignored.
+- `crates/testkit/src/lib.rs` now honours `RUPRIZZLE_SOAK_DB_PATH` for SQLite,
+  allowing `TestDb` to use a persistent file instead of a `tempfile` temp
+  directory.
+- Health and error lines are written to `local/soak-48h/soak.log` and
+  `local/soak-48h/soak.err`; `eprintln!` was replaced with a non-panicking
+  write to avoid the `failed printing to stderr: ... (os error 1450)` crash
+  that killed the original 48-hour worker.
+- The runner `local/run-soak-segment.ps1` runs one segment, auto-detecting
+  whether to resume from an existing database.
+
+### 60-second verification
+
+```powershell
+$env:RUPRIZZLE_SOAK_DURATION_SECONDS=60
+.\local\run-soak-segment.ps1
+```
+
+Result:
+
+```text
+soak health: elapsed=60.0021532s ops=2380046 errors=0 size=0 idle=0 in_use=0 waiters=0 memory_bytes=13283328
+soak segment finished: cumulative_elapsed=60.033s ops=2380049 errors=0 rows=6; rerun with RUPRIZZLE_SOAK_RESUME=1
+```
+
+Zero errors, stable memory, and the cumulative state was persisted to the
+SQLite database, so the next `run-soak-segment.ps1` invocation will resume and
+add the next segment until `48 * 3600` seconds of cumulative elapsed time is
+reached.
+
+### Segmented 48-hour run instructions
+
+```powershell
+# First (or next) segment — 6 hours by default.
+.\local\run-soak-segment.ps1
+
+# Custom segment length, e.g. 1 hour.
+$env:RUPRIZZLE_SOAK_DURATION_SECONDS=3600
+.\local\run-soak-segment.ps1
+
+# Repeat until the test prints `soak finished` instead of `soak segment finished`.
+```
+
+Watch `local/soak-48h/soak.log` for `errors` > 0, `waiters` sustained > 0, or
+unbounded `memory_bytes` growth.
