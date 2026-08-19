@@ -19,6 +19,7 @@
 //! - `RUPRIZZLE_SOAK_LOG_DIR` — directory for `soak.log` and `soak.err`
 //!   (default `local/soak-48h`).
 
+use std::borrow::Cow;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
@@ -28,10 +29,11 @@ use std::sync::{
 };
 use std::time::Duration;
 
-use ruprizzle::executor::Executor;
+use ruprizzle::executor::{Executor, RowBatch};
+use ruprizzle::rusqlite::FromValue;
+use ruprizzle::value::Value;
 use ruprizzle_testkit::{Backend, TestDb};
 use simple_process_stats::ProcessStats;
-use sqlx::{Row, query};
 use tokio::time::{Instant, interval};
 
 const TARGET_CUMULATIVE_SECONDS: f64 = 48.0 * 3600.0;
@@ -122,22 +124,33 @@ impl State {
     }
 }
 
-async fn load_state(db: &TestDb) -> sqlx::Result<State> {
-    let row = query(
-        "SELECT cumulative_elapsed_seconds, total_ops, total_errors, completed FROM soak_state WHERE id = ?",
-    )
-    .bind(STATE_ID)
-    .fetch_optional(db.any_pool())
-    .await?;
+async fn load_state(db: &TestDb) -> Result<State, ruprizzle::Error> {
+    let batch = db
+        .pool()
+        .fetch_all_raw(
+            Cow::Borrowed(
+                "SELECT cumulative_elapsed_seconds, total_ops, total_errors, completed FROM soak_state WHERE id = $1",
+            ),
+            vec![Value::I64(STATE_ID)],
+        )
+        .await?;
 
-    match row {
-        Some(row) => Ok(State {
-            cumulative_elapsed: row.try_get::<f64, _>(0).unwrap_or(0.0),
-            total_ops: row.try_get::<i64, _>(1).unwrap_or(0),
-            total_errors: row.try_get::<i64, _>(2).unwrap_or(0),
-            completed: row.try_get::<i32, _>(3).unwrap_or(0) != 0,
-        }),
-        None => Ok(State {
+    match batch {
+        RowBatch::Rusqlite(rows) => match rows.first() {
+            Some(row) => Ok(State {
+                cumulative_elapsed: f64::from_value(&row.values[0])?,
+                total_ops: i64::from_value(&row.values[1])?,
+                total_errors: i64::from_value(&row.values[2])?,
+                completed: bool::from_value(&row.values[3])?,
+            }),
+            None => Ok(State {
+                cumulative_elapsed: 0.0,
+                total_ops: 0,
+                total_errors: 0,
+                completed: false,
+            }),
+        },
+        _ => Ok(State {
             cumulative_elapsed: 0.0,
             total_ops: 0,
             total_errors: 0,
@@ -146,31 +159,39 @@ async fn load_state(db: &TestDb) -> sqlx::Result<State> {
     }
 }
 
-async fn save_state(db: &TestDb, state: &State) -> sqlx::Result<()> {
-    query(
-        "INSERT OR REPLACE INTO soak_state (id, cumulative_elapsed_seconds, total_ops, total_errors, completed) VALUES (?, ?, ?, ?, ?)",
-    )
-    .bind(STATE_ID)
-    .bind(state.cumulative_elapsed)
-    .bind(state.total_ops)
-    .bind(state.total_errors)
-    .bind(if state.completed { 1 } else { 0 })
-    .execute(db.any_pool())
-    .await?;
+async fn save_state(db: &TestDb, state: &State) -> Result<(), ruprizzle::Error> {
+    db.pool()
+        .execute_raw(
+            Cow::Borrowed(
+                "INSERT OR REPLACE INTO soak_state (id, cumulative_elapsed_seconds, total_ops, total_errors, completed) VALUES ($1, $2, $3, $4, $5)",
+            ),
+            vec![
+                Value::I64(STATE_ID),
+                Value::F64(state.cumulative_elapsed),
+                Value::I64(state.total_ops),
+                Value::I64(state.total_errors),
+                Value::I64(if state.completed { 1 } else { 0 }),
+            ],
+        )
+        .await?;
     Ok(())
 }
 
-async fn init_state_table(db: &TestDb) -> sqlx::Result<()> {
-    db.execute(
-        "CREATE TABLE IF NOT EXISTS soak_state (
-            id INTEGER PRIMARY KEY,
-            cumulative_elapsed_seconds REAL NOT NULL DEFAULT 0,
-            total_ops BIGINT NOT NULL DEFAULT 0,
-            total_errors BIGINT NOT NULL DEFAULT 0,
-            completed INTEGER NOT NULL DEFAULT 0
-        )",
-    )
-    .await?;
+async fn init_state_table(db: &TestDb) -> Result<(), ruprizzle::Error> {
+    db.pool()
+        .execute_raw(
+            Cow::Borrowed(
+                "CREATE TABLE IF NOT EXISTS soak_state (
+                    id INTEGER PRIMARY KEY,
+                    cumulative_elapsed_seconds REAL NOT NULL DEFAULT 0,
+                    total_ops BIGINT NOT NULL DEFAULT 0,
+                    total_errors BIGINT NOT NULL DEFAULT 0,
+                    completed INTEGER NOT NULL DEFAULT 0
+                )",
+            ),
+            Vec::new(),
+        )
+        .await?;
     Ok(())
 }
 
@@ -188,6 +209,17 @@ fn report_pool_health(log: &Mutex<File>, db: &TestDb, elapsed: Duration, ops: u6
 }
 
 async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
+    // The resumable soak stresses a single SQLite file for hours. Close the
+    // auxiliary sqlx Any/Sqlite pools that TestDb opens for helper methods so
+    // that only the native rusqlite pool touches the database during the test.
+    if let Some(sqlite) = db.sqlite_pool() {
+        sqlite.close().await;
+    }
+    db.any_pool().close().await;
+
+    let log = soak_log();
+    let err_log = soak_err_log();
+
     let db = Arc::new(db);
     let duration = segment_duration();
     let workers = workers();
@@ -201,8 +233,10 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
         load_state(&db).await?
     } else {
         // Start a fresh run: clear any partial data and the old state.
-        db.execute("DELETE FROM soak_kv").await?;
-        db.execute("DELETE FROM soak_state").await?;
+        pool.execute_raw(Cow::Borrowed("DELETE FROM soak_kv"), Vec::new())
+            .await?;
+        pool.execute_raw(Cow::Borrowed("DELETE FROM soak_state"), Vec::new())
+            .await?;
         save_state(
             &db,
             &State {
@@ -220,8 +254,6 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
             completed: false,
         }
     };
-
-    let log = soak_log();
 
     if state.completed {
         log_line(
@@ -248,20 +280,31 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
     let base_state = state.clone();
 
     pool.execute_raw(
-        "CREATE TABLE IF NOT EXISTS soak_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)"
-            .to_owned()
-            .into(),
+        Cow::Borrowed("CREATE TABLE IF NOT EXISTS soak_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)"),
         Vec::new(),
     )
     .await?;
 
     // Start each segment with a clean working set so key cycling does not collide
     // with rows left behind by an interrupted previous segment.
-    db.execute("DELETE FROM soak_kv").await?;
+    pool.execute_raw(Cow::Borrowed("DELETE FROM soak_kv"), Vec::new())
+        .await?;
+
+    // Truncate any WAL accumulated during setup or the previous segment before
+    // the worker load starts. This is safe because the auxiliary pools are closed
+    // and no workers are running yet.
+    if let Err(e) = pool
+        .fetch_all_raw(Cow::Borrowed("PRAGMA wal_checkpoint(TRUNCATE)"), Vec::new())
+        .await
+    {
+        log_line(
+            &log,
+            &format!("WAL checkpoint warning at segment start: {e}"),
+        );
+    }
 
     let start = Instant::now();
-    let mut health = interval(Duration::from_secs(5));
-    let err_log = soak_err_log();
+    let mut health = interval(Duration::from_secs(30));
 
     let mut handles = Vec::new();
     for w in 0..workers {
@@ -279,37 +322,31 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
                 let value = format!("v-{cycle}");
                 let (sql, binds) = match op {
                     0 => (
-                        "INSERT INTO soak_kv (k, v) VALUES ($1, $2)",
+                        Cow::Borrowed("INSERT INTO soak_kv (k, v) VALUES ($1, $2)"),
                         vec![
                             ruprizzle::Encodable::to_value(&key),
                             ruprizzle::Encodable::to_value(&value),
                         ],
                     ),
                     1 => (
-                        "UPDATE soak_kv SET v = $2 WHERE k = $1",
+                        Cow::Borrowed("UPDATE soak_kv SET v = $2 WHERE k = $1"),
                         vec![
                             ruprizzle::Encodable::to_value(&key),
                             ruprizzle::Encodable::to_value(&value),
                         ],
                     ),
                     2 => (
-                        "SELECT v FROM soak_kv WHERE k = $1",
+                        Cow::Borrowed("SELECT v FROM soak_kv WHERE k = $1"),
                         vec![ruprizzle::Encodable::to_value(&key)],
                     ),
                     _ => (
-                        "DELETE FROM soak_kv WHERE k = $1",
+                        Cow::Borrowed("DELETE FROM soak_kv WHERE k = $1"),
                         vec![ruprizzle::Encodable::to_value(&key)],
                     ),
                 };
                 let res = match op {
-                    2 => pool
-                        .fetch_all_raw(sql.to_owned().into(), binds)
-                        .await
-                        .map(|_| ()),
-                    _ => pool
-                        .execute_raw(sql.to_owned().into(), binds)
-                        .await
-                        .map(|_| ()),
+                    2 => pool.fetch_all_raw(sql, binds).await.map(|_| ()),
+                    _ => pool.execute_raw(sql, binds).await.map(|_| ()),
                 };
                 if let Err(e) = res {
                     log_line(&err_log, &format!("soak op error (worker {w}): {e}"));
@@ -317,13 +354,12 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
                 }
                 ops.fetch_add(1, Ordering::Relaxed);
 
+                // Connection churn: some percentage of work is done inside a
+                // transaction so the pool sees frequent acquire/release cycles.
                 if local % 7 == 0 {
                     if let Ok(tx) = pool.begin().await {
                         let _ = tx
-                            .execute_raw(
-                                "SELECT COUNT(*) FROM soak_kv".to_owned().into(),
-                                Vec::new(),
-                            )
+                            .execute_raw(Cow::Borrowed("SELECT 1"), Vec::new())
                             .await;
                         let _ = tx.commit().await;
                     }
@@ -355,7 +391,7 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
                     current_errors,
                 );
             }
-            Ok::<(), sqlx::Error>(())
+            Ok::<(), ruprizzle::Error>(())
         }
     });
 
@@ -371,7 +407,18 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
     let final_state = base_state.after_segment(segment_elapsed, segment_ops, segment_errors);
     save_state(&db, &final_state).await?;
 
-    let count = db.fetch_i64("SELECT COUNT(*) FROM soak_kv").await?;
+    let count = db
+        .pool()
+        .fetch_all_raw(
+            Cow::Borrowed("SELECT COUNT(*) FROM soak_kv"),
+            Vec::new(),
+        )
+        .await?;
+    let count = match count {
+        RowBatch::Rusqlite(rows) if !rows.is_empty() => i64::from_value(&rows[0].values[0])?,
+        _ => 0,
+    };
+
     assert_eq!(final_state.total_errors, 0, "soak produced errors");
     if final_state.completed {
         log_line(

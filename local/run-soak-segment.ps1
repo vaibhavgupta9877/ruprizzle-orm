@@ -17,7 +17,9 @@ $dbPath = Join-Path $soakDir "soak-rusqlite.db"
 New-Item -ItemType Directory -Force -Path $soakDir | Out-Null
 
 if (-not $env:RUPRIZZLE_SOAK_WORKERS) { $env:RUPRIZZLE_SOAK_WORKERS = "8" }
-if (-not $env:RUPRIZZLE_SOAK_DURATION_SECONDS) { $env:RUPRIZZLE_SOAK_DURATION_SECONDS = "21600" }
+# 1-hour segments bound WAL growth and give the start-of-segment TRUNCATE checkpoint
+# frequent, small work units.
+if (-not $env:RUPRIZZLE_SOAK_DURATION_SECONDS) { $env:RUPRIZZLE_SOAK_DURATION_SECONDS = "3600" }
 
 $env:RUPRIZZLE_TEST_RUSQLITE = "1"
 $env:RUST_BACKTRACE = "1"

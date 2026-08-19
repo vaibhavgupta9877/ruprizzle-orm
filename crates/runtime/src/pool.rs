@@ -71,7 +71,7 @@ impl Pool {
             Pool::Sqlite(p) => p.size(),
             Pool::Mysql(p) => p.size(),
             #[cfg(feature = "sqlite-rusqlite")]
-            Pool::SqliteNative(_) => 0,
+            Pool::SqliteNative(p) => p.num_total() as u32,
             #[cfg(feature = "postgres-tokio-postgres")]
             Pool::PostgresNative(p) => p.size(),
         }
@@ -86,7 +86,7 @@ impl Pool {
             Pool::Sqlite(p) => p.num_idle(),
             Pool::Mysql(p) => p.num_idle(),
             #[cfg(feature = "sqlite-rusqlite")]
-            Pool::SqliteNative(_) => 0,
+            Pool::SqliteNative(p) => p.num_idle(),
             #[cfg(feature = "postgres-tokio-postgres")]
             Pool::PostgresNative(p) => p.num_idle(),
         }
@@ -100,6 +100,8 @@ impl Pool {
         match self {
             #[cfg(feature = "postgres-tokio-postgres")]
             Pool::PostgresNative(p) => p.num_waiters(),
+            #[cfg(feature = "sqlite-rusqlite")]
+            Pool::SqliteNative(p) => p.num_waiters(),
             _ => 0,
         }
     }

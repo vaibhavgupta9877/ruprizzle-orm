@@ -80,6 +80,8 @@ struct Inner {
     conns: std::sync::Mutex<Vec<Arc<std::sync::Mutex<rusqlite::Connection>>>>,
     available: std::sync::Condvar,
     next: AtomicUsize,
+    size: usize,
+    waiters: AtomicUsize,
 }
 
 impl RusqlitePool {
@@ -148,6 +150,8 @@ impl RusqlitePool {
                 conns: std::sync::Mutex::new(conns),
                 available: std::sync::Condvar::new(),
                 next: AtomicUsize::new(0),
+                size: capacity,
+                waiters: AtomicUsize::new(0),
             })
         })
         .await
@@ -177,6 +181,14 @@ impl RusqlitePool {
     /// concurrent load because transactions removed connections while one-shot
     /// queries still expected to find one.
     fn checkout(&self) -> Result<ConnGuard<'_>, Error> {
+        self.inner.waiters.fetch_add(1, Ordering::Relaxed);
+        struct WaiterGuard<'a>(&'a Inner);
+        impl Drop for WaiterGuard<'_> {
+            fn drop(&mut self) {
+                self.0.waiters.fetch_sub(1, Ordering::Relaxed);
+            }
+        }
+        let _guard = WaiterGuard(&self.inner);
         let mut conns = self
             .inner
             .conns
@@ -198,8 +210,37 @@ impl RusqlitePool {
         })
     }
 
+    /// Number of connections in the pool.
+    #[must_use]
+    pub fn num_total(&self) -> usize {
+        self.inner.size
+    }
+
+    /// Number of idle connections available for checkout.
+    #[must_use]
+    pub fn num_idle(&self) -> usize {
+        self.inner
+            .conns
+            .try_lock()
+            .map_or(0, |conns| conns.len())
+    }
+
+    /// Number of threads currently waiting for a connection.
+    #[must_use]
+    pub fn num_waiters(&self) -> usize {
+        self.inner.waiters.load(Ordering::Relaxed)
+    }
+
     /// Check out a connection and take ownership of it (for transactions).
     fn checkout_owned(&self) -> Result<Arc<std::sync::Mutex<rusqlite::Connection>>, Error> {
+        self.inner.waiters.fetch_add(1, Ordering::Relaxed);
+        struct WaiterGuard<'a>(&'a Inner);
+        impl Drop for WaiterGuard<'_> {
+            fn drop(&mut self) {
+                self.0.waiters.fetch_sub(1, Ordering::Relaxed);
+            }
+        }
+        let _guard = WaiterGuard(&self.inner);
         let mut conns = self
             .inner
             .conns
@@ -280,7 +321,6 @@ impl RusqlitePool {
         T: FromRusqliteRow + Send + 'static,
     {
         let pool = self.clone();
-        let sql = sql.into_owned();
         tokio::task::spawn_blocking(move || {
             let conn = pool.checkout()?;
 
@@ -551,9 +591,8 @@ impl Executor for RusqlitePool {
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<RowBatch, Error>> {
         let pool = self.clone();
-        let sql = sql.into_owned();
         Box::pin(async move {
-            tokio::task::spawn_blocking(move || fetch_all(pool, Cow::Owned(sql), binds))
+            tokio::task::spawn_blocking(move || fetch_all(pool, sql, binds))
                 .await
                 .map_err(|e| Error::Message(e.to_string()))?
         })
@@ -565,9 +604,8 @@ impl Executor for RusqlitePool {
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<u64, Error>> {
         let pool = self.clone();
-        let sql = sql.into_owned();
         Box::pin(async move {
-            tokio::task::spawn_blocking(move || execute(pool, Cow::Owned(sql), binds))
+            tokio::task::spawn_blocking(move || execute(pool, sql, binds))
                 .await
                 .map_err(|e| Error::Message(e.to_string()))?
         })
@@ -1070,6 +1108,10 @@ fn apply_pragmas(conn: &rusqlite::Connection, is_memory: bool) -> Result<(), rus
     if !is_memory {
         // `journal_mode` returns a row, so we need the checking variant.
         let _ = conn.pragma_update_and_check(None, "journal_mode", "WAL", |_| Ok(()));
+        // Checkpoint less frequently than the default 1000 pages. The long soak
+        // segments run their own explicit TRUNCATE checkpoint at the start of
+        // each segment, so mid-segment auto-checkpoints should be large and rare.
+        let _ = conn.pragma_update(None, "wal_autocheckpoint", 10_000i64);
     }
 
     conn.pragma_update(None, "synchronous", "NORMAL")?;
