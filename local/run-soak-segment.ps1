@@ -5,7 +5,7 @@
 # exists, the script resumes; otherwise it starts a fresh segment.
 #
 # Usage:
-#   .\local\run-soak-segment.ps1                    # run one 6-hour segment
+#   .\local\run-soak-segment.ps1                    # run one 1-hour segment
 #   $env:RUPRIZZLE_SOAK_DURATION_SECONDS=3600; .\local\run-soak-segment.ps1
 
 $ErrorActionPreference = "Stop"
