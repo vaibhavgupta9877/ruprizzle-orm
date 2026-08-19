@@ -108,32 +108,46 @@ struct State {
     completed: bool,
 }
 
-async fn load_state(db: &TestDb) -> State {
+impl State {
+    fn after_segment(&self, elapsed: f64, ops: u64, errors: u64) -> Self {
+        let total_ops = self.total_ops + ops as i64;
+        let total_errors = self.total_errors + errors as i64;
+        let cumulative_elapsed = self.cumulative_elapsed + elapsed;
+        Self {
+            cumulative_elapsed,
+            total_ops,
+            total_errors,
+            completed: cumulative_elapsed >= TARGET_CUMULATIVE_SECONDS && total_errors == 0,
+        }
+    }
+}
+
+async fn load_state(db: &TestDb) -> sqlx::Result<State> {
     let row = query(
         "SELECT cumulative_elapsed_seconds, total_ops, total_errors, completed FROM soak_state WHERE id = ?",
     )
     .bind(STATE_ID)
     .fetch_optional(db.any_pool())
-    .await;
+    .await?;
 
     match row {
-        Ok(Some(row)) => State {
+        Some(row) => Ok(State {
             cumulative_elapsed: row.try_get::<f64, _>(0).unwrap_or(0.0),
             total_ops: row.try_get::<i64, _>(1).unwrap_or(0),
             total_errors: row.try_get::<i64, _>(2).unwrap_or(0),
             completed: row.try_get::<i32, _>(3).unwrap_or(0) != 0,
-        },
-        _ => State {
+        }),
+        None => Ok(State {
             cumulative_elapsed: 0.0,
             total_ops: 0,
             total_errors: 0,
             completed: false,
-        },
+        }),
     }
 }
 
-async fn save_state(db: &TestDb, state: &State) {
-    let _ = query(
+async fn save_state(db: &TestDb, state: &State) -> sqlx::Result<()> {
+    query(
         "INSERT OR REPLACE INTO soak_state (id, cumulative_elapsed_seconds, total_ops, total_errors, completed) VALUES (?, ?, ?, ?, ?)",
     )
     .bind(STATE_ID)
@@ -142,21 +156,22 @@ async fn save_state(db: &TestDb, state: &State) {
     .bind(state.total_errors)
     .bind(if state.completed { 1 } else { 0 })
     .execute(db.any_pool())
-    .await;
+    .await?;
+    Ok(())
 }
 
-async fn init_state_table(db: &TestDb) {
-    let _ = db
-        .execute(
-            "CREATE TABLE IF NOT EXISTS soak_state (
-                id INTEGER PRIMARY KEY,
-                cumulative_elapsed_seconds REAL NOT NULL DEFAULT 0,
-                total_ops BIGINT NOT NULL DEFAULT 0,
-                total_errors BIGINT NOT NULL DEFAULT 0,
-                completed INTEGER NOT NULL DEFAULT 0
-            )",
-        )
-        .await;
+async fn init_state_table(db: &TestDb) -> sqlx::Result<()> {
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS soak_state (
+            id INTEGER PRIMARY KEY,
+            cumulative_elapsed_seconds REAL NOT NULL DEFAULT 0,
+            total_ops BIGINT NOT NULL DEFAULT 0,
+            total_errors BIGINT NOT NULL DEFAULT 0,
+            completed INTEGER NOT NULL DEFAULT 0
+        )",
+    )
+    .await?;
+    Ok(())
 }
 
 fn report_pool_health(log: &Mutex<File>, db: &TestDb, elapsed: Duration, ops: u64, errors: u64) {
@@ -180,14 +195,14 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
     let ops = Arc::new(AtomicU64::new(0));
     let errors = Arc::new(AtomicU64::new(0));
 
-    init_state_table(&db).await;
+    init_state_table(&db).await?;
 
-    let mut state = if is_resume() {
-        load_state(&db).await
+    let state = if is_resume() {
+        load_state(&db).await?
     } else {
         // Start a fresh run: clear any partial data and the old state.
-        let _ = db.execute("DELETE FROM soak_kv").await;
-        let _ = db.execute("DELETE FROM soak_state").await;
+        db.execute("DELETE FROM soak_kv").await?;
+        db.execute("DELETE FROM soak_state").await?;
         save_state(
             &db,
             &State {
@@ -197,7 +212,7 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
                 completed: false,
             },
         )
-        .await;
+        .await?;
         State {
             cumulative_elapsed: 0.0,
             total_ops: 0,
@@ -230,7 +245,7 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
         return Ok(());
     }
 
-    let base_cumulative = state.cumulative_elapsed;
+    let base_state = state.clone();
 
     pool.execute_raw(
         "CREATE TABLE IF NOT EXISTS soak_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)"
@@ -242,7 +257,7 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
 
     // Start each segment with a clean working set so key cycling does not collide
     // with rows left behind by an interrupted previous segment.
-    let _ = db.execute("DELETE FROM soak_kv").await;
+    db.execute("DELETE FROM soak_kv").await?;
 
     let start = Instant::now();
     let mut health = interval(Duration::from_secs(5));
@@ -317,61 +332,56 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
         }));
     }
 
+    let reporter_base = base_state.clone();
     let reporter = tokio::spawn({
         let db = Arc::clone(&db);
         let ops = Arc::clone(&ops);
         let errors = Arc::clone(&errors);
         let log = Arc::clone(&log);
-        let mut state = state.clone();
         async move {
             while start.elapsed() < duration {
                 health.tick().await;
                 let segment_elapsed = start.elapsed().as_secs_f64();
                 let current_ops = ops.load(Ordering::Relaxed);
                 let current_errors = errors.load(Ordering::Relaxed);
-                state.cumulative_elapsed = base_cumulative + segment_elapsed;
-                state.total_ops = current_ops as i64;
-                state.total_errors = current_errors as i64;
-                save_state(&db, &state).await;
+                let checkpoint_state =
+                    reporter_base.after_segment(segment_elapsed, current_ops, current_errors);
+                save_state(&db, &checkpoint_state).await?;
                 report_pool_health(
                     &log,
                     &db,
-                    Duration::from_secs_f64(state.cumulative_elapsed),
+                    Duration::from_secs_f64(checkpoint_state.cumulative_elapsed),
                     current_ops,
                     current_errors,
                 );
             }
+            Ok::<(), sqlx::Error>(())
         }
     });
 
     for h in handles {
         h.await.expect("worker panic");
     }
-    reporter.abort();
+    reporter.await??;
 
     let segment_elapsed = start.elapsed().as_secs_f64();
     let segment_ops = ops.load(Ordering::Relaxed);
     let segment_errors = errors.load(Ordering::Relaxed);
 
-    // Final state update. If the segment was interrupted before this point, the
-    // last 5-second health tick already persisted the state, so only the last few
-    // seconds are lost.
-    state.cumulative_elapsed = base_cumulative + segment_elapsed;
-    state.total_ops = segment_ops as i64;
-    state.total_errors = segment_errors as i64;
-
-    let reached_target = state.cumulative_elapsed >= TARGET_CUMULATIVE_SECONDS;
-    state.completed = reached_target;
-    save_state(&db, &state).await;
+    let final_state = base_state.after_segment(segment_elapsed, segment_ops, segment_errors);
+    save_state(&db, &final_state).await?;
 
     let count = db.fetch_i64("SELECT COUNT(*) FROM soak_kv").await?;
-    assert_eq!(state.total_errors, 0, "soak produced errors");
-    if reached_target {
+    assert_eq!(final_state.total_errors, 0, "soak produced errors");
+    if final_state.completed {
         log_line(
             &log,
             &format!(
                 "soak finished: cumulative_elapsed={:.3}s ops={} errors={} rows={}",
-                state.cumulative_elapsed, state.total_ops, state.total_errors, count
+                final_state.cumulative_elapsed,
+                final_state.total_ops,
+                final_state.total_errors,
+                count
             ),
         );
     } else {
@@ -379,7 +389,10 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
             &log,
             &format!(
                 "soak segment finished: cumulative_elapsed={:.3}s ops={} errors={} rows={}; rerun with RUPRIZZLE_SOAK_RESUME=1",
-                state.cumulative_elapsed, state.total_ops, state.total_errors, count
+                final_state.cumulative_elapsed,
+                final_state.total_ops,
+                final_state.total_errors,
+                count
             ),
         );
     }
@@ -388,6 +401,7 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
 }
 
 #[tokio::test]
+#[ignore = "48-hour gate; run explicitly through local/run-soak-segment.ps1"]
 async fn soak_rusqlite_resumable_48h() {
     // Ensure the runner set a workspace-local DB path. If not, the test aborts
     // with a clear message rather than silently using a temp directory on C:.
@@ -407,4 +421,32 @@ async fn soak_rusqlite_resumable_48h() {
     mixed_load(db)
         .await
         .expect("resumable soak should not fail if no errors occurred");
+}
+
+#[test]
+fn resumed_segment_accumulates_totals() {
+    let base = State {
+        cumulative_elapsed: 60.0,
+        total_ops: 2_380_049,
+        total_errors: 0,
+        completed: false,
+    };
+    let next = base.after_segment(30.0, 1_000, 0);
+    assert_eq!(next.cumulative_elapsed, 90.0);
+    assert_eq!(next.total_ops, 2_381_049);
+    assert_eq!(next.total_errors, 0);
+    assert!(!next.completed);
+}
+
+#[test]
+fn resumed_segment_never_erases_errors() {
+    let base = State {
+        cumulative_elapsed: 60.0,
+        total_ops: 100,
+        total_errors: 2,
+        completed: false,
+    };
+    let next = base.after_segment(30.0, 100, 0);
+    assert_eq!(next.total_errors, 2);
+    assert!(!next.completed);
 }

@@ -34,4 +34,4 @@ if (Test-Path $dbPath) {
 
 Set-Location $workspace
 
-cargo test -p ruprizzle --test soak_resumable --features "sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite" --release -- soak_rusqlite_resumable_48h --nocapture
+cargo test -p ruprizzle --test soak_resumable --features "sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite" --release -- --ignored --exact soak_rusqlite_resumable_48h --nocapture
