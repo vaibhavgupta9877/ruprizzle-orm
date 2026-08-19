@@ -536,55 +536,10 @@ impl Executor for Pool {
     }
 
     fn stream_unbuffered_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
-        let sql: &'static str = match sql {
-            Cow::Borrowed(s) => s,
-            Cow::Owned(s) => Box::leak(s.into_boxed_str()),
-        };
-        let binds: &'static [Value] = Box::leak(binds.into_boxed_slice());
-
         match self {
-            Pool::Any(p) => {
-                let mut q = sqlx::query::<sqlx::Any>(sql);
-                for bind in binds {
-                    q = q.bind(bind);
-                }
-                Box::pin(futures_util::StreamExt::map(q.fetch(p), |r| {
-                    r.map(RawRow::Any).map_err(Error::from)
-                }))
-            }
-            Pool::Postgres(p) => {
-                let mut q = sqlx::query::<sqlx::Postgres>(sql);
-                for bind in binds {
-                    q = q.bind(bind);
-                }
-                Box::pin(futures_util::StreamExt::map(q.fetch(p), |r| {
-                    r.map(RawRow::Postgres).map_err(Error::from)
-                }))
-            }
-            Pool::Sqlite(p) => {
-                let mut q = sqlx::query::<sqlx::Sqlite>(sql);
-                for bind in binds {
-                    q = q.bind(bind);
-                }
-                Box::pin(futures_util::StreamExt::map(q.fetch(p), |r| {
-                    r.map(RawRow::Sqlite).map_err(Error::from)
-                }))
-            }
-            Pool::Mysql(p) => {
-                let mut q = sqlx::query::<sqlx::MySql>(sql);
-                for bind in binds {
-                    q = q.bind(bind);
-                }
-                Box::pin(futures_util::StreamExt::map(q.fetch(p), |r| {
-                    r.map(RawRow::Mysql).map_err(Error::from)
-                }))
-            }
-            #[cfg(feature = "sqlite-rusqlite")]
-            Pool::SqliteNative(p) => Executor::stream_raw(p, Cow::Borrowed(sql), binds.to_vec()),
             #[cfg(feature = "postgres-tokio-postgres")]
-            Pool::PostgresNative(p) => {
-                Executor::stream_unbuffered_raw(p, Cow::Borrowed(sql), binds.to_vec())
-            }
+            Pool::PostgresNative(p) => Executor::stream_unbuffered_raw(p, sql, binds),
+            _ => self.stream_raw(sql, binds),
         }
     }
 }

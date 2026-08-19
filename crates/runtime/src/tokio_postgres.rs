@@ -214,11 +214,7 @@ impl Executor for TokioPostgresPool {
     }
 
     fn stream_unbuffered_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
-        let sql: &'static str = match sql {
-            Cow::Borrowed(s) => s,
-            Cow::Owned(s) => Box::leak(s.into_boxed_str()),
-        };
-        let binds: &'static [Value] = Box::leak(binds.into_boxed_slice());
+        let sql = sql.into_owned();
         let pool = self.clone();
 
         Box::pin(futures_util::stream::unfold(
@@ -240,7 +236,7 @@ impl Executor for TokioPostgresPool {
                                 ));
                             }
                         };
-                        let row_stream = match client.query_raw(sql, binds).await {
+                        let row_stream = match client.query_raw(&sql, &binds).await {
                             Ok(s) => s,
                             Err(e) => return Some((Err(Error::from(e)), (sql, binds, None))),
                         };

@@ -86,7 +86,7 @@ On SQLite, enable the `sqlite-rusqlite` feature and connect with
 `?driver=rusqlite` in the URL. This bypasses `sqlx::Any` text marshalling for
 `Uuid`, `Decimal`, `DateTime`, `Date`, `Time` and `Json` and decodes them from
 the native SQLite value directly. It is still stored as text in the database, so
-exact `Decimal` arithmetic should use `Int` minor units or a PostgreSQL backend.
+exact `Decimal` arithmetic should use `Int` minor units or a PostgreSQL backend. The synchronous `rusqlite` call is offloaded to `tokio::task::spawn_blocking` so it does not pin the async runtime's worker threads; this trades a small per-call dispatch cost for runtime responsiveness.
 
 In a real workload with rich types the gap between ruprizzle and hand-written
 sqlx is expected to be dominated by the ORM decode path, not by driver
