@@ -208,3 +208,33 @@ cycles. The planned 48-hour run should also include a forced database restart
 or `Pool::close()`/`connect_with()` cycle mid-run to verify that the pool
 recovers and that in-flight work receives a clean `AcquireTimeout` or
 `ConnectionFailure` rather than a panic.
+
+## 48-hour run — terminated at ~11 hours
+
+The 48-hour `rusqlite` run started on 2026-08-18 14:50 UTC stopped before
+completion. The last health line in `logs/soak-48h-rusqlite.err` was:
+
+```text
+soak health: elapsed=40215.0007672s ops=889382385 errors=2 size=0 idle=0 in_use=0 waiters=0 memory_bytes=6320128
+```
+
+That is approximately **11 h 10 m** and **889 M operations**. The test process
+(`soak-9c6b6ecac4cbf8a3.exe`, PID 31040) was no longer running at
+2026-08-19 ~02:00 UTC, and the log does not contain a `soak finished` or
+test-result line, so the run did not complete cleanly.
+
+Approximately two hours into the run (`elapsed=8520s`), the harness recorded two
+`soak op error: disk I/O error` events and a thread panic while printing to
+stderr:
+
+```text
+soak op error: disk I/O error
+thread 'soak_mixed_load_with_connection_churn::sqlite' (36088) panicked at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\io\stdio.rs:1165:9:
+failed printing to stderr: Insufficient system resources exist to complete the requested service. (os error 1450)
+soak op error: disk I/O error
+```
+
+The error count remained at 2 for the remaining ~9 hours of the run, but the
+premature termination and the I/O / system-resource events mean this is **not**
+a passing 48-hour gate. The root cause must be investigated and a new 48-hour
+run completed before the W4-02 exit gate is satisfied.

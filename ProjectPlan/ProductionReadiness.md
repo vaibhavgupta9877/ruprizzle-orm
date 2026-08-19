@@ -1,4 +1,4 @@
-> **Note (2026-08-18):** This assessment is a historical snapshot of `0.1.1-beta.1` at `7636f44`. The repository has since moved to `1.0.0-rc.1` and most of the findings below have been addressed. A reassessment for the `1.0.0-rc.1` candidate is in §11.
+> **Note (2026-08-18):** This assessment is a historical snapshot of `0.1.1-beta.1` at `7636f44`. The repository has since moved to `1.0.0-rc.1` and most of the findings below have been addressed. A reassessment for the `1.0.0-rc.1` candidate is in §11; the latest live reassessment is in §12.
 
 # Production Readiness Assessment — ruprizzle-orm
 
@@ -251,5 +251,67 @@ status, and every `schema.ruprizzle` file in the repository (`examples/*/schema.
 ### Remaining v1.0.0 blockers
 
 1. Complete the 48-hour `rusqlite` soak (W4-02) and record final results in `docs/SoakReport.md`.
+2. Cut the `1.0.0-rc.1` tag, publish to crates.io, and run the minimum two-week feedback window (W6-04).
+3. Re-score production readiness against the live RC, targeting ≥ 92/100 (W6-05).
+
+---
+
+## 12. Live reassessment against `1.0.0-rc.1`
+
+**Version assessed:** `1.0.0-rc.1`  
+**Date:** 2026-08-19  
+**Assessor:** Devin (live build, lint, doc, deny, harden, soak log review)  
+**Scope:** ORM workspace, all driver paths, release automation, documentation, and the live 48-hour soak status.
+
+### Verdict
+
+| Axis | Score | Grade |
+|---|---|---|
+| **Production readiness** | **84 / 100** | **B — mechanically green, but the 48-hour soak failed to complete; not ready to publish** |
+| Engineering craft | 90 / 100 | A− |
+
+The mechanical release gates are still green at HEAD. `cargo fmt`, `cargo clippy`, `cargo doc`, `cargo deny check advisories`, and `cargo xtask harden` all pass, and the test suite is clean. However, the 48-hour native `rusqlite` soak that was started on 2026-08-18 14:50 UTC stopped before completion. The last health line in `logs/soak-48h-rusqlite.err` is at `elapsed=40215.0007672s` (~11 h 10 m, ~889 M operations, 2 errors), and the test process was no longer running at 2026-08-19 ~02:00 UTC. The log does not contain a `soak finished` or `test ... ok` line, so W4-02 is not satisfied.
+
+Earlier in the run, at approximately `elapsed=8520s` (~2 h 22 m), the harness recorded two `soak op error: disk I/O error` events and a thread panic while printing to stderr:
+
+```text
+soak op error: disk I/O error
+thread 'soak_mixed_load_with_connection_churn::sqlite' (36088) panicked at /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\std\src\io\stdio.rs:1165:9:
+failed printing to stderr: Insufficient system resources exist to complete the requested service. (os error 1450)
+soak op error: disk I/O error
+```
+
+The error count remained at 2 for the rest of the run, but the premature termination and the I/O / system-resource events mean the `rusqlite` backend has not been validated for 48-hour sustained use. Until a clean 48-hour run is completed and the root cause of the `os error 1450` / `disk I/O error` events is understood, the release gates are not met.
+
+### Scorecard
+
+| # | Dimension | Weight | Score | Rationale |
+|---|---|---|---|---|
+| 1 | Correctness & testing | 20% | **8.0** | `cargo test --workspace` (via `cargo xtask harden`) passes. 60-second and 1-hour `rusqlite` soaks remain clean. The 48-hour soak did not complete cleanly: it stopped at ~11 h with 2 `disk I/O error` operations and an `os error 1450` panic. W4-02 not met. |
+| 2 | Security | 15% | 9.0 | Parameterised binding, `forbid(unsafe_code)`, `xtask harden`, `cargo-deny`, Dependabot, `SECURITY.md`. `RUSTSEC-2023-0071` exception documented for `rsa` via `sqlx-mysql`. |
+| 3 | Operability & observability | 15% | 7.5 | Tracing, slow-query events, `PoolStats`, migrations checksums/locking. No Prometheus/OTel exporter yet. |
+| 4 | Data safety & migrations | 15% | 8.5 | Transactional migrations, drift detection, destructive gating, `db pull`, `db seed`. |
+| 5 | Architecture & design | 10% | 9.0 | Layered query builder, native and `sqlx` driver paths, explicit joins, CTEs, set ops, batched `include`. |
+| 6 | CI/CD & release engineering | 10% | 8.0 | `release.yml`, `xtask harden`, `cargo fmt`, `clippy`, `doc`, and `deny` are green. The 48-hour soak gate is not satisfied. |
+| 7 | Documentation | 5% | 9.0 | ADRs, `KnownLimitations`, `SoakReport`, `FeaturesMasterComparison` current. |
+| 8 | API stability & semver | 5% | 8.0 | Version `1.0.0-rc.1`; `cargo-semver-checks` in CI; `Stability.md` documented. RC feedback window not run. |
+| 9 | Performance | 5% | **7.5** | Benchmarks show parity, but the long-haul `rusqlite` run exposed uncharacterized I/O / system-resource errors, so sustained performance is not yet validated. |
+
+**Weighted total: 8.375 / 10 → 84 / 100.**
+
+### Verification performed
+
+| Check | Command | Result |
+|---|---|---|
+| Format | `cargo fmt --all --check` | ✅ Clean |
+| Lint | `cargo clippy --workspace --all-targets -- -D warnings` | ✅ Clean |
+| Docs | `cargo doc --workspace --no-deps` | ✅ No warnings |
+| Harden | `cargo xtask harden` | ✅ Panic, arithmetic/indexing, injection, `cargo-deny` green |
+| Advisories | `cargo deny check advisories` | ✅ `advisories ok` |
+| Native rusqlite 48-hour | `logs/soak-48h-rusqlite.err` / `logs/soak-48h-rusqlite.log` | ❌ Terminated at `elapsed=40215 s` (~11 h 10 m), 2 `disk I/O error` ops, 1 `os error 1450` panic, no `soak finished` line |
+
+### Remaining v1.0.0 blockers
+
+1. **Re-run and complete a clean 48-hour `rusqlite` soak (W4-02).** Investigate the `disk I/O error` and `Insufficient system resources exist to complete the requested service. (os error 1450)` events before restarting.
 2. Cut the `1.0.0-rc.1` tag, publish to crates.io, and run the minimum two-week feedback window (W6-04).
 3. Re-score production readiness against the live RC, targeting ≥ 92/100 (W6-05).
