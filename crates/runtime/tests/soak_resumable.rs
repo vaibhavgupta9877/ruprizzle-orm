@@ -20,6 +20,7 @@
 //!   (default `local/soak-48h`).
 
 use std::borrow::Cow;
+use std::fmt::Write as _;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
@@ -314,12 +315,16 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
         let err_log = Arc::clone(&err_log);
         handles.push(tokio::spawn(async move {
             let mut local = 0u64;
+            let mut key = String::new();
+            let mut value = String::new();
             while start.elapsed() < duration {
                 local += 1;
                 let cycle = (local - 1) >> 2;
                 let op = (local - 1) & 3;
-                let key = format!("w{w}-k{cycle}");
-                let value = format!("v-{cycle}");
+                key.clear();
+                value.clear();
+                let _ = write!(key, "w{w}-k{cycle}");
+                let _ = write!(value, "v-{cycle}");
                 let (sql, binds) = match op {
                     0 => (
                         Cow::Borrowed("INSERT INTO soak_kv (k, v) VALUES ($1, $2)"),

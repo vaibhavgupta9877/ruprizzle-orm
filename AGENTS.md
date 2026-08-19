@@ -26,10 +26,13 @@
 
 - Run the native `rusqlite` soak test (resumable, segmented 48-hour gate):
   ```powershell
-  # One segment (6 hours by default; set RUPRIZZLE_SOAK_DURATION_SECONDS to override).
+  # One segment (1 hour by default; set RUPRIZZLE_SOAK_DURATION_SECONDS to override).
   .\local\run-soak-segment.ps1
 
-  # Repeat the above command until it prints `soak finished`.
+  # Repeat the above command until it prints `soak finished`, or run the loop
+  # that starts 1-hour segments back-to-back until completed.
+  .\local\run-soak-48h.ps1
+
   # State is kept in `local/soak-48h/soak-rusqlite.db`.
   ```
 
