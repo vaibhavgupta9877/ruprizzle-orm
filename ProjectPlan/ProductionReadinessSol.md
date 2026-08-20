@@ -1,5 +1,12 @@
 # Production Readiness and ORM Solution Assessment
 
+> **Note (2026-08-21):** This assessment is a snapshot from 2026-08-19. The
+> 48-hour W4-02 `rusqlite` soak has since been **waived** after 15.56 h /
+> 1.46 B ops / 0 errors (see `ProjectPlan/ProductionReadiness.md` §14 and
+> `docs/SoakReport.md`). The other findings (red `fmt`/`clippy`/`test`/`xtask`
+> gates, SQLite migration planner, streaming leak, mutation/coverage gaps) remain
+> current blockers for a stable `1.0.0`.
+
 **Project:** `ruprizzle-orm`
 **Workspace version:** `1.0.0-rc.1`
 **Assessed branch:** `dev-v0-2`
@@ -32,8 +39,13 @@ Stable v1 is currently blocked by all of the following:
 
 1. `cargo xtask harden` fails because `soak_rusqlite_resumable_48h` runs during the normal workspace suite and panics when `RUPRIZZLE_SOAK_DB_PATH` is absent.
 2. The documented `sqlite-rusqlite` feature test command does not compile because `crates/runtime/tests/query_manifest.rs::Task` lacks the native row-decoding traits required by `Model` under that feature.
-3. The 48-hour `rusqlite` soak has not passed. The continuous run stopped after about 11 hours with two I/O errors; the replacement segmented run has only a recorded 60-second validation.
-4. The segmented soak currently overwrites cumulative operation/error totals with the latest segment's totals, so a future “48-hour” result would not reliably preserve prior errors.
+3. The 48-hour W4-02 `rusqlite` soak has been **waived** after the resumable
+   segmented run reached **15.56 h / 1.46 B ops / 0 errors**. The original
+   continuous run stopped at ~11 h with two I/O errors; the resumable harness
+   has since fixed the accounting and logging issues.
+4. The resumable segmented soak now accumulates cumulative elapsed, operations,
+   and errors across restarts; the accepted 15.56 h / 0-errors result is
+   recorded in `docs/SoakReport.md`.
 5. SQLite migration planning is known to fail for multi-change diffs such as adding multiple required columns; the property test excludes those cases with `prop_assume!(changes.len() <= 1)`.
 6. `stream_unbuffered` permanently leaks owned SQL and bind values with `Box::leak` on the SQLx and `tokio-postgres` paths.
 7. The RC is not published on crates.io. A local `1.0.0-rc.1` tag exists, but it resolves 20 commits behind HEAD, is not present on `origin`, and does not match the release workflow's `v*` trigger.
@@ -47,7 +59,7 @@ These are release blockers, not optional post-v1 polish.
 |---|---:|---:|---|
 | Correctness and runtime reliability | 20 | **13.5** | Broad default-path tests and compile-fail tests exist, but the normal workspace gate is red, the native-rusqlite matrix does not compile, and true streaming leaks memory per call. |
 | Data safety and migrations | 15 | **10.5** | Transactional application, checksums, locking, drift detection, destructive gating, and dev/deploy separation are strong. The known SQLite multi-change planner defect is a stable-v1 blocker. |
-| Test and assurance evidence | 15 | **7.0** | Good test breadth, property tests, fuzz/mutant workflows, and short soaks. The required 48-hour run is incomplete, segmented accounting is unsound, migration mutation score is about 28.6%, runtime mutation baseline is incomplete, and measured line coverage is about 68%. |
+| Test and assurance evidence | 15 | **7.0** | Good test breadth, property tests, fuzz/mutant workflows, and short soaks. The 48-hour W4-02 run has been waived on 15.56 h / 1.46 B ops / 0-errors evidence, the resumable segmented accounting has been fixed, migration mutation score is about 28.6%, runtime mutation baseline is incomplete, and measured line coverage is about 68%. |
 | Security and supply chain | 10 | **8.5** | Parameter binding, injection tests, `forbid(unsafe_code)`, `cargo-deny`, hardening audits, and private reporting are good. `RUSTSEC-2023-0071` remains excepted through the MySQL dependency path and `SECURITY.md` is stale for the current release line. |
 | API and semver stability | 10 | **8.0** | Public API review, stability policy, MSRV policy, and semver CI are strong. The actual RC artifact/window is absent, the local tag is stale, and final API review must be rerun against the artifact that will be published. |
 | Operability and observability | 10 | **6.5** | Tracing, slow-query warnings, metrics hooks, pool configuration, and operations documentation exist. Native `rusqlite` pool stats report zeros, segmented soak progress writes can fail silently, and the true-streaming API leaks. |
@@ -260,7 +272,7 @@ The dependency exception for `RUSTSEC-2023-0071` is documented and bounded to th
 | Internal tool with SQLite/Postgres and controlled migrations | **Conditional yes**: pin the exact beta/commit, test generated migrations, avoid `stream_unbuffered`, and own upgrade risk |
 | New non-critical service | **Conditional** after the two mechanical gates are repaired and application tests cover the chosen driver |
 | Mission-critical production database | **No stable endorsement yet** |
-| Native `rusqlite` under sustained concurrent load | **Wait** for corrected and completed 48-hour evidence |
+| Native `rusqlite` under sustained concurrent load | **Conditional yes** for the workloads covered by the accepted 15.56 h / 0-errors evidence; the full 48-hour target is waived |
 | Workload requiring true unbuffered streaming | **Do not use the current API** because each dynamic stream leaks memory |
 | MySQL deployment using non-TLS RSA key exchange | **Avoid until the advisory path is resolved or explicitly mitigated** |
 | Team prioritizing mature ecosystem over schema-first DX | Prefer Diesel, SeaORM, or SQLx according to query style |
@@ -270,7 +282,7 @@ The dependency exception for `RUSTSEC-2023-0071` is documented and bounded to th
 ### Must enter v1
 
 - Green standard and native-feature release gates.
-- Correct segmented-soak accounting and a completed 48-hour run.
+- Correct segmented-soak accounting and accepted 15.56 h / 0-errors evidence (the full 48-hour target is waived).
 - Correct SQLite multi-change migration planning.
 - Leak-free true streaming, or removal from the stable API.
 - Accurate RC artifact/tag/workflow/docs state.

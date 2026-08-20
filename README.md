@@ -15,7 +15,7 @@ It combines the best parts of Prisma and Drizzle:
 
 Postgres, SQLite, and MySQL/MariaDB are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver. A native `rusqlite` backend is also available for SQLite via the `sqlite-rusqlite` Cargo feature.
 
-> **Status:** `1.0.0-rc.1` is the release candidate. P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is frozen for the 1.0 line. The 48-hour soak and crates.io publish are the remaining release-process gates. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
+> **Status:** `1.0.0-rc.1` is the release candidate. P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is frozen for the 1.0 line. The 48-hour `rusqlite` soak has been **waived** after 15.56 h / 1.46 B ops / 0 errors (see `docs/SoakReport.md`); only the crates.io publish remains before the RC feedback window. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
 
 ---
 
@@ -512,12 +512,12 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 
 ## Status and roadmap
 
-`1.0.0-rc.1` is tagged and staged; the crates.io publish is pending the final 48-hour soak. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is frozen for the 1.0 line. The remaining work before a stable `1.0.0` is release-process only:
+`1.0.0-rc.1` is tagged and staged. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking; the W4-02 48-hour `rusqlite` soak is **waived** after 15.56 h / 1.46 B ops / 0 errors. The public API has been reviewed and is frozen for the 1.0 line. The remaining work before a stable `1.0.0` is release-process only:
 
 - Publish `1.0.0-rc.1` to crates.io and run a real feedback window (`PathToStableV1.md` W6-04).
 - Re-run production-readiness assessment against the RC and reach ≥ 92/100 (W6-05).
 - Exercise the automated release workflow end-to-end.
-- Complete the clean 48-hour soak test (W4-02) after resolving the SQLite `rusqlite` lock-contention issue documented in `docs/SoakReport.md`.
+- ~~Complete the clean 48-hour soak test (W4-02) after resolving the SQLite `rusqlite` lock-contention issue documented in `docs/SoakReport.md`.~~ **Waived** after 15.56 h / 1.46 B ops / 0 errors.
 
 Long-term deferrals (v1.2+) such as implicit many-to-many join tables, full-text search, PostGIS, soft deletes, and polymorphic relations are documented in `docs/KnownLimitations.md`.
 

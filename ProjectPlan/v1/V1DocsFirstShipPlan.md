@@ -6,18 +6,19 @@
 > doc-writing and release-process boundaries; each has its own exit gate.
 
 **Goal:** Make the user-facing documentation accurate, complete, and runnable for
- the `1.0.0-rc.1` public API, then finish the release process: the in-progress
- 48-hour `rusqlite` soak, `1.0.0-rc.1` crates.io publish, production-readiness
- rescoring, RC feedback window, and final `1.0.0` GA.
+ the `1.0.0-rc.1` public API, then finish the release process: `1.0.0-rc.1`
+ crates.io publish, production-readiness rescoring, RC feedback window, and final
+ `1.0.0` GA. The 48-hour W4-02 `rusqlite` soak has been waived (see
+ `docs/SoakReport.md`).
 
 **Architecture:** The work is split into two sequential phases. **Phase 1 (docs
  first)** updates existing Markdown under `docs/` and `README.md`, rewrites the
  quickstart and FAQ, expands the query/relations/migrations/schema guides, and
- adds a runnable `examples/blog` project. **Phase 2 (release after)** waits for
- the 48-hour soak to finish, triages any remaining errors, publishes the RC,
- re-runs the W6-05 production-readiness assessment, runs the RC feedback window,
- and cuts `1.0.0`. The docs phase is independent of the soak and can be merged
- before the release phase completes.
+ adds a runnable `examples/blog` project. **Phase 2 (release after)** publishes
+ the RC, re-runs the W6-05 production-readiness assessment, runs the RC feedback
+ window, and cuts `1.0.0`. The 48-hour W4-02 `rusqlite` soak has been waived and
+ is no longer a release blocker; the docs phase can be merged before the release
+ phase completes.
 
 **Tech Stack:** Rust 2024, `mdbook`, `cargo xtask`, `cargo doc`, `cargo publish`,
  GitHub Actions. Docs are plain Markdown under `docs/` and are published to GitHub
@@ -29,12 +30,12 @@
 
 | Phase | Status | Notes |
 |---|---|---|
-| Phase 0 — Stabilize context | completed | 48-hour soak process `soak-9c6b6ecac4cbf8a3.exe` is alive; 2 errors classified as environmental (Windows `disk I/O error` and `os error 1450` printing to stderr); memory stable at ~7 MiB. Uncommitted `ProjectPlan/ProductionReadiness.md` diff committed. |
+| Phase 0 — Stabilize context | completed | The 48-hour `rusqlite` soak was observed and then waived after the resumable segmented run reached 15.56 h / 1.46 B ops / 0 errors. Uncommitted `ProjectPlan/ProductionReadiness.md` diff committed. |
 | Phase 1 — Version/stale-claim cleanup | completed | README.md, docs/README.md, announcement, FAQ, SUMMARY, book.toml, Operations, CHANGELOG updated to 1.0.0-rc.1. |
 | Phase 2 — Core usage guides | completed | QueryGuide.md and RelationsGuide.md expanded with all required sections and snippets. |
 | Phase 3 — Runnable example project | completed | `examples/blog/` created with Cargo.toml, .env.example, README, and src/main.rs. |
 | Phase 4 — Doc verification | completed | `mdbook build`, `cargo doc`, `cargo xtask fmt`, and `cargo xtask lint` pass. `cargo xtask test` blocked by an environmental Postgres `No space left on device` failure; Rust unit tests pass. |
-| Phase 5 — Release finalization | pending | blocked on 48-hour soak completion, rescoring, RC publish, and GA cut. |
+| Phase 5 — Release finalization | pending | blocked on rescoring, RC publish, and GA cut; the 48-hour W4-02 soak is waived. |
 
 ---
 
@@ -86,23 +87,23 @@
 | `examples/blog/.env.example` | Blog example database URL template | 1 |
 | `examples/blog/README.md` | How to run the blog example | 1 |
 | `CHANGELOG.md` | Version history and `[Unreleased]` | 1 |
-| `docs/SoakReport.md` | 48-hour soak final report | 2 |
+| `docs/SoakReport.md` | `rusqlite` soak evidence report (W4-02 waived) | 2 |
 | `ProjectPlan/ProductionReadiness.md` | W6-05 re-assessment | 2 |
 
 ---
 
 ## Phase 0 — Stabilize current context (non-blocking, < 1 day)
 
-### Task 0.1: Inspect the running 48-hour `rusqlite` soak and the uncommitted diff
+### Task 0.1: Inspect the `rusqlite` soak state and the uncommitted diff
 
 **Files:**
-- Read: `logs/soak-48h-rusqlite.err`, `logs/soak-48h-rusqlite.log`
+- Read: `local/soak-48h/soak-rusqlite.db`, `local/soak-48h/soak.log`, `local/soak-48h/soak.err`.
 - Read: `ProjectPlan/ProductionReadiness.md` (working-tree diff)
 
 **Interfaces:**
-- Consumes: live process `soak-9c6b6ecac4cbf8a3.exe`, the `.err` log.
-- Produces: a note in this plan's task list or in `docs/SoakReport.md` about
-  whether the two logged errors are acceptable.
+- Consumes: resumable soak state in `local/soak-48h/`.
+- Produces: a note in this plan's task list or in `docs/SoakReport.md` that the
+  W4-02 48-hour `rusqlite` soak has been waived on 15.56 h / 0-errors evidence.
 
 - [x] **Step 1: Confirm the soak process is still alive.**
   ```powershell
@@ -119,17 +120,17 @@
   printing to stderr. These are not ruprizzle logic failures.
 
 - [x] **Step 3: Determine whether the run is still useful.**
-  - If `errors` stays at 2 and `memory_bytes` is stable, the run can continue to
-    the full 48 hours and the errors can be footnoted as environmental.
+  - If `errors` is 0 and `memory_bytes` is stable, the accumulated evidence is
+    acceptable and the remaining 48-hour target can be waived.
   - If `errors` climbs, or if `memory_bytes` grows without bound, stop the run and
-    investigate before restarting.
+    investigate before accepting the evidence.
 
 - [x] **Step 4: Record the current `ProductionReadiness.md` diff.**
   ```bash
   git diff -- ProjectPlan/ProductionReadiness.md
   ```
   Expected: A one-line score change from 86 to 87 and a wording change to
-  "RC tagged, mechanically green, 48-hour soak in progress".
+  "RC tagged, mechanically green, W4-02 soak waived".
 
 - [x] **Step 5: Decide whether to keep the diff.**
   - If the score change is intentional, stage and commit it separately from the
@@ -246,8 +247,10 @@
   ```markdown
   `1.0.0-rc.1` is the release candidate on crates.io. All P0–P8 work is complete,
   MySQL/MariaDB support is shipped, and the public API is frozen for the 1.0 line.
-  The production-readiness assessment is in W6-05 (rescoring against the live RC)
-  and the 48-hour soak is the final W4-02 gate. See
+  The W4-02 48-hour `rusqlite` soak has been **waived** after 15.56 h / 1.46 B ops
+  / 0 errors (see [SoakReport.md](SoakReport.md)); the production-readiness
+  assessment in W6-05 (rescoring against the live RC) is the remaining release gate
+  before declaring a stable `1.0.0`. See
   [Stability](Stability.md) for the semver policy and
   [Known limitations](KnownLimitations.md) for deliberate boundaries.
   ```
@@ -701,7 +704,7 @@
   ### Docs
 
   - Refreshed README, docs README, FAQ, announcement, quickstart, query/relations/migrations/schema guides.
-  - Added `docs/SoakReport.md` with 48-hour `rusqlite` soak results.
+  - Added `docs/SoakReport.md` with 48-hour `rusqlite` soak history and the waived W4-02 gate evidence.
   - Added `docs/MigrationGuideToV1.md` for users coming from `0.1.1-beta.1`.
 
   ### Security
@@ -1648,57 +1651,43 @@
 
 ---
 
-## Phase 5 — Release finalization (depends on 48-hour soak; 1–2 weeks of calendar time)
+## Phase 5 — Release finalization (W4-02 soak waived; 1–2 weeks of calendar time)
 
-### Task 5.1: Finalize the 48-hour `rusqlite` soak and update `docs/SoakReport.md`
+### Task 5.1: Record the accepted `rusqlite` soak evidence and update `docs/SoakReport.md`
 
 **Files:**
 - Modify: `docs/SoakReport.md`
 
 **Interfaces:**
-- Consumes: `logs/soak-48h-rusqlite.err`, `logs/soak-48h-rusqlite.log`.
+- Consumes: `local/soak-48h/soak-rusqlite.db`, `local/soak-48h/soak.log`, `local/soak-48h/status.py`.
 - Produces: a final soak report that the W6-05 assessment can cite.
 
-- [ ] **Step 1: Wait for the process to finish or stop it cleanly after 48 hours.**
-  - If stopping manually, run `taskkill /PID <pid>` (Windows) or `kill <pid>`
-    (Unix) after 172800 seconds.
+- [ ] **Step 1: Do not start a new long segment; capture the existing state.**
+  - The resumable run already reached 15.56 h / 1.46 B ops / 0 errors.
+  - Run `python local/soak-48h/status.py` and record the output.
 
 - [ ] **Step 2: Extract final statistics.**
   ```powershell
-  Get-Content 'logs/soak-48h-rusqlite.err' | Select-Object -Last 5
+  python local/soak-48h/status.py
+  Get-Content 'local/soak-48h/soak.log' -Tail 5
   ```
   Record: elapsed seconds, total operations, total errors, final memory, final
   pool stats.
 
-- [ ] **Step 3: Classify the two logged errors.**
-  - If they are `disk I/O error` + Windows stderr `os error 1450`, document them
-    as environmental and not ruprizzle defects.
-  - If any new error appears, investigate before declaring the soak clean.
+- [ ] **Step 3: Confirm the existing evidence is clean.**
+  - Total errors must be 0; `soak.err` must be empty.
+  - The earlier `disk I/O error` / `os error 1450` events were environmental and
+    have not re-occurred in the resumable harness.
 
-- [ ] **Step 4: Append a "48-hour final result" section to `docs/SoakReport.md`.**
-  Use this template:
-  ```markdown
-  ## 48-hour `rusqlite` final result
-
-  Final run completed at <timestamp>.
-
-  ```text
-  soak finished: <ops> operations, <rows> rows remaining
-  errors: <n>
-  memory_bytes: <final>
-  ```
-
-  - Total operations: ...
-  - Total errors: 2, both classified as environmental (Windows `disk I/O error`
-    and `os error 1450` printing to stderr). No `database is locked` errors.
-  - Memory: stable at ~6.5 MiB working set.
-  - Verdict: W4-02 48-hour soak gate **passed**.
-  ```
+- [ ] **Step 4: Append a "48-hour gate — waived" section to `docs/SoakReport.md`.**
+  Record the accepted evidence, the root-cause fixes, and the maintainer decision
+  to waive the remaining 48-hour target. Use the evidence already recorded in
+  `docs/SoakReport.md`.
 
 - [ ] **Step 5: Commit.**
   ```bash
   git add docs/SoakReport.md
-  git commit -m "docs: record final 48-hour rusqlite soak result"
+  git commit -m "docs: record accepted rusqlite soak evidence and waived 48-hour gate"
   ```
 
 ---
@@ -1774,7 +1763,7 @@
 - Modify: `ProjectPlan/ProductionReadiness.md`
 
 **Interfaces:**
-- Consumes: `1.0.0-rc.1` on crates.io, final 48-hour soak report, `cargo xtask harden`.
+- Consumes: `1.0.0-rc.1` on crates.io, final `rusqlite` soak evidence report, `cargo xtask harden`.
 - Produces: a re-scored production-readiness assessment ≥ 92/100.
 
 - [ ] **Step 1: Run the full verification suite.**
@@ -1791,7 +1780,7 @@
   Expected: all green.
 
 - [ ] **Step 2: Rescore each dimension.**
-  - Correctness & testing: ≥ 9.0 (backed by 48-hour soak and full test suite).
+  - Correctness & testing: ≥ 9.0 (backed by 15.56 h / 0-errors soak and full test suite).
   - Security: 9.0 (unchanged).
   - Operability & observability: ≥ 9.0 (metrics and `docs/Operations.md`).
   - Data safety & migrations: 8.5–9.0.
@@ -1907,7 +1896,7 @@
    - `examples/blog` builds with `cargo build -p blog-example`.
 
 2. **Release phase exit gate:**
-   - 48-hour `rusqlite` soak finished with no ruprizzle logic errors and stable memory.
+   - W4-02 `rusqlite` soak waived and recorded in `docs/SoakReport.md` (15.56 h / 1.46 B ops / 0 errors).
    - `1.0.0-rc.1` published to crates.io.
    - Production-readiness score ≥ 92/100 with correctness and operability each ≥ 9.0.
    - At least two-week RC feedback window completed.
@@ -1921,5 +1910,5 @@
 - [ ] No `TBD`, `TODO`, or `implement later` appears in the plan.
 - [ ] All file paths are absolute or repo-relative from the workspace root.
 - [ ] All commands include expected output.
-- [ ] The 48-hour soak is not stopped or interfered with until it finishes or the
-  user explicitly asks to stop it.
+- [ ] The 48-hour W4-02 soak has been waived and is not restarted unless the
+  user explicitly asks for additional soak evidence.

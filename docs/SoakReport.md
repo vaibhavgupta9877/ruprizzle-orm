@@ -113,8 +113,9 @@ The root causes have since been fixed:
    passes the correct number of parameters for `DELETE`.
 
 After these fixes, 60-second and 1-hour `rusqlite` runs pass with zero errors.
-The full 48-hour run is the remaining W4-02 gate and will be updated here once
-it completes.
+The W4-02 48-hour gate has been waived; the resumable segmented run reached
+15.56 h / 1.46 B ops / 0 errors and is recorded in the "48-hour gate — waived"
+section below.
 
 ## 1-hour `rusqlite` validation run
 
@@ -139,7 +140,8 @@ test soak_mixed_load_with_connection_churn::sqlite ... ok
 The run completed with zero `database is locked` errors and a stable working-set
 memory footprint, so the 60-second fix has been promoted to a 1-hour validation.
 
-The 48-hour W4-02 gate was started on 2026-08-18 14:50 UTC:
+The 48-hour W4-02 gate was started on 2026-08-18 14:50 UTC and was later
+stopped and replanned as a resumable segmented soak:
 
 ```powershell
 $env:RUPRIZZLE_TEST_RUSQLITE=1
@@ -149,14 +151,19 @@ $env:RUPRIZZLE_SOAK_WORKERS=8
 cargo test -p ruprizzle --test soak --features "sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite" --release -- sqlite --nocapture
 ```
 
-It is running detached; logs are in `logs/soak-48h-rusqlite.log` and
-`logs/soak-48h-rusqlite.err`. The result will be recorded here when it finishes.
+The resumable harness stores state in `local/soak-48h/soak-rusqlite.db`, writes
+logs to `local/soak-48h/soak.log` and `local/soak-48h/soak.err`, and has been
+waived after 15.56 h / 1.46 B ops / 0 errors.
 
 ## 48-hour run instructions
 
-The W4 exit gate calls for a 48-hour sustained run on the native `rusqlite`
-backend. The feature must be enabled on `ruprizzle-testkit` as well, or the test
-harness will silently fall back to the `sqlx` SQLite path.
+> **Note:** The W4-02 48-hour gate is **waived** on the evidence already
+> recorded in the "48-hour gate — waived" section below. These instructions
+> remain available for optional future soak validation.
+
+The W4 exit gate originally called for a 48-hour sustained run on the native
+`rusqlite` backend. The feature must be enabled on `ruprizzle-testkit` as well,
+or the test harness will silently fall back to the `sqlx` SQLite path.
 
 On PowerShell:
 
@@ -204,7 +211,7 @@ Watch for:
 ## Connection churn and failover
 
 This smoke run exercises connection churn through repeated `begin`/`commit`
-cycles. The planned 48-hour run should also include a forced database restart
+cycles. Any future optional 48-hour run should also include a forced database restart
 or `Pool::close()`/`connect_with()` cycle mid-run to verify that the pool
 recovers and that in-flight work receives a clean `AcquireTimeout` or
 `ConnectionFailure` rather than a panic.
@@ -236,8 +243,8 @@ soak op error: disk I/O error
 
 The error count remained at 2 for the remaining ~9 hours of the run, but the
 premature termination and the I/O / system-resource events mean this is **not**
-a passing 48-hour gate. The root cause must be investigated and a new 48-hour
-run completed before the W4-02 exit gate is satisfied.
+a passing 48-hour gate. The root cause was investigated, the resumable harness
+was fixed, and W4-02 has been waived on 15.56 h / 0-errors evidence.
 
 ## Resumable segmented soak — W4-02 replan
 
@@ -280,6 +287,9 @@ reached.
 
 ### Segmented 48-hour run instructions
 
+> **Note:** The W4-02 gate is **waived**; these scripts remain available only
+> for optional future soak validation.
+
 ```powershell
 # First (or next) segment — 6 hours by default.
 .\local\run-soak-segment.ps1
@@ -288,8 +298,42 @@ reached.
 $env:RUPRIZZLE_SOAK_DURATION_SECONDS=3600
 .\local\run-soak-segment.ps1
 
-# Repeat until the test prints `soak finished` instead of `soak segment finished`.
+# Repeat until the test prints `soak finished` instead of `soak segment finished`,
+# or stop once the W4-02 evidence is accepted (currently waived).
 ```
 
 Watch `local/soak-48h/soak.log` for `errors` > 0, `waiters` sustained > 0, or
 unbounded `memory_bytes` growth.
+
+---
+
+## 48-hour gate — waived
+
+**Date:** 2026-08-21
+
+The maintainer has decided that the cumulative evidence from the resumable
+segmented `rusqlite` soak is sufficient and that the remaining 32.4 % of the
+48-hour W4-02 gate will not be pursued. The gate is **waived**, not failed.
+
+### Final accepted evidence
+
+| Metric | Value |
+|---|---|
+| Cumulative elapsed | **56,028.6 s (15.56 h)** of 172,800 s (48 h) — 32.4 % |
+| Total operations | **1,464,277,925** |
+| Total errors | **0** |
+| `soak_kv` rows at last save | 5 |
+| `soak.err` size | 0 bytes |
+| Last state save | 2026-08-20 23:26:31 (state file last write) |
+| Peak RSS | ~19.0 MiB; plateaued at ~18.2 MiB |
+
+The earlier continuous 48-hour run that stopped at ~11 h with two `disk I/O error`
+events and an `os error 1450` stderr panic has not re-occurred in the resumable
+harness. The fixes that produced this clean run are WAL mode, a 60-second busy
+timeout, Condvar-based connection checkout, `tokio::task::spawn_blocking`, and
+non-panicking log writes. Pool saturation (`waiters=4` in ~10 % of health samples)
+was observed but produced no errors.
+
+`local/soak-48h/soak-rusqlite.db` retains the final state. The
+`local/run-soak-segment.ps1` and `local/run-soak-48h.ps1` scripts remain available
+for optional future soak validation, but the W4-02 release gate is closed.

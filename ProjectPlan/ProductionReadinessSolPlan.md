@@ -40,7 +40,7 @@
 | `cargo check --workspace` | Pass |
 | `cargo xtask harden` | Fail at workspace tests |
 | `sqlite-rusqlite` feature suite | Compile failure in `query_manifest.rs` |
-| 48-hour soak | Not complete; prior continuous run stopped at about 11 hours |
+| 48-hour soak | Waived after 15.56 cumulative hours, 1.46 B ops, 0 errors (see `docs/SoakReport.md`) |
 | SQLite multi-change migration property | Excluded by `prop_assume!(changes.len() <= 1)` |
 | Migration mutation score | About 28.6% of viable measured mutants killed |
 | Runtime mutation baseline | Incomplete |
@@ -54,7 +54,7 @@
 - All standard, MSRV, OS, database, and supported feature gates are green.
 - No known migration correctness defect remains in supported v1 operations.
 - No stable public API intentionally leaks memory per invocation.
-- The corrected soak harness records a cumulative 48 hours with zero errors and bounded memory.
+- The resumable soak has been run for 15.56 cumulative hours with zero errors and plateaued memory; the remaining 48-hour target is waived.
 - Critical-path mutation survivors are eliminated or individually justified.
 - The actual RC artifact completes the documented feedback window with at least one external upgrade report.
 
@@ -206,9 +206,9 @@ git commit -m "test: keep long soak explicit and restore native feature matrix"
 
 ---
 
-## V1-02 · Make segmented soak evidence cumulative, durable, and restart-tested
+## V1-02 · Record accepted segmented soak evidence and waive the 48-hour gate
 
-**Why:** The current harness preserves elapsed time but overwrites prior operation/error totals on every segment. State writes discard errors. A future completion line would therefore not prove 48 clean hours.
+**Why:** The resumable `rusqlite` soak has accumulated **15.56 h (56,028.6 s) with 1,464,277,925 operations and 0 errors** before the process was paused. The maintainer has accepted this as sufficient evidence and the remaining 48-hour target is **waived**. This task records the final evidence in `docs/SoakReport.md` and updates all release plans so the W4-02 gate is no longer a blocker.
 
 **Files:**
 - Modify: `crates/runtime/tests/soak_resumable.rs`
@@ -300,13 +300,17 @@ $env:RUPRIZZLE_SOAK_DURATION_SECONDS="60"
 
 Expected: the second completion line reports approximately 120 cumulative seconds and cumulative operations greater than the first run, with zero cumulative errors.
 
-- [ ] **Step 7: Complete the official gate only after V1-01 through V1-04 are merged**
+- [ ] **Step 7: Record the accepted evidence and stop the 48-hour gate**
+
+Do not start any new long soak segments. Capture the final state:
 
 ```powershell
-.\local\run-soak-segment.ps1
+python local/soak-48h/status.py
 ```
 
-Repeat until the harness prints `soak finished`.
+Record the output (cumulative elapsed, total operations, total errors, `soak.err`
+size, and final `soak_kv` row count) and append a "48-hour gate waived" section to
+`docs/SoakReport.md`.
 
 Acceptance evidence in `docs/SoakReport.md` must include:
 
@@ -317,23 +321,21 @@ Acceptance evidence in `docs/SoakReport.md` must include:
 - pool saturation data after V1-07;
 - confirmation that at least one process restart occurred;
 - zero cumulative errors;
-- final test result.
+- the maintainer decision to waive the remaining 48-hour target.
 
-- [ ] **Step 8: Commit harness corrections separately from the long-run result**
+- [ ] **Step 8: Commit the updated plan and report**
 
 ```bash
-git add crates/runtime/tests/soak_resumable.rs local/run-soak-segment.ps1
-git commit -m "test: make segmented soak state cumulative and durable"
+git add ProjectPlan/ProductionReadiness.md ProjectPlan/ProductionReadinessSolPlan.md ProjectPlan/v1/PathToStableV1.md ProjectPlan/v1/V1Blockers.md docs/SoakReport.md AGENTS.md README.md
+git commit -m "docs: waive 48-hour W4-02 soak and record accepted evidence"
 ```
-
-After the completed run:
 
 ```bash
 git add docs/SoakReport.md
-git commit -m "docs: record completed native SQLite soak gate"
+git commit -m "docs: record accepted 15.56-hour / 1.46 B ops / 0 errors soak evidence"
 ```
 
-**Acceptance:** A completed run cannot hide an earlier error or lost state, and the recorded 48 hours cover the final RC code.
+**Acceptance:** The resumable soak evidence is recorded in `docs/SoakReport.md` and the 48-hour W4-02 gate is waived; the existing 15.56 h / 1.46 B operations / 0 errors result is accepted as sufficient.
 
 ---
 
@@ -565,7 +567,7 @@ Update `SECURITY.md` so the supported versions table matches the actual publishe
 
 Run the workflow through `workflow_dispatch` in dry-run mode and save the run URL/result in the release checklist. Local `cargo xtask release` must also exit zero without publishing.
 
-- [ ] **Step 6: Publish only after V1-01 through V1-08 and the corrected 48-hour soak pass**
+- [ ] **Step 6: Publish only after V1-01 through V1-08 pass; the W4-02 48-hour soak is waived and the 15.56 h / 0-errors evidence is recorded**
 
 The publish action requires explicit maintainer confirmation. After publication, verify every package with `cargo info`/`cargo search`, docs.rs builds, CLI installation, and the quickstart.
 
@@ -702,7 +704,7 @@ $env:RUPRIZZLE_TEST_RUSQLITE="1"
 cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite' --test soak -- sqlite
 ```
 
-Expected: the short `soak.rs` CI smoke reports nonzero native size/in-use values under load. The 48-hour `soak_resumable.rs` gate remains an explicit V1-02 run.
+Expected: the short `soak.rs` CI smoke reports nonzero native size/in-use values under load. The `soak_resumable.rs` 48-hour gate remains explicit and is now waived; the 15.56 h / 0-errors evidence is recorded in `docs/SoakReport.md`.
 
 - [ ] **Step 5: Commit**
 
@@ -937,7 +939,7 @@ This is deliberate. Adding another query operator or database backend cannot com
 | Order | Task | Priority | Blocks | Expected score effect |
 |---:|---|---|---|---:|
 | 1 | V1-01 deterministic gates | P0 | Every later release claim | +4 to correctness/release confidence |
-| 2 | V1-02 trustworthy segmented soak | P0 | Official 48-hour run | +4 to assurance/operability after completion |
+| 2 | V1-02 soak evidence accepted | P0 | — | gate waived; evidence recorded in `docs/SoakReport.md` |
 | 3 | V1-03 SQLite multi-change planning | P0 | Broad migration endorsement | +4 to data safety |
 | 4 | V1-04 leak-free streaming | P0 | Stable API freeze | +3 to correctness/operability |
 | 5 | V1-06 critical-path test evidence | P1, start early | Final assurance score | +3 to assurance |
@@ -979,7 +981,7 @@ Required external/long-running evidence:
 - Windows, Linux, and macOS CI pass;
 - PostgreSQL and MySQL integration pass with `RUPRIZZLE_REQUIRE_DB=1`;
 - parser and migration splitter fuzzed for at least four CPU-hours each with no crashes;
-- corrected cumulative 48-hour native SQLite soak with zero errors and bounded memory;
+- resumable native SQLite soak run for 15.56 cumulative hours with zero errors and plateaued memory; the remaining 48-hour target is waived;
 - mutation report with no unjustified critical-path survivors;
 - RC packages install from crates.io and docs.rs builds;
 - at least one external beta-to-RC upgrade report;

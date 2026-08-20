@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Extended `docs/FeaturesMasterComparison.md` with all 16 end-to-end and 16 query-construction benchmark operations, a new "Advanced query builder & SQL features" table, and an updated best-fit summary.
 - Added prax, Prisma, and Drizzle columns and new feature rows to the high-level comparison in `docs/README.md`.
 - Fixed and cross-linked internal markdown links across `README.md`, `docs/README.md`, `docs/SUMMARY.md`, `docs/announcement.md`, `docs/BenchmarkResults.md`, `docs/FeaturesMasterComparison.md`, `docs/KnownLimitations.md`, and `ProjectPlan/Enhancements/Performance/Enhancements1.md`.
+- `docs/SoakReport.md`, `ProjectPlan/ProductionReadiness.md`, and related plans
+  updated to record that the 48-hour W4-02 `rusqlite` soak has been waived after
+  15.56 h / 1.46 B ops / 0 errors.
 
 
 ## [1.0.0-rc.1] - 2026-08-19

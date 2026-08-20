@@ -22,10 +22,11 @@ the wire protocol and pooling; we do not write a driver.
 
 `1.0.0-rc.1` is tagged and staged. The core P0–P8 implementation is complete,
 MySQL/MariaDB support is shipped, and the public API is frozen for the 1.0 line.
-The production-readiness assessment is in W6-05 (rescoring against the live RC)
-and the 48-hour soak is the final W4-02 gate. See [Stability](Stability.md) for
-the semver policy and [Known limitations](KnownLimitations.md) for deliberate
-boundaries.
+The W4-02 48-hour `rusqlite` soak has been **waived** after 15.56 h / 1.46 B ops
+/ 0 errors (see [SoakReport.md](SoakReport.md)); the production-readiness
+assessment in W6-05 (rescoring against the live RC) is the remaining release gate
+before declaring a stable `1.0.0`. See [Stability](Stability.md) for the semver
+policy and [Known limitations](KnownLimitations.md) for deliberate boundaries.
 
 ## Quick example
 

@@ -24,7 +24,8 @@
   cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'
   ```
 
-- Run the native `rusqlite` soak test (resumable, segmented 48-hour gate):
+- Run the native `rusqlite` soak test (resumable, 48-hour gate is **waived**; the
+  scripts remain available for optional extended validation):
   ```powershell
   # One segment (1 hour by default; set RUPRIZZLE_SOAK_DURATION_SECONDS to override).
   .\local\run-soak-segment.ps1
@@ -34,6 +35,8 @@
   .\local\run-soak-48h.ps1
 
   # State is kept in `local/soak-48h/soak-rusqlite.db`.
+  # The 48-hour W4-02 gate has been waived after 15.56 h / 1.46 B ops / 0 errors.
+  # Use these scripts only if you want additional optional soak evidence.
   ```
 
 ## Default branch

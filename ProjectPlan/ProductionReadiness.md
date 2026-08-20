@@ -1,4 +1,4 @@
-> **Note (2026-08-20):** The section immediately below is a historical snapshot of `0.1.1-beta.1` at `7636f44`. The repository has since moved to `1.0.0-rc.1`. Reassessments follow in §11 (2026-08-18, 86/100), §12 (2026-08-19, 84/100), and **§13 (2026-08-20, 71/100 — current)**. **Read §13 first:** it supersedes the others, and it downgrades the score because three release gates (`fmt`, `clippy`/`test`, `xtask harden`) are red at HEAD `3090b14`.
+> **Note (2026-08-21):** The section immediately below is a historical snapshot of `0.1.1-beta.1` at `7636f44`. The repository has since moved to `1.0.0-rc.1`. Reassessments follow in §11 (2026-08-18, 86/100), §12 (2026-08-19, 84/100), §13 (2026-08-20, 71/100), and **§14 (2026-08-21 — current)**. **Read §14 first:** it records the maintainer decision to waive the remaining 48-hour W4-02 soak after 15.56 h / 1.46 B ops / 0 errors. The rest of the §13 assessment (red `fmt`, `clippy`/`test`, and `xtask harden` gates) remains in force until the V1-01 fixes land.
 
 # Production Readiness Assessment — ruprizzle-orm
 
@@ -250,7 +250,7 @@ status, and every `schema.ruprizzle` file in the repository (`examples/*/schema.
 
 ### Remaining v1.0.0 blockers
 
-1. Complete the 48-hour `rusqlite` soak (W4-02) and record final results in `docs/SoakReport.md`.
+1. ~~Complete the 48-hour `rusqlite` soak (W4-02).~~ W4-02 is waived on 15.56 h / 0-errors evidence; the decision is recorded in `docs/SoakReport.md` (see §14).
 2. Cut the `1.0.0-rc.1` tag, publish to crates.io, and run the minimum two-week feedback window (W6-04).
 3. Re-score production readiness against the live RC, targeting ≥ 92/100 (W6-05).
 
@@ -312,7 +312,7 @@ The error count remained at 2 for the rest of the run, but the premature termina
 
 ### Remaining v1.0.0 blockers
 
-1. **Re-run and complete a clean 48-hour `rusqlite` soak (W4-02).** Investigate the `disk I/O error` and `Insufficient system resources exist to complete the requested service. (os error 1450)` events before restarting.
+1. ~~**Re-run and complete a clean 48-hour `rusqlite` soak (W4-02).**~~ W4-02 is waived on 15.56 h / 0-errors evidence; see §14.
 2. Cut the `1.0.0-rc.1` tag, publish to crates.io, and run the minimum two-week feedback window (W6-04).
 3. Re-score production readiness against the live RC, targeting ≥ 92/100 (W6-05).
 
@@ -434,7 +434,7 @@ table) is materially healthier:
 | Segments completed | 9 |
 | `soak.err` size | **0 bytes** |
 | RSS | 12.3 MB → 18.2 MB (peak 19.0 MB), plateaued |
-| Completed flag | `False` — run is ongoing |
+| Completed flag | `False` — run was paused; W4-02 waived on this evidence (see §14) |
 
 Zero errors across 1.46 billion operations, and the `os error 1450` crash is gone (the
 non-panicking log write fixed it). Two things to keep watching:
@@ -446,8 +446,9 @@ non-panicking log write fixed it). Two things to keep watching:
   steady-state allocator behaviour rather than a leak, but it should be confirmed over
   the remaining 32 h.
 
-W4-02 remains **unmet** — 32.4 % of the gate is not the gate — but it is now on a
-credible path rather than blocked on an unexplained failure.
+W4-02 has since been **waived** on this evidence — the maintainer accepted the
+15.56 h / 1.46 B ops / 0-errors result and decided not to pursue the remaining
+32.4 % of the 48-hour target. See §14 for the formal decision.
 
 ### Scorecard
 
@@ -503,8 +504,8 @@ empty) — unlike §1, nothing here is attributable to uncommitted WIP.
    and repository state are decoupled.
 6. **Re-run `cargo xtask harden` after #1–#3** to actually exercise the panic,
    arithmetic/indexing, and injection audits, which have not run since the lint break.
-7. **Continue the segmented soak to 100 %** (32 h remaining). Investigate the sustained
-   `waiters=4` pool saturation and confirm RSS stays plateaued.
+7. ~~**Continue the segmented soak to 100 %** (32 h remaining).~~ **W4-02 soak gate waived**
+   on 15.56 h / 1.46 B ops / 0 errors evidence; see §14.
 8. **Re-tag `1.0.0-rc.1`** once #1–#6 are green — the current tag is 27 commits stale and
    predates all of this work.
 
@@ -512,3 +513,44 @@ Items 1–3 total roughly a dozen changed lines. **This assessment scores 71/100
 because the project is far from ready, but because a nearly-trivial set of breaks is
 sitting directly on top of every automated gate** — which is exactly what those gates
 exist to prevent, and exactly why item 5 matters most in the long run.
+
+---
+
+## 14. Soak decision at current state — W4-02 waived
+
+**Version assessed:** `1.0.0-rc.1` (workspace), branch `dev-v0-2`
+**Date:** 2026-08-21
+**Assessor:** Devin (soak state review and log inspection)
+**Scope:** The resumable native `rusqlite` soak and the W4-02 release gate.
+
+### Decision
+
+The maintainer has decided that the cumulative soak evidence gathered to date is
+sufficient and that the remaining 32.4 % of the 48-hour W4-02 gate will not be
+pursued. The segmented `rusqlite` soak is therefore **waived**, not failed.
+
+### Evidence
+
+| Metric | Value |
+|---|---|
+| Cumulative elapsed | **56,028.6 s (15.56 h)** of the 172,800 s (48 h) target |
+| Total operations | **1,464,277,925** |
+| Total errors | **0** |
+| `soak.err` size | **0 bytes** |
+| `soak_kv` rows at last save | 5 |
+| Last state save | 2026-08-20 23:26:31 (state file last write) |
+
+The resumable harness has not exhibited the `disk I/O error` or `os error 1450`
+stderr panic that terminated the original continuous 48-hour run. Memory remained
+plateaued (≈ 12–19 MiB working set). Pool saturation (`waiters=4` in ~10 % of
+samples) was observed but produced no errors.
+
+### Updated remaining v1.0.0 blockers
+
+1. Fix the `fmt`/`clippy`/`test`/`xtask harden` breaks documented in §13 (V1-01).
+2. Cut the `1.0.0-rc.1` tag, publish to crates.io, and run the minimum two-week
+   feedback window (W6-04).
+3. Re-score production readiness against the live RC, targeting ≥ 92/100 (W6-05).
+
+The 48-hour soak is no longer a blocker. `docs/SoakReport.md` has been updated to
+record this decision.
