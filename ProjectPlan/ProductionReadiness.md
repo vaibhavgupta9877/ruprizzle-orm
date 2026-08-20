@@ -1,4 +1,4 @@
-> **Note (2026-08-18):** This assessment is a historical snapshot of `0.1.1-beta.1` at `7636f44`. The repository has since moved to `1.0.0-rc.1` and most of the findings below have been addressed. A reassessment for the `1.0.0-rc.1` candidate is in §11; the latest live reassessment is in §12.
+> **Note (2026-08-20):** The section immediately below is a historical snapshot of `0.1.1-beta.1` at `7636f44`. The repository has since moved to `1.0.0-rc.1`. Reassessments follow in §11 (2026-08-18, 86/100), §12 (2026-08-19, 84/100), and **§13 (2026-08-20, 71/100 — current)**. **Read §13 first:** it supersedes the others, and it downgrades the score because three release gates (`fmt`, `clippy`/`test`, `xtask harden`) are red at HEAD `3090b14`.
 
 # Production Readiness Assessment — ruprizzle-orm
 
@@ -315,3 +315,200 @@ The error count remained at 2 for the rest of the run, but the premature termina
 1. **Re-run and complete a clean 48-hour `rusqlite` soak (W4-02).** Investigate the `disk I/O error` and `Insufficient system resources exist to complete the requested service. (os error 1450)` events before restarting.
 2. Cut the `1.0.0-rc.1` tag, publish to crates.io, and run the minimum two-week feedback window (W6-04).
 3. Re-score production readiness against the live RC, targeting ≥ 92/100 (W6-05).
+
+---
+
+## 13. Reassessment at `3090b14` — regression in the release gates
+
+**Version assessed:** `1.0.0-rc.1` (workspace), branch `dev-v0-2`, HEAD `3090b14`
+**Date:** 2026-08-20
+**Assessor:** Claude (live `fmt`, `clippy`, `test`, `doc`, `deny`, `xtask harden`, soak-state review)
+**Scope:** ORM workspace, feature combinations, CI configuration, and the live resumable 48-hour soak.
+
+### Verdict
+
+| Axis | Score | Grade | Previous (§12, `1.0.0-rc.1`) |
+|---|---|---|---|
+| **Production readiness** | **71 / 100** | **C− — three release gates are red at HEAD; not shippable** | 84 / 100 (B) |
+| Engineering craft | 89 / 100 | B+ | 90 / 100 (A−) |
+
+**The score dropped 13 points, and none of it is about the ORM's logic.** The library
+design, query builder, and migration engine are unchanged and sound. What regressed is
+the *release gate*: at HEAD, `cargo fmt --all --check`, `cargo clippy --workspace
+--all-targets -- -D warnings`, and `cargo xtask harden` all **fail**, and
+`cargo test --workspace` **does not build at all** — zero tests execute.
+
+The one genuinely good piece of news is the soak, which has gone from a hard failure
+to a clean run in progress (see *Soak status* below).
+
+### The two compile breaks
+
+**Break 1 — `crates/runtime/tests/soak_resumable.rs` is not feature-gated.**
+The file unconditionally does:
+
+```rust
+use ruprizzle::executor::{Executor, RowBatch};
+use ruprizzle::rusqlite::FromValue;
+```
+
+`ruprizzle::rusqlite`, `RowBatch::Rusqlite`, and the `FromValue` impls only exist under
+the `sqlite-rusqlite` feature, and the file carries **no `#![cfg(feature = ...)]`
+attribute** (`grep -n "cfg("` returns nothing). On default features it fails with 8
+errors (`E0432` on the import, then `E0599` cascading through `RowBatch::Rusqlite` and
+`{i64,f64,bool}::from_value`). Verified as purely a missing gate:
+`cargo check -p ruprizzle --test soak_resumable --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'`
+exits **0**. The sibling `crates/runtime/tests/soak.rs` also has no gate but only uses
+backend-agnostic APIs, so it is unaffected. Introduced by `d016e6c`. **One-line fix.**
+
+Because `cargo test --workspace` builds all targets before running any, this single
+file takes the entire suite down: the run aborts at
+`could not compile 'ruprizzle' (test "soak_resumable")` and **not one test executes**.
+Excluding the broken target, **200 tests across 46 binaries pass, 0 fail** — so the
+suite itself is healthy and this is a build-graph problem, not a correctness problem.
+
+**Break 2 — `ruprizzle-migrate` does not compile under `sqlite-rusqlite`.**
+This one is worse, because it is *library* code in a published crate, not a test.
+`crates/migrate/src/introspect.rs` fails with 2 errors when the feature is on:
+
+- line 434: `.0` on `&ruprizzle::rusqlite::Row` — that type has fields `values` and
+  `names`, not tuple fields.
+- line 442: `String::from_utf8_lossy(value)` where `value` is an owned `Vec<u8>` and a
+  `&[u8]` is required (needs `&value`).
+
+`introspect.rs` was last touched in `9d17f0f` ("feat: add database schema
+introspection"), so this combination has **never** compiled. Anyone enabling
+`sqlite-rusqlite` and depending on `ruprizzle-migrate` cannot build — `db pull`
+introspection is unavailable on the native SQLite driver. The same run also surfaces
+`query_manifest.rs` failing on `Task: FromOwnedRow` / `Task: FromRusqliteRow` bounds.
+
+### Formatting
+
+`cargo fmt --all --check` exits **1** with 3 diffs in 2 files — and one of them is
+shipped library source, not just a test:
+
+- `crates/runtime/src/rusqlite.rs:219` (`num_idle`)
+- `crates/runtime/tests/soak_resumable.rs:363, :414`
+
+All three are cosmetic line-joining, introduced alongside `b5b41b2`/`3090b14`.
+
+### Why CI did not catch any of this
+
+Two independent reasons, and the first is the dominant one:
+
+1. **The branch is 17 commits ahead of `origin/dev-v0-2`.** None of the current work has
+   been pushed, so CI has never run on `3090b14` or on any commit that introduced these
+   breaks. The green gates recorded in §11 and §12 describe commits that no longer
+   represent the tip.
+2. **Even once pushed, CI would miss Break 2.** The `feature-combination` matrix in
+   `.github/workflows/ci.yml:146-160` runs `cargo clippy -p ruprizzle …` and
+   `cargo test -p ruprizzle …` — scoped to a single package, so `ruprizzle-migrate` is
+   never built with `sqlite-rusqlite` on. `release.yml:29` is narrower still:
+   `cargo clippy -p ruprizzle --features sqlite-rusqlite --lib --bins --examples`
+   omits `--tests` entirely. The `cargo test --workspace` job (`ci.yml:93`) only ever
+   runs default features. **No job in either workflow builds the workspace with
+   `sqlite-rusqlite` enabled.** That is the hole Break 2 lives in.
+
+Break 1 *would* be caught by the `{ features: "", db: sqlite }` matrix row once pushed.
+
+### `cargo xtask harden` is red — and the audits never ran
+
+`cargo xtask harden` exits **1**. Per `xtask/src/main.rs:263` it runs `lint`, `test`,
+`docs` before the panic, arithmetic/indexing, and injection audits. It aborts on the
+very first sub-stage (`lint`, failing with Break 1's 8 errors), so the **panic audit,
+arithmetic/indexing audit, injection audit, and `cargo-deny` stage never executed this
+pass.** The security posture asserted in §11/§12 is therefore unverified at HEAD rather
+than confirmed — which is why dimension 2 is docked below.
+
+### Soak status — the genuine improvement
+
+The §12 assessment recorded a 48-hour soak that died at ~11 h with 2 `disk I/O error`
+events and an `os error 1450` stderr panic. The replanned **resumable segmented soak**
+(`crates/runtime/tests/soak_resumable.rs`, persisting cumulative state in a `soak_state`
+table) is materially healthier:
+
+| Metric | Value |
+|---|---|
+| Cumulative elapsed | **56,025 s (15.56 h) of 172,800 s — 32.4 %** |
+| Total operations | **1,464,151,587** |
+| Total errors | **0** |
+| Segments completed | 9 |
+| `soak.err` size | **0 bytes** |
+| RSS | 12.3 MB → 18.2 MB (peak 19.0 MB), plateaued |
+| Completed flag | `False` — run is ongoing |
+
+Zero errors across 1.46 billion operations, and the `os error 1450` crash is gone (the
+non-panicking log write fixed it). Two things to keep watching:
+
+- **Pool saturation.** `waiters > 0` in 788 of 7,240 health samples (10.9 %), with
+  `waiters=4` — every worker queued against a 4-connection pool — in 687 of them. The
+  SoakReport's own watch list names "waiters sustained > 0" as a warning sign.
+- **Memory.** ~48 % RSS growth before plateauing. Flat across the back half, so likely
+  steady-state allocator behaviour rather than a leak, but it should be confirmed over
+  the remaining 32 h.
+
+W4-02 remains **unmet** — 32.4 % of the gate is not the gate — but it is now on a
+credible path rather than blocked on an unexplained failure.
+
+### Scorecard
+
+| # | Dimension | Weight | Score | Prev (§12) | Rationale |
+|---|---|---|---|---|---|
+| 1 | Correctness & testing | 20% | **5.0** | 8.0 | `cargo test --workspace` does not build; **zero tests run**. 200 tests / 46 binaries pass once the broken target is excluded, so the suite is sound — but the gate command is red, and Break 2 is a library-code failure in a published crate, not a test-only defect. |
+| 2 | Security | 15% | **8.5** | 9.0 | `cargo deny check advisories` independently verified ✅ `advisories ok`. Docked because `xtask harden` aborted before the panic, arithmetic/indexing, and injection audits, so those are unverified this pass rather than confirmed. `forbid(unsafe_code)` (14 crates) and parameterised binding unchanged. |
+| 3 | Operability & observability | 15% | 7.5 | 7.5 | Unchanged. Tracing, slow-query events, `PoolStats` (well exercised by the soak). Still no Prometheus/OTel exporter — open since the first assessment. |
+| 4 | Data safety & migrations | 15% | **7.5** | 8.5 | Engine design unchanged and strong, but `ruprizzle-migrate` fails to compile under `sqlite-rusqlite`, so `db pull` introspection is unavailable on the native SQLite driver — and has never worked. |
+| 5 | Architecture & design | 10% | **8.5** | 9.0 | Query builder, driver abstraction, and relation handling unchanged and strong. Docked for the feature-composability seam: the `Row`/`RowBatch` shape differs enough between driver backends that a consumer crate silently rotted against it. |
+| 6 | CI/CD & release engineering | 10% | **5.0** | 8.0 | The largest single drop. 17 unpushed commits mean CI has not run on the tip; no workflow builds the **workspace** with `sqlite-rusqlite`; `release.yml` clippy omits `--tests`; `xtask harden` is red; the `1.0.0-rc.1` tag sits **27 commits behind HEAD**. |
+| 7 | Documentation | 5% | 9.0 | 9.0 | Unchanged and still a strength. `cargo doc --workspace --no-deps` ✅ **0 warnings**. ADRs, `KnownLimitations`, `SoakReport` (which accurately records the prior failure and the replan), `FeaturesMasterComparison` all current. |
+| 8 | API stability & semver | 5% | **7.5** | 8.0 | Version is `1.0.0-rc.1` and the tag now exists (contrary to §11/§12, which recorded it as uncut) — but it points at `5411faf`, 27 commits back, is unpushed, and is not on crates.io. No RC feedback window has run. |
+| 9 | Performance | 5% | **8.0** | 7.5 | Raised. The long-haul path that failed in §12 now shows 1.46 B operations at 0 errors over 15.56 h with plateaued RSS. Sustained pool saturation (10.9 % of samples) is the remaining question. |
+
+**Weighted total: 7.10 / 10 → 71 / 100.**
+
+### Verification performed
+
+Executed against `dev-v0-2` at `3090b14` with a **clean working tree** (`git status`
+empty) — unlike §1, nothing here is attributable to uncommitted WIP.
+
+| Check | Command | Result |
+|---|---|---|
+| Format | `cargo fmt --all --check` | ❌ **Exit 1** — 3 diffs in `crates/runtime/src/rusqlite.rs`, `crates/runtime/tests/soak_resumable.rs` |
+| Lint | `cargo clippy --workspace --all-targets -- -D warnings` | ❌ **8 compile errors** (`E0432`, `E0599` ×7) in `soak_resumable.rs` |
+| Tests | `cargo test --workspace` | ❌ **Build failure — 0 tests executed** |
+| Tests (broken target excluded) | `cargo test --workspace --exclude ruprizzle …` + `cargo test -p ruprizzle --lib` | ✅ **200 passed, 0 failed** across 46 test binaries |
+| Tests (`sqlite-rusqlite` on) | `cargo test --workspace --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'` | ❌ `ruprizzle-migrate` (lib) 2 errors; `query_manifest` 2 errors |
+| Gate isolation | `cargo check -p ruprizzle --test soak_resumable --features 'sqlite-rusqlite,…'` | ✅ **Exit 0** — confirms Break 1 is a missing feature gate, nothing more |
+| Docs | `cargo doc --workspace --no-deps` | ✅ Clean — 0 warnings |
+| Advisories | `cargo deny check advisories` | ✅ `advisories ok` |
+| Harden | `cargo xtask harden` | ❌ **Exit 1** — aborts at `lint`; panic/arithmetic/injection audits never ran |
+| Soak | `local/soak-48h/status.py`, `soak.log` (7,240 health lines) | 🔄 32.4 % complete — 1,464,151,587 ops, **0 errors**, `soak.err` empty |
+| Git state | `git status -sb`, `git rev-list`, `git tag` | Clean tree; **17 commits ahead of `origin/dev-v0-2`**; tag `1.0.0-rc.1` at `5411faf`, **27 commits behind HEAD** |
+
+### Immediate next actions
+
+1. **Add `#![cfg(feature = "sqlite-rusqlite")]` to `crates/runtime/tests/soak_resumable.rs`.**
+   One line. Restores `cargo test --workspace`, `clippy --all-targets`, and
+   `xtask harden` in a single stroke. **Do this first** — it unblocks every other gate.
+2. **Run `cargo fmt --all`.** Three cosmetic diffs, one of them in shipped library source.
+3. **Fix `crates/migrate/src/introspect.rs` under `sqlite-rusqlite`** — `.0` → `.values`
+   at line 434, and borrow at line 442 (`&value`). Then re-check `query_manifest.rs`'s
+   `FromOwnedRow`/`FromRusqliteRow` bounds. This is the only one of the three that is a
+   real defect in shipped code rather than hygiene.
+4. **Close the CI hole that hid #3:** add a workspace-scoped job that builds and tests
+   with `sqlite-rusqlite` enabled (`cargo clippy --workspace --all-targets --features
+   sqlite-rusqlite -- -D warnings`), and add `--tests` to `release.yml:29`. A
+   package-scoped matrix cannot catch cross-crate feature rot by construction.
+5. **Push the 17 local commits** so CI observes the real tip. Every "green gate" claim in
+   §11 and §12 describes commits well behind HEAD; until this branch is pushed, CI status
+   and repository state are decoupled.
+6. **Re-run `cargo xtask harden` after #1–#3** to actually exercise the panic,
+   arithmetic/indexing, and injection audits, which have not run since the lint break.
+7. **Continue the segmented soak to 100 %** (32 h remaining). Investigate the sustained
+   `waiters=4` pool saturation and confirm RSS stays plateaued.
+8. **Re-tag `1.0.0-rc.1`** once #1–#6 are green — the current tag is 27 commits stale and
+   predates all of this work.
+
+Items 1–3 total roughly a dozen changed lines. **This assessment scores 71/100 not
+because the project is far from ready, but because a nearly-trivial set of breaks is
+sitting directly on top of every automated gate** — which is exactly what those gates
+exist to prevent, and exactly why item 5 matters most in the long run.
