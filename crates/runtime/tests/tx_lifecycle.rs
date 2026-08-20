@@ -24,6 +24,9 @@ mod rusqlite_backend {
 
         let mut config = PoolConfig::default();
         config.max_connections = max_connections;
+        // Exhaustion is an expected outcome in this module, so the wait for a
+        // free connection is kept short instead of the 30s default.
+        config.acquire_timeout = std::time::Duration::from_secs(2);
 
         let pool = connect_with(&url, &config).await.expect("connect");
         assert!(

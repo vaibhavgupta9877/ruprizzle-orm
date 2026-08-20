@@ -1,3 +1,4 @@
+#![cfg(feature = "sqlite-rusqlite")]
 //! Resumable segmented soak test for the native `rusqlite` backend.
 //!
 //! This test is designed for machines that cannot stay on for a continuous
@@ -209,7 +210,12 @@ fn report_pool_health(log: &Mutex<File>, db: &TestDb, elapsed: Duration, ops: u6
     log_line(log, &line);
 }
 
-async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
+async fn mixed_load(
+    db: TestDb,
+    resume: bool,
+    duration: Duration,
+    workers: usize,
+) -> ruprizzle_testkit::Result<State> {
     // The resumable soak stresses a single SQLite file for hours. Close the
     // auxiliary sqlx Any/Sqlite pools that TestDb opens for helper methods so
     // that only the native rusqlite pool touches the database during the test.
@@ -222,15 +228,13 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
     let err_log = soak_err_log();
 
     let db = Arc::new(db);
-    let duration = segment_duration();
-    let workers = workers();
     let pool = db.pool().clone();
     let ops = Arc::new(AtomicU64::new(0));
     let errors = Arc::new(AtomicU64::new(0));
 
     init_state_table(&db).await?;
 
-    let state = if is_resume() {
+    let state = if resume {
         load_state(&db).await?
     } else {
         // Start a fresh run: clear any partial data and the old state.
@@ -264,7 +268,7 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
                 state.cumulative_elapsed, state.total_ops, state.total_errors
             ),
         );
-        return Ok(());
+        return Ok(state);
     }
 
     if state.cumulative_elapsed >= TARGET_CUMULATIVE_SECONDS {
@@ -275,7 +279,7 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
                 state.cumulative_elapsed, state.total_ops, state.total_errors
             ),
         );
-        return Ok(());
+        return Ok(state);
     }
 
     let base_state = state.clone();
@@ -305,7 +309,10 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
     }
 
     let start = Instant::now();
-    let mut health = interval(Duration::from_secs(30));
+    // For short segments the reporter must not wait for a fixed 30 s tick past
+    // the end of the run; cap the health interval at the segment duration.
+    let health_interval = std::cmp::min(duration, Duration::from_secs(30));
+    let mut health = interval(health_interval);
 
     let mut handles = Vec::new();
     for w in 0..workers {
@@ -419,7 +426,6 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
         _ => 0,
     };
 
-    assert_eq!(final_state.total_errors, 0, "soak produced errors");
     if final_state.completed {
         log_line(
             &log,
@@ -444,7 +450,7 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
         );
     }
 
-    Ok(())
+    Ok(final_state)
 }
 
 #[tokio::test]
@@ -465,9 +471,10 @@ async fn soak_rusqlite_resumable_48h() {
     .await
     .expect("connect to persistent SQLite soak database");
 
-    mixed_load(db)
+    let state = mixed_load(db, is_resume(), segment_duration(), workers())
         .await
         .expect("resumable soak should not fail if no errors occurred");
+    assert_eq!(state.total_errors, 0, "soak produced errors");
 }
 
 #[test]
@@ -496,4 +503,110 @@ fn resumed_segment_never_erases_errors() {
     let next = base.after_segment(30.0, 100, 0);
     assert_eq!(next.total_errors, 2);
     assert!(!next.completed);
+}
+
+#[tokio::test]
+async fn segmented_soak_reconnect_preserves_state() {
+    // Run two short, reconnecting segments against a persistent SQLite file to
+    // prove that cumulative state is durable and that a stored error is never
+    // erased by a later clean segment.
+
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("soak-restart.sqlite");
+    let db_path_str = db_path.to_str().unwrap().replace('\\', "/");
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+
+    let duration = 3;
+    let workers = 2;
+
+    // SAFETY: these environment variables are only consumed by the ignored
+    // long-running soak or by this test. The unit tests above do not read them,
+    // and the surrounding integration tests run in separate binaries.
+    unsafe {
+        std::env::set_var("RUPRIZZLE_TEST_RUSQLITE", "1");
+        std::env::set_var("RUPRIZZLE_SOAK_DB_PATH", &db_path_str);
+        std::env::set_var("RUPRIZZLE_SOAK_LOG_DIR", log_dir.to_str().unwrap());
+        std::env::set_var("RUPRIZZLE_SOAK_DURATION_SECONDS", duration.to_string());
+        std::env::set_var("RUPRIZZLE_SOAK_WORKERS", workers.to_string());
+    }
+
+    let setup = "CREATE TABLE IF NOT EXISTS soak_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)";
+    let segment_duration = Duration::from_secs(duration);
+
+    // First segment on a fresh database.
+    let db = TestDb::connect(Backend::Sqlite, setup)
+        .await
+        .expect("connect to first soak segment");
+    let first = mixed_load(db, false, segment_duration, workers)
+        .await
+        .expect("first segment must succeed");
+    assert!(first.total_ops > 0, "first segment must perform ops");
+    assert_eq!(first.total_errors, 0, "first segment must be clean");
+
+    // Reconnect, verify the first segment's state was persisted, and simulate a
+    // historical error. A later clean segment must keep it.
+    let db = TestDb::connect(Backend::Sqlite, setup)
+        .await
+        .expect("reconnect to read first segment state");
+    let loaded = load_state(&db).await.expect("load first segment state");
+    assert_eq!(
+        loaded.total_ops, first.total_ops,
+        "reconnect must read saved state"
+    );
+    let corrupted = State {
+        total_errors: 1,
+        ..loaded
+    };
+    save_state(&db, &corrupted)
+        .await
+        .expect("inject historical error");
+    drop(db);
+
+    // Second segment resumes from a new connection after the historical error
+    // was injected.
+    let db = TestDb::connect(Backend::Sqlite, setup)
+        .await
+        .expect("connect to second soak segment");
+    let second = mixed_load(db, true, segment_duration, workers)
+        .await
+        .expect("second segment must succeed");
+
+    // A fourth connection proves the final state is durable and readable.
+    let db = TestDb::connect(Backend::Sqlite, setup)
+        .await
+        .expect("reconnect to read final state");
+    let final_state = load_state(&db).await.expect("load final state");
+
+    assert_eq!(
+        final_state.total_ops, second.total_ops,
+        "reconnect must read the saved final state"
+    );
+    assert_eq!(
+        final_state.total_errors, second.total_errors,
+        "reconnect must read the saved final error count"
+    );
+
+    assert!(
+        final_state.cumulative_elapsed > first.cumulative_elapsed,
+        "cumulative elapsed must increase across the reconnect"
+    );
+    assert!(
+        final_state.total_ops > first.total_ops,
+        "cumulative ops must increase across the reconnect"
+    );
+    assert_eq!(
+        final_state.total_errors, 1,
+        "a stored error must not be erased by a clean segment"
+    );
+    assert!(!final_state.completed, "short test must not reach 48 h");
+
+    // SAFETY: clean up the variables this test set.
+    unsafe {
+        std::env::remove_var("RUPRIZZLE_TEST_RUSQLITE");
+        std::env::remove_var("RUPRIZZLE_SOAK_DB_PATH");
+        std::env::remove_var("RUPRIZZLE_SOAK_LOG_DIR");
+        std::env::remove_var("RUPRIZZLE_SOAK_DURATION_SECONDS");
+        std::env::remove_var("RUPRIZZLE_SOAK_WORKERS");
+    }
 }

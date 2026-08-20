@@ -12,7 +12,7 @@ use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ::rusqlite::{self, OpenFlags, types::ValueRef};
 use ruprizzle_core::ir::Provider;
@@ -82,6 +82,9 @@ struct Inner {
     next: AtomicUsize,
     size: usize,
     waiters: AtomicUsize,
+    /// Maximum time a caller blocks waiting for a free connection before
+    /// [`Error::PoolExhausted`] is returned.
+    acquire_timeout: Duration,
 }
 
 impl RusqlitePool {
@@ -152,6 +155,7 @@ impl RusqlitePool {
                 next: AtomicUsize::new(0),
                 size: capacity,
                 waiters: AtomicUsize::new(0),
+                acquire_timeout: config.acquire_timeout,
             })
         })
         .await
@@ -181,6 +185,20 @@ impl RusqlitePool {
     /// concurrent load because transactions removed connections while one-shot
     /// queries still expected to find one.
     fn checkout(&self) -> Result<ConnGuard<'_>, Error> {
+        let conn = self.pop_conn()?;
+        self.inner.next.fetch_add(1, Ordering::Relaxed);
+        Ok(ConnGuard {
+            pool: self,
+            conn: Some(conn),
+        })
+    }
+
+    /// Block until a connection is free, up to `acquire_timeout`.
+    ///
+    /// The wait is bounded: an unbounded `Condvar::wait` made
+    /// [`Error::PoolExhausted`] unreachable and deadlocked callers forever when
+    /// every connection was held by a live transaction.
+    fn pop_conn(&self) -> Result<Arc<std::sync::Mutex<rusqlite::Connection>>, Error> {
         self.inner.waiters.fetch_add(1, Ordering::Relaxed);
         struct WaiterGuard<'a>(&'a Inner);
         impl Drop for WaiterGuard<'_> {
@@ -189,25 +207,30 @@ impl RusqlitePool {
             }
         }
         let _guard = WaiterGuard(&self.inner);
-        let mut conns = self
-            .inner
-            .conns
-            .lock()
-            .map_err(|_| Error::Message("rusqlite connection pool mutex poisoned".into()))?;
-        while conns.is_empty() {
-            conns =
-                self.inner.available.wait(conns).map_err(|_| {
-                    Error::Message("rusqlite connection pool mutex poisoned".into())
-                })?;
-        }
-        let conn = conns.pop().ok_or(Error::PoolExhausted {
+
+        let poisoned = || Error::Message("rusqlite connection pool mutex poisoned".into());
+        let exhausted = || Error::PoolExhausted {
             backend: "rusqlite",
-        })?;
-        self.inner.next.fetch_add(1, Ordering::Relaxed);
-        Ok(ConnGuard {
-            pool: self,
-            conn: Some(conn),
-        })
+        };
+
+        let mut conns = self.inner.conns.lock().map_err(|_| poisoned())?;
+        let deadline = Instant::now() + self.inner.acquire_timeout;
+        while conns.is_empty() {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(exhausted());
+            }
+            let (guard, wait) = self
+                .inner
+                .available
+                .wait_timeout(conns, remaining)
+                .map_err(|_| poisoned())?;
+            conns = guard;
+            if wait.timed_out() && conns.is_empty() {
+                return Err(exhausted());
+            }
+        }
+        conns.pop().ok_or_else(exhausted)
     }
 
     /// Number of connections in the pool.
@@ -230,28 +253,7 @@ impl RusqlitePool {
 
     /// Check out a connection and take ownership of it (for transactions).
     fn checkout_owned(&self) -> Result<Arc<std::sync::Mutex<rusqlite::Connection>>, Error> {
-        self.inner.waiters.fetch_add(1, Ordering::Relaxed);
-        struct WaiterGuard<'a>(&'a Inner);
-        impl Drop for WaiterGuard<'_> {
-            fn drop(&mut self) {
-                self.0.waiters.fetch_sub(1, Ordering::Relaxed);
-            }
-        }
-        let _guard = WaiterGuard(&self.inner);
-        let mut conns = self
-            .inner
-            .conns
-            .lock()
-            .map_err(|_| Error::Message("rusqlite connection pool mutex poisoned".into()))?;
-        while conns.is_empty() {
-            conns =
-                self.inner.available.wait(conns).map_err(|_| {
-                    Error::Message("rusqlite connection pool mutex poisoned".into())
-                })?;
-        }
-        conns.pop().ok_or(Error::PoolExhausted {
-            backend: "rusqlite",
-        })
+        self.pop_conn()
     }
 
     /// Return an owned connection to the pool.
