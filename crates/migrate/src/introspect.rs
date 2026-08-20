@@ -398,7 +398,7 @@ async fn fetch_rows(
         RowBatch::Sqlite(rows) => rows.iter().map(|row| row_cells(row, width)).collect(),
         RowBatch::Mysql(rows) => rows.iter().map(|row| row_cells(row, width)).collect(),
         #[cfg(feature = "sqlite-rusqlite")]
-        RowBatch::Rusqlite(rows) => rows.iter().map(|row| rusqlite_cells(row, width)).collect(),
+        RowBatch::Rusqlite(rows) => Ok(rows.iter().map(|row| rusqlite_cells(row, width)).collect()),
         _ => Err(Error::Message(
             "unsupported row batch for introspection".into(),
         )),
@@ -424,14 +424,10 @@ where
 }
 
 #[cfg(feature = "sqlite-rusqlite")]
-fn rusqlite_cells(
-    row: &ruprizzle::rusqlite::Row,
-    width: usize,
-) -> Result<Vec<Option<String>>, Error> {
+fn rusqlite_cells(row: &ruprizzle::rusqlite::Row, width: usize) -> Vec<Option<String>> {
     use ruprizzle::rusqlite::types::Value as SqliteValue;
 
-    Ok(row
-        .0
+    row.values
         .iter()
         .take(width)
         .map(|value| match value {
@@ -439,11 +435,13 @@ fn rusqlite_cells(
             SqliteValue::Integer(value) => Some(value.to_string()),
             SqliteValue::Real(value) => Some(value.to_string()),
             SqliteValue::Text(value) => Some(value.clone()),
-            SqliteValue::Blob(value) => Some(String::from_utf8_lossy(value).into_owned()),
+            SqliteValue::Blob(value) => {
+                Some(String::from_utf8_lossy(value.as_slice()).into_owned())
+            }
         })
         .chain(std::iter::repeat(None))
         .take(width)
-        .collect())
+        .collect()
 }
 
 fn value(row: &[Option<String>], index: usize) -> Option<String> {

@@ -26,8 +26,17 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
-      - run: cargo clippy -p ruprizzle --features sqlite-rusqlite --lib --bins --examples -- -D warnings
-      - run: cargo clippy -p ruprizzle --features postgres-tokio-postgres --lib --bins --examples -- -D warnings
+      # `--all-targets` (not `--lib --bins --examples`) and the whole workspace:
+      # the narrower form let a native-driver break in ruprizzle-migrate and in
+      # test targets through the gate.
+      - run: >-
+          cargo clippy --workspace --all-targets
+          --features ruprizzle/sqlite-rusqlite,ruprizzle-migrate/sqlite-rusqlite,ruprizzle-cli/sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite,ruprizzle-integration-tests/sqlite-rusqlite,ruprizzle-deep-tests/sqlite-rusqlite
+          -- -D warnings
+      - run: >-
+          cargo clippy --workspace --all-targets
+          --features ruprizzle/postgres-tokio-postgres,ruprizzle-integration-tests/postgres-tokio-postgres,ruprizzle-deep-tests/postgres-tokio-postgres
+          -- -D warnings
       - run: cargo test -p ruprizzle --test soak --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'
         env:
           RUPRIZZLE_TEST_RUSQLITE: 1

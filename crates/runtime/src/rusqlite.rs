@@ -219,10 +219,7 @@ impl RusqlitePool {
     /// Number of idle connections available for checkout.
     #[must_use]
     pub fn num_idle(&self) -> usize {
-        self.inner
-            .conns
-            .try_lock()
-            .map_or(0, |conns| conns.len())
+        self.inner.conns.try_lock().map_or(0, |conns| conns.len())
     }
 
     /// Number of threads currently waiting for a connection.

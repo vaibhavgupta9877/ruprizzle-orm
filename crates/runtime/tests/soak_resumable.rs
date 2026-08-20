@@ -363,9 +363,7 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
                 // transaction so the pool sees frequent acquire/release cycles.
                 if local % 7 == 0 {
                     if let Ok(tx) = pool.begin().await {
-                        let _ = tx
-                            .execute_raw(Cow::Borrowed("SELECT 1"), Vec::new())
-                            .await;
+                        let _ = tx.execute_raw(Cow::Borrowed("SELECT 1"), Vec::new()).await;
                         let _ = tx.commit().await;
                     }
                 }
@@ -414,10 +412,7 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
 
     let count = db
         .pool()
-        .fetch_all_raw(
-            Cow::Borrowed("SELECT COUNT(*) FROM soak_kv"),
-            Vec::new(),
-        )
+        .fetch_all_raw(Cow::Borrowed("SELECT COUNT(*) FROM soak_kv"), Vec::new())
         .await?;
     let count = match count {
         RowBatch::Rusqlite(rows) if !rows.is_empty() => i64::from_value(&rows[0].values[0])?,

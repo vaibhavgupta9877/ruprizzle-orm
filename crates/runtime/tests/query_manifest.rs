@@ -8,11 +8,51 @@ struct Task {
     name: String,
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Task);
+
 impl Model for Task {
     const TABLE: &'static str = "manifest_tasks";
 }
 
 const NAME: Column<Task, String> = Column::new("manifest_tasks", "name");
+
+// The `Model` bound pulls in the native-driver decode traits when the
+// `sqlite-rusqlite` feature is on. This hand-written model does not go through
+// `#[derive(Model)]`, so the impls are supplied here.
+#[cfg(feature = "sqlite-rusqlite")]
+mod rusqlite_impls {
+    use super::Task;
+    use ruprizzle::Error;
+    use ruprizzle::rusqlite::{FromOwnedRow, FromRusqliteRow, Row, RusqliteRow, RusqliteValue};
+
+    impl FromOwnedRow for Task {
+        fn from_owned_row(row: &Row) -> Result<Self, Error> {
+            let id = match row.values.first() {
+                Some(RusqliteValue::Integer(id)) => *id,
+                _ => 0,
+            };
+            let name = match row.values.get(1) {
+                Some(RusqliteValue::Text(name)) => name.clone(),
+                _ => String::new(),
+            };
+            Ok(Task { id, name })
+        }
+    }
+
+    impl FromRusqliteRow for Task {
+        fn from_rusqlite_row(row: &RusqliteRow) -> Result<Self, Error> {
+            Ok(Task {
+                id: row
+                    .get(0)
+                    .map_err(|e| Error::Message(format!("cannot decode Task.id: {e}")))?,
+                name: row
+                    .get(1)
+                    .map_err(|e| Error::Message(format!("cannot decode Task.name: {e}")))?,
+            })
+        }
+    }
+}
 
 async fn fresh_pool() -> Pool {
     let dir = tempfile::tempdir().unwrap();

@@ -160,6 +160,36 @@ jobs:
             cargo test -p ruprizzle
           fi
 
+  native-driver-workspace:
+    name: workspace compiles with native drivers
+    runs-on: ubuntu-latest
+    # The feature matrix above is scoped to `-p ruprizzle`, so a native-driver
+    # break anywhere else in the workspace (library code in ruprizzle-migrate,
+    # integration tests, hand-written models in local crates) compiled clean in
+    # CI while being broken on the feature. This job builds *every* crate, and
+    # every target including tests, with each crate's own native-driver feature
+    # switched on.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: sqlite-rusqlite
+            features: >-
+              ruprizzle/sqlite-rusqlite,ruprizzle-migrate/sqlite-rusqlite,ruprizzle-cli/sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite,ruprizzle-integration-tests/sqlite-rusqlite,ruprizzle-deep-tests/sqlite-rusqlite
+          - name: postgres-tokio-postgres
+            features: >-
+              ruprizzle/postgres-tokio-postgres,ruprizzle-integration-tests/postgres-tokio-postgres,ruprizzle-deep-tests/postgres-tokio-postgres
+          - name: both native drivers
+            features: >-
+              ruprizzle/sqlite-rusqlite,ruprizzle-migrate/sqlite-rusqlite,ruprizzle-cli/sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite,ruprizzle-integration-tests/sqlite-rusqlite,ruprizzle-deep-tests/sqlite-rusqlite,ruprizzle/postgres-tokio-postgres,ruprizzle-integration-tests/postgres-tokio-postgres,ruprizzle-deep-tests/postgres-tokio-postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets --features "${{ matrix.features }}" -- -D warnings
+
   generated-code:
     name: generated code compiles clean
     runs-on: ubuntu-latest

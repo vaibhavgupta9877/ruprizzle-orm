@@ -260,15 +260,47 @@ fn run_bench_client() -> ExitCode {
 fn run_harden() -> ExitCode {
     eprintln!("--- xtask: harden ---");
 
-    if run_all(&["lint", "test", "docs"]) != ExitCode::SUCCESS {
-        return ExitCode::FAILURE;
+    // Stage failures are collected rather than returned immediately. The three
+    // source audits at the end are pure text scans over the checked-in code:
+    // they do not need a successful build, and aborting before them left the
+    // security posture unreported whenever an earlier stage broke.
+    let mut failures: Vec<String> = Vec::new();
+    let build_ok = run_all(&["lint", "test", "docs"]) == ExitCode::SUCCESS;
+    if !build_ok {
+        failures.push("lint/test/docs".to_owned());
     }
 
+    if build_ok {
+        if let Err(stage) = run_harden_build_stages() {
+            failures.push(stage);
+        }
+    } else {
+        eprintln!(
+            "xtask: skipping deny/check/package stages because lint/test/docs failed; running source audits anyway"
+        );
+    }
+
+    if let Err(mut stages) = run_harden_audits() {
+        failures.append(&mut stages);
+    }
+
+    if failures.is_empty() {
+        eprintln!("xtask: harden complete");
+        return ExitCode::SUCCESS;
+    }
+    eprintln!("xtask: harden failed: {}", failures.join(", "));
+    ExitCode::FAILURE
+}
+
+/// Build-dependent hardening stages: cargo-deny, workspace check, packaging.
+///
+/// Returns the name of the first failing stage.
+fn run_harden_build_stages() -> Result<(), String> {
     // cargo-deny: licences, advisories, duplicate versions.
     if has_command("cargo-deny") || has_command("cargo") && has_subcommand("deny") {
         if !run_command("cargo", &["deny", "check"]) {
             eprintln!("xtask: cargo deny check failed");
-            return ExitCode::FAILURE;
+            return Err("cargo deny check".to_owned());
         }
     } else {
         eprintln!("xtask: cargo-deny not installed; skipping deny check");
@@ -276,7 +308,7 @@ fn run_harden() -> ExitCode {
 
     // MSRV is declared in the workspace; verify with the installed toolchain.
     if !run_command("cargo", &["check", "--workspace"]) {
-        return ExitCode::FAILURE;
+        return Err("cargo check --workspace".to_owned());
     }
 
     // Package every crate that will be published, in dependency order.
@@ -303,9 +335,19 @@ fn run_harden() -> ExitCode {
             "cargo",
             &["package", "-p", package, "--list", "--allow-dirty"],
         ) {
-            return ExitCode::FAILURE;
+            return Err(format!("cargo package -p {package}"));
         }
     }
+
+    Ok(())
+}
+
+/// Source-only hardening audits: panic budget, arithmetic/indexing budget, and
+/// the SQL-injection scan. These run regardless of build health.
+///
+/// Returns the names of every failing audit, not just the first.
+fn run_harden_audits() -> Result<(), Vec<String>> {
+    let mut failures: Vec<String> = Vec::new();
 
     // Panic audit: fail on unwrap/expect/panic in library source above the
     // checked-in budget.
@@ -319,11 +361,11 @@ fn run_harden() -> ExitCode {
                 eprintln!(
                     "xtask: panic budget exceeded for {crate_dir}: found {count}, budget {budget}"
                 );
-                return ExitCode::FAILURE;
+                failures.push(format!("panic budget ({crate_dir})"));
             }
             Err(e) => {
                 eprintln!("xtask: panic audit failed for {crate_dir}: {e}");
-                return ExitCode::FAILURE;
+                failures.push(format!("panic audit ({crate_dir})"));
             }
         }
     }
@@ -342,11 +384,11 @@ fn run_harden() -> ExitCode {
                 eprintln!(
                     "xtask: arithmetic/indexing budget exceeded for {crate_dir}: arithmetic {arith} (budget {arith_budget}), indexing {idx} (budget {idx_budget})"
                 );
-                return ExitCode::FAILURE;
+                failures.push(format!("arithmetic/indexing budget ({crate_dir})"));
             }
             Err(e) => {
                 eprintln!("xtask: code audit failed for {crate_dir}: {e}");
-                return ExitCode::FAILURE;
+                failures.push(format!("code audit ({crate_dir})"));
             }
         }
     }
@@ -355,11 +397,14 @@ fn run_harden() -> ExitCode {
     eprintln!("--- xtask: injection audit ---");
     if let Err(e) = injection_audit() {
         eprintln!("xtask: injection audit failed: {e}");
-        return ExitCode::FAILURE;
+        failures.push("injection audit".to_owned());
     }
 
-    eprintln!("xtask: harden complete");
-    ExitCode::SUCCESS
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures)
+    }
 }
 
 fn panic_audit(crate_dir: &str) -> Result<usize, std::io::Error> {
