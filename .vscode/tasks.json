@@ -1,0 +1,92 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "cargo",
+      "command": "check",
+      "args": ["--workspace", "--all-targets"],
+      "problemMatcher": ["$rustc"],
+      "group": "build",
+      "label": "Cargo: Check All Targets"
+    },
+    {
+      "type": "cargo",
+      "command": "test",
+      "args": ["--workspace"],
+      "problemMatcher": ["$rustc"],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "label": "Cargo: Test Workspace"
+    },
+    {
+      "type": "shell",
+      "command": "cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'",
+      "options": {
+        "env": {
+          "RUPRIZZLE_TEST_RUSQLITE": "1"
+        }
+      },
+      "problemMatcher": ["$rustc"],
+      "group": "test",
+      "label": "Cargo: Test SQLite Rusqlite"
+    },
+    {
+      "type": "cargo",
+      "command": "clippy",
+      "args": ["--workspace", "--all-targets", "--", "-D", "warnings"],
+      "problemMatcher": ["$rustc"],
+      "group": "build",
+      "label": "Cargo: Clippy (Strict)"
+    },
+    {
+      "type": "cargo",
+      "command": "fmt",
+      "args": ["--all", "--check"],
+      "problemMatcher": ["$rustc"],
+      "group": "none",
+      "label": "Cargo: Format Check"
+    },
+    {
+      "type": "cargo",
+      "command": "fmt",
+      "args": ["--all"],
+      "problemMatcher": ["$rustc"],
+      "group": "none",
+      "label": "Cargo: Format Apply"
+    },
+    {
+      "type": "cargo",
+      "command": "xtask",
+      "args": ["harden"],
+      "problemMatcher": ["$rustc"],
+      "group": "test",
+      "label": "XTask: Harden"
+    },
+    {
+      "type": "cargo",
+      "command": "xtask",
+      "args": ["ci"],
+      "problemMatcher": ["$rustc"],
+      "group": "test",
+      "label": "XTask: CI Full Suite"
+    },
+    {
+      "type": "cargo",
+      "command": "run",
+      "args": ["-p", "ruprizzle-cli", "--", "validate"],
+      "problemMatcher": ["$rustc"],
+      "group": "none",
+      "label": "Ruprizzle CLI: Validate Schema"
+    },
+    {
+      "type": "cargo",
+      "command": "run",
+      "args": ["-p", "ruprizzle-cli", "--", "generate"],
+      "problemMatcher": ["$rustc"],
+      "group": "none",
+      "label": "Ruprizzle CLI: Generate Code"
+    }
+  ]
+}

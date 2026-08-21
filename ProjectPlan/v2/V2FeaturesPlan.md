@@ -1,241 +1,328 @@
-# v2 Features Plan — closing the Prisma/Drizzle DX gap
+# v2 Features Plan — The High-Performance Developer Experience Platform
 
-**Date:** 2026-08-14
-**Author:** Vaibhav Gupta
-**Status:** Draft — proposed, not yet scheduled
-**Precondition:** [`ProjectPlan/ProductionReadiness.md`](../ProductionReadiness.md) currently
-reports a **build failure at HEAD** (`dev-v0-2` @ `169606b`,
-`crates/runtime/src/query.rs`). Nothing in this plan should start until that is fixed and the
-full gate (`fmt`, `clippy`, `test`, `harden`) is green again. Building new surface area on an
-unverified base compounds risk instead of reducing it.
-**Builds on:** [`ProjectPlan/v1/PathToStableV1.md`](../v1/PathToStableV1.md), which is the
-active plan for reaching 1.0 (semver policy, metrics/operability, capability commitments). v1
-explicitly defers Studio/GUI, offline query checking, and edge/serverless drivers to
-"post-1.0, reconsider then." This document is that reconsideration: it is the **v2 plan**,
-scoped for *after* v1 ships, not a replacement for it.
+**Date:** 2026-08-21  
+**Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
+**Status:** Approved & Scheduled for v2 Cycle  
+**Baseline:** `1.0.0-rc.1` (Published on crates.io 2026-08-21, branch `dev-v0-2`). All mechanical gates (`fmt`, `clippy -D warnings`, `test`, `harden`, `deny`) are **100% green** across all ten workspace crates.  
+**Builds on:** [`ProjectPlan/v1/PathToStableV1.md`](../v1/PathToStableV1.md), which delivers the 1.0 stability, semver commitment, and core query engine parity (Postgres, SQLite, MySQL, savepoints, CTEs, joins, aggregates, streaming).
 
 ---
 
-## 1. Why now, and why these features
+## 1. Executive Summary & Market Landscape
 
-`docs/FeaturesMasterComparison.md` and the 2026-08-14 readiness reassessment show that the last
-three weeks of work (savepoints, MySQL, `db pull` introspection, seeding, joins, correlated
-subqueries, CTEs, set operations) closed nearly every **query-capability** gap against
-Prisma/Drizzle. What's left is not query capability — it's the **developer-experience layer**
-around the query engine that Prisma and Drizzle are actually known for:
+### 1.1 The v2 Strategic Mission
+With the release of `1.0.0-rc.1`, `ruprizzle-orm` has established itself as the fastest and most reliable relational ORM in the Rust ecosystem (`3.1 µs` PK lookup vs Diesel's `9.9 µs`, Drizzle's `39.0 µs`, Prisma's `173.1 µs` per `docs/BenchmarkResults.md`).
 
-| Gap | Prisma | Drizzle | ruprizzle today |
-|---|---|---|---|
-| Visual data browser / editor | Prisma Studio | Drizzle Studio | **None** |
-| Compile-time / offline query checking | Generated client is fully typed against schema | `drizzle-kit` + TS types | **None** — no `sqlx-data.json`-equivalent |
-| Editor support | Full LSP via generated client + TS | TS types + drizzle-kit | TextMate grammar only, no LSP |
-| Seeding | `prisma db seed` | `drizzle-seed` | ✅ has it (`crates/cli/src/seed.rs`) |
-| Schema introspection | `prisma db pull` | `drizzle-kit introspect` | ✅ has it (`db pull`) |
-| Edge/serverless drivers | Accelerate, Data Proxy | Neon/Turso/D1/PlanetScale HTTP drivers | **None** |
-| True streaming cursors | N/A (buffered) | N/A (buffered) | Buffered (parity, not a gap) |
-| Array bind values (Postgres) | Supported | Supported | **Rejected at bind time** |
+However, customer research (`customer-research.md`) and market analysis across TypeScript and Rust ecosystems (Prisma, Drizzle, SeaORM, Diesel, SQLx, Toasty, Prax) reveal a definitive pattern:
 
-The pattern: ruprizzle now *generates and executes* SQL as well as or better than the
-competition (per `docs/BenchmarkResults.md`), but it gives the developer far less **visibility
-and confidence** while writing and running that code. That's the v2 theme — not "more query
-features," but **"see what's happening, catch mistakes before running, work from anywhere."**
+> **Developers choose ORMs for performance, but they stay for Developer Experience (DX), visibility, and confidence.**
+
+While `ruprizzle` v1 perfected SQL generation and runtime execution, **v2 transforms ruprizzle into a complete data platform**:
+1. **Visibility & Inspection:** Local-first visual data browser & ERD studio (`ruprizzle studio`), visual migration safety diffing, and `EXPLAIN ANALYZE` visualizer.
+2. **Confidence & Tooling:** Zero-DB compile-time query verification (`ruprizzle check`), rich LSP editor intelligence with semantic completions and quick fixes, and deep IDE integration.
+3. **Modern Data Stacks:** Native `pgvector` & `sqlite-vec` AI embeddings, Edge/Serverless drivers (Turso/libSQL, Cloudflare D1, Neon), Primary/Replica connection routing, and OpenTelemetry observability.
 
 ---
 
-## 2. Feature set, ranked by leverage
+### 1.2 Competitive Matrix & Ecosystem Positioning
 
-### 2.1 Studio — local-first data browser and editor (headline feature)
-
-**What:** A local web UI, launched via `ruprizzle studio` (new CLI subcommand), that connects to
-the configured database and gives a Prisma-Studio-equivalent experience: browse tables, page
-through rows, filter/sort, edit cells inline, create/delete rows, follow FK relations by
-clicking through, and view the generated schema graph.
-
-**Why it's the headline item:** it's the single most-requested Prisma/Drizzle feature category
-(named explicitly as a competitor win in `docs/FeaturesMasterComparison.md`) and the one with no
-existing ruprizzle counterpart at all — every other v2 item has a partial analog already.
-
-**Design direction:**
-- **Backend:** a thin HTTP server embedded in the `ruprizzle-cli` crate (behind a `studio`
-  feature flag to avoid bloating the default CLI binary), reusing the existing `Pool` and
-  generated schema metadata — **no new query engine**, it drives the same `SelectQuery`/`Tx`
-  APIs the generated client uses. Serves a REST-ish JSON API: `GET /api/tables`,
-  `GET /api/tables/:name/rows?offset=&limit=&filter=&sort=`, `PATCH /api/tables/:name/rows/:pk`,
-  `POST`/`DELETE` equivalents. Read path first, write path gated behind an explicit
-  `--allow-writes` flag (default read-only, matching Drizzle Studio's safer default over
-  Prisma's).
-- **Frontend:** a static single-page app (no separate build/deploy story — ship it embedded in
-  the binary via `include_dir!` or similar), talking only to `localhost`. Keep it a static asset
-  bundle rather than a live framework dependency, to avoid adding a JS toolchain to the Rust
-  release pipeline.
-- **Schema source:** reuse the same introspection/codegen metadata `db pull` and codegen already
-  produce — Studio should describe tables from the same source of truth the generated client
-  uses, not re-parse SQL independently.
-- **Safety:** binds to `127.0.0.1` only by default; refuses to start against a database URL that
-  looks like a production host unless `--yes-i-know` is passed (mirrors `db push`'s existing
-  destructive-action gating pattern in the migrate crate).
-
-**Effort:** Large — new CLI subcommand, new embedded HTTP server, new frontend. Estimate:
-**3–4 weeks** for a v1 of Studio covering browse/filter/sort/edit on Postgres + SQLite.
-
-**Sequencing:** Start after 2.2 (offline query checking) is scaffolded, since Studio's row
-editor benefits from the same typed-schema introspection work; but Studio can proceed in
-parallel by a separate contributor since the dependency is soft (shared schema metadata format,
-not shared code).
-
-### 2.2 Offline / compile-time query checking
-
-**What:** A `ruprizzle check` command (and optional generated `query-manifest.json`, analogous
-to `sqlx-data.json`) that validates every query in the codebase against the schema **without a
-live database connection**, catching type mismatches, unknown columns, and invalid joins at
-build/CI time instead of at first execution.
-
-**Why:** named explicitly in `docs/KnownLimitations.md` as absent; it's the single gap most
-likely to matter in CI pipelines that don't want a live DB for a type check step, and it's a
-core part of both Prisma's (generated client) and Drizzle's (TS types) value proposition.
-
-**Design direction:**
-- Reuse the existing parser/codegen crates' schema model — this is fundamentally a "run the
-  existing type-checking logic that today only runs against a live `Pool` at codegen time,
-  but make it runnable against a serialized schema snapshot instead."
-  Note: because ruprizzle's queries are already expressed through a typed Rust query builder
-  (not a macro over raw SQL strings, unlike `sqlx::query!`), a large fraction of this checking
-  already happens at **Rust compile time** via the type system. The gap is narrower than for
-  `sqlx`: what's missing is validating *dynamically constructed* queries (e.g., `raw!` escape
-  hatch, or filters built at runtime) against the schema ahead of execution.
-- Ship `ruprizzle check` as a CI-friendly command: exit non-zero on any unresolvable query,
-  print file:line diagnostics.
-- Snapshot format: reuse the schema representation already produced by `db pull`/codegen so this
-  doesn't invent a second schema IR.
-
-**Effort:** Medium. Estimate: **1.5–2 weeks**, mostly plumbing existing type-checking logic into
-a schema-snapshot-driven CLI path instead of requiring a live connection.
-
-### 2.3 LSP / editor support
-
-**What:** A minimal Language Server for `.ruprizzle`/schema DSL files (if one exists) or for
-inline query macros — diagnostics (unknown column, type mismatch) and go-to-definition for
-schema fields, at minimum. Full completion is a stretch goal.
-
-**Why:** `docs/KnownLimitations.md` already flags "No LSP yet; syntax highlighting is available
-as a TextMate grammar" as a known 0.2 deferral — this item is not new, it's promoting an
-already-acknowledged gap into a scheduled v2 feature.
-
-**Design direction:** Build on top of 2.2 — the LSP's diagnostics engine should be a thin
-wrapper around whatever powers `ruprizzle check`, not a separate implementation, to avoid two
-sources of truth for "is this query valid."
-
-**Effort:** Medium-Large, but can ship incrementally (diagnostics-only first, completion later).
-Estimate: **2–3 weeks** for diagnostics + go-to-definition; completion is a v2.1+ stretch.
-
-**Sequencing:** After 2.2. Do not start before offline checking exists — the LSP has nothing to
-wrap otherwise.
-
-### 2.4 Postgres array bind values
-
-**What:** Close finding #3 from the readiness assessment — `Value::Array` is currently rejected
-at bind time in all four encoders (`sqlx::Any`, SQLite, native Postgres, `tokio-postgres`).
-
-**Why it's in v2 and not v1-blocking:** it's a real capability gap but narrow and well-isolated
-(4 call sites per the existing finding), unlike Studio/offline-checking which require new
-subsystems. Grouping it here because it's genuine Prisma/Drizzle parity work, not because it's
-architecturally related to the DX items above.
-
-**Design direction:** Native Postgres path (`postgres-tokio-postgres`) is the natural place to
-land this first — `tokio-postgres` has first-class array support already. `sqlx::Any` and
-plain SQLite arrays likely stay unsupported/rejected (SQLite has no native array type), so this
-should ship as a **documented, feature-gated capability** rather than a blanket enablement —
-consistent with how `docs/adr/ADR-010-PostgresArraysAndSqliteFallback.md` already frames the
-Postgres/SQLite split for a related concern.
-
-**Effort:** Small. Estimate: **3–5 days**, given the ADR groundwork already exists.
-
-### 2.5 Edge/serverless driver support
-
-**What:** HTTP-based driver adapters for at least one of Neon, Turso/libSQL, or Cloudflare D1 —
-matching the "Partial" edge/serverless support Prisma and Drizzle already have and ruprizzle
-currently marks "No" for in `docs/FeaturesMasterComparison.md`.
-
-**Why it's last:** highest effort-to-clarity ratio of the five items — it's a new driver
-category (HTTP-transport SQL, not TCP), and the previous readiness assessments have consistently
-found that ruprizzle's core differentiation is measured performance on traditional
-Postgres/SQLite deployments, not edge reach. This is valuable but should not block Studio or
-offline checking, which serve every existing user immediately.
-
-**Design direction:** Pick **one** target first (Turso/libSQL is the closest architectural
-match to the existing `sqlite-rusqlite` path) rather than building a generic HTTP-driver
-abstraction speculatively. Treat it as a new feature-gated crate (`ruprizzle-turso` or similar),
-mirroring the `postgres-tokio-postgres`/`sqlite-rusqlite` pattern already established, so it
-plugs into the existing `Pool` accessor pattern (`as_turso()`, etc.) rather than inventing a new
-integration seam.
-
-**Effort:** Large, open-ended. Estimate: **3+ weeks** for a single target driver, and this
-should be timeboxed/re-scoped rather than committed to a hard estimate until a target is chosen.
+| Dimension | ruprizzle v1.0 | **ruprizzle v2.0 (Target)** | Prisma 6 | Drizzle | SeaORM 1.1 | Diesel 2.2 | SQLx 0.8 |
+|---|---|---|---|---|---|---|---|
+| **Core Architecture** | Pure Rust, Zero-Sidecar | **Pure Rust, Zero-Sidecar** | Node + Rust Sidecar engine | Pure TypeScript | Pure Rust (ActiveRecord) | Pure Rust (Type DSL) | Pure Rust (Raw SQL) |
+| **Schema Paradigm** | Schema-first (`schema.ruprizzle`) | **Schema-first + Rich Types** | `schema.prisma` | TypeScript Code-First | Entity derive macros | `table!` / `schema.rs` | None / Raw SQL migrations |
+| **SQL Transparency** | Full `.to_sql()` | **Full `.to_sql()` + Visual Explain** | Partial | Full (SQL-like) | No (Hidden AST) | Partial | Full (Raw SQL) |
+| **Visual Studio / GUI** | None | **ruprizzle Studio (Embedded SPA)** | Prisma Studio | Drizzle Studio | Seaography (GraphQL) | None | None |
+| **Offline CI Checking** | Scaffolded (`crates/check`) | **Full Query Manifest & Type Validation** | Generated client types | TS Typecheck | None | Hand-written type tests | `sqlx-data.json` |
+| **Language Server (LSP)**| Scaffolded (`crates/lsp`) | **Full Semantic LSP + Quick-Fixes** | Full LSP | TS Server | Rust-analyzer only | Rust-analyzer only | Rust-analyzer only |
+| **AI / Vector Search** | None | **First-Class `pgvector` & `sqlite-vec`** | Manual extensions | Manual extensions | Partial (`pgvector`) | Manual SQL | Raw SQL |
+| **Edge / Serverless** | Basic connection | **Turso (Embedded Replica), D1, Neon** | Accelerate / Proxy | HTTP driver adapters | Limited | No | Partial |
+| **Connection Routing** | Single Pool | **Primary / Read-Replica Auto-Split** | Prisma Accelerate | Manual split | Manual connection | Manual connection | Manual connection |
+| **Observability** | Tracing events & Slow Query | **OpenTelemetry Semantic DB Spans & Metrics** | Tracing / Pulse | None | `tracing` spans | `tracing` | `tracing` |
+| **Postgres Array Binds** | Rejected at bind | **First-Class Typed Array Round-Tripping** | Yes | Yes | Yes | Yes | Yes |
 
 ---
 
-## 3. Sequencing and phases
+## 2. Core v2 Feature Specifications
 
-```
-Phase 0 (prerequisite, not part of v2 scope):
-  Fix crates/runtime/src/query.rs build break → green gate → tag a known-good v1 baseline.
+```mermaid
+graph TD
+    subgraph "Core Schema & Diagnostics"
+        DSL["schema.ruprizzle DSL"]
+        Parser["ruprizzle-parser"]
+        LSP["ruprizzle-lsp (Language Server)"]
+        Check["ruprizzle check (Offline Engine)"]
+    end
 
-Phase 1 (v2.0 — DX foundation, ~5-6 weeks):
-  2.4 Array binds            [independent, can start immediately, smallest]
-  2.2 Offline query checking [independent, unlocks 2.3]
+    subgraph "Developer Experience & Visibility"
+        Studio["ruprizzle Studio (Embedded Web GUI)"]
+        ERD["Visual ERD Diagram"]
+        Explain["Query Explain Visualizer"]
+        DiffPreview["Migration Safety Preview"]
+    end
 
-Phase 2 (v2.1 — visibility layer, ~4-5 weeks, can overlap late Phase 1):
-  2.1 Studio (read-only first, writes behind --allow-writes)
-  2.3 LSP diagnostics (depends on 2.2's checking engine)
+    subgraph "Modern Runtime & Drivers"
+        Runtime["ruprizzle Runtime"]
+        Vector["pgvector & sqlite-vec (AI)"]
+        Edge["Turso / libSQL & D1 Edge Drivers"]
+        Replicas["Primary / Read-Replica Routing"]
+        OTel["OpenTelemetry DB Semantics"]
+        Arrays["Postgres Array Binds & Rich Types"]
+    end
 
-Phase 3 (v2.2 — reach, open-ended, ~3+ weeks):
-  2.5 One edge/serverless driver (target chosen at phase start, not now)
+    DSL --> Parser
+    Parser --> LSP
+    Parser --> Check
+    Parser --> Studio
+    Studio --> ERD
+    Studio --> Explain
+    Studio --> DiffPreview
+    Runtime --> Vector
+    Runtime --> Edge
+    Runtime --> Replicas
+    Runtime --> OTel
+    Runtime --> Arrays
 ```
 
-Rationale for this order: 2.4 is a quick, isolated win that removes an existing documented
-limitation with no dependency on anything else. 2.2 is scoped second because 2.3 (LSP) and
-part of 2.1 (Studio's schema awareness) both benefit from its schema-snapshot infrastructure —
-building it once and reusing it avoids two independent "read the schema and validate against it"
-implementations. Studio is scoped as the headline deliverable of Phase 2 despite being the
-largest single item, because it's the most externally visible gap and the one most likely to
-change a prospective user's evaluation (per §7 of the readiness assessment: "a team choosing
-between it and Prisma or Drizzle is weighing trade-offs rather than counting absences" — Studio
-is currently a flat absence, not a trade-off). The edge driver is scoped last because it's the
-least differentiated relative to ruprizzle's proven strength (raw performance on traditional
-deployments) and the most open-ended in scope.
+---
+
+### 2.1 Ruprizzle Studio — Embedded Visual Data & Schema Workbench (Headline Feature)
+
+**Problem:** Today, developers using `ruprizzle` must switch to third-party tools (TablePlus, DBeaver, psql, sqlite3) to inspect data, test queries, or understand relation graphs. Prisma and Drizzle proved that an integrated, zero-config local UI dramatically accelerates prototyping and debugging.
+
+**Solution:** A lightweight, blazing-fast local web UI launched via `ruprizzle studio`:
+- **Single-Binary Zero-Dependency Deployment:** Pre-compiled static single-page app (SPA built with React/Vite and modern Tailwind/Radix components) embedded directly into the `ruprizzle-cli` binary using `rust-embed` or `include_dir!`. Zero external Node/npm dependencies required by the user.
+- **Embedded Asynchronous Backend:** Embedded web server inside `ruprizzle-cli` (behind `feature = "studio"`) using `axum` / `tower-http` binding exclusively to `127.0.0.1`.
+- **Core Capabilities:**
+  1. **Table Data Browser & Live Editor:** Paginated row view, column sorting, multi-column search/filtering, inline cell editing (with type-validated inputs), row insertion, and soft/hard deletion.
+  2. **Relation Traversal:** Interactive clickable foreign keys that seamlessly navigate between parent and child models (e.g. `User -> Posts -> Comments`).
+  3. **Interactive ERD Visualizer:** Dynamic graphical entity-relationship diagram generated directly from `schema.ruprizzle`, showing models, fields, types, indexes, and foreign-key cardinality.
+  4. **SQL Sandbox & `.to_sql()` Playground:** Visual query builder where users can compose filters, view generated parameterized SQL, and test query execution with real-time latency stats.
+  5. **Visual Migration Safety Diff:** Preview pending schema changes side-by-side with destructive migration risk indicators before executing `migrate dev` or `db push`.
+  6. **Live Query Plan Visualizer:** Visual execution tree for `EXPLAIN (ANALYZE, BUFFERS)` on Postgres / SQLite / MySQL.
+- **Safety Defaults:**
+  - Read-only by default; writes require `--allow-writes` flag.
+  - Rejection of production database URLs without explicit `--yes-i-know` override.
+
+**Effort:** Large (~3.5–4.5 weeks).  
+**Crates Affected:** `crates/cli`, new frontend submodule `editor/studio`.
 
 ---
 
-## 4. What v2 deliberately does not include
+### 2.2 Offline / Compile-Time Query Verification (`ruprizzle check`)
 
-Carried forward from `ProjectPlan/v1/PathToStableV1.md`'s explicit out-of-scope list, and still
-out of scope here unless a future plan revisits them:
+**Problem:** In CI/CD pipelines and team development environments, developers want guarantees that dynamic queries, raw fragments, and filters match the current schema *without* requiring an active database server running during CI type-checking.
 
-- MongoDB, ScyllaDB, DuckDB, Cassandra support.
-- Multi-tenancy / row-level security primitives.
-- `pgvector` / vector search (v1 plan defers to 1.1; not pulled forward here).
-- Replacing `sqlx::Any` as the default driver path (ADR-009's position stands).
-- MySQL is **not** in this out-of-scope list — it's already shipped as of the 2026-08-14
-  readiness reassessment and needs no further v2 work beyond normal maintenance.
+**Solution:** Elevate `crates/check` into a complete zero-DB validation engine:
+- **Query Manifest Specification (`query-manifest.json`):** A lightweight, standardized schema and query manifest format generated at build time or emitted by query builder macros.
+- **AST-Level Semantic Validation:**
+  - Tokenizes and parses queries to validate table existence, column names, column nullability, and foreign key references against `Schema` IR.
+  - Type-checks WHERE clauses and bind parameters against declared schema field types (e.g. catches `id: String` passed to `Int` primary key).
+  - Validates JOIN conditions and projection lists.
+- **CI Automation:** `ruprizzle check --schema schema.ruprizzle --manifest queries.json` exits with code 0 on success or returns structured GitHub-actions-compatible annotations and diagnostics with file, line, and suggested fixes.
+
+**Effort:** Medium (~1.5–2 weeks).  
+**Crates Affected:** `crates/check`, `crates/cli`, `crates/runtime`.
 
 ---
 
-## 5. Success criteria for v2
+### 2.3 Ruprizzle LSP 2.0 & Developer Tooling
 
-A v2 release is ready to ship when, for each landed feature:
+**Problem:** Writing `.ruprizzle` schemas without intelligent auto-completion, doc hovers, and real-time error underlines reduces developer velocity compared to TypeScript schemas.
 
-1. **Array binds (2.4):** Postgres array values round-trip through `postgres-tokio-postgres`
-   with a passing property test; `docs/KnownLimitations.md` updated to remove the caveat.
-2. **Offline checking (2.2):** `ruprizzle check` runs in CI with no live DB, catches at least the
-   same class of errors the previous readiness assessment's `query.rs` regression would have
-   caught (a strong internal validation of the feature's value, given that regression's cause).
-3. **Studio (2.1):** a fresh clone + `ruprizzle studio` gets a developer browsing real rows
-   within one command, with FK-relation click-through working on at least Postgres and SQLite.
-4. **LSP (2.3):** at minimum, unknown-column and type-mismatch diagnostics surface in VS Code
-   via the TextMate grammar's language ID, without requiring a live DB connection.
-5. **Edge driver (2.5):** at least one target (Turso preferred) passes the same conformance
-   suite the existing `sqlite-rusqlite`/`postgres-tokio-postgres` paths pass.
+**Solution:** Mature `crates/lsp` and the VS Code extension (`editor/vscode`) into a first-class language server:
+- **Rich Language Server Protocol Capabilities:**
+  1. **Diagnostics:** Immediate schema syntax errors, missing primary keys, invalid relation references, duplicate fields, unsupported types per provider.
+  2. **Intelligent Autocompletion:**
+     - Attribute completions (`@id`, `@default(...)`, `@unique`, `@updatedAt`, `@relation(...)`, `@map(...)`).
+     - Type completions (scalars, enums, referenced model types).
+     - Field-level completions for relation arguments (`fields: [...]`, `references: [...]`).
+  3. **Hover Documentation:** Rich Markdown hover info explaining attributes, data types, indexes, and dialect compatibility.
+  4. **Go-To-Definition & Find References:** Jump instantly between relation fields and target models.
+  5. **Formatting:** Native `textDocument/formatting` powered by `ruprizzle-parser` canonical printer.
+  6. **Code Actions / Quick-Fixes:** Automatically insert missing relation fields on inverse models, fix misspelled column types, and generate missing enum variants.
+- **Distribution:** Publish official `ruprizzle` extension to the VS Code Marketplace and Open VSX Registry.
 
-Each item ships independently behind its own feature flag or subcommand — v2 is not a single
-big-bang release, consistent with how `sqlite-rusqlite` and `postgres-tokio-postgres` shipped
-independently in the run-up to beta.1.
+**Effort:** Medium (~2–2.5 weeks).  
+**Crates Affected:** `crates/lsp`, `editor/vscode`.
+
+---
+
+### 2.4 Postgres Array Bind Values & Rich Native Types
+
+**Problem:** `Value::Array` was rejected at bind time in SQL encoders. Postgres developers heavily rely on native array types (`TEXT[]`, `INT[]`, `UUID[]`) for tags, role lists, and multi-tenant scopes.
+
+**Solution:**
+- Implement first-class `Value::Array(Vec<Value>)` serialization across `sqlx::Postgres` and native `tokio-postgres`.
+- Provide typed array filter operations:
+  - `has(val)` (`val = ANY(column)`)
+  - `has_every(vec)` (`column @> ARRAY[...]`)
+  - `has_some(vec)` (`column && ARRAY[...]`)
+  - `is_empty()` (`cardinality(column) = 0`)
+- SQLite/MySQL fallback: Transparent JSON serialization or graceful compile-time capability checks documented in ADR-010.
+
+**Effort:** Small (~3–5 days).  
+**Crates Affected:** `crates/core`, `crates/dialect`, `crates/runtime`.
+
+---
+
+### 2.5 Edge & Serverless Database Adapters (Turso, Cloudflare D1, Neon)
+
+**Problem:** Modern Rust web services deploy to Cloudflare Workers, Fastly Compute, AWS Lambda, and Vercel. Standard TCP connection pools are unsuitable for serverless environments with short execution lifespans and HTTP-only egress.
+
+**Solution:**
+- **Target 1: Turso / libSQL (`ruprizzle-turso`):**
+  - Native support for embedded SQLite replicas with automatic remote sync over HTTP/WebSocket.
+  - Zero-latency local reads with transactional remote writes.
+- **Target 2: Cloudflare D1 (`ruprizzle-d1`):**
+  - WASM-compatible HTTP client binding directly to Cloudflare D1 REST API.
+- **Target 3: Neon Serverless Postgres (`ruprizzle-neon`):**
+  - WebSockets / HTTP driver adapter bypassing TCP connection limits via Neon's connection pooler.
+- **Seam Architecture:** Plugs seamlessly into `Pool` trait via feature gates (`turso`, `d1`, `neon`) without altering query builder syntax.
+
+**Effort:** Large (~3–4 weeks).  
+**Crates Affected:** `crates/runtime`, new driver crates (`crates/turso`, etc.).
+
+---
+
+### 2.6 AI & Vector Search First-Class Integration (`pgvector` & `sqlite-vec`)
+
+**Problem:** Rust is increasingly the language of choice for high-throughput AI agents, RAG systems, and embedding pipelines. Developers currently must drop down to raw SQL to perform vector similarity searches.
+
+**Solution:**
+- **Schema DSL Primitive:**
+  ```ruprizzle
+  model Document {
+    id        String   @id @default(uuid())
+    content   String
+    embedding Vector(1536) // Vector column with dimension constraint
+    @@index([embedding], type: Hnsw, distance: Cosine)
+  }
+  ```
+- **Migration Engine Support:** Automatic generation of `CREATE EXTENSION IF NOT EXISTS vector` and `CREATE INDEX ... USING hnsw / ivfflat`.
+- **Query Builder Vector Operations:**
+  - `.nearest_neighbors(Document::embedding, query_vector, Limit(10))`
+  - `.with_distance(Document::embedding, query_vector, DistanceMetric::Cosine)`
+  - Operators: `<->` (L2 distance), `<#>` (inner product), `<=>` (cosine distance).
+
+**Effort:** Medium (~2 weeks).  
+**Crates Affected:** `crates/core`, `crates/parser`, `crates/dialect`, `crates/migrate`, `crates/runtime`.
+
+---
+
+### 2.7 Primary / Read-Replica Connection Routing
+
+**Problem:** Production architectures scale reads across multiple database read replicas while routing writes to a single primary.
+
+**Solution:**
+- Dual-pool connection manager in `ruprizzle`:
+  ```rust
+  let pool = Pool::builder()
+      .primary("postgres://writer.db/prod")
+      .replica("postgres://reader-1.db/prod")
+      .replica("postgres://reader-2.db/prod")
+      .build()
+      .await?;
+  ```
+- **Automatic Query Routing:** `SelectQuery` automatically routes to read replicas with round-robin / least-connection load balancing; `InsertQuery`, `UpdateQuery`, `DeleteQuery`, and active `Tx` transactions automatically route to the primary.
+- **Explicit Override:** `.use_primary()` or `.use_replica()` on any query builder.
+
+**Effort:** Medium (~1.5–2 weeks).  
+**Crates Affected:** `crates/runtime`.
+
+---
+
+### 2.8 OpenTelemetry (OTEL) Semantic Tracing & Metrics 2.0
+
+**Problem:** Production engineering teams require OpenTelemetry-compliant metrics and distributed tracing to monitor query latency, connection pool saturation, and slow database operations in Datadog, Grafana, or Honeycomb.
+
+**Solution:**
+- **Standardized DB Semantic Conventions:** Emit OTel spans matching OpenTelemetry Database Spans specification (`db.system`, `db.name`, `db.statement.sanitized`, `db.operation`, `net.peer.name`).
+- **Prometheus Metrics Exporter:**
+  - `ruprizzle_pool_connections_active`
+  - `ruprizzle_pool_connections_idle`
+  - `ruprizzle_pool_wait_duration_seconds`
+  - `ruprizzle_query_duration_seconds{status, operation, table}`
+  - `ruprizzle_slow_queries_total`
+
+**Effort:** Small-Medium (~1 week).  
+**Crates Affected:** `crates/runtime`.
+
+---
+
+### 2.9 Row-Level Security (RLS) & Multi-Tenant Primitives
+
+**Problem:** Multi-tenant SaaS apps require strict tenant data isolation. Developers want declarative security policies in their schema rather than remembering to add `where(tenant_id.eq(...))` on every query.
+
+**Solution:**
+- **Schema Directives:**
+  ```ruprizzle
+  model OrganizationData {
+    id        String @id @default(uuid())
+    tenant_id String
+    content   String
+    @@tenant(tenant_id)
+    @@policy(read, "tenant_id = current_setting('app.current_tenant')")
+  }
+  ```
+- **Runtime Tenant Context:** `pool.with_tenant("org_123")` or automatic Postgres RLS session variable injection.
+
+**Effort:** Medium (~2 weeks).  
+**Crates Affected:** `crates/core`, `crates/parser`, `crates/dialect`, `crates/runtime`.
+
+---
+
+## 3. Phased Roadmap & Release Milestones
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Phase 1: v2.0 Foundation & High-Leverage DX (5–6 Weeks)                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ • 2.4 Postgres Array Bind Values & Rich Native Types                        │
+│ • 2.2 Offline Query Checking (crates/check manifest validation & CI engine) │
+│ • 2.3 Ruprizzle LSP 2.0 (Completions, Hover, Quick-Fixes, VS Code Ext)      │
+│ • 2.8 OpenTelemetry 2.0 Metrics & Semantic DB Tracing                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Phase 2: v2.1 Visibility & Visual Workbench (4–5 Weeks)                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ • 2.1 Ruprizzle Studio Headline Release (Embedded Web UI)                   │
+│   ├── Table Browser, Paginated Grid, Inline Cell Editor                     │
+│   ├── Foreign Key Relation Click-Through Navigation                         │
+│   ├── Visual ERD Schema Graph Visualizer                                    │
+│   ├── Interactive SQL & .to_sql() Sandbox                                   │
+│   └── Migration Safety Diff & EXPLAIN Plan Tree                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Phase 3: v2.2 Modern Data Stack & AI Reach (4–5 Weeks)                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ • 2.6 pgvector & sqlite-vec AI Embeddings & Vector Distance Queries         │
+│ • 2.5 Edge / Serverless Adapters (Turso Embedded Replicas, D1, Neon)       │
+│ • 2.7 Primary / Read-Replica Auto-Routing Pool                              │
+│ • 2.9 Declarative Row-Level Security (RLS) & Multi-Tenant Primitives        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 4. Architectural Safeguards & Non-Goals
+
+1. **No Sidecars or Node Runtime:** `ruprizzle` will **never** adopt a Node.js daemon or external binary sidecar. All Studio, LSP, Check, and CLI tools remain 100% self-contained Rust binaries.
+2. **Relational Core Integrity:** Document stores (MongoDB, Cassandra, CouchDB) remain strictly out of scope. `ruprizzle` is engineered to be the absolute best ORM for relational and hybrid-relational (JSONB/Vector) databases.
+3. **Zero Runtime Allocation Regression:** Every new feature must preserve zero-cost query compilation and pass `cargo xtask harden` and `cargo xtask bench` performance budgets.
+
+---
+
+## 5. Success Metrics & Definition of Done
+
+Each v2 workstream is considered complete when:
+1. **Array Binds:** Postgres array round-trip property tests pass across all native and sqlx paths.
+2. **Offline Check:** `ruprizzle check` runs in GitHub Actions CI with no database attached and detects all schema mismatches.
+3. **LSP & Editor:** LSP passes language client conformance, published on VS Code marketplace with syntax highlighting, autocomplete, and diagnostics.
+4. **Studio:** `ruprizzle studio` launches a responsive browser UI within <50ms, rendering tables, ERD graphs, and inline edits with zero external dependencies.
+5. **Vector Search:** Embeddings round-trip with cosine distance nearest-neighbor queries and HNSW index migration generation.
+6. **Edge Drivers:** Turso embedded replica reads and writes pass all dialect conformance tests.
+7. **Production Gates:** `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `cargo xtask harden` are 100% green.

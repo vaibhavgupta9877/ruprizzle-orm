@@ -1,0 +1,60 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug ruprizzle CLI",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=ruprizzle",
+          "--package=ruprizzle-cli"
+        ],
+        "filter": {
+          "name": "ruprizzle",
+          "kind": "bin"
+        }
+      },
+      "args": ["validate"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug ruprizzle LSP",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=ruprizzle-lsp",
+          "--package=ruprizzle-lsp"
+        ],
+        "filter": {
+          "name": "ruprizzle-lsp",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug Integration Tests",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--package=ruprizzle-integration-tests",
+          "--test=crud"
+        ],
+        "filter": {
+          "name": "crud",
+          "kind": "test"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
