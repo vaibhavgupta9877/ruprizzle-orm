@@ -477,6 +477,8 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
         .filter_map(|f| emit_relation_filter_helpers(schema, model, f))
         .collect();
 
+    let (tree_module_tokens, tree_repo_tokens) = emit_tree_helpers(model);
+
     let insert_sets: Vec<_> = model
         .fields
         .values()
@@ -770,6 +772,28 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
             const UPDATED_AT_COLUMN: Option<&'static str> = #updated_at_tokens;
         }
 
+        impl #model_name {
+            /// Starts building a nested creation object for this model.
+            pub fn nested_create() -> ::ruprizzle::NestedCreate<#model_name> {
+                ::ruprizzle::NestedCreate::new()
+            }
+
+            /// Creates a nested connect specification by primary key.
+            pub fn nested_connect(id: impl ::ruprizzle::Encodable) -> ::ruprizzle::Value {
+                id.to_value()
+            }
+
+            /// Creates a nested connect-or-create specification.
+            pub fn nested_connect_or_create(
+                filter: ::ruprizzle::Filter<#model_name>,
+                create: ::ruprizzle::NestedCreate<#model_name>,
+            ) -> ::ruprizzle::NestedConnectOrCreate<#model_name> {
+                ::ruprizzle::NestedConnectOrCreate::new(filter, create)
+            }
+        }
+
+        #tree_module_tokens
+
         /// Table name for this model.
         pub const TABLE: &str = #table;
 
@@ -824,6 +848,8 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
             pub fn delete(&self) -> ::ruprizzle::DeleteQuery<'a, #model_name> {
                 ::ruprizzle::DeleteQuery::new(self.db.raw_pool())
             }
+
+            #tree_repo_tokens
         }
     };
     format(tokens)
@@ -2071,4 +2097,143 @@ fn emit_relation_filter_helpers(
             })
         }
     })
+}
+
+fn emit_tree_helpers(model: &Model) -> (TokenStream, TokenStream) {
+    let model_name = format_ident!("{}", model.name.as_str());
+    let table = &model.table;
+
+    let Some(pk_name) = model.primary_key.fields.first() else {
+        return (quote! {}, quote! {});
+    };
+    let Some(pk_field) = model.fields.get(pk_name.as_str()) else {
+        return (quote! {}, quote! {});
+    };
+    let primary_key = &pk_field.column;
+    let pk_field_ident = safe_field_ident(pk_name.as_str());
+
+    // Look for a self-referential relation field pointing to model.name with non-empty fields
+    let self_rel = model.fields.values().find_map(|f| {
+        let rel = f.relation()?;
+        if rel.target == model.name && !rel.fields.is_empty() {
+            let fk_name = rel.fields.first()?;
+            let fk_field = model.fields.get(fk_name.as_str())?;
+            Some((fk_field, f))
+        } else {
+            None
+        }
+    });
+
+    let Some((parent_fk_field, _rel_field)) = self_rel else {
+        return (quote! {}, quote! {});
+    };
+
+    let parent_fk_col = &parent_fk_field.column;
+    let parent_fk_ident = safe_field_ident(parent_fk_field.name.as_str());
+
+    let module_tokens = quote! {
+        /// Creates an ancestor hierarchy query traversing up to the root.
+        pub fn ancestors<'__a>(
+            id: impl Into<::ruprizzle::Value>,
+            pool: &'__a ::ruprizzle::Pool,
+        ) -> ::ruprizzle::HierarchyQuery<'__a, #model_name> {
+            ::ruprizzle::HierarchyQuery::ancestors(
+                pool,
+                #table,
+                #primary_key,
+                #parent_fk_col,
+                id,
+            )
+        }
+
+        /// Creates a descendant hierarchy query traversing down all subtrees.
+        pub fn descendants<'__a>(
+            id: impl Into<::ruprizzle::Value>,
+            pool: &'__a ::ruprizzle::Pool,
+        ) -> ::ruprizzle::HierarchyQuery<'__a, #model_name> {
+            ::ruprizzle::HierarchyQuery::descendants(
+                pool,
+                #table,
+                #primary_key,
+                #parent_fk_col,
+                id,
+            )
+        }
+
+        /// Reconstructs the complete in-memory tree hierarchy starting from `root_id`.
+        pub async fn tree_from_root(
+            root_id: impl Into<::ruprizzle::Value>,
+            pool: &::ruprizzle::Pool,
+        ) -> Result<::ruprizzle::HierarchyNode<#model_name>, ::ruprizzle::Error> {
+            let root_val = root_id.into();
+            let root_items = ::ruprizzle::HierarchyQuery::<#model_name>::new(
+                pool,
+                #table,
+                #primary_key,
+                #parent_fk_col,
+                root_val.clone(),
+                ::ruprizzle::HierarchyDirection::Ancestors,
+            )
+            .max_depth(1)
+            .all()
+            .await?;
+
+            let root = root_items.into_iter().next().ok_or_else(|| {
+                ::ruprizzle::Error::Message(format!("Tree root entity not found in {}", #table))
+            })?;
+
+            let descendants = ::ruprizzle::HierarchyQuery::<#model_name>::descendants(
+                pool,
+                #table,
+                #primary_key,
+                #parent_fk_col,
+                root_val,
+            )
+            .all()
+            .await?;
+
+            let descendants = descendants
+                .into_iter()
+                .filter(|d| {
+                    ::ruprizzle::Encodable::to_value(&d.#pk_field_ident)
+                        != ::ruprizzle::Encodable::to_value(&root.#pk_field_ident)
+                })
+                .collect();
+
+            Ok(::ruprizzle::HierarchyNode::from_flat(
+                root,
+                descendants,
+                |m| ::ruprizzle::Encodable::to_value(&m.#pk_field_ident),
+                |m| m.#parent_fk_ident.as_ref().map(::ruprizzle::Encodable::to_value),
+            ))
+        }
+    };
+
+    let repo_tokens = quote! {
+        /// Creates an ancestor hierarchy query traversing up to the root.
+        pub fn ancestors(
+            &self,
+            id: impl Into<::ruprizzle::Value>,
+        ) -> ::ruprizzle::HierarchyQuery<'a, #model_name> {
+            ancestors(id, self.db.raw_pool())
+        }
+
+        /// Creates a descendant hierarchy query traversing down all subtrees.
+        pub fn descendants(
+            &self,
+            id: impl Into<::ruprizzle::Value>,
+        ) -> ::ruprizzle::HierarchyQuery<'a, #model_name> {
+            descendants(id, self.db.raw_pool())
+        }
+
+        /// Reconstructs the complete in-memory tree hierarchy starting from `root_id`.
+        pub async fn tree_from_root(
+            &self,
+            root_id: impl Into<::ruprizzle::Value>,
+        ) -> Result<::ruprizzle::HierarchyNode<#model_name>, ::ruprizzle::Error> {
+            tree_from_root(root_id, self.db.raw_pool()).await
+        }
+    };
+
+    (module_tokens, repo_tokens)
 }

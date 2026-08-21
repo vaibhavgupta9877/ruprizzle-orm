@@ -581,6 +581,23 @@ impl ::ruprizzle::Model for Membership {
     const DELETED_AT_COLUMN: Option<&'static str> = None;
     const UPDATED_AT_COLUMN: Option<&'static str> = Some("updated_at");
 }
+impl Membership {
+    /// Starts building a nested creation object for this model.
+    pub fn nested_create() -> ::ruprizzle::NestedCreate<Membership> {
+        ::ruprizzle::NestedCreate::new()
+    }
+    /// Creates a nested connect specification by primary key.
+    pub fn nested_connect(id: impl ::ruprizzle::Encodable) -> ::ruprizzle::Value {
+        id.to_value()
+    }
+    /// Creates a nested connect-or-create specification.
+    pub fn nested_connect_or_create(
+        filter: ::ruprizzle::Filter<Membership>,
+        create: ::ruprizzle::NestedCreate<Membership>,
+    ) -> ::ruprizzle::NestedConnectOrCreate<Membership> {
+        ::ruprizzle::NestedConnectOrCreate::new(filter, create)
+    }
+}
 /// Table name for this model.
 pub const TABLE: &str = "memberships";
 pub const ID: Column<Membership, Uuid> = Column::new("memberships", "id");

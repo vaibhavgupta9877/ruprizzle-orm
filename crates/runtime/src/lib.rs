@@ -35,12 +35,14 @@ pub mod counting;
 pub mod error;
 pub mod executor;
 pub mod filter;
+pub mod hierarchy;
 pub mod include;
 pub mod join;
 pub mod json;
 pub mod m2m;
 pub mod metrics;
 pub mod model;
+pub mod nested;
 #[doc(hidden)]
 pub mod offset_row;
 pub use offset_row::OffsetRow;
@@ -71,9 +73,10 @@ pub mod decode;
 pub mod prelude {
     pub use crate::{
         Aggregate, AggregateQuery, AggregateScalar, Column, Cte, CteQuery, Encodable, Error,
-        Executor, Filter, GroupBy, GroupedQuery, InsertQuery, IsolationLevel, Join2, JoinKind,
-        JoinOn, JsonColumn, LeftJoin2, Maybe, Model, Numeric, OrderBy, Page, Pool, RawFragment,
-        Related, SelectQuery, SetOp, SetOpQuery, Tx, Value, raw,
+        Executor, Filter, GroupBy, GroupedQuery, HierarchyDirection, HierarchyNode, HierarchyQuery,
+        InsertQuery, IsolationLevel, Join2, JoinKind, JoinOn, JsonColumn, LeftJoin2, Maybe, Model,
+        NestedConnectOrCreate, NestedCreate, NestedRelWrite, Numeric, OrderBy, Page, Pool,
+        RawFragment, RelNestedOp, Related, SelectQuery, SetOp, SetOpQuery, Tx, Value, raw,
     };
 }
 
@@ -90,11 +93,15 @@ pub use filter::{
     Cte, CteQuery, ExistsSubquery, Filter, FilterNode, JsonFilterOp, RawFragment, Subquery, all,
     any,
 };
+pub use hierarchy::{HierarchyDirection, HierarchyNode, HierarchyQuery};
 pub use include::{IncludeList, IncludeMany, IncludeOne, IncludeSet};
 pub use join::{Join2, JoinKind, JoinOn, JoinSide, LeftJoin2, Maybe};
 pub use json::{JsonColumn, JsonPath, JsonSet};
 pub use m2m::{M2mAction, M2mWrite};
 pub use model::Model;
+pub use nested::{
+    AnyNestedWrite, NestedConnectOrCreate, NestedCreate, NestedRelWrite, RelNestedOp,
+};
 pub use order::OrderBy;
 pub use page::Page;
 pub use pool::{Pool, PoolConfig, PoolStats, connect, connect_with, ping, stats};

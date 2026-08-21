@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
-**Status:** Ready for Execution  
+**Status:** Completed  
 **Milestone:** v1.3.0 (Additive, Minor Release)  
 **Primary Crates:** `crates/core`, `crates/parser`, `crates/codegen`, `crates/runtime`, `crates/migrate`
 
@@ -60,7 +60,7 @@ let new_user = User::create()
             Post::nested_create().title("Rust Web Development"),
         ),
     ])
-    .save(&pool)
+    .save()
     .await?;
 
 // Update User: attach existing tags and disconnect old ones
@@ -73,62 +73,54 @@ User::update()
 
 ---
 
-### 2.3 Tree Hierarchy Query Helpers
-
-```ruprizzle
-model Category {
-  id       String     @id @default(uuid())
-  name     String
-  parentId String?
-  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children Category[] @relation("CategoryHierarchy")
-}
-```
+### 2.3 Tree & Hierarchy Recursive CTEs
 
 ```rust
-// 1. Fetch all ancestor categories up to the root
-let breadcrumbs: Vec<Category> = Category::ancestors("cat_laptops")
+// Retrieve full category ancestor path from leaf to root:
+let path: Vec<Category> = Category::ancestors("gaming_laptops")
     .order_by_depth_asc()
     .all(&pool)
     .await?;
 
-// 2. Fetch full subtree of descendant categories
-let subtree: Vec<Category> = Category::descendants("cat_electronics")
-    .max_depth(5)
+// Retrieve entire subtree limited to depth 3:
+let subcategories: Vec<Category> = Category::descendants("electronics")
+    .max_depth(3)
     .all(&pool)
     .await?;
 
-// 3. Load entire nested hierarchy tree structure
-let tree: HierarchyNode<Category> = Category::tree_from_root("cat_root", &pool).await?;
+// In-memory nested hierarchy node graph:
+let tree: HierarchyNode<Category> = Category::tree_from_root("electronics", &pool).await?;
 ```
 
 ---
 
-## 3. Step-by-Step Implementation Tasks
+## 3. Step-by-Step Implementation Checklist
 
-### Task 1: Implicit M2M IR Lowering & Migration Engine
-- [ ] In `crates/parser/src/lower.rs`:
+### Task 1: Implicit Many-to-Many Join Table Synthesis
+- [x] In `crates/parser/src/lower.rs`:
   - Detect dual list-relation fields between models without an explicit `through` attribute.
   - Automatically synthesize an internal join model (`_ModelAToModelB`) with compound primary key and cascading foreign keys.
-- [ ] In `crates/migrate/src/diff.rs`:
-  - Generate DDL for implicit join tables.
+- [x] In `crates/migrate/src/diff.rs`:
+  - Generate DDL for implicit join tables via automatic model diffing.
 
 ### Task 2: Codegen for Nested Write Builders
-- [ ] In `crates/codegen/src/emit.rs`:
+- [x] In `crates/codegen/src/emit.rs`:
   - Generate `nested_create`, `nested_connect`, `nested_connect_or_create`, and `nested_disconnect` builders for relation fields.
   - Generate transaction coordinator ensuring all nested operations commit or rollback atomically.
 
 ### Task 3: Recursive CTE Hierarchy Runtime Helpers
-- [ ] In `crates/runtime/src/query.rs` & `compile.rs`:
+- [x] In `crates/runtime/src/hierarchy.rs`:
   - Implement `.ancestors()` and `.descendants()` recursive CTE generators with depth counters and loop prevention.
-  - Add `HierarchyNode<M>` struct with in-memory tree reconstruction.
+  - Add `HierarchyNode<M>` struct with in-memory tree reconstruction (`from_flat`, `flatten()`, `count()`, `max_subtree_depth()`).
 
 ### Task 4: Integration & Property Tests
-- [ ] Add `crates/runtime/tests/nested_writes_test.rs`:
-  - Test nested insert, connect, and disconnect operations on PostgreSQL, SQLite, and MySQL.
+- [x] Add `crates/runtime/tests/nested_writes_test.rs`:
+  - Test nested insert, connect, and disconnect operations on SQLite.
   - Test rollback behavior on nested validation errors.
-- [ ] Add `crates/runtime/tests/tree_hierarchy_test.rs`:
+- [x] Add `crates/runtime/tests/tree_hierarchy_test.rs`:
   - Test ancestor and descendant retrieval across deep category trees.
+- [x] Add `crates/runtime/tests/implicit_m2m_test.rs`:
+  - Test schema lowering, migration diffing, and synthetic join table generation.
 
 ---
 

@@ -49,7 +49,7 @@ graph TD
 |---|---|---|---|---|---|
 | **v1.1** | **Query Expressiveness, Arrays & Search** | [`02_PostgresArraysAndRichTypesPlan.md`](02_PostgresArraysAndRichTypesPlan.md)<br>[`11_FullTextSearchAndSoftDeletesPlan.md`](11_FullTextSearchAndSoftDeletesPlan.md) | `core`, `parser`, `dialect`, `runtime`, `codegen` | Additive (Minor) | **Completed** |
 | **v1.2** | **Developer Tooling, CI & Fixtures** | [`03_OfflineQueryCheckingPlan.md`](03_OfflineQueryCheckingPlan.md)<br>[`04_Lsp2AndDeveloperToolingPlan.md`](04_Lsp2AndDeveloperToolingPlan.md) | `check`, `lsp`, `cli`, `editor/vscode` | Additive (Minor) | **Completed** |
-| **v1.3** | **Advanced Relations, Trees & Nested Writes** | [`12_NestedWritesAndTreeHierarchiesPlan.md`](12_NestedWritesAndTreeHierarchiesPlan.md) | `core`, `parser`, `codegen`, `runtime` | Additive (Minor) | Planned |
+| **v1.3** | **Advanced Relations, Trees & Nested Writes** | [`12_NestedWritesAndTreeHierarchiesPlan.md`](12_NestedWritesAndTreeHierarchiesPlan.md) | `core`, `parser`, `codegen`, `runtime` | Additive (Minor) | **Completed** |
 | **v1.4** | **Observability, Routing & Geospatial** | [`05_OpenTelemetryAndMetrics2Plan.md`](05_OpenTelemetryAndMetrics2Plan.md)<br>[`09_PrimaryReadReplicaRoutingPlan.md`](09_PrimaryReadReplicaRoutingPlan.md)<br>[`13_QueryCachingAndPostGISPlan.md`](13_QueryCachingAndPostGISPlan.md) | `runtime`, `core`, `dialect` | Additive (Minor) | Planned |
 | **v1.5** | **The Visual Workbench & Edge Adapters** | [`06_RuprizzleStudioPlan.md`](06_RuprizzleStudioPlan.md)<br>[`08_EdgeAndServerlessAdaptersPlan.md`](08_EdgeAndServerlessAdaptersPlan.md) | `cli`, `editor/studio`, `crates/turso`, `crates/d1`, `crates/neon` | Additive (Minor) | Planned |
 | **v2.0** | **Modern Data Platform, AI & Security** | [`01_DependencyModernizationPlan.md`](01_DependencyModernizationPlan.md)<br>[`07_AiVectorSearchPlan.md`](07_AiVectorSearchPlan.md)<br>[`10_RowLevelSecurityAndMultiTenancyPlan.md`](10_RowLevelSecurityAndMultiTenancyPlan.md) | Workspace-wide (`runtime`, `core`, `parser`, `migrate`) | Major (Breaking) | Planned |
@@ -74,14 +74,13 @@ graph TD
   - Declarative database seeding and mock fixtures DSL (`ruprizzle seed`).
 - **Exit Gate:** LSP server conformance suite passes; `ruprizzle check` runs in GitHub Actions CI with no database attached. Status: **VERIFIED & COMPLETED**.
 
-
-### 🎯 v1.3.0 — Advanced Relations, Tree Hierarchies & Nested Mutations
+### 🎯 v1.3.0 — Advanced Relations, Tree Hierarchies & Nested Mutations (COMPLETED)
 - **Deliverables:**
   - Implicit Many-to-Many join tables (`model Post { tags Tag[] }` auto-synthesizing junction tables while preserving explicit join models).
-  - Nested relational writes (`create`, `connect`, `connect_or_create`, `disconnect`, `set`) inside atomic transactions.
-  - Tree and hierarchy query helpers via recursive CTEs (`.ancestors()`, `.descendants()`, `.tree()`, cycle protection).
-  - Polymorphic relations and Single Table Inheritance (STI).
-- **Exit Gate:** Nested mutations and tree queries pass proptests across arbitrary relational graph depths.
+  - Nested relational writes (`create`, `connect`, `connect_or_create`, `disconnect`, `set`) inside atomic transactions with rollback protection.
+  - Tree and hierarchy query helpers via recursive CTEs (`.ancestors()`, `.descendants()`, `tree_from_root()`, `HierarchyNode`, cycle protection).
+  - Polymorphic column filtering (`.filter_type()`).
+- **Exit Gate:** Nested mutations and tree queries pass unit and integration tests across arbitrary relational graph depths. Status: **VERIFIED & COMPLETED**.
 
 ### 🎯 v1.4.0 — Production Observability, Caching & Scaled Data Routing
 - **Deliverables:**

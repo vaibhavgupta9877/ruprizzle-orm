@@ -1076,16 +1076,28 @@ fn resolve_group(
     }
 
     let Some(&owner_index) = owner_positions.first() else {
+        // Check if this is an implicit many-to-many relation: exactly two list fields pointing to each other
+        let mut iter = group.iter();
+        if let (Some(first), Some(second), None) = (iter.next(), iter.next(), iter.next()) {
+            if first.is_list && second.is_list {
+                resolve_implicit_many_to_many(first, second, models, relations, diags);
+                return;
+            }
+        }
+
         // V08 — nobody declared `fields:`.
-        let side = &group[0];
-        diags.push(SchemaError::MissingRelationOwner {
-            model: side.model.to_string(),
-            target: side.target.to_string(),
-            span: side.span.into(),
-        });
+        if let Some(side) = group.first() {
+            diags.push(SchemaError::MissingRelationOwner {
+                model: side.model.to_string(),
+                target: side.target.to_string(),
+                span: side.span.into(),
+            });
+        }
         return;
     };
-    let owner = &group[owner_index];
+    let Some(owner) = group.get(owner_index) else {
+        return;
+    };
 
     let back = group
         .iter()
@@ -1481,4 +1493,303 @@ fn build_many_to_many_relation(
         join_owner_field: Some(owner_fk.field.clone()),
         join_target_field: Some(target_fk.field.clone()),
     })
+}
+
+#[allow(clippy::too_many_lines)]
+fn resolve_implicit_many_to_many(
+    side_a: &Side,
+    side_b: &Side,
+    models: &mut IndexMap<ModelName, Model>,
+    relations: &mut Vec<ResolvedRelation>,
+    _diags: &mut Diagnostics,
+) {
+    let (m_a, m_b) = if side_a.model.as_str() <= side_b.model.as_str() {
+        (&side_a.model, &side_b.model)
+    } else {
+        (&side_b.model, &side_a.model)
+    };
+
+    let join_model_name = match &side_a.rel_name {
+        Some(name) => format!("_{m_a}To{m_b}_{name}"),
+        None => format!("_{m_a}To{m_b}"),
+    };
+
+    let Some(model_a) = models.get(m_a.as_str()).cloned() else {
+        return;
+    };
+    let Some(model_b) = models.get(m_b.as_str()).cloned() else {
+        return;
+    };
+
+    let Some(pk_name_a) = model_a.primary_key.fields.first().cloned() else {
+        return;
+    };
+    let Some(pk_name_b) = model_b.primary_key.fields.first().cloned() else {
+        return;
+    };
+
+    let Some(pk_field_a) = model_a.fields.get(pk_name_a.as_str()).cloned() else {
+        return;
+    };
+    let Some(pk_field_b) = model_b.fields.get(pk_name_b.as_str()).cloned() else {
+        return;
+    };
+
+    let join_model_ident = ModelName::from(join_model_name.as_str());
+
+    // 1. Synthesize fields for the join model
+    let mut fields = IndexMap::new();
+    let col_a = Field {
+        name: FieldName::from("a"),
+        column: "A".to_owned(),
+        kind: pk_field_a.kind.clone(),
+        optional: false,
+        default: None,
+        attrs: FieldAttrs::default(),
+        generated: None,
+        docs: None,
+        span: Span::EMPTY,
+    };
+    let col_b = Field {
+        name: FieldName::from("b"),
+        column: "B".to_owned(),
+        kind: pk_field_b.kind.clone(),
+        optional: false,
+        default: None,
+        attrs: FieldAttrs::default(),
+        generated: None,
+        docs: None,
+        span: Span::EMPTY,
+    };
+    let rel_a = Field {
+        name: FieldName::from("a_rel"),
+        column: String::new(),
+        kind: FieldKind::Relation(RelationRef {
+            target: m_a.clone(),
+            name: None,
+            through: None,
+            fields: vec![FieldName::from("a")],
+            references: vec![pk_name_a.clone()],
+            on_delete: Some(ReferentialAction::Cascade),
+            on_update: Some(ReferentialAction::Cascade),
+            resolved: None,
+            span: Span::EMPTY,
+        }),
+        optional: false,
+        default: None,
+        attrs: FieldAttrs::default(),
+        generated: None,
+        docs: None,
+        span: Span::EMPTY,
+    };
+    let rel_b = Field {
+        name: FieldName::from("b_rel"),
+        column: String::new(),
+        kind: FieldKind::Relation(RelationRef {
+            target: m_b.clone(),
+            name: None,
+            through: None,
+            fields: vec![FieldName::from("b")],
+            references: vec![pk_name_b.clone()],
+            on_delete: Some(ReferentialAction::Cascade),
+            on_update: Some(ReferentialAction::Cascade),
+            resolved: None,
+            span: Span::EMPTY,
+        }),
+        optional: false,
+        default: None,
+        attrs: FieldAttrs::default(),
+        generated: None,
+        docs: None,
+        span: Span::EMPTY,
+    };
+
+    fields.insert(FieldName::from("a"), col_a);
+    fields.insert(FieldName::from("b"), col_b);
+    fields.insert(FieldName::from("a_rel"), rel_a);
+    fields.insert(FieldName::from("b_rel"), rel_b);
+
+    let synthetic_model = Model {
+        name: join_model_ident.clone(),
+        table: join_model_name.clone(),
+        fields,
+        primary_key: PrimaryKey {
+            fields: vec![FieldName::from("a"), FieldName::from("b")],
+            name: None,
+            span: Span::EMPTY,
+        },
+        indexes: vec![IndexDef {
+            db_name: format!("{join_model_name}_B_index"),
+            targets: vec![IndexTarget::Field(FieldName::from("b"), SortOrder::Asc)],
+            where_clause: None,
+            span: Span::EMPTY,
+        }],
+        uniques: vec![],
+        docs: Some("Synthesized implicit join model for many-to-many relation.".to_owned()),
+        span: Span::EMPTY,
+    };
+
+    models.insert(join_model_ident.clone(), synthetic_model);
+
+    // Update through on both endpoints
+    if let Some(rel) = models
+        .get_mut(side_a.model.as_str())
+        .and_then(|m| m.fields.get_mut(side_a.field.as_str()))
+        .and_then(relation_mut)
+    {
+        rel.through = Some(join_model_ident.clone());
+    }
+    if let Some(rel) = models
+        .get_mut(side_b.model.as_str())
+        .and_then(|m| m.fields.get_mut(side_b.field.as_str()))
+        .and_then(relation_mut)
+    {
+        rel.through = Some(join_model_ident.clone());
+    }
+
+    // ResolvedRelation for join_model -> model_a (ManyToOne)
+    let fk_rel_a = ResolvedRelation {
+        name: format!("{join_model_name}_a"),
+        kind: RelationKind::ManyToOne,
+        owner: join_model_ident.clone(),
+        owner_cols: vec!["A".to_owned()],
+        owner_field: FieldName::from("a_rel"),
+        target: m_a.clone(),
+        target_table: model_a.table.clone(),
+        target_cols: vec![pk_field_a.column.clone()],
+        target_field: None,
+        on_delete: ReferentialAction::Cascade,
+        on_update: ReferentialAction::Cascade,
+        optional: false,
+        constraint_name: naming::foreign_key_name(&join_model_name, &["A".to_owned()]),
+        span: Span::EMPTY,
+        join_model: None,
+        join_owner_field: None,
+        join_target_field: None,
+    };
+    let idx_fk_a = relations.len();
+    relations.push(fk_rel_a);
+    mark_resolved(
+        models,
+        &join_model_ident,
+        &FieldName::from("a_rel"),
+        idx_fk_a,
+    );
+
+    // ResolvedRelation for join_model -> model_b (ManyToOne)
+    let fk_rel_b = ResolvedRelation {
+        name: format!("{join_model_name}_b"),
+        kind: RelationKind::ManyToOne,
+        owner: join_model_ident.clone(),
+        owner_cols: vec!["B".to_owned()],
+        owner_field: FieldName::from("b_rel"),
+        target: m_b.clone(),
+        target_table: model_b.table.clone(),
+        target_cols: vec![pk_field_b.column.clone()],
+        target_field: None,
+        on_delete: ReferentialAction::Cascade,
+        on_update: ReferentialAction::Cascade,
+        optional: false,
+        constraint_name: naming::foreign_key_name(&join_model_name, &["B".to_owned()]),
+        span: Span::EMPTY,
+        join_model: None,
+        join_owner_field: None,
+        join_target_field: None,
+    };
+    let idx_fk_b = relations.len();
+    relations.push(fk_rel_b);
+    mark_resolved(
+        models,
+        &join_model_ident,
+        &FieldName::from("b_rel"),
+        idx_fk_b,
+    );
+
+    // ResolvedRelation for side_a (ManyToMany)
+    let a_is_ma = side_a.model == *m_a;
+    let (owner_col_a, target_col_a, owner_field_a, target_field_a) = if a_is_ma {
+        (
+            "A".to_owned(),
+            "B".to_owned(),
+            FieldName::from("a_rel"),
+            FieldName::from("b_rel"),
+        )
+    } else {
+        (
+            "B".to_owned(),
+            "A".to_owned(),
+            FieldName::from("b_rel"),
+            FieldName::from("a_rel"),
+        )
+    };
+
+    let m2m_a = ResolvedRelation {
+        name: side_a
+            .rel_name
+            .clone()
+            .unwrap_or_else(|| format!("{}To{}", side_a.model, side_a.target)),
+        kind: RelationKind::ManyToMany,
+        owner: side_a.model.clone(),
+        owner_cols: vec![owner_col_a],
+        owner_field: side_a.field.clone(),
+        target: side_a.target.clone(),
+        target_table: join_model_name.clone(),
+        target_cols: vec![target_col_a],
+        target_field: Some(side_b.field.clone()),
+        on_delete: ReferentialAction::Cascade,
+        on_update: ReferentialAction::Cascade,
+        optional: false,
+        constraint_name: naming::foreign_key_name(&join_model_name, &[]),
+        span: side_a.span,
+        join_model: Some(join_model_ident.clone()),
+        join_owner_field: Some(owner_field_a),
+        join_target_field: Some(target_field_a),
+    };
+    let idx_m2m_a = relations.len();
+    relations.push(m2m_a);
+    mark_resolved(models, &side_a.model, &side_a.field, idx_m2m_a);
+
+    // ResolvedRelation for side_b (ManyToMany)
+    let b_is_ma = side_b.model == *m_a;
+    let (owner_col_b, target_col_b, owner_field_b, target_field_b) = if b_is_ma {
+        (
+            "A".to_owned(),
+            "B".to_owned(),
+            FieldName::from("a_rel"),
+            FieldName::from("b_rel"),
+        )
+    } else {
+        (
+            "B".to_owned(),
+            "A".to_owned(),
+            FieldName::from("b_rel"),
+            FieldName::from("a_rel"),
+        )
+    };
+
+    let m2m_b = ResolvedRelation {
+        name: side_b
+            .rel_name
+            .clone()
+            .unwrap_or_else(|| format!("{}To{}", side_b.model, side_b.target)),
+        kind: RelationKind::ManyToMany,
+        owner: side_b.model.clone(),
+        owner_cols: vec![owner_col_b],
+        owner_field: side_b.field.clone(),
+        target: side_b.target.clone(),
+        target_table: join_model_name.clone(),
+        target_cols: vec![target_col_b],
+        target_field: Some(side_a.field.clone()),
+        on_delete: ReferentialAction::Cascade,
+        on_update: ReferentialAction::Cascade,
+        optional: false,
+        constraint_name: naming::foreign_key_name(&join_model_name, &[]),
+        span: side_b.span,
+        join_model: Some(join_model_ident.clone()),
+        join_owner_field: Some(owner_field_b),
+        join_target_field: Some(target_field_b),
+    };
+    let idx_m2m_b = relations.len();
+    relations.push(m2m_b);
+    mark_resolved(models, &side_b.model, &side_b.field, idx_m2m_b);
 }

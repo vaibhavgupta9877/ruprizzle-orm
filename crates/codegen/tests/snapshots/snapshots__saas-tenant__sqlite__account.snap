@@ -492,6 +492,23 @@ impl ::ruprizzle::Model for Account {
     const DELETED_AT_COLUMN: Option<&'static str> = None;
     const UPDATED_AT_COLUMN: Option<&'static str> = None;
 }
+impl Account {
+    /// Starts building a nested creation object for this model.
+    pub fn nested_create() -> ::ruprizzle::NestedCreate<Account> {
+        ::ruprizzle::NestedCreate::new()
+    }
+    /// Creates a nested connect specification by primary key.
+    pub fn nested_connect(id: impl ::ruprizzle::Encodable) -> ::ruprizzle::Value {
+        id.to_value()
+    }
+    /// Creates a nested connect-or-create specification.
+    pub fn nested_connect_or_create(
+        filter: ::ruprizzle::Filter<Account>,
+        create: ::ruprizzle::NestedCreate<Account>,
+    ) -> ::ruprizzle::NestedConnectOrCreate<Account> {
+        ::ruprizzle::NestedConnectOrCreate::new(filter, create)
+    }
+}
 /// Table name for this model.
 pub const TABLE: &str = "accounts";
 pub const ID: Column<Account, Uuid> = Column::new("accounts", "id");

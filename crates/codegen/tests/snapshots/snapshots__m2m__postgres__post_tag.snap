@@ -579,6 +579,23 @@ impl ::ruprizzle::Model for PostTag {
     const DELETED_AT_COLUMN: Option<&'static str> = None;
     const UPDATED_AT_COLUMN: Option<&'static str> = None;
 }
+impl PostTag {
+    /// Starts building a nested creation object for this model.
+    pub fn nested_create() -> ::ruprizzle::NestedCreate<PostTag> {
+        ::ruprizzle::NestedCreate::new()
+    }
+    /// Creates a nested connect specification by primary key.
+    pub fn nested_connect(id: impl ::ruprizzle::Encodable) -> ::ruprizzle::Value {
+        id.to_value()
+    }
+    /// Creates a nested connect-or-create specification.
+    pub fn nested_connect_or_create(
+        filter: ::ruprizzle::Filter<PostTag>,
+        create: ::ruprizzle::NestedCreate<PostTag>,
+    ) -> ::ruprizzle::NestedConnectOrCreate<PostTag> {
+        ::ruprizzle::NestedConnectOrCreate::new(filter, create)
+    }
+}
 /// Table name for this model.
 pub const TABLE: &str = "post_tags";
 pub const POST_ID: Column<PostTag, i32> = Column::new("post_tags", "post_id");
