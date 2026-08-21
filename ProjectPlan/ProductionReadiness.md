@@ -1,4 +1,4 @@
-> **Note (2026-08-21):** The section immediately below is a historical snapshot of `0.1.1-beta.1` at `7636f44`. The repository has since moved to `1.0.0-rc.1`. Reassessments follow in §11 (2026-08-18, 86/100), §12 (2026-08-19, 84/100), §13 (2026-08-20, 71/100), §14 (2026-08-21, W4-02 soak waived), §15 (2026-08-21, 92/100 pre-RC), and **§16 (2026-08-21 — current, 87/100)**. **Read §16 first:** it independently re-ran every §15 gate and confirms the mechanical ones green, but records that §15 never ran the suite against a database. With Postgres attached, `cargo test --workspace` fails reproducibly on a pre-existing test-isolation defect in `crates/migrate/tests/roundtrip_prop.rs`. §16 supersedes §15's 92/100; the project's ≥ 92 definition of done is **not** met today. The §13 gate breaks are genuinely closed and the W4-02 soak waiver in §14 stands.
+> **Note (2026-08-21):** The section immediately below is a historical snapshot of `0.1.1-beta.1` at `7636f44`. The repository has since moved to `1.0.0-rc.1`. Reassessments follow in §11 (2026-08-18, 86/100), §12 (2026-08-19, 84/100), §13 (2026-08-20, 71/100), §14 (2026-08-21, W4-02 soak waived), §15 (2026-08-21, 92/100 pre-RC), §16 (2026-08-21, 87/100), and **§17 (2026-08-21 — current, 89/100)**. **Read §17 first:** it records that §16's test-isolation blocker and the `metrics` CI gap are both fixed and verified end to end — `cargo test --workspace` against a database is now green (476 passed / 0 failed), leaves no tables in `public`, and leaks no schemas. **§16 for the analysis:** it independently re-ran every §15 gate and confirms the mechanical ones green, but records that §15 never ran the suite against a database. With Postgres attached, `cargo test --workspace` fails reproducibly on a pre-existing test-isolation defect in `crates/migrate/tests/roundtrip_prop.rs`. §16 supersedes §15's 92/100; the project's ≥ 92 definition of done is **not** met today. The §13 gate breaks are genuinely closed and the W4-02 soak waiver in §14 stands.
 
 # Production Readiness Assessment — ruprizzle-orm
 
@@ -761,3 +761,95 @@ Clean working tree at `1baed01`. Local PostgreSQL 17.10; no local MySQL.
 *The project remains close to its target. The gap is one pre-existing test-isolation defect,
 a branch that has never been pushed, and two scoring marks that were more generous than the
 evidence behind them.*
+
+---
+
+## 17. §16 gaps closed — 2026-08-21
+
+**Version assessed:** `1.0.0-rc.1` (workspace), branch `dev-v0-2`
+**Date:** 2026-08-21
+**Assessor:** Claude (fix + end-to-end verification against local PostgreSQL 17.10)
+**Scope:** The two defects §16 raised as blockers 1 and 3, plus a schema leak found while fixing them.
+
+### Status
+
+| §16 blocker | Status |
+|---|---|
+| 1. Postgres test isolation defect | ✅ **Fixed** — `cargo test --workspace` with a database attached is green |
+| 3. `metrics` feature has no CI coverage | ✅ **Fixed** — added to the `feature-combination` matrix |
+| — New: test schemas leaked on every run | ✅ **Fixed** — found during the above; 17,066 had accumulated |
+| 2. Push the 27 local commits | ⬜ Still open — maintainer action |
+| 4–6. RC lifecycle, feedback window, final rescoring | ⬜ Still open |
+
+### What was wrong
+
+Five test files connected to Postgres with `ruprizzle::connect`/`connect_with` directly
+instead of going through `ruprizzle-testkit`, so they ran in the shared `public` schema
+rather than the testkit's per-test `rz_<uuid>` schema:
+
+- `crates/migrate/tests/roundtrip_prop.rs` asserted **whole-database** drift — effectively
+  "`public` contains nothing but the target schema" — while dropping only the single table
+  it knew about.
+- `crates/runtime/tests/arrays.rs` left `articles` behind, and its two tests raced each other
+  to drop and recreate that same table.
+- `crates/runtime/tests/rich_types.rs` left `events` behind.
+- `crates/migrate/tests/concurrency.rs` left `conc_a`/`conc_b` behind.
+
+So the suite polluted its own database and then failed an assertion about that pollution.
+
+### The fix
+
+`ruprizzle-testkit` gained `IsolatedSchema`, which creates an `rz_<uuid>` schema and returns a
+URL carrying a libpq `options=-c search_path=<schema>` parameter. `sqlx` applies that on
+**every** connection the pool opens, so a pool that outgrows one connection cannot drift back
+into `public`. Drift detection and introspection already scope themselves with
+`current_schema()` (`crates/migrate/src/drift.rs:135-148`), so a test connected this way both
+writes into and sees only its own schema. All four files above now use it.
+
+`roundtrip_prop` gets a pristine schema per property case, which let the old
+"drop the one table we know about" clean-slate hack be deleted rather than patched.
+
+### The schema leak
+
+Verifying the fix surfaced a separate pre-existing defect: the test database held **17,066**
+abandoned `rz_*` schemas. `TestDb::drop` cleans up by calling `Handle::spawn`, but
+`#[tokio::test]` builds a current-thread runtime that is torn down the moment the test
+returns, so the spawned task usually never gets polled. Measured directly: one
+`roundtrip_prop` run leaked 33 schemas.
+
+Cleanup is now awaited rather than spawned — `IsolatedSchema::drop_now`, and `run_case`
+captures the schema before the `TestDb` moves into the test body so it can drop it with an
+awaited query. `Drop` remains as best-effort for the panic path. A full workspace run now
+leaks zero.
+
+### Verification
+
+Database reset to empty (`DROP SCHEMA public CASCADE`, all `rz_*` dropped) before the run.
+
+| Check | Command | Result |
+|---|---|---|
+| **The §16 failure** | `RUPRIZZLE_TEST_PG_URL=… cargo test --workspace --no-fail-fast` | ✅ **476 passed, 0 failed, exit 0** (was 475 / 1) |
+| Same under CI's env | `RUPRIZZLE_REQUIRE_DB=1 RUPRIZZLE_TEST_PG_URL=… cargo test --workspace` | ✅ `applied_diff_reaches_the_target_schema ... ok`; the 72 failures are all `::mysql`, from having no local MySQL server — zero non-MySQL failures |
+| Isolation is real | `roundtrip_prop` run against a deliberately polluted `public` | ✅ 3/3 pass — 8 foreign tables present and invisible to the assertion |
+| No pollution | `information_schema.tables WHERE table_schema='public'` after a full run | ✅ **(none)** |
+| No leak | `information_schema.schemata WHERE schema_name LIKE 'rz_%'` after a full run | ✅ **0** (was leaking 33/run against 17,066 accumulated) |
+| `metrics` CI row | `cargo test -p ruprizzle --features metrics` | ✅ **219 passed, 0 failed** |
+| CI config | `yaml.safe_load(.github/workflows/ci.yml)` | ✅ Parses; matrix now carries `{ features: "metrics", db: sqlite }` |
+| Format | `cargo fmt --all --check` | ✅ Exit 0 |
+| Lint | `cargo clippy --workspace --all-targets -- -D warnings` | ✅ Exit 0 |
+| Lint (`sqlite-rusqlite`) | `cargo clippy --workspace --all-targets --features 'sqlite-rusqlite,…' -- -D warnings` | ✅ Exit 0 |
+| Harden | `cargo xtask harden` | ✅ Exit 0 |
+
+No library code changed — the diff is test isolation, one testkit helper, and one CI matrix row.
+
+### Score
+
+Two of §16's dockings are now addressed. Dimension 1 returns to **9.0** (the DB-backed gate is
+green and the suite no longer corrupts its own database; still short of 9.5 on 68.08 % line
+coverage) and dimension 6 to **8.0** (`metrics` is covered and the isolation defect is gone,
+but CI still has not run on this tip and the tag remains 38 commits stale). Others unchanged.
+
+**Weighted total: 8.90 / 10 → 89 / 100** (§16: 87).
+
+The remaining gap to the project's ≥ 92 target is entirely release process: push the branch,
+re-tag, publish the RC, and run the two-week feedback window.

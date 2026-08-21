@@ -20,6 +20,7 @@ use ruprizzle_core::ir::Schema;
 use ruprizzle_dialect::dialect_for;
 use ruprizzle_migrate::{diff, up_sql};
 use ruprizzle_parser::parse;
+use ruprizzle_testkit::IsolatedSchema;
 
 /// A field that may appear on the generated model.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,35 +139,30 @@ async fn probe_db(url: &str, config: &ruprizzle::PoolConfig) -> Result<(), Strin
 }
 
 /// Builds an empty-to-`from` migration and applies it, then diffs to `to`
-/// and applies that. The database must then report no drift against `to`.
+/// and applies that. The schema must then report no drift against `to`.
+///
+/// Runs in a private Postgres schema so the drift check observes only this
+/// case's tables.
 async fn round_trip(
     url: &str,
     config: &ruprizzle::PoolConfig,
     from: &Schema,
     to: &Schema,
 ) -> Result<Vec<String>, String> {
-    let pool = ruprizzle::connect_with(url, config)
+    // Each case runs in its own freshly-created schema. This used to run in
+    // `public` and "isolate" itself by dropping the single table it knew about,
+    // which left the drift assertion below reading a schema that every other
+    // DB-backed test in the workspace also writes into: any table they left
+    // behind was reported as drift and failed the property. Drift detection
+    // scopes itself with `current_schema()`, so a private schema makes the
+    // assertion see exactly the tables this case created.
+    let schema = IsolatedSchema::create(url)
+        .await
+        .map_err(|e| e.to_string())?;
+    let pool = ruprizzle::connect_with(schema.url(), config)
         .await
         .map_err(|e| e.to_string())?;
     let dialect = dialect_for(from.datasource.provider);
-
-    // Isolate each case: drop anything a previous case left behind. The model
-    // is always called "Thing", but the physical table name is pluralised, so
-    // we read it out of the schema and quote it through the dialect.
-    let table = from
-        .model("Thing")
-        .ok_or_else(|| "model Thing missing in from schema".to_owned())?
-        .table
-        .clone();
-    let drop_sql = dialect
-        .drop_table(&table)
-        .into_iter()
-        .next()
-        .ok_or_else(|| "drop_table produced no statement".to_owned())?
-        .sql;
-    pool.execute_raw(Cow::Owned(drop_sql), Vec::new())
-        .await
-        .map_err(|e| e.to_string())?;
 
     let empty = parse("empty", &empty_schema()).map_err(|_| "parse empty".to_owned())?;
     for sql in [up_sql(&empty, from, dialect), up_sql(from, to, dialect)] {
@@ -177,7 +173,10 @@ async fn round_trip(
         }
     }
 
-    detect(&pool, to).await.map_err(|e| e.to_string())
+    let drift = detect(&pool, to).await.map_err(|e| e.to_string())?;
+    pool.close().await;
+    schema.drop_now().await.map_err(|e| e.to_string())?;
+    Ok(drift)
 }
 
 proptest! {

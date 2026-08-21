@@ -10,6 +10,7 @@ use ruprizzle::sqlx::Row;
 use ruprizzle::types::chrono::{DateTime, Utc};
 use ruprizzle::types::{Decimal, Uuid};
 use ruprizzle::{Column, Executor, InsertQuery, Model, Pool, SelectQuery, connect, decode};
+use ruprizzle_testkit::IsolatedSchema;
 use serde_json::Value as JsonValue;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -118,8 +119,18 @@ const CREATED_AT: Column<Event, DateTime<Utc>> = Column::new("events", "created_
 const PRICE: Column<Event, Decimal> = Column::new("events", "price");
 const META: Column<Event, JsonValue> = Column::new("events", "meta");
 
-async fn fresh_pool() -> (Pool, bool) {
-    let (url, is_pg) = if let Ok(url) = std::env::var("RUPRIZZLE_TEST_PG_URL") {
+/// A pool for one test, plus the private Postgres schema backing it.
+///
+/// On Postgres this used to run in `public`, leaving an `events` table behind
+/// for the rest of the workspace's DB-backed tests to trip over.
+async fn fresh_pool() -> (Pool, bool, Option<IsolatedSchema>) {
+    let mut isolated = None;
+    let (url, is_pg) = if let Ok(base) = std::env::var("RUPRIZZLE_TEST_PG_URL") {
+        let schema = IsolatedSchema::create(&base)
+            .await
+            .expect("create isolated schema");
+        let url = schema.url().to_owned();
+        isolated = Some(schema);
         (url, true)
     } else if std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok() {
         panic!("RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not");
@@ -176,12 +187,12 @@ async fn fresh_pool() -> (Pool, bool) {
         .unwrap();
     }
 
-    (pool, is_pg)
+    (pool, is_pg, isolated)
 }
 
 #[tokio::test]
 async fn rich_types_round_trip() {
-    let (pool, _is_pg) = fresh_pool().await;
+    let (pool, _is_pg, schema) = fresh_pool().await;
 
     let id = Uuid::nil();
     let created_at = Utc::now();
@@ -213,4 +224,9 @@ async fn rich_types_round_trip() {
     assert_eq!(row.price, price);
     assert_eq!(row.meta, meta);
     assert_eq!(row.created_at.timestamp(), created_at.timestamp());
+
+    pool.close().await;
+    if let Some(schema) = schema {
+        schema.drop_now().await.expect("drop isolated schema");
+    }
 }

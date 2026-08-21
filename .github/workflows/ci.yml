@@ -107,6 +107,10 @@ jobs:
           - { features: "postgres-tokio-postgres", db: postgres }
           - { features: "", db: mysql }
           - { features: "sqlite-rusqlite,postgres-tokio-postgres", db: all }
+          # `metrics` ships as an opt-in feature but had no job building it, so
+          # nothing would have caught it rotting the way the native-driver paths
+          # did. It is runtime-only, so the `-p ruprizzle` scope here is enough.
+          - { features: "metrics", db: sqlite }
     services:
       postgres:
         image: postgres:17-alpine

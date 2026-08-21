@@ -5,6 +5,7 @@ use std::fs;
 
 use ruprizzle::Executor;
 use ruprizzle_migrate::Migrator;
+use ruprizzle_testkit::IsolatedSchema;
 
 /// Writes a two-migration directory into a temp dir and returns its path.
 fn fixture() -> tempfile::TempDir {
@@ -42,14 +43,14 @@ async fn ten_concurrent_deployers_all_succeed() {
     };
 
     let dir = fixture();
-    let pool = ruprizzle::connect(&url).await.expect("connect");
 
-    pool.execute_raw(
-        Cow::Owned("DROP TABLE IF EXISTS conc_a, conc_b, _ruprizzle_migrations".into()),
-        Vec::new(),
-    )
-    .await
-    .expect("clean slate");
+    // A private schema, rather than `public` with a "drop what we know about"
+    // clean slate. The old form left `conc_a`/`conc_b` behind for every other
+    // DB-backed test in the workspace to trip over.
+    let schema = IsolatedSchema::create(&url)
+        .await
+        .expect("create isolated schema");
+    let pool = ruprizzle::connect(schema.url()).await.expect("connect");
 
     let mut handles = Vec::new();
     for _ in 0..10 {
@@ -80,4 +81,7 @@ async fn ten_concurrent_deployers_all_succeed() {
     pool.execute_raw(Cow::Owned("SELECT 1 FROM conc_b".into()), Vec::new())
         .await
         .expect("conc_b exists");
+
+    pool.close().await;
+    schema.drop_now().await.expect("drop isolated schema");
 }

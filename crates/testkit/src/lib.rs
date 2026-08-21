@@ -531,11 +531,46 @@ impl TestDb {
     }
 }
 
+impl TestDb {
+    /// The isolated schema and the URL that can drop it, on Postgres only.
+    ///
+    /// [`run_case`] captures this before handing the [`TestDb`] to the test body
+    /// so it can remove the schema with an awaited query. See [`Drop`] below for
+    /// why the `Drop` impl alone is not enough.
+    #[must_use]
+    fn pg_schema_info(&self) -> Option<(String, String)> {
+        match &self.inner {
+            Inner::Postgres {
+                schema, admin_url, ..
+            } => Some((schema.clone(), admin_url.clone())),
+            _ => None,
+        }
+    }
+}
+
+/// Drops a Postgres test schema, waiting for the server to confirm it.
+async fn drop_schema(schema: &str, admin_url: &str) {
+    if let Ok(pool) = PgPoolOptions::new()
+        .max_connections(1)
+        .acquire_timeout(Duration::from_secs(5))
+        .connect(admin_url)
+        .await
+    {
+        let _ = sqlx::query(&format!(r#"DROP SCHEMA IF EXISTS "{schema}" CASCADE"#))
+            .execute(&pool)
+            .await;
+        pool.close().await;
+    }
+}
+
 impl Drop for TestDb {
     fn drop(&mut self) {
-        // Postgres schemas outlive the process, so they must be cleaned up
-        // explicitly or a long-running CI database accumulates thousands of them.
-        // SQLite needs nothing here: `TempDir` removes the file.
+        // Best-effort fallback for the panic path. `#[tokio::test]` builds a
+        // current-thread runtime that is torn down the moment the test returns,
+        // so a task spawned here usually never gets polled — which is exactly how
+        // a long-lived test database accumulates tens of thousands of abandoned
+        // `rz_*` schemas. `run_case` does the cleanup that actually works, with an
+        // awaited drop. SQLite needs nothing here: `TempDir` removes the file.
         if let Inner::Postgres {
             schema, admin_url, ..
         } = &self.inner
@@ -552,6 +587,126 @@ impl Drop for TestDb {
                     }
                 });
             }
+        }
+    }
+}
+
+/// A private Postgres schema for tests that build their own `ruprizzle` pool.
+///
+/// [`TestDb`] isolates each Postgres test by creating an `rz_<uuid>` schema and
+/// pinning `search_path` to it with a `sqlx` `after_connect` hook. Tests that
+/// call [`ruprizzle::connect`] or [`ruprizzle::connect_with`] directly cannot
+/// install that hook, so before this existed they ran in `public` — creating
+/// tables that outlived them and, in the case of the migration round-trip
+/// property, asserting against a `public` other tests were concurrently
+/// writing into.
+///
+/// This carries the same isolation through the URL instead. [`Self::url`]
+/// returns the base URL with a libpq `options` parameter that sets
+/// `search_path` for **every** connection the pool opens, not just the first.
+/// Drift detection and introspection scope themselves with `current_schema()`
+/// (`crates/migrate/src/drift.rs`), so a test connected this way both writes
+/// into and sees only its own schema.
+///
+/// The schema is dropped on `Drop`, matching [`TestDb`]'s cleanup, so a
+/// long-lived CI or local database does not accumulate them.
+pub struct IsolatedSchema {
+    name: String,
+    url: String,
+    admin_url: String,
+    cleaned: bool,
+}
+
+impl IsolatedSchema {
+    /// Creates a uniquely-named schema on `base_url` and returns a handle to it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the driver error if the server is unreachable or the
+    /// `CREATE SCHEMA` fails.
+    pub async fn create(base_url: &str) -> std::result::Result<Self, sqlx::Error> {
+        let admin = PgPoolOptions::new()
+            .max_connections(1)
+            .acquire_timeout(Duration::from_secs(5))
+            .connect(base_url)
+            .await?;
+
+        let name = format!("rz_{}", uuid::Uuid::new_v4().simple());
+        sqlx::query(&format!(r#"CREATE SCHEMA "{name}""#))
+            .execute(&admin)
+            .await?;
+        admin.close().await;
+
+        // `options` is a libpq-style connection option that `sqlx` forwards to
+        // the server on every connect, so a pool that outgrows one connection
+        // does not start writing to `public` halfway through. The space and the
+        // `=` have to survive URL query parsing, hence the percent-encoding.
+        let sep = if base_url.contains('?') { '&' } else { '?' };
+        let url = format!("{base_url}{sep}options=-c%20search_path%3D{name}");
+
+        Ok(Self {
+            name,
+            url,
+            admin_url: base_url.to_owned(),
+            cleaned: false,
+        })
+    }
+
+    /// Drops the schema, waiting for the server to confirm it.
+    ///
+    /// Prefer this over letting the value fall out of scope. `Drop` can only
+    /// `spawn` the delete, and a spawned task on a runtime that is about to shut
+    /// down usually never runs — which is why a long-lived test database ends up
+    /// holding tens of thousands of abandoned `rz_*` schemas. Awaiting here is
+    /// the only cleanup that actually happens.
+    ///
+    /// # Errors
+    ///
+    /// Returns the driver error if the server is unreachable or the drop fails.
+    pub async fn drop_now(mut self) -> std::result::Result<(), sqlx::Error> {
+        self.cleaned = true;
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .acquire_timeout(Duration::from_secs(5))
+            .connect(&self.admin_url)
+            .await?;
+        sqlx::query(&format!(r#"DROP SCHEMA IF EXISTS "{}" CASCADE"#, self.name))
+            .execute(&pool)
+            .await?;
+        pool.close().await;
+        Ok(())
+    }
+
+    /// The connection URL pinned to this schema.
+    #[must_use]
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    /// The schema name, for tests that need to name it in SQL.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl Drop for IsolatedSchema {
+    fn drop(&mut self) {
+        // Best-effort only, for the panic path. [`Self::drop_now`] is what
+        // reliably removes the schema; see its note on spawned cleanup.
+        if self.cleaned {
+            return;
+        }
+        let (schema, url) = (self.name.clone(), self.admin_url.clone());
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(async move {
+                if let Ok(pool) = PgPoolOptions::new().max_connections(1).connect(&url).await {
+                    let _ = sqlx::query(&format!(r#"DROP SCHEMA IF EXISTS "{schema}" CASCADE"#))
+                        .execute(&pool)
+                        .await;
+                    pool.close().await;
+                }
+            });
         }
     }
 }
@@ -584,7 +739,16 @@ where
         Err(e) => panic!("{e}"),
     };
 
-    if let Err(e) = body(db).await {
+    // Captured before `db` moves into the body, so the schema can be dropped
+    // with an awaited query rather than a spawn that never runs.
+    let schema_info = db.pg_schema_info();
+    let result = body(db).await;
+
+    if let Some((schema, admin_url)) = schema_info {
+        drop_schema(&schema, &admin_url).await;
+    }
+
+    if let Err(e) = result {
         panic!("test body failed on {backend}: {e}");
     }
 }

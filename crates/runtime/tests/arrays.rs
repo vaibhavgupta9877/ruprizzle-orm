@@ -1,6 +1,7 @@
 //! End-to-end array column round-trips on SQLite.
 
 use ruprizzle::{Column, Executor, InsertQuery, Model, Pool, SelectQuery, connect};
+use ruprizzle_testkit::IsolatedSchema;
 use sqlx::Row;
 
 static FILE_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -102,8 +103,19 @@ impl Model for Article {
 const TITLE: Column<Article, String> = Column::new("articles", "title");
 const TAGS: Column<Article, Vec<String>> = Column::new("articles", "tags");
 
-async fn fresh_pool() -> (Pool, bool) {
-    let (url, is_pg) = if let Ok(url) = std::env::var("RUPRIZZLE_TEST_PG_URL") {
+/// A pool for one test, plus the private Postgres schema backing it.
+///
+/// On Postgres each call gets its own schema. Sharing `public` meant the two
+/// tests in this file raced to drop and recreate the same `articles` table, and
+/// left it behind for the rest of the workspace's DB-backed tests.
+async fn fresh_pool() -> (Pool, bool, Option<IsolatedSchema>) {
+    let mut isolated = None;
+    let (url, is_pg) = if let Ok(base) = std::env::var("RUPRIZZLE_TEST_PG_URL") {
+        let schema = IsolatedSchema::create(&base)
+            .await
+            .expect("create isolated schema");
+        let url = schema.url().to_owned();
+        isolated = Some(schema);
         (url, true)
     } else if std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok() {
         panic!("RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not");
@@ -154,12 +166,20 @@ async fn fresh_pool() -> (Pool, bool) {
         .unwrap();
     }
 
-    (pool, is_pg)
+    (pool, is_pg, isolated)
+}
+
+/// Closes the pool and removes the schema, if this run had one.
+async fn cleanup(pool: Pool, schema: Option<IsolatedSchema>) {
+    pool.close().await;
+    if let Some(schema) = schema {
+        schema.drop_now().await.expect("drop isolated schema");
+    }
 }
 
 #[tokio::test]
 async fn insert_and_select_array_round_trip() {
-    let (pool, _is_pg) = fresh_pool().await;
+    let (pool, _is_pg, schema) = fresh_pool().await;
 
     let inserted: Article = InsertQuery::<Article>::new(&pool)
         .set(TITLE, "first")
@@ -178,11 +198,13 @@ async fn insert_and_select_array_round_trip() {
     assert_eq!(rows[0].id, inserted.id);
     assert_eq!(rows[0].title, "first");
     assert_eq!(rows[0].tags, vec!["rust".to_string(), "orm".to_string()]);
+
+    cleanup(pool, schema).await;
 }
 
 #[tokio::test]
 async fn array_filters_work() {
-    let (pool, _is_pg) = fresh_pool().await;
+    let (pool, _is_pg, schema) = fresh_pool().await;
 
     InsertQuery::<Article>::new(&pool)
         .set(TITLE, "a")
@@ -226,4 +248,6 @@ async fn array_filters_work() {
     assert_eq!(overlaps.len(), 2);
     assert_eq!(overlaps[0].title, "a");
     assert_eq!(overlaps[1].title, "b");
+
+    cleanup(pool, schema).await;
 }

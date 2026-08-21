@@ -34,4 +34,5 @@ tracing            = { version = "0.1", default-features = false, features = ["s
 proptest = "1"
 tokio    = { workspace = true }
 tempfile = { workspace = true }
+ruprizzle-testkit = { path = "../testkit" }
 

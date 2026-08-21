@@ -2552,6 +2552,7 @@ dependencies = [
  "ruprizzle-core",
  "ruprizzle-dialect",
  "ruprizzle-parser",
+ "ruprizzle-testkit",
  "serde",
  "serde_json",
  "sha2 0.10.9",
