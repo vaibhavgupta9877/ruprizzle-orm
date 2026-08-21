@@ -15,7 +15,7 @@ It combines the best parts of Prisma and Drizzle:
 
 Postgres, SQLite, and MySQL/MariaDB are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver. A native `rusqlite` backend is also available for SQLite via the `sqlite-rusqlite` Cargo feature.
 
-> **Status:** `1.0.0-rc.1` is the release candidate. P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is frozen for the 1.0 line. The 48-hour `rusqlite` soak has been **waived** after 15.56 h / 1.46 B ops / 0 errors (see `docs/SoakReport.md`); only the crates.io publish remains before the RC feedback window. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
+> **Status:** `1.0.0-rc.1` is the release candidate, tagged `v1.0.0-rc.1`. P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is frozen for the 1.0 line. The 48-hour `rusqlite` soak has been **waived** after 15.56 h / 1.46 B ops / 0 errors (see `docs/SoakReport.md`). **The RC is not on crates.io yet** — the latest published release is `0.4.0-beta.2`; the RC publish and its feedback window are the remaining gates. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
 
 ---
 
@@ -200,7 +200,7 @@ Rows must include their primary key; repeated runs update the existing row inste
 
 ### Dialects
 
-- **Postgres 17+**, **MySQL/MariaDB**, and **SQLite 3+** are supported.
+- **Postgres 17+**, **MySQL/MariaDB**, and **SQLite 3+** are supported. MySQL/MariaDB carries an unpatched dependency advisory in its authentication path ([RUSTSEC-2023-0071](https://rustsec.org/advisories/RUSTSEC-2023-0071) via `rsa` -> `sqlx-mysql`); connect over TLS or a unix socket, and see [Known limitations](docs/KnownLimitations.md) before using MySQL in production.
 - **Dialect capabilities model**: native enums, native UUID, `RETURNING`, `ALTER COLUMN`, window functions, JSON support, partial indexes, and max bind parameters are explicitly modelled.
 - **Portable MySQL DML**: inserts use a primary-key follow-up lookup because MySQL has no DML `RETURNING`; upserts use `ON DUPLICATE KEY UPDATE`.
 - **SQLite table rebuilds** for destructive column changes are handled automatically.
@@ -512,7 +512,7 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 
 ## Status and roadmap
 
-`1.0.0-rc.1` is tagged and staged. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking; the W4-02 48-hour `rusqlite` soak is **waived** after 15.56 h / 1.46 B ops / 0 errors. The public API has been reviewed and is frozen for the 1.0 line. The remaining work before a stable `1.0.0` is release-process only:
+`1.0.0-rc.1` is tagged as `v1.0.0-rc.1` and has **not been published to crates.io yet** (the latest registry release is `0.4.0-beta.2`). P0–P8 and W0–W5 are complete, including LSP and compile-time query checking; the W4-02 48-hour `rusqlite` soak is **waived** after 15.56 h / 1.46 B ops / 0 errors. The public API has been reviewed and is frozen for the 1.0 line. The remaining work before a stable `1.0.0` is release-process only:
 
 - Publish `1.0.0-rc.1` to crates.io and run a real feedback window (`PathToStableV1.md` W6-04).
 - Re-run production-readiness assessment against the RC and reach ≥ 92/100 (W6-05).

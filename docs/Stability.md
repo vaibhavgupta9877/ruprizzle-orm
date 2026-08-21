@@ -144,6 +144,7 @@ prerelease.
   branch. Only fixes to bugs found during the window and, if needed, API corrections land;
   anything else waits for `1.1.0`.
 
-This section documents the process; it does not itself cut a release. As of this writing no
-`1.0.0-rc.1` has been tagged or published — see the W6-04/W6-05 status note in
+This section documents the process; it does not itself cut a release. As of this writing
+`1.0.0-rc.1` is tagged as `v1.0.0-rc.1` but is **not yet published to crates.io** — the
+latest registry release is `0.4.0-beta.2`. See the W6-04/W6-05 status note in
 `ProjectPlan/v1/PathToStableV1.md`.

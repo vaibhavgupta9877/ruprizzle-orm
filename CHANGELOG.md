@@ -6,7 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- `.github/workflows/release.yml` now triggers on both `v1.2.3*` and `1.2.3*` tag
+  shapes (previously `v*` only, so a tag cut without the prefix was a silent
+  no-op), and gained a `workflow_dispatch` trigger whose `publish` input defaults
+  to false so the full pipeline can be rehearsed without touching crates.io.
+- `cargo xtask release` publishes `ruprizzle-check` and `ruprizzle-lsp`, which it
+  previously skipped; its package list now matches `release.yml` exactly.
+- `SECURITY.md` supported-versions table now reflects the real published line and
+  documents the accepted `RUSTSEC-2023-0071` exception and its mitigation.
+- `examples/blog` is an explicit standalone crate (`[workspace]` table of its own)
+  rather than an orphan that no `cargo` invocation could reach.
+
+### Added
+
+- `cargo xtask release-check --tag <name>` — fails unless the git tag, the
+  workspace version, and the `CHANGELOG.md` heading all agree. Wired into
+  `release.yml` ahead of the release gate.
+
 ### Docs
+
+- Corrected the RC status claims in `README.md`, `docs/README.md`,
+  `docs/Stability.md`, and `docs/announcement.md`: the RC is tagged, not
+  published. `docs/announcement.md` is marked DRAFT until it is live.
+- Documented the `RUSTSEC-2023-0071` MySQL/MariaDB caveat in
+  `docs/KnownLimitations.md` and the README dialect list.
+- `docs/FeaturesMasterComparison.md` measured version corrected to `1.0.0-rc.1`,
+  matching `docs/BenchmarkResults.md`.
+- `ProjectPlan/v1/V1DocsFirstShipPlan.md` Phase 5 corrected: the blog example's
+  package name is `ruprizzle-example-blog`, it is not a workspace member, and the
+  release covers ten publishable crates, not eight.
 
 - Refreshed `README.md`, `docs/README.md`, `docs/announcement.md`, `docs/faq.md`, `docs/SUMMARY.md`, and `docs/Operations.md` to the `1.0.0-rc.1` release.
 - Extended `docs/FeaturesMasterComparison.md` with all 16 end-to-end and 16 query-construction benchmark operations, a new "Advanced query builder & SQL features" table, and an updated best-fit summary.

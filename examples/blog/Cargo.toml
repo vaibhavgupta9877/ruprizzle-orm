@@ -1,3 +1,11 @@
+# Standalone crate: deliberately NOT a member of the root workspace. The
+# generated `src/db` module is gitignored, so a fresh clone does not compile
+# until `ruprizzle generate` has been run -- which would break
+# `cargo test --workspace` at the repo root. The empty `[workspace]` table
+# below detaches it so `cargo build` works from this directory with no edit to
+# the root manifest.
+[workspace]
+
 [package]
 name = "ruprizzle-example-blog"
 version = "0.1.0"

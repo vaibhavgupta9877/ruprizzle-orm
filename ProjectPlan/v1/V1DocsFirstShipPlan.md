@@ -1176,7 +1176,9 @@
   - For snippets that cannot be fully compiled without a real generated client,
     mark them `rust,ignore` and add a comment above explaining why.
   - For snippets that can compile inside `examples/blog`, copy them into
-    `examples/blog/src/main.rs` and run `cargo build -p blog-example` (see Task 3.1).
+    `examples/blog/src/main.rs` and run `cargo build` from `examples/blog`
+    (see Task 3.1). `examples/blog` is a standalone crate, not a workspace
+    member, so `cargo build -p ...` from the repo root does not reach it.
 
 - [x] **Step 4: Run `mdbook build` and `cargo doc --workspace --no-deps`.** Expected: PASS.
 
@@ -1488,8 +1490,12 @@
 
 - [x] **Step 2: Create `examples/blog/Cargo.toml`.**
   ```toml
+  # Detached from the root workspace: the generated `src/db` is gitignored, so
+  # membership would break `cargo test --workspace` on a fresh clone.
+  [workspace]
+
   [package]
-  name = "blog-example"
+  name = "ruprizzle-example-blog"
   version = "0.1.0"
   edition = "2024"
   publish = false
@@ -1596,16 +1602,18 @@
 
 - [x] **Step 7: Generate the client and build the example.**
   ```powershell
+  cd examples/blog
   $env:DATABASE_URL="postgres://..."
   ruprizzle generate
-  cargo build -p blog-example
+  cargo build
   ```
-  Expected: PASS.
+  Expected: PASS. Run from `examples/blog`; the crate is not a workspace
+  member, so the root `cargo build -p ...` cannot reach it.
 
 - [x] **Step 8: Commit.**
   ```bash
-  git add examples/blog Cargo.toml
-  git commit -m "docs: add runnable examples/blog project and include it in the workspace"
+  git add examples/blog
+  git commit -m "docs: add runnable examples/blog project as a standalone crate"
   ```
 
 ---
@@ -1699,7 +1707,8 @@
 
 **Interfaces:**
 - Consumes: current workspace, `Cargo.toml` version `1.0.0-rc.1`.
-- Produces: a dry-run report confirming all eight crates package cleanly.
+- Produces: a dry-run report confirming all ten publishable crates package
+  cleanly (`ruprizzle-testkit` is `publish = false` and is excluded).
 
 - [ ] **Step 1: Run `cargo xtask release`.**
   ```bash
@@ -1723,28 +1732,31 @@
 
 **Interfaces:**
 - Consumes: clean dry-run from Task 5.2 and crates.io credentials.
-- Produces: `1.0.0-rc.1` published for all eight workspace crates.
+- Produces: `1.0.0-rc.1` published for all ten publishable workspace crates.
 
-- [ ] **Step 1: Ensure the local `1.0.0-rc.1` tag is on the correct commit and matches
+- [ ] **Step 1: Ensure the `v1.0.0-rc.1` tag is on the release commit and matches
   the working tree.**
   ```bash
-  git show 1.0.0-rc.1 --stat
+  git show v1.0.0-rc.1 --stat
   ```
+  The canonical tag name is `v`-prefixed so it matches the `release.yml` trigger.
   If the tag points to the wrong commit, delete and re-tag after confirming with
-  the user (`git tag -d 1.0.0-rc.1` and `git tag -a 1.0.0-rc.1 -m "1.0.0-rc.1"`).
+  the user (`git tag -d v1.0.0-rc.1` and `git tag -a v1.0.0-rc.1 -m "v1.0.0-rc.1"`).
 
 - [ ] **Step 2: Run the live release from an interactive shell.**
   ```bash
   cargo xtask release --live --no-verify --wait 60
   ```
-  Expected: all eight crates (`ruprizzle-core`, `ruprizzle-parser`,
-  `ruprizzle-dialect`, `ruprizzle-macros`, `ruprizzle`, `ruprizzle-migrate`,
-  `ruprizzle-codegen`, `ruprizzle-cli`) publish successfully.
+  Expected: all ten publishable crates (`ruprizzle-core`, `ruprizzle-parser`,
+  `ruprizzle-dialect`, `ruprizzle-macros`, `ruprizzle-check`, `ruprizzle-lsp`,
+  `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, `ruprizzle-cli`)
+  publish successfully. `ruprizzle-testkit` is `publish = false`.
 
 - [ ] **Step 3: Push the tag to the remote.**
   ```bash
-  git push origin 1.0.0-rc.1
+  git push origin v1.0.0-rc.1
   ```
+  Pushing the tag is what triggers `.github/workflows/release.yml`.
 
 - [ ] **Step 4: Update `ProjectPlan/v1/PathToStableV1.md`.**
   Mark `W6-04` as complete and add the publish date.
@@ -1893,7 +1905,8 @@
    - No `0.4.0-beta.2` or missing-MySQL claims remain in `README.md`, `docs/README.md`,
      `docs/announcement.md`, `docs/faq.md`, `docs/quickstart.md`,
      `docs/Operations.md`, or `docs/known-limitations.md`.
-   - `examples/blog` builds with `cargo build -p blog-example`.
+   - `examples/blog` builds with `cargo build` run from `examples/blog`, after
+     `ruprizzle generate` (standalone crate, not a workspace member).
 
 2. **Release phase exit gate:**
    - W4-02 `rusqlite` soak waived and recorded in `docs/SoakReport.md` (15.56 h / 1.46 B ops / 0 errors).

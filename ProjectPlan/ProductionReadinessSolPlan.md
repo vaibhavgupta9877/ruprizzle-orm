@@ -517,6 +517,30 @@ git commit -m "fix(runtime): own unbuffered query state for the stream lifetime"
 
 ## V1-05 · Align RC version, tag convention, workflow, registry, and docs
 
+> **Status (2026-08-21): implemented, pending the registry publish.** Steps 1-4 are
+> done and Step 5 is done locally. What changed:
+>
+> - `release.yml` now triggers on both `v1.2.3*` and `1.2.3*` tag shapes, so a tag
+>   cut without the `v` prefix can no longer be a silent no-op. `v`-prefixed
+>   remains canonical.
+> - `release.yml` gained a `workflow_dispatch` trigger with a `publish` input that
+>   defaults to false. A manual run executes the whole gate plus
+>   `cargo xtask release` (package-only) and cannot reach crates.io.
+> - New `cargo xtask release-check --tag <name>` fails the job unless the tag
+>   version, `workspace.package.version`, and the `## [<version>]` heading in
+>   `CHANGELOG.md` all agree. It runs on every tag push before the gate.
+> - `cargo xtask release` no longer omits `ruprizzle-check` and `ruprizzle-lsp`;
+>   its package list now matches `release.yml` exactly (ten publishable crates;
+>   `ruprizzle-testkit` is `publish = false`).
+> - `SECURITY.md` supported-versions table rewritten to the real published line,
+>   with the `RUSTSEC-2023-0071` exception stated explicitly.
+> - `README.md`, `docs/README.md`, `docs/Stability.md`, and `docs/announcement.md`
+>   no longer claim the RC is staged/available; they state the tag exists and the
+>   RC is not on crates.io. `docs/announcement.md` carries a DRAFT banner until it is.
+>
+> The stale local `1.0.0-rc.1` tag (40 commits behind HEAD) is retained per Step 1
+> until the maintainer confirms its removal; the release tag is `v1.0.0-rc.1` at HEAD.
+
 **Why:** Workspace/docs claim `1.0.0-rc.1`, crates.io serves `0.4.0-beta.2`, the local tag is stale and unpushed, and `release.yml` only reacts to `v*` tags.
 
 **Files:**
@@ -530,7 +554,7 @@ git commit -m "fix(runtime): own unbuffered query state for the stream lifetime"
 - Consumes: workspace package version, Git tag, registry version, release-workflow mode.
 - Produces: one release-state source of truth and a dry-run workflow that cannot publish accidentally.
 
-- [ ] **Step 1: Choose and enforce one tag format**
+- [x] **Step 1: Choose and enforce one tag format**
 
 Use `v<workspace-version>` because the existing workflow listens for `v*`, for example `v1.0.0-rc.1`.
 
@@ -538,11 +562,11 @@ Add an `xtask` validation that compares the tag version, workspace version, and 
 
 Do not move or delete the existing local tag during implementation. Present the stale tag and the intended replacement to the maintainer for explicit confirmation.
 
-- [ ] **Step 2: Add a non-publishing workflow exercise**
+- [x] **Step 2: Add a non-publishing workflow exercise**
 
 Add `workflow_dispatch` inputs that default to dry-run. The workflow must run the full gate and package checks without `cargo publish` unless an explicit publish input is true and the ref is a valid version tag.
 
-- [ ] **Step 3: Make the release gate cover the supported matrix**
+- [x] **Step 3: Make the release gate cover the supported matrix**
 
 At minimum, the release workflow must run:
 
@@ -559,13 +583,13 @@ cargo xtask harden
 
 Database-required CI must run separately with PostgreSQL and MySQL services and `RUPRIZZLE_REQUIRE_DB=1`. The normal/release suite's `--test soak` remains the short CI smoke. The ignored `--test soak_resumable` gate is intentionally run only through `local/run-soak-segment.ps1`; it must not turn a release workflow into a 48-hour job.
 
-- [ ] **Step 4: Correct public status before the RC exists**
+- [x] **Step 4: Correct public status before the RC exists**
 
 Until crates.io confirms the RC, installation examples must resolve to the published beta or clearly state they require Git/path dependencies. Remove text that says the RC is already collecting feedback.
 
 Update `SECURITY.md` so the supported versions table matches the actual published line and defines RC support.
 
-- [ ] **Step 5: Exercise dry-run automation**
+- [x] **Step 5: Exercise dry-run automation**
 
 Run the workflow through `workflow_dispatch` in dry-run mode and save the run URL/result in the release checklist. Local `cargo xtask release` must also exit zero without publishing.
 

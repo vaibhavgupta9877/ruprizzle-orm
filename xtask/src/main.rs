@@ -32,6 +32,10 @@ const TASKS: &[(&str, &str)] = &[
         "release",
         "dry-run (or live) publish every crate in order; --live --no-verify --wait 60",
     ),
+    (
+        "release-check",
+        "verify the git tag, workspace version, and CHANGELOG heading agree; --tag <name>",
+    ),
 ];
 
 /// Per-crate ceiling for `unwrap()` / `expect()` / `panic!` in `src/`.
@@ -91,6 +95,7 @@ fn main() -> ExitCode {
         Some("bench-compile") => bench_compile::bench_compile(),
         Some("harden") => run_harden(),
         Some("release") => run_release(&rest),
+        Some("release-check") => run_release_check(&rest),
         other => {
             if let Some(t) = other {
                 eprintln!("unknown task `{t}`");
@@ -709,11 +714,16 @@ fn run_release(args: &[String]) -> ExitCode {
 
     // Dependency order for first-time publish. `parser` is a dev-dependency
     // of `dialect`, so it must be indexed before `dialect` can package.
+    // This list must stay in sync with the publish steps in
+    // `.github/workflows/release.yml`; `ruprizzle-testkit` is intentionally
+    // absent because it is `publish = false`.
     let packages = [
         "ruprizzle-core",
         "ruprizzle-parser",
         "ruprizzle-dialect",
         "ruprizzle-macros",
+        "ruprizzle-check",
+        "ruprizzle-lsp",
         "ruprizzle",
         "ruprizzle-migrate",
         "ruprizzle-codegen",
@@ -759,6 +769,77 @@ fn run_release(args: &[String]) -> ExitCode {
     } else {
         eprintln!("xtask: dry-run complete; pass --live to publish for real");
     }
+    ExitCode::SUCCESS
+}
+
+/// Guards a release against the three ways a version can drift apart: the git
+/// tag that triggered the workflow, `workspace.package.version` in the root
+/// `Cargo.toml`, and the matching `## [<version>]` heading in `CHANGELOG.md`.
+///
+/// Any publish that gets past this check is publishing the version its tag and
+/// changelog claim. Without it, a stale tag silently publishes whatever the
+/// workspace happens to say.
+fn run_release_check(args: &[String]) -> ExitCode {
+    let tag = args
+        .iter()
+        .position(|a| a == "--tag")
+        .and_then(|i| args.get(i + 1))
+        .map(String::as_str);
+    let Some(tag) = tag else {
+        eprintln!("xtask: release-check requires --tag <name>");
+        return ExitCode::FAILURE;
+    };
+    // Both `v1.2.3` and `1.2.3` are accepted; `release.yml` triggers on either.
+    let tag_version = tag.strip_prefix('v').unwrap_or(tag);
+
+    let manifest = match std::fs::read_to_string("Cargo.toml") {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("xtask: cannot read Cargo.toml: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    // `version      = "1.0.0-rc.1"` under `[workspace.package]`. The root
+    // manifest has exactly one such key, so a line scan is enough and avoids a
+    // TOML dependency in xtask.
+    let workspace_version = manifest
+        .lines()
+        .map(str::trim)
+        .find(|l| l.starts_with("version") && l.contains('='))
+        .and_then(|l| l.split('"').nth(1));
+    let Some(workspace_version) = workspace_version else {
+        eprintln!("xtask: could not find workspace.package.version in Cargo.toml");
+        return ExitCode::FAILURE;
+    };
+
+    let mut failed = false;
+    if tag_version != workspace_version {
+        eprintln!(
+            "xtask: tag `{tag}` is version `{tag_version}` but workspace.package.version is `{workspace_version}`"
+        );
+        failed = true;
+    }
+
+    match std::fs::read_to_string("CHANGELOG.md") {
+        Ok(changelog) => {
+            let heading = format!("## [{workspace_version}]");
+            if !changelog.contains(&heading) {
+                eprintln!("xtask: CHANGELOG.md has no `{heading}` heading");
+                failed = true;
+            }
+        }
+        Err(e) => {
+            eprintln!("xtask: cannot read CHANGELOG.md: {e}");
+            failed = true;
+        }
+    }
+
+    if failed {
+        return ExitCode::FAILURE;
+    }
+    eprintln!(
+        "xtask: release-check ok - tag, workspace version, and CHANGELOG all agree on {workspace_version}"
+    );
     ExitCode::SUCCESS
 }
 

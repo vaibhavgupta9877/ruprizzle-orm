@@ -267,9 +267,29 @@ The previous result files remain useful historical measurements, but they are no
 
 This must be corrected before inviting external users into an RC feedback window.
 
+> **Resolution (2026-08-21, V1-05).** The tooling and documentation halves are fixed:
+> `release.yml` now matches both `v1.2.3*` and `1.2.3*` tags and has a
+> non-publishing `workflow_dispatch` mode; `cargo xtask release-check --tag`
+> refuses any publish whose tag, workspace version, and `CHANGELOG.md` heading
+> disagree; `cargo xtask release` no longer omits `ruprizzle-check` and
+> `ruprizzle-lsp`; and `README.md`, `docs/README.md`, `docs/Stability.md`, and
+> `docs/announcement.md` now agree that the RC is tagged but not on crates.io.
+> The release tag is `v1.0.0-rc.1` at HEAD. The stale `1.0.0-rc.1` tag is left in
+> place pending maintainer confirmation. The registry half of the finding closes
+> only when the RC is actually published and `cargo search` confirms it.
+
 ### 8.9 Security posture requires release-specific clarification
 
 The dependency exception for `RUSTSEC-2023-0071` is documented and bounded to the MySQL authentication path, but it remains an accepted risk. `SECURITY.md` still says only `0.1.x` is supported, while the registry's latest package is `0.4.0-beta.2` and the workspace claims an RC.
+
+> **Resolution (2026-08-21, V1-05 Step 4).** `SECURITY.md`'s supported-versions
+> table now names the actual published line (`0.4.x`) and defines RC support, and
+> carries a "Known accepted dependency risk" section naming `RUSTSEC-2023-0071`
+> and the TLS/unix-socket mitigation. `docs/KnownLimitations.md` and the README
+> dialect list say the same thing at the point of use. The advisory itself remains
+> an accepted risk with no patched `rsa` release available: MySQL/MariaDB is
+> supported and tested but is **not** marketed as production-grade until a patched
+> `rsa`/`sqlx` ships. Postgres and SQLite are unaffected.
 
 ## 9. Use-case recommendation
 

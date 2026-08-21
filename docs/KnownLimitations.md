@@ -49,6 +49,16 @@ whether the tool is right for your project.
   typically small). `stream_unbuffered` must not be used inside a transaction,
   because a transaction holds a single connection and a streaming cursor would
   prevent any other statement from running on it.
+- **MySQL/MariaDB carries an unpatched advisory in its auth path.** `sqlx-mysql`
+  pulls in `rsa 0.9.x`, which is affected by
+  [RUSTSEC-2023-0071](https://rustsec.org/advisories/RUSTSEC-2023-0071) (a Marvin
+  timing side-channel in RSA decryption). No patched `rsa` release exists as of
+  2026-08-21, so the exception is recorded in `deny.toml` rather than fixed. The
+  side-channel is reachable only through MySQL's `caching_sha2_password` RSA key
+  exchange, which is skipped when the connection uses TLS or a unix socket.
+  **Use TLS or a unix socket for MySQL connections.** Until a patched `rsa` or
+  `sqlx` ships, MySQL/MariaDB is supported and tested but is not marketed as
+  production-grade; Postgres and SQLite carry no such exception.
 
 ## Deferred to v1.2+
 

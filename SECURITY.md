@@ -2,13 +2,22 @@
 
 ## Supported versions
 
-ruprizzle is pre-1.0. Only the most recent `0.x` release receives security
-fixes.
+ruprizzle is pre-1.0. Only the most recent published release receives security
+fixes. Once `1.0.0` ships, the `1.x` line becomes the supported line.
 
 | Version | Supported |
 |---|---|
-| 0.1.x   | ✅ |
-| < 0.1   | ❌ |
+| `1.0.0-rc.x` (once published) | ✅ |
+| `0.4.x` (current latest on crates.io) | ✅ |
+| < `0.4` | ❌ |
+
+## Known accepted dependency risk
+
+`sqlx-mysql` depends on `rsa 0.9.x`, which is affected by
+[RUSTSEC-2023-0071](https://rustsec.org/advisories/RUSTSEC-2023-0071). No patched
+release is available; the exception is recorded in `deny.toml`. It is reachable
+only through MySQL's `caching_sha2_password` RSA key exchange — connect over TLS
+or a unix socket to avoid that path. Postgres and SQLite are unaffected.
 
 ## Reporting a vulnerability
 

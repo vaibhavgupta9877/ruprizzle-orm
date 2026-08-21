@@ -3,7 +3,19 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      # Both spellings are accepted so a tag cut as `1.0.0-rc.1` triggers the
+      # workflow just as `v1.0.0-rc.1` does. The canonical form is `v`-prefixed.
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+      - '[0-9]+.[0-9]+.[0-9]+*'
+  # Lets the whole gate be exercised without publishing. `publish` defaults to
+  # false, so a manual run can never reach crates.io by accident; it has to be
+  # set to the literal string `true`.
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish to crates.io (otherwise dry-run: gate + cargo package only)'
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -20,6 +32,22 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+
+      # A tag push always publishes. A manual run publishes only when the
+      # `publish` input is explicitly true, so `workflow_dispatch` is a safe
+      # rehearsal of the full pipeline.
+      - id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.publish }}" = "true" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Guards that the git tag, the workspace version, and the CHANGELOG
+      # heading all agree before anything is uploaded. Fails the job otherwise.
+      - if: github.event_name == 'push'
+        run: cargo xtask release-check --tag "${GITHUB_REF_NAME}"
 
       # Full verification gate — this is the same command that `harden` runs
       # plus the two native-driver feature combinations.
@@ -47,22 +75,46 @@ jobs:
       # would see the *previous* release until the index updates. We run the
       # full gate above instead, and use `--no-verify` here. A short pause
       # between crates gives the crates.io index time to refresh.
-      - run: cargo publish -p ruprizzle-core --no-verify
-      - run: sleep 30
-      - run: cargo publish -p ruprizzle-parser --no-verify
-      - run: sleep 30
-      - run: cargo publish -p ruprizzle-dialect --no-verify
-      - run: sleep 30
-      - run: cargo publish -p ruprizzle-macros --no-verify
-      - run: sleep 30
-      - run: cargo publish -p ruprizzle-check --no-verify
-      - run: sleep 30
-      - run: cargo publish -p ruprizzle-lsp --no-verify
-      - run: sleep 30
-      - run: cargo publish -p ruprizzle --no-verify
-      - run: sleep 30
-      - run: cargo publish -p ruprizzle-migrate --no-verify
-      - run: sleep 30
-      - run: cargo publish -p ruprizzle-codegen --no-verify
-      - run: sleep 30
-      - run: cargo publish -p ruprizzle-cli --no-verify
+      # Dry-run: package every crate without uploading. Runs only on a manual
+      # non-publishing invocation.
+      - if: steps.mode.outputs.publish != 'true'
+        run: cargo xtask release
+
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle-core --no-verify
+      - if: steps.mode.outputs.publish == 'true'
+        run: sleep 30
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle-parser --no-verify
+      - if: steps.mode.outputs.publish == 'true'
+        run: sleep 30
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle-dialect --no-verify
+      - if: steps.mode.outputs.publish == 'true'
+        run: sleep 30
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle-macros --no-verify
+      - if: steps.mode.outputs.publish == 'true'
+        run: sleep 30
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle-check --no-verify
+      - if: steps.mode.outputs.publish == 'true'
+        run: sleep 30
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle-lsp --no-verify
+      - if: steps.mode.outputs.publish == 'true'
+        run: sleep 30
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle --no-verify
+      - if: steps.mode.outputs.publish == 'true'
+        run: sleep 30
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle-migrate --no-verify
+      - if: steps.mode.outputs.publish == 'true'
+        run: sleep 30
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle-codegen --no-verify
+      - if: steps.mode.outputs.publish == 'true'
+        run: sleep 30
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle-cli --no-verify
