@@ -27,21 +27,21 @@
 
 ## Baseline and target
 
-### Current verified baseline at `7dd3b6a`
+### Current verified baseline at `dev-v0-2` HEAD (post-V1-01/V1-02)
 
 | Gate | State |
 |---|---|
 | `cargo fmt --all --check` | Pass |
 | Default workspace clippy | Pass |
-| `cargo test --workspace` | Fail: resumable soak requires an unset environment variable |
-| Workspace tests excluding that soak | Pass |
+| `cargo test --workspace` | Pass |
+| `cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'` | Pass |
 | Rustdoc with warnings denied | Pass |
 | `cargo deny check` | Pass under current exception policy |
 | `cargo check --workspace` | Pass |
-| `cargo xtask harden` | Fail at workspace tests |
-| `sqlite-rusqlite` feature suite | Compile failure in `query_manifest.rs` |
+| `cargo xtask harden` | Pass |
+| `sqlite-rusqlite` feature suite | Pass |
 | 48-hour soak | Waived after 15.56 cumulative hours, 1.46 B ops, 0 errors (see `docs/SoakReport.md`) |
-| SQLite multi-change migration property | Excluded by `prop_assume!(changes.len() <= 1)` |
+| SQLite multi-change migration property | Excluded by `prop_assume!(changes.len() <= 1)` (V1-03 still open) |
 | Migration mutation score | About 28.6% of viable measured mutants killed |
 | Runtime mutation baseline | Incomplete |
 | Overall line coverage | About 68% |
@@ -91,9 +91,11 @@
 
 # P0 — Required before publishing the RC
 
-## V1-01 · Restore deterministic standard and native-feature gates
+## V1-01 · Restore deterministic standard and native-feature gates — **completed 2026-08-21**
 
-**Why:** The standard workspace suite and `cargo xtask harden` currently fail, and the advertised native-rusqlite feature suite does not compile. No RC should be published from a red matrix.
+**Why:** The standard workspace suite and `cargo xtask harden` were failing, and the advertised native-rusqlite feature suite did not compile. All of these gates are now green.
+
+**Status:** Complete at `dev-v0-2` HEAD. `cargo test --workspace`, `cargo clippy --workspace --all-targets`, `cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'`, and `cargo xtask harden` all exit zero.
 
 **Files:**
 - Modify: `crates/runtime/tests/soak_resumable.rs:390-410`
@@ -206,9 +208,9 @@ git commit -m "test: keep long soak explicit and restore native feature matrix"
 
 ---
 
-## V1-02 · Record accepted segmented soak evidence and waive the 48-hour gate
+## V1-02 · Record accepted segmented soak evidence and waive the 48-hour gate — **completed 2026-08-21**
 
-**Why:** The resumable `rusqlite` soak has accumulated **15.56 h (56,028.6 s) with 1,464,277,925 operations and 0 errors** before the process was paused. The maintainer has accepted this as sufficient evidence and the remaining 48-hour target is **waived**. This task records the final evidence in `docs/SoakReport.md` and updates all release plans so the W4-02 gate is no longer a blocker.
+**Why:** The resumable `rusqlite` soak accumulated **15.56 h (56,028.6 s) with 1,464,277,925 operations and 0 errors**. The maintainer accepted this as sufficient evidence and the remaining 48-hour target is **waived**. `docs/SoakReport.md` and the release plans record the waiver.
 
 **Files:**
 - Modify: `crates/runtime/tests/soak_resumable.rs`
@@ -435,9 +437,9 @@ git commit -m "fix(migrate): plan SQLite multi-column changes per model"
 
 ---
 
-## V1-04 · Remove permanent allocations from unbuffered streaming
+## V1-04 · Remove permanent allocations from unbuffered streaming — **completed 2026-08-21**
 
-**Why:** `stream_unbuffered_raw` uses `Box::leak` for dynamic SQL and binds. Completion and cancellation never reclaim those allocations.
+**Why:** The historical `Box::leak` path in `stream_unbuffered_raw` has already been removed. Current `dev-v0-2` source contains no `Box::leak` in `crates/runtime/src/executor.rs` or `crates/runtime/src/tokio_postgres.rs`; the SQLx and default paths fall back to buffered `stream_raw`, and the `tokio-postgres` path owns query state in the `unfold` closure.
 
 **Files:**
 - Modify: `crates/runtime/src/executor.rs:532-589`

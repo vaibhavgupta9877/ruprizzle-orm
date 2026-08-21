@@ -2,10 +2,16 @@
 
 > **Note (2026-08-21):** This assessment is a snapshot from 2026-08-19. The
 > 48-hour W4-02 `rusqlite` soak has since been **waived** after 15.56 h /
-> 1.46 B ops / 0 errors (see `ProjectPlan/ProductionReadiness.md` §14 and
-> `docs/SoakReport.md`). The other findings (red `fmt`/`clippy`/`test`/`xtask`
-> gates, SQLite migration planner, streaming leak, mutation/coverage gaps) remain
-> current blockers for a stable `1.0.0`.
+> 1.46 B ops / 0 errors (see `ProjectPlan/ProductionReadiness.md` §14/§15 and
+> `docs/SoakReport.md`).
+>
+> As of the same date, the red `fmt`/`clippy`/`test`/`xtask` gates
+> (`ProjectPlan/ProductionReadinessSolPlan.md` V1-01) and the `sqlite-rusqlite`
+> feature suite compile failures are **closed**; the `stream_unbuffered` `Box::leak`
+> issue (V1-04) is also **closed** because the current source no longer contains
+> `Box::leak` in the streaming path and all streaming tests pass. The remaining
+> current blockers are the SQLite multi-change migration planner (V1-03),
+> RC/publish/feedback window (V1-05), and coverage/mutation evidence (V1-06).
 
 **Project:** `ruprizzle-orm`
 **Workspace version:** `1.0.0-rc.1`
