@@ -257,19 +257,27 @@ fn sqlite_type_name(ty: ScalarType) -> &'static str {
 pub(crate) fn rebuild_table(
     dialect: &dyn DbDialect,
     schema: &Schema,
-    m: &Model,
+    target: &Model,
+    source: &Model,
     from: &Field,
     to: &Field,
 ) -> Vec<Stmt> {
-    let table = &m.table;
+    let table = &target.table;
     let new_table = format!("{table}__new");
 
     let mut stmts = Vec::new();
     stmts.push(Stmt::new("PRAGMA foreign_keys=OFF;".to_owned()).non_transactional());
 
-    // Build the new table schema. Replace the old field with the new one.
-    let mut new_model = m.clone();
+    // Build the new table schema from the source table, replacing the field being
+    // changed (`from`) with its new definition (`to`). Using `source` rather than
+    // `target` prevents a table rebuild from referencing columns that have not been
+    // added to the physical table yet when several changes are applied to one model
+    // in the same migration.
+    let mut new_model = source.clone();
     new_model.table.clone_from(&new_table);
+    new_model.primary_key = target.primary_key.clone();
+    new_model.indexes.clone_from(&target.indexes);
+    new_model.uniques.clone_from(&target.uniques);
     new_model.fields.shift_remove(from.name.as_str());
     new_model.fields.insert(to.name.clone(), to.clone());
 
@@ -326,22 +334,23 @@ pub(crate) fn rebuild_table(
         }
     }
 
-    // Copy the intersection of old and new columns. If the column is being
-    // renamed, use the old name on the source side and the new name on the
-    // destination side.
+    // Copy the columns that exist in the source table into the new table. The
+    // field being changed maps from the source's `from` field to the target's `to`
+    // field, which may differ by name and/or column.
     let mut old_cols = Vec::new();
     let mut new_cols = Vec::new();
-    for f in m.scalar_fields() {
-        if f.column == from.column && to.column != from.column {
-            // The old column is being renamed. The destination is `to.column`
-            // while the source is `from.column`.
-            old_cols.push(dialect.quote_ident(&from.column));
-            new_cols.push(dialect.quote_ident(&to.column));
-        } else if new_model.fields.contains_key(f.name.as_str()) {
-            let col = dialect.quote_ident(&f.column);
-            old_cols.push(col.clone());
-            new_cols.push(col);
-        }
+    for f in new_model.scalar_fields() {
+        let src = if f.name == to.name {
+            from
+        } else {
+            match source.fields.get(f.name.as_str()) {
+                Some(s) => s,
+                None => continue,
+            }
+        };
+
+        old_cols.push(dialect.quote_ident(&src.column));
+        new_cols.push(dialect.quote_ident(&f.column));
     }
 
     if !old_cols.is_empty() {
@@ -362,7 +371,7 @@ pub(crate) fn rebuild_table(
     )));
 
     // Recreate indexes that still apply to the new model.
-    for ix in &m.indexes {
+    for ix in &target.indexes {
         // Drop the index if any of its field targets no longer exist.
         let missing = ix.targets.iter().any(|target| match target {
             ruprizzle_core::ir::IndexTarget::Field(name, _) => {
@@ -386,7 +395,7 @@ pub(crate) fn rebuild_table(
         }
     }
 
-    for u in &m.uniques {
+    for u in &target.uniques {
         let missing = u.targets.iter().any(|target| match target {
             ruprizzle_core::ir::IndexTarget::Field(name, _) => {
                 !new_model.fields.contains_key(name.as_str())

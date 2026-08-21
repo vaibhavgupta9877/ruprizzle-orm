@@ -313,18 +313,45 @@ impl<'a> Planner<'a> {
     }
 
     fn columns_to_add(&self) -> Vec<Stmt> {
-        self.filter(|c| matches!(c, Change::AddColumn { .. }))
-            .flat_map(|c| match c {
-                Change::AddColumn { model, field } => {
-                    let m = self.model(model);
-                    self.add_column_with_backfill(m, field)
-                }
-                _ => Vec::new(),
-            })
-            .collect()
+        // SQLite table rebuilds for NOT NULL column adds must reflect the table as it
+        // exists before the change, not the final target schema. Process adds in order
+        // and maintain a source model per table so a rebuild does not reference columns
+        // that have not been added yet.
+        let mut stmts = Vec::new();
+        let mut current: HashMap<ModelName, Model> = HashMap::new();
+
+        for c in self.filter(|c| matches!(c, Change::AddColumn { .. })) {
+            let Change::AddColumn { model, field } = c else {
+                continue;
+            };
+            let target = self.model(model);
+            let source = current.entry(model.clone()).or_insert_with(|| {
+                self.prev
+                    .models
+                    .get(model)
+                    .cloned()
+                    .unwrap_or_else(|| target.clone())
+            });
+
+            let mut step = self.add_column_with_backfill(target, source, field);
+            stmts.append(&mut step);
+
+            // Advance the source model so the next change for this table sees the
+            // column in the state it will have after this step.
+            if !field.optional && field.default.is_none() {
+                let mut nullable = field.clone();
+                nullable.optional = true;
+                source.fields.shift_remove(nullable.name.as_str());
+                source.fields.insert(field.name.clone(), field.clone());
+            } else {
+                source.fields.insert(field.name.clone(), field.clone());
+            }
+        }
+
+        stmts
     }
 
-    fn add_column_with_backfill(&self, m: &Model, field: &Field) -> Vec<Stmt> {
+    fn add_column_with_backfill(&self, target: &Model, source: &Model, field: &Field) -> Vec<Stmt> {
         // A NOT NULL column with no default cannot be added to a table that may
         // already contain rows.  Emit a nullable add, an editable backfill block,
         // then a NOT NULL alter so the user can fill in the middle.
@@ -332,9 +359,9 @@ impl<'a> Planner<'a> {
             let mut nullable = field.clone();
             nullable.optional = true;
 
-            let mut stmts = self.dialect.add_column(self.next, m, &nullable);
+            let mut stmts = self.dialect.add_column(self.next, target, &nullable);
 
-            let table = self.dialect.quote_ident(&m.table);
+            let table = self.dialect.quote_ident(&target.table);
             let col = self.dialect.quote_ident(&field.column);
             stmts.push(Stmt::new(format!(
                 "-- ▼▼▼ RUPRIZZLE:BACKFILL — edit this block (preserved on regeneration) ▼▼▼\n\
@@ -344,10 +371,20 @@ impl<'a> Planner<'a> {
                  -- ▲▲▲ RUPRIZZLE:BACKFILL ▲▲▲"
             )));
 
-            stmts.extend(ruprizzle_dialect::full_alter_column(
+            // The rebuild source is the source table with the nullable added column,
+            // because the `ALTER TABLE ADD COLUMN` above will have created it before the
+            // rebuild runs.
+            let mut rebuild_source = source.clone();
+            rebuild_source.fields.shift_remove(nullable.name.as_str());
+            rebuild_source
+                .fields
+                .insert(nullable.name.clone(), nullable.clone());
+
+            stmts.extend(ruprizzle_dialect::full_alter_column_with_source(
                 self.dialect,
                 self.next,
-                m,
+                target,
+                &rebuild_source,
                 &nullable,
                 field,
             ));
@@ -355,7 +392,7 @@ impl<'a> Planner<'a> {
             return stmts;
         }
 
-        self.dialect.add_column(self.next, m, field)
+        self.dialect.add_column(self.next, target, field)
     }
 
     fn columns_to_drop(&self) -> Vec<Stmt> {
@@ -380,8 +417,8 @@ impl<'a> Planner<'a> {
                     from_column,
                     to_column,
                 } => {
-                    let m = self.model(model);
-                    let to_field = m
+                    let target = self.model(model);
+                    let to_field = target
                         .fields
                         .get(to)
                         .cloned()
@@ -390,14 +427,21 @@ impl<'a> Planner<'a> {
                     from_field.name = from.clone();
                     from_field.column = from_column.clone();
 
+                    let mut source = target.clone();
+                    source.fields.shift_remove(to_field.name.as_str());
+                    source
+                        .fields
+                        .insert(from_field.name.clone(), from_field.clone());
+
                     if self.dialect.capabilities().alter_column_type {
                         self.dialect
-                            .alter_column(self.next, m, &from_field, &to_field)
+                            .alter_column(self.next, target, &from_field, &to_field)
                     } else {
-                        ruprizzle_dialect::full_alter_column(
+                        ruprizzle_dialect::full_alter_column_with_source(
                             self.dialect,
                             self.next,
-                            m,
+                            target,
+                            &source,
                             &from_field,
                             &to_field,
                         )
@@ -414,8 +458,19 @@ impl<'a> Planner<'a> {
                 Change::AlterColumn {
                     model, from, to, ..
                 } => {
-                    let m = self.model(model);
-                    ruprizzle_dialect::full_alter_column(self.dialect, self.next, m, from, to)
+                    let target = self.model(model);
+                    let mut source = target.clone();
+                    source.fields.shift_remove(to.name.as_str());
+                    source.fields.insert(from.name.clone(), from.clone());
+
+                    ruprizzle_dialect::full_alter_column_with_source(
+                        self.dialect,
+                        self.next,
+                        target,
+                        &source,
+                        from,
+                        to,
+                    )
                 }
                 _ => Vec::new(),
             })

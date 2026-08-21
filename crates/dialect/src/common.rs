@@ -88,6 +88,11 @@ pub fn full_create_table(dialect: &dyn DbDialect, schema: &Schema, m: &Model) ->
 /// including the table rebuild, index recreation, and foreign-key recreation.
 ///
 /// On PostgreSQL this delegates directly to `alter_column`.
+///
+/// The `source` model is the table as it exists before the change. For a single
+/// column change it can be the same as `target`; for sequential changes within one
+/// migration it should reflect the table state after all earlier changes have been
+/// applied, so the table rebuild does not reference columns that do not yet exist.
 #[must_use]
 pub fn full_alter_column(
     dialect: &dyn DbDialect,
@@ -96,11 +101,24 @@ pub fn full_alter_column(
     from: &Field,
     to: &Field,
 ) -> Vec<Stmt> {
+    full_alter_column_with_source(dialect, schema, m, m, from, to)
+}
+
+/// [`full_alter_column`] with an explicit source model.
+#[must_use]
+pub fn full_alter_column_with_source(
+    dialect: &dyn DbDialect,
+    schema: &Schema,
+    target: &Model,
+    source: &Model,
+    from: &Field,
+    to: &Field,
+) -> Vec<Stmt> {
     if dialect.capabilities().alter_column_type {
-        return dialect.alter_column(schema, m, from, to);
+        return dialect.alter_column(schema, target, from, to);
     }
 
-    crate::sqlite::rebuild_table(dialect, schema, m, from, to)
+    crate::sqlite::rebuild_table(dialect, schema, target, source, from, to)
 }
 
 /// Checks a schema for constructs that the active provider handles poorly.

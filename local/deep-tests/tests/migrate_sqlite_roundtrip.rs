@@ -172,16 +172,9 @@ proptest! {
     ) {
         let (Some(sa), Some(sb)) = (schema_of(&a), schema_of(&b)) else { return Ok(()); };
 
-        // Multi-change diffs (especially multiple NOT NULL column adds) currently
-        // expose a SQLite migration planner bug where a table rebuild tries to
-        // select a column that has not been added yet. Limit the property to a
-        // single change at a time so the round-trip is meaningful and green.
-        let changes = diff(&sa, &sb);
-        prop_assume!(
-            changes.len() <= 1,
-            "skipping {} simultaneous changes (planner limitation)",
-            changes.len()
-        );
+        // Multi-change diffs (especially multiple NOT NULL column adds) are now
+        // exercised after the V1-03 planner fix.
+        let _ = diff(&sa, &sb);
 
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()

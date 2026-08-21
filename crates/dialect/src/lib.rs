@@ -41,7 +41,10 @@ use ruprizzle_core::ir::{
     EnumDef, Field, IndexDef, Model, ResolvedRelation, ScalarType, Schema, UniqueDef,
 };
 
-pub use common::{check_schema_capabilities, dialect_for, full_alter_column, full_create_table};
+pub use common::{
+    check_schema_capabilities, dialect_for, full_alter_column, full_alter_column_with_source,
+    full_create_table,
+};
 pub use mysql::MySqlDialect;
 pub use postgres::PostgresDialect;
 pub use sqlite::SqliteDialect;
