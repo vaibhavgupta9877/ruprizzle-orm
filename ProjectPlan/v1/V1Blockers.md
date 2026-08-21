@@ -19,10 +19,10 @@ The code is feature-rich and the workstreams up through W5 (including W5-07 LSP 
 - `cargo xtask harden` **passes**.
 - `cargo deny check advisories` **passes** (with a documented exception for `RUSTSEC-2023-0071` because no patched `rsa` release is available).
 - `cargo doc --workspace --no-deps` **passes** without warnings.
-- A local `1.0.0-rc.1` tag exists but is 20+ commits behind `dev-v0-2` HEAD; no RC feedback window has been run — and `ProjectPlan/v1/PathToStableV1.md` explicitly forbids skipping that.
+- A local `1.0.0-rc.1` tag exists but is **38 commits** behind `dev-v0-2` HEAD, and the branch is 27 commits ahead of `origin/dev-v0-2` and unpushed, so CI has never run on this tip; no RC feedback window has been run — and `ProjectPlan/v1/PathToStableV1.md` explicitly forbids skipping that.
 - The W4-02 48-hour `rusqlite` soak has been **waived**. The resumable segmented soak accumulated **15.56 h (56,028.6 s), 1,464,277,925 operations, and 0 errors** before the maintainer accepted the evidence and stopped the remaining 32.4 % of the 48-hour target. The earlier 47-minute and ~11-hour failures were due to SQLite lock-contention and Windows `disk I/O error` / `os error 1450` events; the root cause (WAL mode, 60-second busy timeout, Condvar checkout, `spawn_blocking`, and non-panicking log writes) is fixed. 60-second and 1-hour validation runs remain clean. See `docs/SoakReport.md`.
 
-The workspace version is `1.0.0-rc.1`; the tag should be moved to current HEAD and crates.io publish is pending the W6-04 release-candidate cut and W6-05 re-scoring. The W4-02 48-hour soak is waived. The pre-RC production-readiness score has been re-scored to **92 / 100** (`ProjectPlan/ProductionReadiness.md` §15) after closing the V1-03 SQLite multi-change migration bug. The RC feedback window is still pending.
+The workspace version is `1.0.0-rc.1`; the tag should be moved to current HEAD and crates.io publish is pending the W6-04 release-candidate cut and W6-05 re-scoring. The W4-02 48-hour soak is waived. The pre-RC production-readiness score was re-scored to 92 / 100 in `ProjectPlan/ProductionReadiness.md` §15, but §16 (independent re-run, 2026-08-21) **supersedes that with 87 / 100**: with Postgres attached, `cargo test --workspace` fails reproducibly on a pre-existing test-isolation defect in `crates/migrate/tests/roundtrip_prop.rs` that §15 never exercised. The RC feedback window is still pending.
 
 ---
 
@@ -45,10 +45,10 @@ The workspace version is `1.0.0-rc.1`; the tag should be moved to current HEAD a
 |------|--------------|
 | Version | `1.0.0-rc.1` (`Cargo.toml` workspace package) |
 | Branch | `dev-v0-2` |
-| Tags | local `1.0.0-rc.1` exists but is 20+ commits behind HEAD; not pushed to `origin` |
-| Production-readiness score (last self-assessment) | **92 / 100** pre-RC (`ProjectPlan/ProductionReadiness.md` §15); the live RC rescoring (≥ 92) must still be rerun once `1.0.0-rc.1` is on crates.io and the feedback window has run |
+| Tags | local `1.0.0-rc.1` exists but is **38 commits** behind HEAD; not pushed to `origin` |
+| Production-readiness score (last self-assessment) | **87 / 100** (`ProjectPlan/ProductionReadiness.md` §16, superseding the §15 pre-RC 92); the live RC rescoring (≥ 92) must still be rerun once `1.0.0-rc.1` is on crates.io and the feedback window has run |
 | Plan status | W0–W5 marked complete; W4-02 48-hour soak **waived** after 15.56 h / 1.46 B ops / 0 errors; W6-04/W6-05 (RC tag + final assessment) still to execute (`ProjectPlan/v1/PathToStableV1.md`) |
-| Tests (live) | **all green** — `cargo test --workspace`, `cargo test -p ruprizzle-integration-tests`, and `cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'` all pass; the W4-02 48-hour soak is **waived** after a resumable segmented run reached 15.56 h / 1.46 B ops / 0 errors |
+| Tests (live) | green on **default features** — `cargo test --workspace`, `cargo test -p ruprizzle-integration-tests`, and `cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'` all pass. **With `RUPRIZZLE_TEST_PG_URL` set, `cargo test --workspace` fails** (475 passed / 1 failed) on a test-isolation defect — see `ProductionReadiness.md` §16; the W4-02 48-hour soak is **waived** after a resumable segmented run reached 15.56 h / 1.46 B ops / 0 errors |
 | `cargo fmt --all --check` | **passes** |
 | `cargo clippy --workspace --all-targets` | **passes** |
 | `cargo xtask harden` | **passes** |

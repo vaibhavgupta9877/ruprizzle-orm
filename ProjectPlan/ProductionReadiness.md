@@ -1,4 +1,4 @@
-> **Note (2026-08-21):** The section immediately below is a historical snapshot of `0.1.1-beta.1` at `7636f44`. The repository has since moved to `1.0.0-rc.1`. Reassessments follow in §11 (2026-08-18, 86/100), §12 (2026-08-19, 84/100), §13 (2026-08-20, 71/100), and **§14 (2026-08-21 — current)**. **Read §14 first:** it records the maintainer decision to waive the remaining 48-hour W4-02 soak after 15.56 h / 1.46 B ops / 0 errors. The rest of the §13 assessment (red `fmt`, `clippy`/`test`, and `xtask harden` gates) remains in force until the V1-01 fixes land.
+> **Note (2026-08-21):** The section immediately below is a historical snapshot of `0.1.1-beta.1` at `7636f44`. The repository has since moved to `1.0.0-rc.1`. Reassessments follow in §11 (2026-08-18, 86/100), §12 (2026-08-19, 84/100), §13 (2026-08-20, 71/100), §14 (2026-08-21, W4-02 soak waived), §15 (2026-08-21, 92/100 pre-RC), and **§16 (2026-08-21 — current, 87/100)**. **Read §16 first:** it independently re-ran every §15 gate and confirms the mechanical ones green, but records that §15 never ran the suite against a database. With Postgres attached, `cargo test --workspace` fails reproducibly on a pre-existing test-isolation defect in `crates/migrate/tests/roundtrip_prop.rs`. §16 supersedes §15's 92/100; the project's ≥ 92 definition of done is **not** met today. The §13 gate breaks are genuinely closed and the W4-02 soak waiver in §14 stands.
 
 # Production Readiness Assessment — ruprizzle-orm
 
@@ -610,3 +610,154 @@ This is a **pre-RC rescoring** (§13 → §15). The final W6-05 assessment
 2. **RC feedback window (W6-04):** run the minimum two-week RC window and collect an external upgrade report.
 3. **Final rescoring (W6-05):** re-score against the live RC, targeting ≥ 92/100.
 4. ~~SQLite multi-change migration (V1-03)~~ — **fixed 2026-08-21**; the `local/deep-tests` SQLite round-trip property now exercises multiple simultaneous column adds.
+
+---
+
+## 16. Independent validation of the §15 score — 2026-08-21
+
+**Version assessed:** `1.0.0-rc.1` (workspace), branch `dev-v0-2`, HEAD `1baed01`
+**Date:** 2026-08-21
+**Assessor:** Claude (independent live re-run of every §15 gate, plus the DB-backed suite §15 did not run)
+**Scope:** Validation of the §15 pre-RC score of 92/100. Clean working tree.
+
+### Verdict
+
+| Axis | Score | Grade | Previous (§15) |
+|---|---|---|---|
+| **Production readiness** | **87 / 100** | **B+ — mechanically green, but the DB-backed workspace gate is reproducibly red** | 92 / 100 |
+| Engineering craft | 90 / 100 | A− | — |
+
+**§15's mechanical gates all reproduce green — that part of the assessment is sound.** What
+§15 did not do is run the test suite against a real database. Its verification table records a
+bare `cargo test --workspace`, and without `RUPRIZZLE_TEST_PG_URL` set the testkit's
+`run_case` skip path (`crates/testkit/src/lib.rs:572-584`) silently skips **every** Postgres
+and MySQL test while still reporting `ok`. Dimension 1's 9.5 therefore rested on a run that
+never touched a database.
+
+Run with a database, `cargo test --workspace` **fails** — reproducibly, including against a
+freshly reset one. That is the same configuration as CI's `db-backed` job
+(`.github/workflows/ci.yml:84-93`).
+
+The score also lands on exactly the project's 92/100 definition of done, carried there by a
+10.0/10 Performance mark awarded to a soak that reached 32.4 % of its target. Both are
+adjusted below.
+
+### The DB-backed failure
+
+```text
+test applied_diff_reaches_the_target_schema ... FAILED
+Test failed: after applying the diff, drift remains:
+  ["table `articles` exists in the database but not in the snapshot",
+   "table `events` exists in the database but not in the snapshot",
+   "table `conc_a` exists in the database but not in the snapshot",
+   "table `conc_b` exists in the database but not in the snapshot"]
+minimal failing input: a = [], b = []
+```
+
+**This is a test-isolation defect, not an ORM or migration-planner defect.** Run alone
+against a pristine database, `cargo test -p ruprizzle-migrate --test roundtrip_prop` passes
+(3/3). The round-trip logic is sound.
+
+The cause is that three test files bypass the project's own isolation pattern. The testkit
+gives every Postgres test a private `rz_<uuid>` schema (`crates/testkit/src/lib.rs:201-221`),
+but:
+
+- `crates/migrate/tests/roundtrip_prop.rs:142-181` connects with `ruprizzle::connect_with`
+  directly, drops only its own `things` table, then asserts **whole-database** drift at
+  line 228 — effectively asserting "`public` contains nothing but the target schema".
+- `crates/runtime/tests/arrays.rs:105-128` (`fresh_pool`) uses the raw `RUPRIZZLE_TEST_PG_URL`
+  with no schema isolation, leaving `articles` and `events` behind in `public`.
+- `crates/migrate/tests/concurrency.rs:15` creates `conc_a`/`conc_b` in `public`.
+
+So the suite pollutes its own database and then fails an assertion about that pollution. It is
+**pre-existing** — the three files date from 2026-08-12 to 2026-08-17, not from the 27
+unpushed commits. Whether CI hits it depends on target execution order, which makes it a
+latent flake there and a reproducible failure locally on Windows. Either way the workflow the
+PR template documents (`RUPRIZZLE_REQUIRE_DB=1 cargo test --workspace`,
+`.github/pull_request_template.md:14`) does not pass.
+
+### Corrections to §15's rationales
+
+- **Dimension 3 is factually stale.** §15 says "Prometheus/OTel exporter is still not
+  implemented". The `metrics` feature exists (`crates/runtime/src/metrics.rs`,
+  `crates/runtime/src/pool.rs:572`), is documented with a working Prometheus recipe
+  (`docs/Operations.md:136-149`), and compiles clean. What is actually missing is OpenTelemetry
+  **span** export. Separately — and this is a real gap — **no CI job builds or tests the
+  `metrics` feature.** It is the only shipped feature flag with zero CI coverage, which is the
+  same class of feature-rot that produced §13's Break 2.
+- **Tag staleness is understated.** Tag `1.0.0-rc.1` points at `1a918d4`, **38 commits** behind
+  HEAD — not the "20+" recorded in `V1Blockers.md:22` nor §13's 27. The branch is 27 commits
+  ahead of `origin/dev-v0-2` and unpushed, so every green gate in §15 is a local result and CI
+  has never observed this tip.
+- **Coverage is unreferenced.** `docs/TestingAnalysis.md:174` records **68.08 %** line coverage,
+  with `crates/cli/src/main.rs` at ~2.5 %. A 9.5 for correctness should not be silent about that.
+
+### What §15 got right
+
+Verified independently and confirmed: §13's Break 2 is genuinely fixed — the whole workspace
+now compiles and lints clean under `sqlite-rusqlite`, and the CI hole that hid it is closed by
+the new `native-driver-workspace` job (`ci.yml:163-199`), which builds *every* crate with each
+native-driver feature. The V1-03 fix is real: `full_alter_column_with_source` threads the
+source model through the SQLite rebuild, and the `prop_assume!(changes.len() <= 1)` restriction
+is removed from the round-trip property. `xtask harden` runs to completion, so the panic,
+arithmetic/indexing, and injection audits genuinely executed this pass.
+
+### Scorecard
+
+| # | Dimension | Weight | Score | §15 | Rationale |
+|---|---|---:|---:|---:|---|
+| 1 | Correctness & testing | 20% | **8.5** | 9.5 | 475 passed / 1 failed / 5 ignored with Postgres attached. The one failure is isolation, not logic, and the default-feature suite is fully green — but the DB-backed gate is red, and 68.08 % line coverage (CLI at ~2.5 %) is not a 9.5. |
+| 2 | Security | 15% | **9.5** | 9.5 | Confirmed. `xtask harden` exits 0 with all audits actually run; `cargo deny check advisories` ✅ `advisories ok`; `forbid(unsafe_code)`; parameterised binding. |
+| 3 | Operability & observability | 15% | **8.5** | 8.5 | Score unchanged, rationale corrected. The `metrics` facade **is** implemented and documented; OTel span export is not. Docked for the feature having no CI coverage at all. |
+| 4 | Data safety & migrations | 15% | **9.0** | 9.0 | Confirmed. The V1-03 multi-change planner fix is real and the property test restriction is genuinely removed. |
+| 5 | Architecture & design | 10% | **9.5** | 9.5 | Unchanged. Query builder, driver abstraction, and multi-dialect handling remain sound. |
+| 6 | CI/CD & release engineering | 10% | **7.0** | 8.5 | The `native-driver-workspace` job is a real improvement, but CI has still never run on this tip (27 unpushed commits), the tag is 38 commits stale, the `db-backed` job's exact configuration is reproducibly red, and the `metrics` feature is uncovered. |
+| 7 | Documentation | 5% | **9.5** | 9.5 | Confirmed. `mdbook build` and `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS=-D warnings` both exit 0. |
+| 8 | API stability & semver | 5% | **8.0** | 8.5 | Docked slightly: the tag is staler than any prior section recorded (38 commits), unpushed, not on crates.io, and no RC window has run. |
+| 9 | Performance | 5% | **8.5** | 10.0 | Benchmarks are genuinely strong. But 10.0 was awarded to a soak that reached 32.4 % of its target and showed `waiters=4` in ~10 % of health samples — an item on `docs/SoakReport.md:208`'s own watch list ("`waiters` sustained > 0 (pool exhaustion)"). Nothing here was measured to a perfect mark. |
+
+**Weighted total: 8.70 / 10 → 87 / 100.**
+
+### Verification performed
+
+Clean working tree at `1baed01`. Local PostgreSQL 17.10; no local MySQL.
+
+| Check | Command | Result |
+|---|---|---|
+| Format | `cargo fmt --all --check` | ✅ Exit 0 |
+| Lint | `cargo clippy --workspace --all-targets -- -D warnings` | ✅ Exit 0 |
+| Lint (`sqlite-rusqlite`, workspace) | `cargo clippy --workspace --all-targets --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite' -- -D warnings` | ✅ Exit 0 — §13 Break 2 confirmed fixed |
+| Lint (`metrics`) | `cargo clippy -p ruprizzle --all-targets --features metrics -- -D warnings` | ✅ Exit 0 — but no CI job runs this |
+| Tests (default features) | `cargo test --workspace --no-fail-fast` | ✅ Exit 0 — **but skips all Postgres/MySQL tests silently** |
+| Tests (Postgres attached) | `RUPRIZZLE_TEST_PG_URL=… cargo test --workspace --no-fail-fast` | ❌ **475 passed, 1 failed** — `roundtrip_prop::applied_diff_reaches_the_target_schema` |
+| Same, after `DROP SCHEMA public CASCADE` | as above, on a freshly reset database | ❌ **Fails again** — pollution is self-inflicted within the run |
+| Failure isolated | `cargo test -p ruprizzle-migrate --test roundtrip_prop` on a pristine DB | ✅ 3/3 pass — confirms isolation defect, not logic defect |
+| Docs | `RUSTDOCFLAGS=-D warnings cargo doc --workspace --no-deps` | ✅ Exit 0 |
+| Book | `mdbook build` | ✅ Exit 0 |
+| Advisories | `cargo deny check advisories` | ✅ `advisories ok` |
+| Harden | `cargo xtask harden` | ✅ Exit 0 — panic, arithmetic/indexing, and injection audits all ran |
+| Soak state | `python local/soak-48h/status.py` | 15.56 h / 1,464,277,925 ops / 0 errors / 32.4 % — unchanged, waived |
+| Git state | `git status -sb`, `git rev-list`, `git tag` | Clean tree; **27 commits ahead of `origin/dev-v0-2`**; tag `1.0.0-rc.1` at `1a918d4`, **38 commits behind HEAD** |
+
+### Remaining v1.0.0 blockers
+
+1. **Fix the Postgres test isolation defect.** Give `crates/migrate/tests/roundtrip_prop.rs`
+   and `concurrency.rs` a private schema the way `ruprizzle-testkit` already does, or scope
+   `roundtrip_prop`'s drift assertion to the tables it owns; and isolate `arrays.rs`'s
+   `fresh_pool`. Until this lands, `cargo test --workspace` against a database is not a gate
+   that can pass. **This is the one item that must be fixed before pushing.**
+2. **Push the 27 local commits** so CI observes the real tip. Every green gate recorded in §15
+   and in this section is a local result.
+3. **Add a CI job covering the `metrics` feature** — it is the only shipped feature flag with
+   no build or test coverage.
+4. **RC lifecycle (W6-04):** re-tag `1.0.0-rc.1` at HEAD (currently 38 commits stale), push,
+   and publish to crates.io.
+5. **RC feedback window (W6-04):** run the minimum two-week window and collect an external
+   upgrade report.
+6. **Final rescoring (W6-05):** re-score against the live RC, targeting ≥ 92/100. That target
+   is **not** met today: this assessment scores **87/100**, and the pre-RC 92 in §15 should be
+   read as superseded.
+
+*The project remains close to its target. The gap is one pre-existing test-isolation defect,
+a branch that has never been pushed, and two scoring marks that were more generous than the
+evidence behind them.*
