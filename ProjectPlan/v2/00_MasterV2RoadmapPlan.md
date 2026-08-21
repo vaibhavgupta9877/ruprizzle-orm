@@ -1,125 +1,128 @@
-# Master v2 Implementation Roadmap & Orchestration Plan
+# Master v2 Roadmap & Multi-Version Release Pipeline
 
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
-**Status:** Approved & Scheduled for Execution  
+**Status:** Approved Multi-Version Architecture Plan  
 **Target Branch:** `dev-v2-x`  
-**Baseline:** `1.0.0-rc.1` / `dev-v0-2`  
-**Reference Document:** [`ProjectPlan/v2/V2FeaturesPlan.md`](V2FeaturesPlan.md)
+**Baseline:** `1.0.0` / `dev-v0-2`  
+**Reference Strategy:** [`ProjectPlan/v2/14_CompetitiveAnalysisAndMarketGains.md`](14_CompetitiveAnalysisAndMarketGains.md)
 
 ---
 
-## 1. Executive Summary & Architecture Overview
+## 1. Executive Summary & Version Architecture
 
-The `ruprizzle-orm` v2 release transforms `ruprizzle` from the fastest Rust relational query engine into a **complete, developer-first data platform**. 
+The **v2 Roadmap** represents the comprehensive multi-stage journey from `v1.0.0` through a series of additive, high-leverage minor releases (**v1.1**, **v1.2**, **v1.3**, **v1.4**, **v1.5**), culminating in the major, modernized **v2.0.0** data platform.
 
-While v1.0 established unmatched query performance (`3.1 µs` PK lookup vs Diesel's `9.9 µs`, Drizzle's `39.0 µs`, Prisma's `173.1 µs`), v2 delivers:
-1. **Developer Experience & Visibility:** `ruprizzle studio` (embedded local GUI with table browser, ERD graph, and query explain visualizer).
-2. **Confidence & CI Intelligence:** `ruprizzle check` (zero-DB compile-time query verification), rich LSP 2.0 with semantic autocompletions and quick-fixes.
-3. **Modern Cloud & AI Runtime:** Native `pgvector` & `sqlite-vec` embeddings, edge/serverless database drivers (Turso, Cloudflare D1, Neon), primary/read-replica connection routing, OpenTelemetry 2.0 tracing, and declarative Row-Level Security (RLS).
+Each release version is strictly scoped to adhere to Rust SemVer rules:
+- **v1.1 to v1.5 (Minor Releases):** 100% backwards-compatible, additive features, new tooling, new query builders, embedded studio, edge drivers, and observability.
+- **v2.0 (Major Release):** Breaking modernization paying down public dependency debt (`sqlx 0.9`, `rusqlite 0.40`, MSRV 1.86), first-class `pgvector` & `sqlite-vec` AI embeddings, and declarative Row-Level Security (RLS).
 
 ```mermaid
 graph TD
-    subgraph "Phase 1: v2.0 Foundation & Core Modernization"
-        P0["01: Dependency Modernization<br/>(sqlx 0.9, rusqlite 0.40, MSRV 1.86)"]
-        P1A["02: Postgres Arrays & Rich Types"]
-        P1B["03: Offline Query Checking Engine"]
-        P1C["04: LSP 2.0 & IDE Tooling"]
-        P1D["05: OpenTelemetry 2.0 & Metrics"]
+    V10["v1.0.0 (GA Released)<br/>Fastest Core Engine (3.1µs PK Lookup)"] --> V11
+    
+    subgraph "Minor Version Releases (Additive, SemVer-Safe)"
+        V11["v1.1.0: Query Expressiveness & Search<br/>• Postgres Array Binds<br/>• Full-Text Search (FTS)<br/>• Soft Deletes (@deletedAt)"]
+        V12["v1.2.0: Developer Tooling & CI<br/>• Offline Query Checking (ruprizzle check)<br/>• LSP 2.0 & VS Code Extension<br/>• Database Seeding & Mock Fixtures DSL"]
+        V13["v1.3.0: Advanced Relations & Trees<br/>• Implicit Many-to-Many Join Tables<br/>• Nested Relational Writes (create/connect/set)<br/>• Tree Hierarchy Helpers (Recursive CTEs)"]
+        V14["v1.4.0: Observability, Caching & Routing<br/>• OpenTelemetry 2.0 Spans & Prometheus Metrics<br/>• Primary / Read-Replica Auto-Routing Pool<br/>• Query Result & Plan Caching<br/>• PostGIS Geospatial Types"]
+        V15["v1.5.0: The Visual Workbench & Edge<br/>• ruprizzle Studio (Embedded Single-Binary SPA)<br/>• Edge Drivers (Turso libSQL, Cloudflare D1, Neon)<br/>• Visual Migration Diff & EXPLAIN Plan Tree"]
     end
 
-    subgraph "Phase 2: v2.1 Visibility & Visual Workbench"
-        P2A["06: Ruprizzle Studio<br/>(Embedded SPA, ERD, Table Browser, Explain)"]
+    V11 --> V12
+    V12 --> V13
+    V13 --> V14
+    V14 --> V15
+
+    subgraph "Major Milestone (Breaking Modernization)"
+        V20["v2.0.0: Modern Data Platform & AI<br/>• sqlx 0.9, rusqlite 0.40, MSRV 1.86, deny.toml Clean<br/>• First-Class AI Vector Search (pgvector / sqlite-vec)<br/>• Declarative Row-Level Security (RLS) & Multi-Tenancy"]
     end
 
-    subgraph "Phase 3: v2.2 Modern Data Stack & AI Reach"
-        P3A["07: AI & Vector Search (pgvector/sqlite-vec)"]
-        P3B["08: Edge & Serverless Adapters (Turso/D1/Neon)"]
-        P3C["09: Primary / Read-Replica Routing"]
-        P3D["10: Row-Level Security & Multi-Tenancy"]
-    end
-
-    P0 --> P1A
-    P0 --> P1D
-    P1A --> P2A
-    P1B --> P2A
-    P1C --> P2A
-    P1D --> P2A
-    P2A --> P3A
-    P2A --> P3B
-    P2A --> P3C
-    P2A --> P3D
+    V15 --> V20
 ```
 
 ---
 
-## 2. Feature Plan Index & Specification Registry
+## 2. Complete Version Matrix & Implementation Plan Index
 
-| Plan ID & File | Feature Area | Primary Crates Affected | Complexity | Target Milestone |
+| Version | Release Theme | Specification & Implementation Plan | Primary Crates Affected | SemVer Nature |
 |---|---|---|---|---|
-| [`01_DependencyModernizationPlan.md`](01_DependencyModernizationPlan.md) | `sqlx 0.9` & `rusqlite 0.40` Modernization | `runtime`, `migrate`, `cli`, `dialect` | Medium | v2.0.0-alpha.1 |
-| [`02_PostgresArraysAndRichTypesPlan.md`](02_PostgresArraysAndRichTypesPlan.md) | Postgres Array Binds & Rich Types | `core`, `dialect`, `runtime` | Small-Medium | v2.0.0-alpha.2 |
-| [`03_OfflineQueryCheckingPlan.md`](03_OfflineQueryCheckingPlan.md) | Offline Query Verification (`ruprizzle check`) | `check`, `cli`, `runtime` | Medium | v2.0.0-beta.1 |
-| [`04_Lsp2AndDeveloperToolingPlan.md`](04_Lsp2AndDeveloperToolingPlan.md) | Ruprizzle LSP 2.0 & VS Code Extension | `lsp`, `editor/vscode`, `parser` | Medium-Large | v2.0.0-beta.2 |
-| [`05_OpenTelemetryAndMetrics2Plan.md`](05_OpenTelemetryAndMetrics2Plan.md) | OpenTelemetry Semantic DB Spans & Metrics | `runtime` | Small-Medium | v2.0.0-rc.1 |
-| [`06_RuprizzleStudioPlan.md`](06_RuprizzleStudioPlan.md) | Ruprizzle Studio Visual Workbench | `cli`, `editor/studio` | Large | v2.1.0-beta.1 |
-| [`07_AiVectorSearchPlan.md`](07_AiVectorSearchPlan.md) | AI & Vector Search (`pgvector`, `sqlite-vec`) | `core`, `parser`, `dialect`, `migrate`, `runtime` | Medium-Large | v2.2.0-alpha.1 |
-| [`08_EdgeAndServerlessAdaptersPlan.md`](08_EdgeAndServerlessAdaptersPlan.md) | Edge & Serverless Adapters (Turso, D1, Neon) | `runtime`, `crates/turso`, `crates/d1`, `crates/neon` | Large | v2.2.0-beta.1 |
-| [`09_PrimaryReadReplicaRoutingPlan.md`](09_PrimaryReadReplicaRoutingPlan.md) | Primary / Read-Replica Auto-Routing | `runtime` | Medium | v2.2.0-beta.2 |
-| [`10_RowLevelSecurityAndMultiTenancyPlan.md`](10_RowLevelSecurityAndMultiTenancyPlan.md) | Row-Level Security (RLS) & Multi-Tenancy | `core`, `parser`, `dialect`, `migrate`, `runtime` | Medium | v2.2.0-rc.1 |
+| **v1.1** | **Query Expressiveness, Arrays & Search** | [`02_PostgresArraysAndRichTypesPlan.md`](02_PostgresArraysAndRichTypesPlan.md)<br>[`11_FullTextSearchAndSoftDeletesPlan.md`](11_FullTextSearchAndSoftDeletesPlan.md) | `core`, `dialect`, `runtime` | Additive (Minor) |
+| **v1.2** | **Developer Tooling, CI & Fixtures** | [`03_OfflineQueryCheckingPlan.md`](03_OfflineQueryCheckingPlan.md)<br>[`04_Lsp2AndDeveloperToolingPlan.md`](04_Lsp2AndDeveloperToolingPlan.md) | `check`, `lsp`, `cli`, `editor/vscode` | Additive (Minor) |
+| **v1.3** | **Advanced Relations, Trees & Nested Writes** | [`12_NestedWritesAndTreeHierarchiesPlan.md`](12_NestedWritesAndTreeHierarchiesPlan.md) | `core`, `parser`, `codegen`, `runtime` | Additive (Minor) |
+| **v1.4** | **Observability, Routing & Geospatial** | [`05_OpenTelemetryAndMetrics2Plan.md`](05_OpenTelemetryAndMetrics2Plan.md)<br>[`09_PrimaryReadReplicaRoutingPlan.md`](09_PrimaryReadReplicaRoutingPlan.md)<br>[`13_QueryCachingAndPostGISPlan.md`](13_QueryCachingAndPostGISPlan.md) | `runtime`, `core`, `dialect` | Additive (Minor) |
+| **v1.5** | **The Visual Workbench & Edge Adapters** | [`06_RuprizzleStudioPlan.md`](06_RuprizzleStudioPlan.md)<br>[`08_EdgeAndServerlessAdaptersPlan.md`](08_EdgeAndServerlessAdaptersPlan.md) | `cli`, `editor/studio`, `crates/turso`, `crates/d1`, `crates/neon` | Additive (Minor) |
+| **v2.0** | **Modern Data Platform, AI & Security** | [`01_DependencyModernizationPlan.md`](01_DependencyModernizationPlan.md)<br>[`07_AiVectorSearchPlan.md`](07_AiVectorSearchPlan.md)<br>[`10_RowLevelSecurityAndMultiTenancyPlan.md`](10_RowLevelSecurityAndMultiTenancyPlan.md) | Workspace-wide (`runtime`, `core`, `parser`, `migrate`) | Major (Breaking) |
 
 ---
 
-## 3. Phased Execution Roadmap
+## 3. Detailed Version Milestones & Release Breakdown
 
-### Phase 1: v2.0 Foundation & Core Modernization (Target: Weeks 1–6)
-- **Milestone 1.1 (Week 1):** Execute [`01_DependencyModernizationPlan.md`](01_DependencyModernizationPlan.md) to pay down public-dependency debt (`sqlx 0.9`, `rusqlite 0.40`, MSRV 1.86, RUSTSEC-2023-0071 clean).
-- **Milestone 1.2 (Weeks 2–3):** Land [`02_PostgresArraysAndRichTypesPlan.md`](02_PostgresArraysAndRichTypesPlan.md) and [`05_OpenTelemetryAndMetrics2Plan.md`](05_OpenTelemetryAndMetrics2Plan.md).
-- **Milestone 1.3 (Weeks 3–4):** Deliver [`03_OfflineQueryCheckingPlan.md`](03_OfflineQueryCheckingPlan.md) for full CI validation without database dependencies.
-- **Milestone 1.4 (Weeks 4–6):** Ship [`04_Lsp2AndDeveloperToolingPlan.md`](04_Lsp2AndDeveloperToolingPlan.md), publish the updated VS Code extension to Marketplace and Open VSX.
-- **Phase 1 Exit Gate:** All workspace crates compile on Rust 1.86+; mechanical gates (`cargo fmt`, `clippy -D warnings`, `test`, `harden`, `deny`) 100% green.
+### 🎯 v1.1.0 — Query Expressiveness, Rich Types & Search
+- **Deliverables:**
+  - Postgres array bind values and typed operators (`.has()`, `.has_every()`, `.has_some()`, `.is_empty()`).
+  - Full-Text Search (FTS) across PostgreSQL (GIN/tsvector), SQLite (FTS5), and MySQL (FULLTEXT) with `.matches()` and `.with_rank()`.
+  - Declarative Soft Deletes (`@deletedAt`) with automatic query filtering, `.with_deleted()`, `.only_deleted()`, and `.soft_delete()`.
+  - Automatic audit timestamps (`@createdAt`, `@updatedAt`).
+- **Exit Gate:** 100% green tests on Postgres, SQLite, and MySQL; zero breaking changes to existing 1.0 code.
 
-### Phase 2: v2.1 Visibility & Visual Workbench (Target: Weeks 7–11)
-- **Milestone 2.1 (Weeks 7–8):** Embedded Axum backend & static asset bundle integration inside `ruprizzle-cli`.
-- **Milestone 2.2 (Weeks 8–9):** Interactive Table Browser & Live Row Editor with relation click-through.
-- **Milestone 2.3 (Weeks 9–10):** Visual ERD Diagram Generator from `schema.ruprizzle` AST and SQL Sandbox.
-- **Milestone 2.4 (Weeks 10–11):** Migration safety diff preview and live `EXPLAIN (ANALYZE)` visual execution tree.
-- **Phase 2 Exit Gate:** `ruprizzle studio` launches in <50ms with zero external runtime dependencies.
+### 🎯 v1.2.0 — Zero-DB CI Intelligence & Developer Tooling
+- **Deliverables:**
+  - Offline compile-time query checking engine (`ruprizzle check`) supporting `query-manifest.json`, AST semantic verification, and GitHub Actions inline PR annotations.
+  - Ruprizzle LSP 2.0 with semantic completions (`@attributes`, types, relation fields), hover documentation, go-to-definition, and canonical formatting (`textDocument/formatting`).
+  - Code actions and quick-fixes in VS Code extension (auto-inserting inverse relations, fixing type typos).
+  - Declarative database seeding and mock fixtures DSL (`ruprizzle seed`).
+- **Exit Gate:** LSP server conformance suite passes; `ruprizzle check` runs in GitHub Actions CI with no database attached.
 
-### Phase 3: v2.2 Modern Data Stack & AI Reach (Target: Weeks 12–17)
-- **Milestone 3.1 (Weeks 12–13):** AI & Vector Search integration for Postgres (`pgvector`) and SQLite (`sqlite-vec`).
-- **Milestone 3.2 (Weeks 14–15):** Edge driver crates for Turso (libSQL embedded replicas), Cloudflare D1, and Neon serverless.
-- **Milestone 3.3 (Weeks 15–16):** Primary / Read-Replica dual pool manager with automatic write/read query routing.
-- **Milestone 3.4 (Weeks 16–17):** Declarative Row-Level Security (`@@tenant`, `@@policy`) with migration DDL and runtime query scopes.
-- **Phase 3 Exit Gate:** Full end-to-end integration tests across all dialects, vector benchmarks, and soak tests passing.
+### 🎯 v1.3.0 — Advanced Relations, Tree Hierarchies & Nested Mutations
+- **Deliverables:**
+  - Implicit Many-to-Many join tables (`model Post { tags Tag[] }` auto-synthesizing junction tables while preserving explicit join models).
+  - Nested relational writes (`create`, `connect`, `connect_or_create`, `disconnect`, `set`) inside atomic transactions.
+  - Tree and hierarchy query helpers via recursive CTEs (`.ancestors()`, `.descendants()`, `.tree()`, cycle protection).
+  - Polymorphic relations and Single Table Inheritance (STI).
+- **Exit Gate:** Nested mutations and tree queries pass proptests across arbitrary relational graph depths.
+
+### 🎯 v1.4.0 — Production Observability, Caching & Scaled Data Routing
+- **Deliverables:**
+  - OpenTelemetry 2.0 semantic database spans (`db.system`, `db.statement.sanitized`, `db.operation`) and Prometheus metrics exporter (`ruprizzle_pool_connections_active`, `ruprizzle_query_duration_seconds`).
+  - Primary / Read-Replica connection pool manager (`RoutedPool`) with automatic `SELECT` load balancing, primary write routing, and health failover.
+  - Query result caching (in-memory LRU + Redis) with automatic mutation invalidation, plus AST query plan caching.
+  - PostGIS geospatial scalar types (`Point`, `Polygon`, `MultiPolygon`) and spatial distance queries (`.within_radius()`, `.distance_to()`).
+- **Exit Gate:** OTel spans conform to OpenTelemetry DB semantic conventions; read replicas distribute queries under high load soak tests.
+
+### 🎯 v1.5.0 — Ruprizzle Studio & Edge Database Adapters
+- **Deliverables:**
+  - **Ruprizzle Studio:** Embedded visual data workbench single-binary SPA (React 19, Tailwind, Radix) inside `ruprizzle-cli` booting in <50ms with table browser, live cell editor, clickable relation navigation, interactive ERD graph, and SQL sandbox.
+  - Live query plan visualizer (`EXPLAIN ANALYZE`) and migration safety diff preview.
+  - Edge and serverless adapters: `ruprizzle-turso` (libSQL embedded replicas), `ruprizzle-d1` (Cloudflare D1 WASM/HTTP), `ruprizzle-neon` (Neon WebSocket driver).
+- **Exit Gate:** Studio launches with zero external npm/Node dependencies; Turso/D1 drivers pass dialect conformance tests.
+
+### 🚀 v2.0.0 — Modern Data Platform, AI & Security (Major Release)
+- **Deliverables:**
+  - **Public Dependency Debt Paid Down:** Upgrade to `sqlx 0.9.0` (`SqlSafeStr`, `AssertSqlSafe`, `SqliteValue` bounds, `AnyArguments` lifetimes), `rusqlite 0.40.0`, MSRV raised to 1.86, and `deny.toml` RUSTSEC-2023-0071 exception permanently eliminated.
+  - **First-Class AI Vector Search:** `Vector(dim)` schema type, `@@index(..., type: Hnsw, distance: Cosine)`, `.nearest_neighbors()`, and pgvector/sqlite-vec migration DDL.
+  - **Declarative Row-Level Security (RLS) & Multi-Tenancy:** `@@tenant(field)` and `@@policy(...)` generating native Postgres RLS and transparent SQLite/MySQL query rewriting with `pool.with_tenant(...)`.
+- **Exit Gate:** All 10 workspace crates compile on Rust 1.86+; full performance benchmarks rescore with sub-3µs PK lookups across all drivers.
 
 ---
 
-## 4. Cross-Cutting Verification Gates
+## 4. Mechanical Verification Standard
 
-Every pull request and milestone must satisfy the strict mechanical gates:
+All pull requests and milestone releases must pass the unified verification gate:
 
 ```powershell
 # 1. Format & Linting
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 
-# 2. Test Suite & Rusqlite Feature Suite
+# 2. Test Suite & Native Driver Coverage
 cargo test --workspace
 $env:RUPRIZZLE_TEST_RUSQLITE=1; cargo test -p ruprizzle --features "sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite"
 
-# 3. Security & Dependency Audit
+# 3. Security, Advisories & Hardening
 cargo deny check advisories
 cargo xtask harden
 
 # 4. Documentation
 cargo doc --workspace --no-deps
 ```
-
----
-
-## 5. Branching & Release Strategy
-
-- **Default Development Branch:** `dev-v2-x` (branched from `dev-v0-2`).
-- **Feature Branches:** `feature/v2-<plan-id>-<short-description>` (e.g. `feature/v2-01-sqlx-09-upgrade`).
-- **Tags:** `v2.0.0-alpha.1`, `v2.0.0-beta.1`, `v2.0.0-rc.1`, `v2.0.0`, `v2.1.0`, `v2.2.0`.
