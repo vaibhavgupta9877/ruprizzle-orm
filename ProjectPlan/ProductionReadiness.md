@@ -539,6 +539,7 @@ pursued. The segmented `rusqlite` soak is therefore **waived**, not failed.
 | `soak.err` size | **0 bytes** |
 | `soak_kv` rows at last save | 5 |
 | Last state save | 2026-08-20 23:26:31 (state file last write) |
+| Status re-check | 2026-08-21 10:05 UTC — no new segment recorded; evidence unchanged |
 
 The resumable harness has not exhibited the `disk I/O error` or `os error 1450`
 stderr panic that terminated the original continuous 48-hour run. Memory remained
