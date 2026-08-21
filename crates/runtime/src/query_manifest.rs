@@ -56,14 +56,19 @@ pub fn write_manifest<P: AsRef<Path>>(path: P) -> io::Result<()> {
         .map(|g| g.clone())
         .unwrap_or_default();
     let manifest = ruprizzle_check::QueryManifest {
+        version: 1,
         schema_hash: String::new(), // schema hash is computed by the caller of write_manifest
         queries: entries
             .into_iter()
             .map(|e| ruprizzle_check::QueryEntry {
+                id: None,
                 sql: e.sql,
                 source: e.source.map(String::from),
                 line: e.line,
                 dialect: e.dialect,
+                params: Vec::new(),
+                result_columns: Vec::new(),
+                location: None,
             })
             .collect(),
     };

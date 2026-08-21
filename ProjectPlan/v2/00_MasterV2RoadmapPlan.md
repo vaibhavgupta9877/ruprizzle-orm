@@ -48,7 +48,7 @@ graph TD
 | Version | Release Theme | Specification & Implementation Plan | Primary Crates Affected | SemVer Nature | Status |
 |---|---|---|---|---|---|
 | **v1.1** | **Query Expressiveness, Arrays & Search** | [`02_PostgresArraysAndRichTypesPlan.md`](02_PostgresArraysAndRichTypesPlan.md)<br>[`11_FullTextSearchAndSoftDeletesPlan.md`](11_FullTextSearchAndSoftDeletesPlan.md) | `core`, `parser`, `dialect`, `runtime`, `codegen` | Additive (Minor) | **Completed** |
-| **v1.2** | **Developer Tooling, CI & Fixtures** | [`03_OfflineQueryCheckingPlan.md`](03_OfflineQueryCheckingPlan.md)<br>[`04_Lsp2AndDeveloperToolingPlan.md`](04_Lsp2AndDeveloperToolingPlan.md) | `check`, `lsp`, `cli`, `editor/vscode` | Additive (Minor) | Planned |
+| **v1.2** | **Developer Tooling, CI & Fixtures** | [`03_OfflineQueryCheckingPlan.md`](03_OfflineQueryCheckingPlan.md)<br>[`04_Lsp2AndDeveloperToolingPlan.md`](04_Lsp2AndDeveloperToolingPlan.md) | `check`, `lsp`, `cli`, `editor/vscode` | Additive (Minor) | **Completed** |
 | **v1.3** | **Advanced Relations, Trees & Nested Writes** | [`12_NestedWritesAndTreeHierarchiesPlan.md`](12_NestedWritesAndTreeHierarchiesPlan.md) | `core`, `parser`, `codegen`, `runtime` | Additive (Minor) | Planned |
 | **v1.4** | **Observability, Routing & Geospatial** | [`05_OpenTelemetryAndMetrics2Plan.md`](05_OpenTelemetryAndMetrics2Plan.md)<br>[`09_PrimaryReadReplicaRoutingPlan.md`](09_PrimaryReadReplicaRoutingPlan.md)<br>[`13_QueryCachingAndPostGISPlan.md`](13_QueryCachingAndPostGISPlan.md) | `runtime`, `core`, `dialect` | Additive (Minor) | Planned |
 | **v1.5** | **The Visual Workbench & Edge Adapters** | [`06_RuprizzleStudioPlan.md`](06_RuprizzleStudioPlan.md)<br>[`08_EdgeAndServerlessAdaptersPlan.md`](08_EdgeAndServerlessAdaptersPlan.md) | `cli`, `editor/studio`, `crates/turso`, `crates/d1`, `crates/neon` | Additive (Minor) | Planned |
@@ -66,13 +66,14 @@ graph TD
   - Automatic audit timestamps (`@createdAt`, `@updatedAt`).
 - **Exit Gate:** 100% green tests on Postgres, SQLite, and MySQL; zero breaking changes to existing 1.0 code. Status: **VERIFIED & COMPLETED**.
 
-### 🎯 v1.2.0 — Zero-DB CI Intelligence & Developer Tooling
+### 🎯 v1.2.0 — Zero-DB CI Intelligence & Developer Tooling (COMPLETED)
 - **Deliverables:**
-  - Offline compile-time query checking engine (`ruprizzle check`) supporting `query-manifest.json`, AST semantic verification, and GitHub Actions inline PR annotations.
-  - Ruprizzle LSP 2.0 with semantic completions (`@attributes`, types, relation fields), hover documentation, go-to-definition, and canonical formatting (`textDocument/formatting`).
-  - Code actions and quick-fixes in VS Code extension (auto-inserting inverse relations, fixing type typos).
+  - Offline compile-time query checking engine (`ruprizzle check`) supporting `query-manifest.json`, AST semantic verification, parameter type checking, nullability validation, and GitHub Actions inline PR annotations (`::error file=...::`).
+  - Ruprizzle LSP 2.0 with semantic completions (`@attributes`, types, relation `fields` and `references`, snippets), hover documentation, precise go-to-definition, and canonical formatting (`textDocument/formatting`).
+  - Code actions and quick-fixes in VS Code extension (auto-inserting inverse relations, adding default `@id`, fixing scalar type typos).
   - Declarative database seeding and mock fixtures DSL (`ruprizzle seed`).
-- **Exit Gate:** LSP server conformance suite passes; `ruprizzle check` runs in GitHub Actions CI with no database attached.
+- **Exit Gate:** LSP server conformance suite passes; `ruprizzle check` runs in GitHub Actions CI with no database attached. Status: **VERIFIED & COMPLETED**.
+
 
 ### 🎯 v1.3.0 — Advanced Relations, Tree Hierarchies & Nested Mutations
 - **Deliverables:**

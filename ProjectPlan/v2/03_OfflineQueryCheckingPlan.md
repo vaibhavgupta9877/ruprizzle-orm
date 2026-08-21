@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
-**Status:** Ready for Execution  
+**Status:** Completed  
 **Milestone:** v1.2.0 (Additive, Minor Release)  
 **Primary Crates:** `crates/check`, `crates/cli`, `crates/runtime`, `crates/core`
 
@@ -109,34 +109,35 @@ ruprizzle check --schema ./schema.ruprizzle --manifest ./query-manifest.json --f
 ## 4. Step-by-Step Implementation Tasks
 
 ### Task 1: Manifest Schema & Serializer
-- [ ] In `crates/check/src/manifest.rs`:
+- [x] In `crates/check/src/manifest.rs`:
   - Update `QueryManifest`, `QueryEntry`, `ParamSpec`, `ColumnSpec`, `SourceLocation` structures.
   - Implement serialization, deserialization, and schema fingerprint validation.
 
 ### Task 2: AST Semantic Validation Engine
-- [ ] In `crates/check/src/validate.rs`:
+- [x] In `crates/check/src/validate.rs`:
   - Enhance SQL tokenization and parser to extract table aliases, projections, joins, and WHERE expressions.
   - Implement type checking for bind parameters against `ruprizzle_core::ir::ScalarType`.
   - Add suggestion generator using Levenshtein distance for misspelled column/table names.
 
 ### Task 3: Rich Diagnostic Formatting
-- [ ] In `crates/check/src/report.rs`:
+- [x] In `crates/check/src/report.rs`:
   - Implement `PrettyReporter` with miette/colored formatting.
   - Implement `JsonReporter`.
   - Implement `GitHubReporter` for CI workflow annotations.
 
 ### Task 4: CLI Integration
-- [ ] In `crates/cli/src/main.rs`:
+- [x] In `crates/cli/src/main.rs`:
   - Add `Check` subcommand with `--schema`, `--manifest`, and `--format` arguments.
   - Wire exit code handling (exit 0 on success, exit 1 on check failure).
 
 ### Task 5: Automated Testing & CI Harness
-- [ ] Add `crates/check/tests/validation_test.rs`:
+- [x] Add `crates/check/tests/validation_test.rs`:
   - Test valid queries pass with 0 errors.
   - Test unknown table detection.
   - Test unknown column detection.
   - Test bind parameter type mismatch detection.
   - Test GitHub annotation formatting.
+
 
 ---
 

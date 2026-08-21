@@ -100,6 +100,10 @@ enum Command {
         /// Path to the query manifest JSON.
         #[arg(long)]
         manifest: String,
+
+        /// Diagnostic output format (`pretty`, `json`, `github`).
+        #[arg(long, default_value = "pretty")]
+        format: String,
     },
 }
 
@@ -230,7 +234,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Command::Db(DbCommand::Pull) => db_pull(&cli.schema, cli.verbose).await,
         Command::Db(DbCommand::Seed) => db_seed(&cli.schema, cli.verbose).await,
         Command::Lsp { stdio } => run_lsp(*stdio).await,
-        Command::Check { manifest } => run_check(&cli.schema, manifest),
+        Command::Check { manifest, format } => run_check(&cli.schema, manifest, format),
     }
 }
 
@@ -262,21 +266,26 @@ async fn run_lsp(stdio: bool) -> Result<(), Box<dyn std::error::Error + Send + S
 fn run_check(
     schema_path: &str,
     manifest_path: &str,
+    format_str: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let source = std::fs::read_to_string(manifest_path)?;
     let manifest: ruprizzle_check::QueryManifest = serde_json::from_str(&source)?;
+    let report_format: ruprizzle_check::ReportFormat = format_str
+        .parse()
+        .map_err(std::convert::Into::<Box<dyn std::error::Error + Send + Sync>>::into)?;
 
     let (schema, _, _) = parse_schema(schema_path)?;
     let errors = ruprizzle_check::validate_manifest(&schema, &manifest);
 
+    let output = ruprizzle_check::format_report(&errors, report_format, manifest_path);
     if errors.is_empty() {
-        println!("{manifest_path} is valid against {schema_path}");
+        if !output.is_empty() {
+            println!("{output}");
+        }
         return Ok(());
     }
 
-    for error in &errors {
-        eprintln!("{manifest_path}: {error}");
-    }
+    eprintln!("{output}");
     Err(format!("{} query(s) failed validation", errors.len()).into())
 }
 

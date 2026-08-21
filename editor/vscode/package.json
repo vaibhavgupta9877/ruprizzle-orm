@@ -1,14 +1,16 @@
 {
   "name": "vscode-ruprizzle",
   "displayName": "ruprizzle",
-  "description": "Language support for ruprizzle schema files",
-  "version": "0.4.0-beta.2",
+  "description": "Language support, syntax highlighting, formatting, and LSP 2.0 for ruprizzle schema files",
+  "version": "1.2.0",
   "publisher": "ruprizzle",
   "engines": {
-    "vscode": "^1.74.0"
+    "vscode": "^1.96.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Formatters",
+    "Linters"
   ],
   "main": "./out/extension.js",
   "activationEvents": [
@@ -43,6 +45,21 @@
           "type": "string",
           "default": "ruprizzle",
           "description": "Path to the ruprizzle language server executable."
+        },
+        "ruprizzle.lsp.path": {
+          "type": "string",
+          "default": "ruprizzle",
+          "description": "Custom binary path for the Ruprizzle Language Server."
+        },
+        "ruprizzle.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the ruprizzle language server."
         }
       }
     }
@@ -55,7 +72,8 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@types/vscode": "^1.74.0",
+    "@types/vscode": "^1.96.0",
     "typescript": "^5.0.0"
   }
 }
+

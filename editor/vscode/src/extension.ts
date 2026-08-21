@@ -12,7 +12,10 @@ let client: LanguageClient | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   const config = vscode.workspace.getConfiguration("ruprizzle");
-  const serverPath = config.get<string>("languageServer.path") ?? "ruprizzle";
+  const serverPath =
+    config.get<string>("lsp.path") ||
+    config.get<string>("languageServer.path") ||
+    "ruprizzle";
 
   const run: Executable = {
     command: serverPath,
@@ -50,3 +53,4 @@ export function activate(context: vscode.ExtensionContext): void {
 export function deactivate(): Thenable<void> | undefined {
   return client?.stop();
 }
+

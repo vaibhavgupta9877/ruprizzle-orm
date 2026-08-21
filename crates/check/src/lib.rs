@@ -7,7 +7,9 @@
 #![warn(missing_docs, clippy::pedantic)]
 
 pub mod manifest;
+pub mod report;
 pub mod validate;
 
-pub use manifest::{QueryEntry, QueryManifest};
-pub use validate::{QueryCheckError, validate_manifest, validate_raw};
+pub use manifest::{ColumnSpec, ParamSpec, QueryEntry, QueryManifest, SourceLocation};
+pub use report::{ReportFormat, format_report};
+pub use validate::{QueryCheckError, validate_manifest, validate_query_entry, validate_raw};

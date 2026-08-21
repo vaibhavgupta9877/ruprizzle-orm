@@ -2,10 +2,12 @@
 
 use ruprizzle_core::ir::{ScalarType, Schema};
 use tower_lsp::lsp_types::{
-    CompletionItem, CompletionItemKind, CompletionList, CompletionResponse, Position,
+    CompletionItem, CompletionItemKind, CompletionList, CompletionResponse, InsertTextFormat,
+    Position,
 };
 
 /// Build completion items for the given source and cursor position.
+#[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
 #[must_use]
 pub fn complete(
     text: &str,
@@ -16,6 +18,41 @@ pub fn complete(
     let before = &text[..offset];
     let current_line_start = before.rfind('\n').map_or(0, |i| i + 1);
     let current_line = &before[current_line_start..];
+
+    // Inside relation argument list: @relation(...)
+    if current_line.contains("@relation(") {
+        let (in_model, model_name) = nearest_model_context(text, offset);
+        if in_model {
+            if let Some(name) = &model_name {
+                if let Some(schema) = schema {
+                    if let Some(model) = schema.model(name) {
+                        // If typing fields: [
+                        if current_line.contains("fields:") {
+                            let items = model
+                                .fields
+                                .keys()
+                                .map(|f| CompletionItem {
+                                    label: f.as_str().to_owned(),
+                                    kind: Some(CompletionItemKind::FIELD),
+                                    detail: Some("scalar field of current model".to_owned()),
+                                    ..CompletionItem::default()
+                                })
+                                .collect();
+                            return Some(CompletionResponse::List(CompletionList {
+                                is_incomplete: false,
+                                items,
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+
+        return Some(CompletionResponse::List(CompletionList {
+            is_incomplete: false,
+            items: relation_argument_items(),
+        }));
+    }
 
     // Inside an attribute argument list or after an attribute trigger.
     if current_line.trim_start().starts_with("@@") {
@@ -52,7 +89,7 @@ pub fn complete(
                 items.push(CompletionItem {
                     label: model.as_str().to_owned(),
                     kind: Some(CompletionItemKind::CLASS),
-                    detail: Some("model".to_owned()),
+                    detail: Some("model relation".to_owned()),
                     ..CompletionItem::default()
                 });
                 items.push(CompletionItem {
@@ -66,7 +103,7 @@ pub fn complete(
                 items.push(CompletionItem {
                     label: enm.as_str().to_owned(),
                     kind: Some(CompletionItemKind::ENUM),
-                    detail: Some("enum".to_owned()),
+                    detail: Some("enum type".to_owned()),
                     ..CompletionItem::default()
                 });
             }
@@ -83,6 +120,7 @@ pub fn complete(
                             .map(|f| CompletionItem {
                                 label: f.as_str().to_owned(),
                                 kind: Some(CompletionItemKind::FIELD),
+                                detail: Some("model field".to_owned()),
                                 ..CompletionItem::default()
                             })
                             .collect();
@@ -167,10 +205,22 @@ fn nearest_model_context(text: &str, offset: usize) -> (bool, Option<String>) {
 
 fn top_level_items(schema: Option<&Schema>) -> Vec<CompletionItem> {
     let mut items = vec![
-        keyword("datasource", "database connection settings"),
-        keyword("generator", "code generator settings"),
-        keyword("model", "data model"),
-        keyword("enum", "enumeration type"),
+        keyword_snippet(
+            "datasource",
+            "datasource db {\n  provider = \"$1\"\n  url      = env(\"$2\")\n}",
+            "database connection block",
+        ),
+        keyword_snippet(
+            "generator",
+            "generator client {\n  output      = \"$1\"\n  module_name = \"$2\"\n}",
+            "code generator settings",
+        ),
+        keyword_snippet(
+            "model",
+            "model $1 {\n  id    Int    @id @default(autoincrement())\n  $0\n}",
+            "declare a database model",
+        ),
+        keyword_snippet("enum", "enum $1 {\n  $0\n}", "declare an enumeration type"),
     ];
     if let Some(schema) = schema {
         for model in schema.models.keys() {
@@ -185,10 +235,12 @@ fn top_level_items(schema: Option<&Schema>) -> Vec<CompletionItem> {
     items
 }
 
-fn keyword(label: &str, detail: &str) -> CompletionItem {
+fn keyword_snippet(label: &str, snippet: &str, detail: &str) -> CompletionItem {
     CompletionItem {
         label: label.to_owned(),
-        kind: Some(CompletionItemKind::KEYWORD),
+        kind: Some(CompletionItemKind::SNIPPET),
+        insert_text: Some(snippet.to_owned()),
+        insert_text_format: Some(InsertTextFormat::SNIPPET),
         detail: Some(detail.to_owned()),
         ..CompletionItem::default()
     }
@@ -208,22 +260,75 @@ fn scalar_type_items() -> Vec<CompletionItem> {
 
 fn field_attribute_items() -> Vec<CompletionItem> {
     vec![
-        attr("@id", "primary key"),
-        attr("@default", "default value"),
-        attr("@unique", "unique constraint"),
-        attr("@relation", "relation to another model"),
-        attr("@map", "map to a different column name"),
-        attr("@updatedAt", "set on update"),
+        attr("@id", "primary key constraint"),
+        attr_snippet(
+            "@default",
+            "@default($1)",
+            "default column value expression",
+        ),
+        attr("@unique", "unique column constraint"),
+        attr_snippet(
+            "@relation",
+            "@relation(fields: [$1], references: [$2])",
+            "define foreign key relation",
+        ),
+        attr_snippet(
+            "@map",
+            "@map(\"$1\")",
+            "map to a different physical column name",
+        ),
+        attr("@updatedAt", "automatically updated timestamp on row edit"),
+        attr("@deletedAt", "declarative soft-delete timestamp field"),
+        attr("@createdAt", "creation timestamp default value"),
         attr("@ignore", "exclude from generated client"),
     ]
 }
 
 fn model_attribute_items() -> Vec<CompletionItem> {
     vec![
-        attr("@@index", "database index"),
-        attr("@@unique", "unique constraint"),
-        attr("@@id", "composite primary key"),
-        attr("@@map", "map to a different table name"),
+        attr_snippet("@@index", "@@index([$1])", "table secondary index"),
+        attr_snippet(
+            "@@unique",
+            "@@unique([$1])",
+            "table composite unique constraint",
+        ),
+        attr_snippet("@@id", "@@id([$1])", "table composite primary key"),
+        attr_snippet(
+            "@@map",
+            "@@map(\"$1\")",
+            "map to a different physical table name",
+        ),
+        attr_snippet(
+            "@@tenant",
+            "@@tenant($1)",
+            "declare multi-tenant partition key",
+        ),
+        attr_snippet(
+            "@@policy",
+            "@@policy($1, for: $2, using: \"$3\")",
+            "declare row-level security policy",
+        ),
+    ]
+}
+
+fn relation_argument_items() -> Vec<CompletionItem> {
+    vec![
+        attr_snippet("fields", "fields: [$1]", "local foreign key fields"),
+        attr_snippet(
+            "references",
+            "references: [$1]",
+            "target referenced primary key fields",
+        ),
+        attr_snippet(
+            "onDelete",
+            "onDelete: Cascade",
+            "referential action on delete (Cascade, SetNull, Restrict)",
+        ),
+        attr_snippet(
+            "onUpdate",
+            "onUpdate: Cascade",
+            "referential action on update",
+        ),
     ]
 }
 
@@ -231,6 +336,17 @@ fn attr(label: &str, detail: &str) -> CompletionItem {
     CompletionItem {
         label: label.to_owned(),
         kind: Some(CompletionItemKind::PROPERTY),
+        detail: Some(detail.to_owned()),
+        ..CompletionItem::default()
+    }
+}
+
+fn attr_snippet(label: &str, snippet: &str, detail: &str) -> CompletionItem {
+    CompletionItem {
+        label: label.to_owned(),
+        kind: Some(CompletionItemKind::SNIPPET),
+        insert_text: Some(snippet.to_owned()),
+        insert_text_format: Some(InsertTextFormat::SNIPPET),
         detail: Some(detail.to_owned()),
         ..CompletionItem::default()
     }

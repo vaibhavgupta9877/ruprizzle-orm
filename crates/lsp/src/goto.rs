@@ -26,7 +26,7 @@ pub fn goto_definition(
         for field in &model.fields {
             if contains(field.type_span, offset) {
                 let target = field.type_name.trim_end_matches("[]").trim_end_matches('?');
-                return resolve_target(uri, schema, &ast, target);
+                return resolve_target(uri, text, schema, &ast, target);
             }
         }
     }
@@ -36,6 +36,7 @@ pub fn goto_definition(
 
 fn resolve_target(
     base: &Url,
+    text: &str,
     schema: Option<&Schema>,
     ast: &Ast,
     name: &str,
@@ -44,7 +45,7 @@ fn resolve_target(
         if model.name == name {
             return Some(GotoDefinitionResponse::Scalar(Location {
                 uri: base.clone(),
-                range: span_to_range(base, model.name_span),
+                range: span_to_range(text, model.name_span),
             }));
         }
     }
@@ -52,7 +53,7 @@ fn resolve_target(
         if enm.name == name {
             return Some(GotoDefinitionResponse::Scalar(Location {
                 uri: base.clone(),
-                range: span_to_range(base, enm.name_span),
+                range: span_to_range(text, enm.name_span),
             }));
         }
     }
@@ -61,13 +62,13 @@ fn resolve_target(
         if let Some(model) = schema.model(name) {
             return Some(GotoDefinitionResponse::Scalar(Location {
                 uri: base.clone(),
-                range: span_to_range(base, model.span),
+                range: span_to_range(text, model.span),
             }));
         }
         if let Some(enm) = schema.enum_def(name) {
             return Some(GotoDefinitionResponse::Scalar(Location {
                 uri: base.clone(),
-                range: span_to_range(base, enm.span),
+                range: span_to_range(text, enm.span),
             }));
         }
     }
@@ -79,14 +80,27 @@ fn contains(span: Span, offset: usize) -> bool {
     span.start <= offset && offset < span.end
 }
 
-fn span_to_range(_uri: &Url, _span: Span) -> Range {
-    // We don't keep the source text here; line/column conversion requires it.
-    // Return a zero-width range at the top of the file. The editor can still
-    // open the file; precise ranges are left for a future incremental improvement.
-    Range {
-        start: Position::new(0, 0),
-        end: Position::new(0, 0),
+fn span_to_range(text: &str, span: Span) -> Range {
+    let start = byte_offset_to_position(text, span.start);
+    let end = byte_offset_to_position(text, span.end);
+    Range { start, end }
+}
+
+fn byte_offset_to_position(text: &str, offset: usize) -> Position {
+    let mut line = 0;
+    let mut character = 0;
+    for (i, c) in text.char_indices() {
+        if i >= offset {
+            break;
+        }
+        if c == '\n' {
+            line += 1;
+            character = 0;
+        } else {
+            character += 1;
+        }
     }
+    Position { line, character }
 }
 
 fn position_to_byte_offset(text: &str, pos: Position) -> usize {

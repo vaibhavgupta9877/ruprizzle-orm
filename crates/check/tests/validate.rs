@@ -24,12 +24,17 @@ model Post {
 fn validates_known_table_and_column() {
     let schema = ruprizzle_parser::parse("schema.ruprizzle", SCHEMA).unwrap();
     let manifest = QueryManifest {
+        version: 1,
         schema_hash: String::new(),
         queries: vec![QueryEntry {
+            id: None,
             sql: "SELECT * FROM users".to_owned(),
             source: None,
             line: None,
             dialect: "sqlite".to_owned(),
+            params: Vec::new(),
+            result_columns: Vec::new(),
+            location: None,
         }],
     };
     assert!(validate_manifest(&schema, &manifest).is_empty());
@@ -39,12 +44,17 @@ fn validates_known_table_and_column() {
 fn rejects_unknown_table() {
     let schema = ruprizzle_parser::parse("schema.ruprizzle", SCHEMA).unwrap();
     let manifest = QueryManifest {
+        version: 1,
         schema_hash: String::new(),
         queries: vec![QueryEntry {
+            id: None,
             sql: "SELECT * FROM not_a_table".to_owned(),
             source: None,
             line: None,
             dialect: "sqlite".to_owned(),
+            params: Vec::new(),
+            result_columns: Vec::new(),
+            location: None,
         }],
     };
     let errors = validate_manifest(&schema, &manifest);
@@ -56,12 +66,17 @@ fn rejects_unknown_table() {
 fn rejects_unknown_column() {
     let schema = ruprizzle_parser::parse("schema.ruprizzle", SCHEMA).unwrap();
     let manifest = QueryManifest {
+        version: 1,
         schema_hash: String::new(),
         queries: vec![QueryEntry {
+            id: None,
             sql: "SELECT users.not_a_column FROM users".to_owned(),
             source: None,
             line: None,
             dialect: "sqlite".to_owned(),
+            params: Vec::new(),
+            result_columns: Vec::new(),
+            location: None,
         }],
     };
     let errors = validate_manifest(&schema, &manifest);
