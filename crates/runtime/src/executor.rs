@@ -215,7 +215,7 @@ pub trait Executor: Send + Sync {
     /// path.
     fn on_query(&self) {}
 
-    /// Returns the underlying [`rusqlite::RusqlitePool`] if this executor is
+    /// Returns the underlying [`crate::rusqlite::RusqlitePool`] if this executor is
     /// backed by the native `rusqlite` backend.
     ///
     /// Used by query builders to take a direct, single-pass decode path on

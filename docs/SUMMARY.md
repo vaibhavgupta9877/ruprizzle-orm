@@ -16,4 +16,4 @@
 [Migration guide to v1](MigrationGuideToV1.md)
 [FAQ](faq.md)
 [Architecture decision records](adr/index.md)
-[1.0.0-rc.1 announcement](announcement.md)
+[1.0.0 announcement](announcement.md)

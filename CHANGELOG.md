@@ -9,6 +9,73 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 _Nothing yet._
 
 
+## [1.0.0] - 2026-08-21
+
+The first stable release. From this version onward the public API is covered by semantic
+versioning as defined in [`docs/Stability.md`](docs/Stability.md).
+
+There are **no API changes** between `1.0.0-rc.1` and `1.0.0` — the surface frozen for the RC
+is the surface that ships. Everything below is documentation, packaging, and dependency work.
+
+### Fixed
+
+- **`ruprizzle-cli` produced no documentation on docs.rs.** Its only target was a `[[bin]]`
+  carrying `doc = false` and the crate had no library, so rustdoc was asked to document
+  nothing and docs.rs recorded `doc_status: false` for `1.0.0-rc.1` while the other nine
+  crates succeeded. The crate now carries a documentation-only `src/lib.rs` that embeds its
+  README; the binary target keeps `doc = false`, because its target name (`ruprizzle`) would
+  otherwise collide with the runtime crate's docs in a shared `target/doc`.
+- **Two broken intra-doc links in `ruprizzle`.** `executor.rs` linked to
+  `rusqlite::RusqlitePool` (the type is ours, at `crate::rusqlite::RusqlitePool`) and
+  `decode.rs` linked to an ambiguous `bytes`, which resolves to both our function and the
+  `bytes` crate. Both live behind optional features, so `cargo doc --all-features` failed
+  while the default-feature build stayed green.
+
+### Changed
+
+- Workspace version bumped to `1.0.0`.
+- **docs.rs now builds every crate with `all-features = true`** via a new
+  `[package.metadata.docs.rs]` table in all ten publishable manifests. Previously the
+  published API reference silently omitted everything behind `sqlite-rusqlite`,
+  `postgres-tokio-postgres`, and `metrics`.
+- `criterion` `0.5` → `0.8`, `notify` `7` → `8`, `metrics` `0.23` → `0.24`. All three are
+  implementation details rather than public dependencies; see the new "Public dependencies"
+  section of `docs/Stability.md` for what that distinction commits us to.
+- `Cargo.lock` refreshed to the latest semver-compatible versions across the tree
+  (`pest` 2.9, `futures` 0.3.34, `uuid` 1.24.1, and 26 others).
+- `crates/runtime/benches/query_construction.rs` uses `std::hint::black_box`;
+  `criterion::black_box` is deprecated as of criterion 0.6.
+- `SECURITY.md`'s supported-versions table now names `1.x` as the supported line.
+- The 15 `ruprizzle-codegen` snapshots pin `RUPRIZZLE_VERSION`, so they move with the
+  version bump. The generated code is otherwise byte-identical to `1.0.0-rc.1`'s.
+
+### Docs
+
+- `docs/Stability.md` gains a **"Public dependencies"** section naming `sqlx`, `serde`,
+  `serde_json`, and `rusqlite` as part of ruprizzle's own public API, and stating the
+  consequence: a major bump of any of them requires a major bump of `ruprizzle`. The 1.0 line
+  is therefore pinned to `sqlx 0.8`; the `sqlx 0.9` migration is deferred to `2.0.0`.
+- `docs/Stability.md` records a written **waiver of the two-week RC feedback window**, with
+  its rationale and the gate matrix that stands in its place, following the same pattern as
+  the W4-02 soak waiver in `docs/SoakReport.md`.
+- New `ProjectPlan/v1/V1StableRelease.md`: the analysis, the two decisions, and the executable
+  plan behind this release.
+- New per-crate READMEs for `ruprizzle-check` and `ruprizzle-lsp`, which were the only
+  published crates without one, and `readme = "README.md"` added to both manifests.
+- Version references swept from `1.0.0-rc.1` to `1.0.0` across `README.md`, `docs/README.md`,
+  `docs/quickstart.md`, `docs/Examples.md`, `docs/Operations.md`, `docs/faq.md`,
+  `docs/announcement.md`, `docs/SUMMARY.md`, `docs/FeaturesMasterComparison.md`, and
+  `docs/MigrationGuideToV1.md`.
+
+### CI
+
+- The `docs` job runs `cargo doc --workspace --no-deps --all-features`. Without
+  `--all-features` it never compiled the feature-gated code that held the two broken links
+  above, which is how they reached a published release.
+- `semver-checks` covers `ruprizzle-check` and `ruprizzle-lsp`, which are published and
+  semver-covered but were omitted from the package list.
+
+
 ## [1.0.0-rc.1] - 2026-08-21
 
 ### Added
@@ -269,7 +336,8 @@ Initial alpha release of **ruprizzle-orm**: a schema-first ORM for Rust. Write a
 
 See `docs/KnownLimitations.md` for the full list.
 
-[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.0-rc.1...HEAD
+[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.0-rc.1...v1.0.0
 [1.0.0-rc.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.4.0-beta.2...v1.0.0-rc.1
 [0.4.0-beta.2]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.4.0-beta.1...v0.4.0-beta.2
 [0.4.0-beta.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.1.1-beta.1...v0.4.0-beta.1

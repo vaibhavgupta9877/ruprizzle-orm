@@ -484,7 +484,7 @@ where
     row.try_get(col)
 }
 
-/// Ordinal version of [`bytes`].
+/// Ordinal version of [`bytes()`].
 pub fn bytes_idx<R>(row: &R, idx: usize) -> Result<Vec<u8>, sqlx::Error>
 where
     R: Row,

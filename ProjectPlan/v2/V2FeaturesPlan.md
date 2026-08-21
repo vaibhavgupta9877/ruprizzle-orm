@@ -308,6 +308,42 @@ graph TD
 
 ---
 
+## 3a. Inherited from 1.0 — the public-dependency debt
+
+`1.0.0` shipped with `sqlx 0.8`. Because `crates/runtime/src/lib.rs` does `pub use sqlx;`, that
+version is part of ruprizzle's own public API: a caller cannot mix `ruprizzle 1.x` with
+`sqlx 0.9`, because the two `PgPool` types would be different types. `docs/Stability.md`'s
+"Public dependencies" section states this as a commitment; `ProjectPlan/v1/V1StableRelease.md`
+decision **D2** records why it was accepted rather than paid down before the 1.0 tag.
+
+**The bill comes due in `2.0.0`, and it should be the first thing Phase 1 does**, not the last —
+it touches the same executor and decode paths as 2.4 (array binds) and 2.8 (metrics/tracing),
+and doing it after those land means doing it twice.
+
+Scope, measured against `sqlx 0.9.0` (released 2026-05-06):
+
+- **`impl SqlSafeStr` on every `query*()` call.** ruprizzle builds SQL dynamically, so every
+  such site needs `AssertSqlSafe(...)`. **133 call sites across ~25 files** at the 1.0 tag.
+  Mechanical, but wide — and worth pairing with an audit of which of those sites genuinely
+  cannot be `&'static str`.
+- **`SqliteValue` is `!Sync`, `SqliteValueRef` is `!Send`.** Directly implicates
+  `crates/runtime/src/decode.rs` and the boxed-future `Send` bounds on `Executor`.
+- **Lifetimes removed from `AnyArguments` and the `Arguments` trait.**
+- **MySQL text/blob → `AnyTypeInfo` conversion changed** — behavioural, so the MySQL suite is
+  the gate, not the compiler.
+- **MSRV rises to 1.86**, from ruprizzle 1.0's 1.85.
+
+Two things worth taking while the door is open, since they are only cheap during a major bump:
+
+- **`rusqlite 0.32 → 0.40`** under `sqlite-rusqlite`, which re-exports `rusqlite::Row` and
+  `rusqlite::types` and is therefore public for the same reason.
+- **Dropping the `RUSTSEC-2023-0071` exception in `deny.toml`.** The advisory reaches us
+  through `rsa`, pulled in by `sqlx-mysql` for `caching_sha2_password`. In sqlx 0.9 that path
+  moved behind a non-default `mysql-rsa` feature — so not enabling it removes `rsa` from the
+  tree and the exception with it. Verify against the resolved graph before claiming this.
+
+---
+
 ## 4. Architectural Safeguards & Non-Goals
 
 1. **No Sidecars or Node Runtime:** `ruprizzle` will **never** adopt a Node.js daemon or external binary sidecar. All Studio, LSP, Check, and CLI tools remain 100% self-contained Rust binaries.

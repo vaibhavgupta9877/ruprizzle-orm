@@ -39,3 +39,11 @@ notify            = { workspace = true }
 tokio             = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 serde_json        = { workspace = true }
 indexmap          = { workspace = true }
+
+# Build the published API reference with every optional feature enabled, so
+# feature-gated items appear on docs.rs instead of being silently omitted.
+# rustdoc enables `doc(auto_cfg)` at crate level by default, so the feature
+# badges come for free and no nightly `feature(...)` gate is needed here.
+# See ProjectPlan/v1/V1StableRelease.md S1-03.
+[package.metadata.docs.rs]
+all-features = true

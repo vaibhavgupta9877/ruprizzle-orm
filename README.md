@@ -15,7 +15,7 @@ It combines the best parts of Prisma and Drizzle:
 
 Postgres, SQLite, and MySQL/MariaDB are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver. A native `rusqlite` backend is also available for SQLite via the `sqlite-rusqlite` Cargo feature.
 
-> **Status:** `1.0.0-rc.1` is **published on crates.io** (2026-08-21, tag `v1.0.0-rc.1`). P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is frozen for the 1.0 line. The 48-hour `rusqlite` soak has been **waived** after 15.56 h / 1.46 B ops / 0 errors (see `docs/SoakReport.md`). The two-week RC feedback window is now open; the W6-05 production-readiness rescore against the published RC is the remaining gate before `1.0.0`. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
+> **Status:** `1.0.0` is **published on crates.io** (2026-08-21, tag `v1.0.0`). P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is covered by semantic versioning from this release onward. Two gates were waived on the way, both in writing: the 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors (`docs/SoakReport.md`), and the two-week RC feedback window, for want of any external consumer to collect feedback from ([Stability](docs/Stability.md#waiver-the-100-rc1-feedback-window-2026-08-21)). Note that the 1.0 line is pinned to `sqlx 0.8`, which ruprizzle re-exports as part of its own public API. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
 
 ---
 
@@ -456,7 +456,7 @@ The table below focuses on the features that differentiate ruprizzle from the to
 
 ## Architecture and repository layout
 
-The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.0.0-rc.1` at the time of writing).
+The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.0.0` at the time of writing).
 
 | Directory | Crate | Role | Ships to users? | Status |
 |---|---|---|---|---|
@@ -512,11 +512,15 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 
 ## Status and roadmap
 
-`1.0.0-rc.1` is **published on crates.io** (2026-08-21, tag `v1.0.0-rc.1`); all ten publishable crates are live at that version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking; the W4-02 48-hour `rusqlite` soak is **waived** after 15.56 h / 1.46 B ops / 0 errors. The public API has been reviewed and is frozen for the 1.0 line. The remaining work before a stable `1.0.0` is release-process only:
+`1.0.0` is **published on crates.io** (2026-08-21, tag `v1.0.0`); all ten publishable crates are live at that version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
 
-- ~~Publish `1.0.0-rc.1` to crates.io~~ **done 2026-08-21**; the real feedback window is now running (`PathToStableV1.md` W6-04).
-- Re-run production-readiness assessment against the RC and reach ≥ 92/100 (W6-05).
+The plan behind this release, including the two decisions it turned on, is `ProjectPlan/v1/V1StableRelease.md`. What remains open:
+
+- Re-run the production-readiness assessment against the published `1.0.0` and reach ≥ 92/100 (`PathToStableV1.md` W6-05). The current score is 89/100 (`ProjectPlan/ProductionReadiness.md` §17).
 - Exercise the automated release workflow end-to-end.
+- Migrate to `sqlx 0.9`. Deferred to `2.0.0`, because `sqlx` is a public dependency — see the "Public dependencies" section of `docs/Stability.md`.
+- ~~Publish `1.0.0-rc.1` to crates.io~~ **done 2026-08-21**.
+- ~~Two-week RC feedback window~~ **waived 2026-08-21**, with reasons recorded in `docs/Stability.md`.
 - ~~Complete the clean 48-hour soak test (W4-02) after resolving the SQLite `rusqlite` lock-contention issue documented in `docs/SoakReport.md`.~~ **Waived** after 15.56 h / 1.46 B ops / 0 errors.
 
 Long-term deferrals (v1.2+) such as implicit many-to-many join tables, full-text search, PostGIS, soft deletes, and polymorphic relations are documented in `docs/KnownLimitations.md`.

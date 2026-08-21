@@ -4,10 +4,11 @@
 //! binds. It does not touch a database, so it is safe to run anywhere.
 
 use std::borrow::Cow;
+use std::hint::black_box;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use futures_core::Stream;
 use ruprizzle::executor::BoxRowStream;
 use ruprizzle::{Column, Executor, Model, SelectQuery, Value};

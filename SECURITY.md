@@ -2,14 +2,16 @@
 
 ## Supported versions
 
-ruprizzle is pre-1.0. Only the most recent published release receives security
-fixes. Once `1.0.0` ships, the `1.x` line becomes the supported line.
+`1.0.0` is the current release. The `1.x` line is the supported line: security
+fixes land on the most recent `1.x` release. The `0.x` prereleases and
+`1.0.0-rc.1` are superseded and receive no further fixes — upgrade to `1.x`, which
+is API-compatible with `1.0.0-rc.1`.
 
 | Version | Supported |
 |---|---|
-| `1.0.0-rc.x` (current latest on crates.io) | ✅ |
-| `0.4.x` (previous beta line) | ✅ |
-| < `0.4` | ❌ |
+| `1.x` (current line on crates.io) | ✅ |
+| `1.0.0-rc.1` | ❌ — superseded by `1.0.0`, same API |
+| `0.x` (alpha and beta lines) | ❌ |
 
 ## Known accepted dependency risk
 

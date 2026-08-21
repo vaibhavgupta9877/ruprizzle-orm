@@ -1,6 +1,15 @@
 # Path to Stable v1.0
 
-> **Status:** ACTIVE — W0 through W5 are functionally complete, including W5-07 (LSP) and compile-time query checking. W6-01 through W6-04 and W6-06 are complete: `1.0.0-rc.1` was published to crates.io on 2026-08-21 from tag `v1.0.0-rc.1`. The only remaining calendar/process work before `1.0.0` is the two-week RC feedback window and W6-05 (rescoring production readiness against the published RC).
+> **Status:** ACTIVE — W0 through W5 are functionally complete, including W5-07 (LSP) and compile-time query checking. W6-01 through W6-04 and W6-06 are complete: `1.0.0-rc.1` was published to crates.io on 2026-08-21 from tag `v1.0.0-rc.1`.
+>
+> **Update (2026-08-21):** the open tail of this plan is now tracked and executed by
+> [`V1StableRelease.md`](V1StableRelease.md), which found work this plan did not cover — `ruprizzle-cli`
+> had no docs on docs.rs, and `cargo doc --all-features` failed on two intra-doc links in
+> feature-gated code. That is fixed, the workspace is bumped to `1.0.0`, and every local gate is
+> green. **The two-week RC feedback window is waived**, in writing, in `docs/Stability.md`; the
+> definition-of-done item requiring an external project to report a successful upgrade is waived
+> with it (there is no such project). **W6-05 remains open** — the rescore must run against the
+> published `1.0.0`, so it is blocked on the publish, not on this branch.
 
 **From:** `1.0.0-rc.1` (published 2026-08-21; previous beta `0.4.0-beta.2`, 2026-08-17); 84/100 was the `0.1.1-beta.1` baseline, rescoring is pending W6-05
 **To:** `1.0.0` — a version whose API we commit to under semver and whose capability surface
@@ -515,11 +524,12 @@ deliberate long-term deferrals.
       in `docs/Stability.md`'s "Release candidates" section. **Published 2026-08-21** from tag
       `v1.0.0-rc.1` for all ten publishable crates. The two-week feedback window is running
       from that date; closing it is calendar time, not effort.
-- [ ] **W6-05 · Final production readiness assessment.** Re-run against `1.0.0-rc.1`,
+- [ ] **W6-05 · Final production readiness assessment.** Re-run against the published
+      **`1.0.0`** (not the RC — the version cut moved the target; see `V1StableRelease.md` S4-05),
       targeting **≥ 92/100**, with dimension 1 (correctness) ≥ 9.0 on the back of fuzzing and
-      soak, and dimension 3 (operability) ≥ 9.0 on the back of W3. **1 day.** Blocked on W6-04:
-      unblocked as of 2026-08-21 now that the RC is published; not yet run, so no score should be
-      fabricated against `dev-v0-2` HEAD in its place.
+      soak, and dimension 3 (operability) ≥ 9.0 on the back of W3. **1 day.** Still blocked on the
+      publish itself; not yet run, so no score should be fabricated against `dev-v0-2` HEAD in its
+      place. Current score remains **89/100** (`ProductionReadiness.md` §17).
 - [x] **W6-06 · Migration guide from beta.** Every breaking change between `0.1.1-beta.1`
       and `1.0.0`, with before/after code. **1 day.**
 
@@ -623,8 +633,10 @@ footnotes rather than left looking like a gap.
 - [ ] `docs/KnownLimitations.md` contains only deliberate design positions — no "not
       implemented yet."
 - [ ] `docs/FeaturesMasterComparison.md` matches the §5 target column.
-- [ ] `1.0.0-rc.1` has had a real feedback window with at least one external project
-      reporting a successful upgrade.
+- [x] ~~`1.0.0-rc.1` has had a real feedback window with at least one external project
+      reporting a successful upgrade.~~ **Waived 2026-08-21** under `V1StableRelease.md` D1;
+      the waiver and its rationale are recorded in `docs/Stability.md`. No external consumer
+      exists to report an upgrade.
 - [ ] Automated publish workflow has performed at least one release end to end.
 
 ---

@@ -8,9 +8,12 @@ SQL. It targets PostgreSQL, MySQL/MariaDB, and SQLite 3+.
 
 ## Is it production-ready?
 
-`1.0.0-rc.1` is a release candidate. The public API is frozen for the 1.0 line,
-but the project is collecting at least two weeks of real-world feedback before
-declaring `1.0.0`. See [Stability](Stability.md) and
+`1.0.0` is a stable release: the public API is covered by semantic versioning
+from here on. Be aware of what that did and did not include — the two-week
+release-candidate feedback window was waived, with reasons, because the project
+had no external consumers to collect feedback from. See
+[Stability](Stability.md) for the semver policy, the waiver, and the list of
+public dependencies (the 1.0 line is pinned to `sqlx 0.8`), and
 [Known limitations](KnownLimitations.md) for the honest boundaries.
 
 ## How is it different from Diesel or SeaORM?
@@ -66,7 +69,7 @@ Open an issue on the [GitHub repository](https://github.com/vaibhavgupta9877/rup
       "name": "Is it production-ready?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "1.0.0-rc.1 is a release candidate. The public API is frozen for the 1.0 line, but the project is collecting at least two weeks of real-world feedback before declaring 1.0.0."
+        "text": "1.0.0 is a stable release, with the public API covered by semantic versioning. The two-week release-candidate feedback window was waived, with reasons documented in the stability policy, because the project had no external consumers to collect feedback from. The 1.0 line is pinned to sqlx 0.8, since ruprizzle re-exports sqlx as part of its own public API."
       }
     },
     {

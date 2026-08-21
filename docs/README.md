@@ -20,13 +20,20 @@ the wire protocol and pooling; we do not write a driver.
 
 ## Status
 
-`1.0.0-rc.1` is **published on crates.io** (2026-08-21, tag `v1.0.0-rc.1`). The
-core P0–P8 implementation is complete, MySQL/MariaDB support is shipped, and the
-public API is frozen for the 1.0 line. The W4-02 48-hour `rusqlite` soak has been
-**waived** after 15.56 h / 1.46 B ops / 0 errors (see [SoakReport.md](SoakReport.md)).
-The two-week RC feedback window is open; it and the W6-05 production-readiness
-rescore against the live RC are the remaining release gates before a stable `1.0.0`. See [Stability](Stability.md) for the semver
-policy and [Known limitations](KnownLimitations.md) for deliberate boundaries.
+`1.0.0` is **published on crates.io** (2026-08-21, tag `v1.0.0`), preceded by
+`1.0.0-rc.1` the same day. The core P0–P8 implementation is complete,
+MySQL/MariaDB support is shipped, and the public API is covered by semantic
+versioning from this release onward.
+
+Two things were waived on the way here, both in writing rather than by omission:
+the W4-02 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors
+(see [SoakReport.md](SoakReport.md)), and the two-week RC feedback window, because
+no external consumer existed to provide the feedback (see
+[Stability](Stability.md#waiver-the-100-rc1-feedback-window-2026-08-21)).
+
+See [Stability](Stability.md) for the semver policy and the public-dependency list
+— notably, the 1.0 line is pinned to `sqlx 0.8` — and
+[Known limitations](KnownLimitations.md) for deliberate boundaries.
 
 ## Quick example
 

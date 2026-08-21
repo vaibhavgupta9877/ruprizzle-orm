@@ -31,7 +31,7 @@ deadpool-postgres = { version = "0.14", optional = true }
 tokio-postgres    = { version = "0.7", default-features = false, features = ["with-chrono-0_4", "with-uuid-1", "with-serde_json-1"], optional = true }
 thiserror         = { workspace = true }
 tracing            = { version = "0.1", default-features = false, features = ["std"] }
-metrics           = { version = "0.23", default-features = false, optional = true }
+metrics           = { version = "0.24", default-features = false, optional = true }
 # Only for `sync::Mutex`, whose guard is `Send` across an await. The std guard
 # is not, which makes `Executor`'s boxed futures un-`Send`. sqlx already pulls
 # tokio in via `runtime-tokio`, so this adds no new dependency to the tree.
@@ -79,3 +79,11 @@ harness = false
 [[bench]]
 name    = "concurrency"
 harness = false
+
+# Build the published API reference with every optional feature enabled, so
+# feature-gated items appear on docs.rs instead of being silently omitted.
+# rustdoc enables `doc(auto_cfg)` at crate level by default, so the feature
+# badges come for free and no nightly `feature(...)` gate is needed here.
+# See ProjectPlan/v1/V1StableRelease.md S1-03.
+[package.metadata.docs.rs]
+all-features = true

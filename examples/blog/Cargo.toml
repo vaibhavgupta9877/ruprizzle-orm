@@ -13,6 +13,6 @@ edition = "2024"
 publish = false
 
 [dependencies]
-ruprizzle = { path = "../../crates/runtime", version = "1.0.0-rc.1" }
+ruprizzle = { path = "../../crates/runtime", version = "1.0.0" }
 tokio = { version = "1", features = ["full"] }
 dotenvy = "0.15"

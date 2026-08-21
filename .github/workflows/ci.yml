@@ -247,7 +247,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo doc --workspace --no-deps
+      # `--all-features` is load-bearing: without it, broken intra-doc links in
+      # feature-gated code (`sqlite-rusqlite`, `postgres-tokio-postgres`,
+      # `metrics`) are never compiled, and two of them reached a published
+      # release. See ProjectPlan/v1/V1StableRelease.md S1-04.
+      - run: cargo doc --workspace --no-deps --all-features
 
   deny:
     name: advisories and licences
@@ -272,7 +276,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: obi1kenobi/cargo-semver-checks-action@v2
         with:
-          package: ruprizzle-core, ruprizzle-dialect, ruprizzle-parser, ruprizzle-codegen, ruprizzle-migrate, ruprizzle-macros, ruprizzle
+          package: ruprizzle-core, ruprizzle-dialect, ruprizzle-parser, ruprizzle-codegen, ruprizzle-migrate, ruprizzle-macros, ruprizzle-check, ruprizzle-lsp, ruprizzle
 
   harden:
     name: pre-release hardening

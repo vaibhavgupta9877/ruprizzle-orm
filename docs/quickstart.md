@@ -85,7 +85,7 @@ Or edit `Cargo.toml`:
 
 ```toml
 [dependencies]
-ruprizzle = "1.0.0-rc.1"
+ruprizzle = "1.0.0"
 tokio = { version = "1", features = ["full"] }
 ```
 

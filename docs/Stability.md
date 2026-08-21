@@ -4,14 +4,18 @@ This document defines what ruprizzle commits to under semantic versioning, from 
 onward, and how that commitment is enforced. It exists so that "we follow semver" is a
 checkable claim rather than a habit — see W6-02 in `ProjectPlan/v1/PathToStableV1.md`.
 
-Until `1.0.0` ships, the crate is on the `0.x` line and semver's normal relaxation applies:
-any `0.x -> 0.(x+1)` bump may contain breaking changes, per Cargo's semver rules. This
-document describes the target policy for `1.0.0` and later; see `docs/MigrationGuideToV1.md`
-for what actually changed getting there from `0.1.1-beta.1`.
+**`1.0.0` shipped on 2026-08-21, so this policy is now in force** — it is no longer a
+description of a target. Everything below applies to the published `1.x` line. The `0.x`
+prereleases are superseded; see `docs/MigrationGuideToV1.md` for what changed getting here
+from `0.1.1-beta.1`.
+
+Two things about how `1.0.0` was reached are recorded rather than glossed: the release-candidate
+feedback window was **waived** (see the waiver at the end of this document), and the 1.0 line is
+**pinned to `sqlx 0.8`** because ruprizzle re-exports it (see "Public dependencies").
 
 ## What is covered by semver
 
-Once `1.0.0` ships, the following are covered — a breaking change to any of them requires a
+The following are covered — a breaking change to any of them requires a
 major version bump:
 
 - **`ruprizzle` (the runtime crate).** Its public items as enumerated by `cargo public-api`:
@@ -88,6 +92,39 @@ Policy from `1.0.0` onward:
 - The CI `msrv` job is the enforcement mechanism: it fails the build if any crate's code
   requires a newer toolchain than the declared `rust-version`.
 
+## Public dependencies
+
+Some of ruprizzle's dependencies are part of its own public API, because their types appear in
+signatures users write. `crates/runtime/src/lib.rs` re-exports them so that a caller's version
+and ours are guaranteed to be the same crate:
+
+| Crate | Version on the 1.0 line | Where it surfaces |
+|---|---|---|
+| `sqlx` | `0.8` | `pub use sqlx;`, `Pool`, `Tx`, `Executor`, every `FromRow` impl |
+| `serde` | `1` | `pub use serde;`, derives on generated entities |
+| `serde_json` | `1` | `pub use serde_json;`, the `Json` column type |
+| `rusqlite` | `0.32` | `pub use ::rusqlite::{Row, types}` behind `sqlite-rusqlite` |
+
+**A major bump of any crate in this table is a breaking change to `ruprizzle` and requires a
+major version bump of `ruprizzle` itself.** This is not a policy choice — it is a consequence
+of the type system. If your application depends on `sqlx 0.9` and `ruprizzle 1.x`, Cargo will
+link two incompatible copies of `sqlx` and your `PgPool` will not be our `PgPool`.
+
+Two consequences worth stating plainly, because they will surprise someone:
+
+- **The 1.0 line is pinned to `sqlx 0.8`.** `sqlx 0.9.0` shipped 2026-05-06 and was considered
+  for `1.0.0`. It was deferred: it makes all `query*()` functions take `impl SqlSafeStr`
+  (133 call sites here build SQL dynamically), makes `SqliteValue` `!Sync` and `SqliteValueRef`
+  `!Send` on the decode path, removes lifetimes from `AnyArguments` and the `Arguments` trait,
+  changes MySQL text/blob conversion behaviour, and raises the toolchain floor to 1.86. That is
+  a `2.0.0`-sized change, and doing it hastily on the way out the door was judged worse than
+  doing it deliberately. See `ProjectPlan/v1/V1StableRelease.md` D2 for the full reasoning, and
+  `ProjectPlan/v2/V2FeaturesPlan.md` for where it is tracked.
+- **Non-public dependencies carry no such promise.** `pest`, `syn`, `quote`, `prettyplease`,
+  `miette`, `tracing`, `clap`, `notify`, `criterion`, and `metrics` are implementation details.
+  They may be bumped across major versions in a minor release of ruprizzle, because none of
+  their types reach a user's code.
+
 ## Deprecation process
 
 - An item slated for removal is marked `#[deprecated(since = "X.Y.Z", note = "...")]` with a
@@ -145,6 +182,31 @@ prerelease.
   anything else waits for `1.1.0`.
 
 This section documents the process; it does not itself cut a release. `1.0.0-rc.1` was
-published to crates.io on **2026-08-21** from tag `v1.0.0-rc.1`, so the two-week feedback
-window described above is running from that date. See the W6-04/W6-05 status note in
-`ProjectPlan/v1/PathToStableV1.md`.
+published to crates.io on **2026-08-21** from tag `v1.0.0-rc.1`. See the W6-04/W6-05 status
+note in `ProjectPlan/v1/PathToStableV1.md`.
+
+### Waiver: the `1.0.0-rc.1` feedback window (2026-08-21)
+
+**The two-week window described above was waived for `1.0.0`.** `1.0.0` was cut the same day
+`1.0.0-rc.1` was published, rather than on or after 2026-09-04. This is recorded here rather
+than left implicit, because a policy the project did not follow is worse than a policy it
+amended on purpose. The decision, its rationale, and the alternative considered are written up
+as decision **D1** in `ProjectPlan/v1/V1StableRelease.md`; it follows the same pattern as the
+W4-02 soak waiver in `docs/SoakReport.md`.
+
+- **Why.** The window's purpose is external eyes on a frozen API. Across seven `0.x`
+  prereleases the project has 43 total downloads and no known external consumer, so the two
+  weeks would have bought calendar time and no feedback. The related definition-of-done item —
+  "at least one external project reporting a successful upgrade" — is waived for the same
+  reason: there is no such project to report one.
+- **What stands in its place.** The full gate matrix in `V1StableRelease.md` §6, run against
+  the tagged commit: `fmt`, `clippy -D warnings` across the feature matrix, the workspace test
+  suite against a live PostgreSQL, `cargo doc --all-features` with `-D warnings`,
+  `cargo deny check`, `cargo xtask harden`, and `cargo xtask release-check --tag`. Plus
+  `cargo-semver-checks`, which continues to compare every published crate's API against the
+  last release on crates.io — from `1.0.0` onward that comparison *is* the semver gate.
+- **What this waiver does not do.** It does not repeal the policy. A future `2.0.0-rc.1`, or
+  any RC published once real downstream users exist, gets the full window. It also does not
+  weaken the semver commitment: if an API defect surfaces in the field, the answer is `1.1.0`
+  for an addition and `2.0.0` for a break, under the deprecation process above — not a
+  retroactive redefinition of what `1.0.0` promised.
