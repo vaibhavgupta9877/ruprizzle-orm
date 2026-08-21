@@ -72,7 +72,7 @@ These are release blockers, not optional post-v1 polish.
 | Operability and observability | 10 | **6.5** | Tracing, slow-query warnings, metrics hooks, pool configuration, and operations documentation exist. Native `rusqlite` pool stats report zeros, segmented soak progress writes can fail silently, and the true-streaming API leaks. |
 | Performance and scalability | 10 | **7.0** | Reproducible cross-ORM SQLite data and low query-construction cost are valuable. The headline native-rusqlite results predate the current `spawn_blocking` implementation, so current docs describe a different execution path; cross-ORM Postgres evidence is absent. |
 | Documentation and DX | 5 | **4.0** | The schema DSL, guides, ADRs, examples, LSP, CLI, offline checking, and limitations documentation are unusually complete. Several release/install/status claims are currently false or stale. |
-| Release and ecosystem maturity | 5 | **2.0** | Beta packages exist and automation is designed, but crates.io still serves `0.4.0-beta.2`, no remote RC tag exists, the release workflow has not published the RC, and there is no RC feedback evidence. |
+| Release and ecosystem maturity | 5 | **2.0** | Beta packages exist and automation is designed, but crates.io still serves `0.4.0-beta.2`, no remote RC tag exists, the release workflow has not published the RC, and there is no RC feedback evidence. *(Superseded 2026-08-21: the RC is published and the tag is on `origin`; only RC feedback evidence remains outstanding. Rescore under W6-05.)* |
 | **Total** | **100** | **67.0** | **Strong beta; stable-v1 gates not met.** |
 
 ### Score interpretation
@@ -100,8 +100,8 @@ All commands were run on Windows at `7dd3b6a` with Rust `1.95.0`. This does not 
 | Workspace check | `cargo check --workspace` | **Pass** |
 | Full hardening | `cargo xtask harden` | **Fail** at the standard workspace test stage; later audits are therefore not reached by this command |
 | Native rusqlite feature | `RUPRIZZLE_TEST_RUSQLITE=1 cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'` | **Compile failure** in `query_manifest.rs`: missing `FromOwnedRow` and `FromRusqliteRow` for `Task` |
-| Registry state | `cargo search ruprizzle --limit 10` | Latest public runtime/CLI/internal crates are `0.4.0-beta.2`; `1.0.0-rc.1` is not published |
-| Tag state | `git show-ref --tags`, `git ls-remote --tags origin`, `git rev-list --count 1.0.0-rc.1..HEAD` | Local RC tag only; no remote tags returned; local tag is 20 commits behind HEAD |
+| Registry state | `cargo search ruprizzle --limit 10` | Latest public runtime/CLI/internal crates are `0.4.0-beta.2`; `1.0.0-rc.1` is not published *(re-run 2026-08-21: all ten publishable crates now return `1.0.0-rc.1`)* |
+| Tag state | `git show-ref --tags`, `git ls-remote --tags origin`, `git rev-list --count 1.0.0-rc.1..HEAD` | Local RC tag only; no remote tags returned; local tag is 20 commits behind HEAD *(re-run 2026-08-21: the stale tag is deleted and `v1.0.0-rc.1` is on `origin` at the release commit)* |
 
 ### Verification limitations
 
@@ -275,8 +275,13 @@ This must be corrected before inviting external users into an RC feedback window
 > `ruprizzle-lsp`; and `README.md`, `docs/README.md`, `docs/Stability.md`, and
 > `docs/announcement.md` now agree that the RC is tagged but not on crates.io.
 > The release tag is `v1.0.0-rc.1` at HEAD. The stale `1.0.0-rc.1` tag is left in
-> place pending maintainer confirmation. The registry half of the finding closes
-> only when the RC is actually published and `cargo search` confirms it.
+> place pending maintainer confirmation.
+>
+> **Registry half closed 2026-08-21.** `1.0.0-rc.1` is published for all ten
+> publishable crates; `cargo search ruprizzle` returns `1.0.0-rc.1` for each, and
+> an out-of-tree consumer resolves and compiles the full graph from the registry.
+> `ruprizzle-testkit` stays at `0.1.0-alpha.3` because it is `publish = false`.
+> Every item in 8.8 is now resolved.
 
 ### 8.9 Security posture requires release-specific clarification
 

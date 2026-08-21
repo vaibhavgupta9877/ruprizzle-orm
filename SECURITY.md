@@ -7,8 +7,8 @@ fixes. Once `1.0.0` ships, the `1.x` line becomes the supported line.
 
 | Version | Supported |
 |---|---|
-| `1.0.0-rc.x` (once published) | ✅ |
-| `0.4.x` (current latest on crates.io) | ✅ |
+| `1.0.0-rc.x` (current latest on crates.io) | ✅ |
+| `0.4.x` (previous beta line) | ✅ |
 | < `0.4` | ❌ |
 
 ## Known accepted dependency risk

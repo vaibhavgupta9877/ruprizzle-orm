@@ -45,7 +45,7 @@
 | Migration mutation score | About 28.6% of viable measured mutants killed |
 | Runtime mutation baseline | Incomplete |
 | Overall line coverage | About 68% |
-| Registry version | `0.4.0-beta.2` |
+| Registry version | `0.4.0-beta.2` *(as assessed; `1.0.0-rc.1` published 2026-08-21 — see V1-05)* |
 | RC tag | Local-only stale tag; no matching remote release tag |
 
 ### Stable-v1 exit target
@@ -517,8 +517,8 @@ git commit -m "fix(runtime): own unbuffered query state for the stream lifetime"
 
 ## V1-05 · Align RC version, tag convention, workflow, registry, and docs
 
-> **Status (2026-08-21): implemented, pending the registry publish.** Steps 1-4 are
-> done and Step 5 is done locally. What changed:
+> **Status (2026-08-21): COMPLETE.** All five steps are done and `1.0.0-rc.1` is
+> published to crates.io for all ten publishable crates. What changed:
 >
 > - `release.yml` now triggers on both `v1.2.3*` and `1.2.3*` tag shapes, so a tag
 >   cut without the `v` prefix can no longer be a silent no-op. `v`-prefixed
@@ -535,11 +535,15 @@ git commit -m "fix(runtime): own unbuffered query state for the stream lifetime"
 > - `SECURITY.md` supported-versions table rewritten to the real published line,
 >   with the `RUSTSEC-2023-0071` exception stated explicitly.
 > - `README.md`, `docs/README.md`, `docs/Stability.md`, and `docs/announcement.md`
->   no longer claim the RC is staged/available; they state the tag exists and the
->   RC is not on crates.io. `docs/announcement.md` carries a DRAFT banner until it is.
+>   no longer contradict each other about the release state; they now record that
+>   `1.0.0-rc.1` is published (2026-08-21) from tag `v1.0.0-rc.1`.
 >
-> The stale local `1.0.0-rc.1` tag (40 commits behind HEAD) is retained per Step 1
-> until the maintainer confirms its removal; the release tag is `v1.0.0-rc.1` at HEAD.
+> The stale local `1.0.0-rc.1` tag (40 commits behind HEAD, never pushed) was deleted
+> with maintainer confirmation per Step 1; `v1.0.0-rc.1` is the release tag and is on
+> `origin` at the release commit. The publish itself ran through
+> `cargo xtask release --live --wait 60` and was verified independently with
+> `cargo search` plus an out-of-tree consumer that resolves and compiles the whole
+> graph from the registry.
 
 **Why:** Workspace/docs claim `1.0.0-rc.1`, crates.io serves `0.4.0-beta.2`, the local tag is stale and unpushed, and `release.yml` only reacts to `v*` tags.
 

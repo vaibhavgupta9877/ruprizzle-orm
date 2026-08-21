@@ -35,7 +35,7 @@
 | Phase 2 — Core usage guides | completed | QueryGuide.md and RelationsGuide.md expanded with all required sections and snippets. |
 | Phase 3 — Runnable example project | completed | `examples/blog/` created with Cargo.toml, .env.example, README, and src/main.rs. |
 | Phase 4 — Doc verification | completed | `mdbook build`, `cargo doc`, `cargo xtask fmt`, `cargo xtask lint`, `cargo xtask test`, and `cargo xtask harden` all pass on `dev-v0-2`. |
-| Phase 5 — Release finalization | pending | blocked on RC publish, two-week feedback window, final rescoring (≥ 92/100), and GA cut; the 48-hour W4-02 soak is waived. |
+| Phase 5 — Release finalization | in progress (RC published 2026-08-21) | blocked on RC publish, two-week feedback window, final rescoring (≥ 92/100), and GA cut; the 48-hour W4-02 soak is waived. |
 
 ---
 
@@ -1710,17 +1710,17 @@
 - Produces: a dry-run report confirming all ten publishable crates package
   cleanly (`ruprizzle-testkit` is `publish = false` and is excluded).
 
-- [ ] **Step 1: Run `cargo xtask release`.**
+- [x] **Step 1: Run `cargo xtask release`.**
   ```bash
   cargo xtask release
   ```
   Expected: `xtask: dry-run complete; pass --live to publish for real`.
 
-- [ ] **Step 2: Inspect the package list output for any unexpected files.**
+- [x] **Step 2: Inspect the package list output for any unexpected files.**
   If `.env` or `logs/` files appear in the package list, adjust the per-crate
   `exclude` in their `Cargo.toml`.
 
-- [ ] **Step 3: Commit any packaging fixes.**
+- [x] **Step 3: Commit any packaging fixes.**
   Only if the dry-run exposed a real issue; otherwise there is no change to commit.
 
 ---
@@ -1734,7 +1734,7 @@
 - Consumes: clean dry-run from Task 5.2 and crates.io credentials.
 - Produces: `1.0.0-rc.1` published for all ten publishable workspace crates.
 
-- [ ] **Step 1: Ensure the `v1.0.0-rc.1` tag is on the release commit and matches
+- [x] **Step 1: Ensure the `v1.0.0-rc.1` tag is on the release commit and matches
   the working tree.**
   ```bash
   git show v1.0.0-rc.1 --stat
@@ -1743,7 +1743,7 @@
   If the tag points to the wrong commit, delete and re-tag after confirming with
   the user (`git tag -d v1.0.0-rc.1` and `git tag -a v1.0.0-rc.1 -m "v1.0.0-rc.1"`).
 
-- [ ] **Step 2: Run the live release from an interactive shell.**
+- [x] **Step 2: Run the live release from an interactive shell.**
   ```bash
   cargo xtask release --live --no-verify --wait 60
   ```
@@ -1752,13 +1752,13 @@
   `ruprizzle`, `ruprizzle-migrate`, `ruprizzle-codegen`, `ruprizzle-cli`)
   publish successfully. `ruprizzle-testkit` is `publish = false`.
 
-- [ ] **Step 3: Push the tag to the remote.**
+- [x] **Step 3: Push the tag to the remote.**
   ```bash
   git push origin v1.0.0-rc.1
   ```
   Pushing the tag is what triggers `.github/workflows/release.yml`.
 
-- [ ] **Step 4: Update `ProjectPlan/v1/PathToStableV1.md`.**
+- [x] **Step 4: Update `ProjectPlan/v1/PathToStableV1.md`.**
   Mark `W6-04` as complete and add the publish date.
 
 - [ ] **Step 5: Commit the plan update.**

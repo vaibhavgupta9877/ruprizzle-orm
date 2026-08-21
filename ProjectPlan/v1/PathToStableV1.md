@@ -1,8 +1,8 @@
 # Path to Stable v1.0
 
-> **Status:** ACTIVE — W0 through W5 are functionally complete, including W5-07 (LSP) and compile-time query checking. W6-01, W6-02, W6-03, and W6-06 are complete. The only remaining calendar/process work before `1.0.0` is W6-04 (cut `1.0.0-rc.1`), W6-05 (rescoring production readiness against the RC), and exercising the automated release workflow end-to-end.
+> **Status:** ACTIVE — W0 through W5 are functionally complete, including W5-07 (LSP) and compile-time query checking. W6-01 through W6-04 and W6-06 are complete: `1.0.0-rc.1` was published to crates.io on 2026-08-21 from tag `v1.0.0-rc.1`. The only remaining calendar/process work before `1.0.0` is the two-week RC feedback window and W6-05 (rescoring production readiness against the published RC).
 
-**From:** `0.4.0-beta.2` (latest published beta, 2026-08-17) / `1.0.0-rc.1` staged; 84/100 was the `0.1.1-beta.1` baseline, rescoring is pending W6-05
+**From:** `1.0.0-rc.1` (published 2026-08-21; previous beta `0.4.0-beta.2`, 2026-08-17); 84/100 was the `0.1.1-beta.1` baseline, rescoring is pending W6-05
 **To:** `1.0.0` — a version whose API we commit to under semver and whose capability surface
 does not lose a feature comparison on absence alone.
 
@@ -64,7 +64,7 @@ The numbers this plan starts from, all verified at commit `c3ef7f0`:
 | Clippy | Zero warnings at `-D warnings` |
 | `xtask harden` | Passes; all crates at or under panic budget |
 | `cargo fmt --all --check` | Passing |
-| Published versions | 4, none yanked, 43 total downloads; `0.4.0-beta.2` is the latest on crates.io; `1.0.0-rc.1` is staged in the workspace; the W4-02 48-hour soak is **waived** (see `docs/SoakReport.md`) |
+| Published versions | 5, none yanked; `1.0.0-rc.1` is the latest on crates.io (published 2026-08-21, all ten publishable crates), preceded by `0.4.0-beta.2` and 43 total downloads across the four `0.x` prereleases; the W4-02 48-hour soak is **waived** (see `docs/SoakReport.md`) |
 | Databases | PostgreSQL, SQLite, MySQL / MariaDB |
 | Driver paths | `sqlx::Any` (default), `sqlite-rusqlite`, `postgres-tokio-postgres`, MySQL native via `sqlx::MySql` |
 
@@ -74,7 +74,7 @@ fastest `bulk_insert_1000` at 1,383 µs (prax 1,059, Diesel 6,690, Prisma 14,142
 7,553 µs versus Sea-ORM 20,857 and Prisma 40,867. **Performance is not this plan's problem.**
 Every workstream below is capability, operability, or assurance.
 
-> **Current position (2026-08-21):** `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'`, `cargo deny check advisories`, and `cargo xtask harden` all pass. A pre-RC production-readiness re-score of 92 / 100 was recorded in `ProjectPlan/ProductionReadiness.md` §15, including the fix for the SQLite multi-change migration planner (V1-03); §16 (independent re-run) superseded it with 87 / 100 after finding that `cargo test --workspace` failed reproducibly when a Postgres URL was set, on a pre-existing test-isolation defect in `crates/migrate/tests/roundtrip_prop.rs`; **§17 re-scores to 89 / 100** now that every DB-backed test runs in a private schema and the suite is green end to end. W0–W4 (W4-02 waived on accepted 15.56 h / 1.46 B ops / 0 errors soak evidence), W5-01 through W5-06, W5-07 (LSP), and compile-time query checking (`ruprizzle check` in `crates/check`) are functionally complete and tested. The remaining open work is the release process: W6-04 (cut/push `1.0.0-rc.1`), W6-05 (rescoring against the published RC), and the release-automation exercise. **Update (2026-08-21):** the release-process blockers behind W6-04 are cleared (V1-05) - `release.yml` accepts both tag shapes and has a non-publishing `workflow_dispatch` mode, `cargo xtask release-check --tag` guards tag/version/changelog agreement, and `cargo xtask release` no longer omits `ruprizzle-check` and `ruprizzle-lsp`. The release tag is `v1.0.0-rc.1` at HEAD; the crates.io publish is the remaining step.
+> **Current position (2026-08-21):** `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'`, `cargo deny check advisories`, and `cargo xtask harden` all pass. A pre-RC production-readiness re-score of 92 / 100 was recorded in `ProjectPlan/ProductionReadiness.md` §15, including the fix for the SQLite multi-change migration planner (V1-03); §16 (independent re-run) superseded it with 87 / 100 after finding that `cargo test --workspace` failed reproducibly when a Postgres URL was set, on a pre-existing test-isolation defect in `crates/migrate/tests/roundtrip_prop.rs`; **§17 re-scores to 89 / 100** now that every DB-backed test runs in a private schema and the suite is green end to end. W0–W4 (W4-02 waived on accepted 15.56 h / 1.46 B ops / 0 errors soak evidence), W5-01 through W5-06, W5-07 (LSP), and compile-time query checking (`ruprizzle check` in `crates/check`) are functionally complete and tested. The remaining open work is the release process: W6-04 (cut/push `1.0.0-rc.1`), W6-05 (rescoring against the published RC), and the release-automation exercise. **Update (2026-08-21):** the release-process blockers behind W6-04 are cleared (V1-05) - `release.yml` accepts both tag shapes and has a non-publishing `workflow_dispatch` mode, `cargo xtask release-check --tag` guards tag/version/changelog agreement, and `cargo xtask release` no longer omits `ruprizzle-check` and `ruprizzle-lsp`. **W6-04 is complete:** `1.0.0-rc.1` was published to crates.io on 2026-08-21 from tag `v1.0.0-rc.1`, covering all ten publishable crates (`ruprizzle`, `-core`, `-parser`, `-dialect`, `-macros`, `-check`, `-lsp`, `-migrate`, `-codegen`, `-cli`); `ruprizzle-testkit` is `publish = false`. Verified by a clean out-of-tree consumer that resolves and compiles the full graph from the registry. The two-week feedback window runs from 2026-08-21. W6-05 (rescoring against the published RC) is now unblocked.
 
 ---
 
@@ -497,7 +497,7 @@ deliberate long-term deferrals.
 
 **Goal:** make the semver promise real. **Effort:** ~1 week.
 
-> **Current status (2026-08-18):** W6-01 through W6-03 and W6-06 are done. `docs/PublicApiReview.md`, `docs/Stability.md`, `cargo-semver-checks` in CI, and `docs/MigrationGuideToV1.md` are in place. W6-04 (cut `1.0.0-rc.1`), W6-05 (rescoring against the live RC), and the release-workflow end-to-end exercise are the only remaining blockers. W6-05 is blocked on W6-04 because there is no `1.0.0-rc.1` to score yet.
+> **Current status (2026-08-21):** W6-01 through W6-04 and W6-06 are done. `docs/PublicApiReview.md`, `docs/Stability.md`, `cargo-semver-checks` in CI, and `docs/MigrationGuideToV1.md` are in place, and `1.0.0-rc.1` is published to crates.io from tag `v1.0.0-rc.1`. The remaining blockers are the two-week RC feedback window and W6-05 (rescoring against the live RC), which W6-04 has now unblocked.
 
 - [x] **W6-01 · Public API review.** Enumerate the full public surface of every crate with
       `cargo-public-api`. Everything we are not prepared to support for years gets
@@ -509,15 +509,16 @@ deliberate long-term deferrals.
       **0.5 day.**
 - [x] **W6-03 · `cargo-semver-checks` in CI.** Mechanical enforcement of W6-02, so semver
       is a gate rather than a habit. **0.5 day.**
-- [ ] **W6-04 · Release candidates.** `1.0.0-rc.1` with a real feedback window before
+- [x] **W6-04 · Release candidates.** `1.0.0-rc.1` with a real feedback window before
       `1.0.0`. The current 43 downloads across four versions is not enough exposure to
       freeze an API on. **Do not skip this.** **Calendar time, not effort.** Process documented
-      in `docs/Stability.md`'s "Release candidates" section; not yet executed — no `1.0.0-rc.1`
-      has been tagged or published.
+      in `docs/Stability.md`'s "Release candidates" section. **Published 2026-08-21** from tag
+      `v1.0.0-rc.1` for all ten publishable crates. The two-week feedback window is running
+      from that date; closing it is calendar time, not effort.
 - [ ] **W6-05 · Final production readiness assessment.** Re-run against `1.0.0-rc.1`,
       targeting **≥ 92/100**, with dimension 1 (correctness) ≥ 9.0 on the back of fuzzing and
       soak, and dimension 3 (operability) ≥ 9.0 on the back of W3. **1 day.** Blocked on W6-04:
-      there is no `1.0.0-rc.1` to score yet, so this has not been run and no score should be
+      unblocked as of 2026-08-21 now that the RC is published; not yet run, so no score should be
       fabricated against `dev-v0-2` HEAD in its place.
 - [x] **W6-06 · Migration guide from beta.** Every breaking change between `0.1.1-beta.1`
       and `1.0.0`, with before/after code. **1 day.**
@@ -611,7 +612,7 @@ footnotes rather than left looking like a gap.
 
 `1.0.0` ships when all of these hold:
 
-> **Current status (2026-08-18):** The remaining open work before `1.0.0` is W6-04, W6-05, and the definition-of-done exit gates below. The `1.0.0-rc.1` feedback window cannot begin until W6-04 is done.
+> **Current status (2026-08-21):** W6-04 is done — `1.0.0-rc.1` is on crates.io and the feedback window is running from 2026-08-21. The remaining open work before `1.0.0` is that window, W6-05, and the definition-of-done exit gates below.
 
 - [ ] Every workstream exit gate met.
 - [ ] Production readiness ≥ 92/100, with correctness and operability each ≥ 9.0.
