@@ -39,6 +39,23 @@
   # Use these scripts only if you want additional optional soak evidence.
   ```
 
+## Verification commands
+
+- Mechanical gates:
+  ```powershell
+  cargo fmt --all --check
+  cargo clippy --workspace --all-targets -- -D warnings
+  cargo test --workspace
+  $env:RUPRIZZLE_TEST_RUSQLITE=1; cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'
+  cargo doc --workspace --no-deps
+  cargo xtask harden
+  ```
+
+- SQLite migration property (multi-change):
+  ```powershell
+  $env:PROPTEST_CASES='100'; cargo test -p ruprizzle-deep-tests --test migrate_sqlite_roundtrip
+  ```
+
 ## Default branch
 
 - The repository default branch is now `dev-v0-2`. It was created from
