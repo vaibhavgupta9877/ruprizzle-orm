@@ -92,10 +92,10 @@ graph TD
 
 ### 🎯 v1.5.0 — Ruprizzle Studio & Edge Database Adapters
 - **Deliverables:**
-  - **Ruprizzle Studio:** Embedded visual data workbench single-binary SPA (React 19, Tailwind, Radix) inside `ruprizzle-cli` booting in <50ms with table browser, live cell editor, clickable relation navigation, interactive ERD graph, and SQL sandbox.
+  - **Ruprizzle Studio:** Embedded visual data workbench single-binary hypermedia UI (Axum 0.8, Askama, HTMX 2.x, Alpine.js, Tailwind CSS) inside `ruprizzle-cli` booting in <15ms with zero Node/npm dependencies: table browser, live cell editor, clickable relation drawer navigation, interactive ERD graph, and SQL sandbox.
   - Live query plan visualizer (`EXPLAIN ANALYZE`) and migration safety diff preview.
   - Edge and serverless adapters: `ruprizzle-turso` (libSQL embedded replicas), `ruprizzle-d1` (Cloudflare D1 WASM/HTTP), `ruprizzle-neon` (Neon WebSocket driver).
-- **Exit Gate:** Studio launches with zero external npm/Node dependencies; Turso/D1 drivers pass dialect conformance tests.
+- **Exit Gate:** Studio launches with zero external npm/Node dependencies and compiles purely via `cargo build`; Turso/D1 drivers pass dialect conformance tests.
 
 ### 🚀 v2.0.0 — Modern Data Platform, AI & Security (Major Release)
 - **Deliverables:**

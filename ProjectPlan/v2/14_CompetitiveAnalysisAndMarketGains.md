@@ -53,7 +53,7 @@ To capture market dominance, `ruprizzle`'s roadmap from `v1.1` to `v2.0` systema
 ```mermaid
 graph TD
     subgraph "1. Daily Developer Velocity (High Frequency)"
-        F1["ruprizzle Studio (Local GUI: React 19 + Tailwind v4)"]
+        F1["ruprizzle Studio (Pure-Rust HTMX + Tailwind GUI)"]
         F2["LSP 2.0 & Quick Fixes"]
         F3["Nested Writes (create/connect/set)"]
         F4["Soft Deletes (@deletedAt) & Audit Timestamps"]
@@ -75,7 +75,7 @@ graph TD
 
 ### High-Gain Driver 1: The Local Visual Workbench (`ruprizzle studio`)
 - **Competitor Landscape:** Prisma Studio and Drizzle Studio are cited as the #1 reason frontend/fullstack developers choose those tools for rapid prototyping.
-- **Ruprizzle Advantage:** A self-contained, pre-compiled SPA (built on React 19, Tailwind CSS v4, Radix UI) embedded in the CLI with **zero Node/npm dependencies**, booting in `<50ms` with live relation click-through, visual ERD, and SQL playground.
+- **Ruprizzle Advantage:** A self-contained, pure-Rust hypermedia workbench (Axum 0.8 + Askama + HTMX 2.x + Alpine.js + Tailwind CSS) embedded directly into the CLI with **zero Node/npm dependencies**, booting in `<15ms` with live relation click-through drawers, visual ERD, and SQL playground.
 
 ### High-Gain Driver 2: Zero-DB Compile-Time Query Verification (`ruprizzle check`)
 - **Competitor Landscape:** SQLx requires a live database running or a cached `sqlx-data.json` during compilation. Diesel requires writing complex Rust type-level DSLs.
