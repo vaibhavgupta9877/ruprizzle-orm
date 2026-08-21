@@ -3,24 +3,25 @@
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
 **Status:** Ready for Execution  
-**Milestone:** v2.1.0-beta.1 (Phase 2 Headline Feature)  
-**Primary Crates:** `crates/cli`, `editor/studio` (Frontend SPA)
+**Milestone:** v1.5.0 (Phase 2 Headline Feature)  
+**Primary Crates:** `crates/cli`, `editor/studio` (Frontend SPA)  
+**Tech Stack Baseline:** React 19.x, Tailwind CSS v4.x, Vite 6.x, @xyflow/react 12.x, Axum 0.8.x, Tokio 1.44.x
 
 ---
 
 ## 1. Context, Objectives & Scope
 
-Developers using `ruprizzle` often switch to external GUI database clients (TablePlus, DBeaver, psql, sqlite3) to inspect data, test queries, or understand relation graphs. 
+Developers using `ruprizzle` often switch to external GUI database clients (TablePlus, DBeaver, psql, sqlite3) to inspect data, test queries, or understand relation graphs. Prisma Studio (with Prisma 7.9+) and Drizzle Studio proved that a zero-config, embedded web UI significantly accelerates schema iteration and debugging.
 
 **Ruprizzle Studio** is a blazing-fast, local-first visual workbench launched via `ruprizzle studio`:
-- **Single-Binary Zero-Dependency Deployment:** Pre-compiled static SPA (built with React 19, Vite, TypeScript, TailwindCSS, and Radix UI) embedded directly into the `ruprizzle-cli` binary via `rust-embed`. End users require **zero Node.js or npm dependencies**.
-- **Embedded Web Server:** High-performance local `axum` HTTP/WebSocket backend running inside `ruprizzle-cli`, binding exclusively to `127.0.0.1:5555`.
+- **Single-Binary Zero-Dependency Deployment:** Pre-compiled static SPA (built with React 19, Tailwind CSS v4, Vite 6, Radix UI, and `@xyflow/react`) embedded directly into the `ruprizzle-cli` binary via `rust-embed`. End users require **zero Node.js or npm dependencies**.
+- **Embedded Web Server:** High-performance local `axum 0.8` HTTP/WebSocket backend running inside `ruprizzle-cli`, binding exclusively to `127.0.0.1:5555`.
 - **Fast Startup:** Boots in under **50ms** and automatically opens the user's default browser.
 
 ```mermaid
 graph LR
     subgraph "ruprizzle-cli binary (Single Executable)"
-        CLI["CLI Entry (ruprizzle studio)"] --> Server["Embedded Axum Server (127.0.0.1)"]
+        CLI["CLI Entry (ruprizzle studio)"] --> Server["Embedded Axum 0.8 Server (127.0.0.1)"]
         Assets["rust-embed (Pre-compiled SPA Assets)"] --> Server
         Server --> Runtime["ruprizzle Runtime & Schema IR"]
     end
@@ -43,7 +44,7 @@ graph LR
 - Clicking a relation badge (e.g. `userId: "usr_123"`) slides out a drawer or navigates directly to the linked `User` record with active breadcrumbs (`User -> Posts -> Comments`).
 
 ### 2.3 Interactive ERD Visualizer
-- Dynamic interactive schema graph powered by `@xyflow/react` (React Flow) and `dagre`.
+- Dynamic interactive schema graph powered by `@xyflow/react` 12.x and `dagre`.
 - Renders all models, field types, primary keys (`PK`), unique fields (`UQ`), and directional connector lines illustrating 1:1, 1:N, and N:M cardinality.
 - Filter and search models; zoom and export ERD as SVG/PNG.
 
@@ -82,28 +83,27 @@ graph LR
 
 ---
 
-## 4. Frontend SPA Architecture (`editor/studio`)
+## 4. Modern Frontend SPA Architecture (`editor/studio`)
 
 ```
 editor/studio/
 ├── index.html
-├── package.json
+├── package.json         # React 19, Tailwind CSS v4, Vite 6, @xyflow/react 12
 ├── tsconfig.json
 ├── vite.config.ts
-├── tailwind.config.js
 └── src/
     ├── main.tsx
     ├── App.tsx
-    ├── api/                 # Typed API client
+    ├── api/             # Typed API client
     ├── components/
-    │   ├── ui/              # Radix + Tailwind primitives (Button, Modal, Input, Table)
-    │   ├── layout/          # Sidebar, Navbar, Breadcrumbs
-    │   ├── grid/            # Virtualized Data Table & Cell Editors
-    │   ├── erd/             # React Flow ERD Diagram Visualizer
-    │   ├── sandbox/         # Query Playground & .to_sql() viewer
-    │   ├── diff/            # Migration Safety Diff View
-    │   └── explain/         # EXPLAIN Query Plan Tree
-    └── store/               # Zustand state management
+    │   ├── ui/          # Radix + Tailwind v4 primitives
+    │   ├── layout/      # Sidebar, Navbar, Breadcrumbs
+    │   ├── grid/        # Virtualized Data Table & Cell Editors
+    │   ├── erd/         # React Flow (@xyflow/react) ERD Visualizer
+    │   ├── sandbox/     # Query Playground & .to_sql() viewer
+    │   ├── diff/        # Migration Safety Diff View
+    │   └── explain/     # EXPLAIN Query Plan Tree
+    └── store/           # Zustand 5 state management
 ```
 
 ---
@@ -111,21 +111,21 @@ editor/studio/
 ## 5. Step-by-Step Implementation Tasks
 
 ### Task 1: Build Frontend SPA (`editor/studio`)
-- [ ] Initialize React 19 + Vite + TypeScript frontend in `editor/studio`.
-- [ ] Implement UI design system with TailwindCSS and Radix UI components.
+- [ ] Initialize React 19 + Vite 6 + TypeScript + Tailwind CSS v4 in `editor/studio`.
+- [ ] Implement UI design system with Tailwind CSS v4 and Radix UI components.
 - [ ] Build Data Grid with virtual scrolling, inline cell editing, and relation navigation badges.
-- [ ] Build ERD Diagram visualizer with `@xyflow/react`.
+- [ ] Build ERD Diagram visualizer with `@xyflow/react` 12.x.
 - [ ] Build SQL Sandbox & `.to_sql()` playground.
 - [ ] Build EXPLAIN Plan visualizer.
 - [ ] Configure Vite build output to `editor/studio/dist`.
 
 ### Task 2: Embedded Static Asset Integration in `ruprizzle-cli`
-- [ ] Add `rust-embed` dependency behind `feature = "studio"` in `crates/cli/Cargo.toml`.
+- [ ] Add `rust-embed = "8.5"` dependency behind `feature = "studio"` in `crates/cli/Cargo.toml`.
 - [ ] Embed `editor/studio/dist` assets and serve via Axum static file fallback handler.
 
 ### Task 3: Implement Embedded Studio REST API Server
 - [ ] In `crates/cli/src/studio.rs`:
-  - Implement Axum router and API endpoints (`/api/schema`, `/api/models/:model/data`, etc.).
+  - Implement Axum 0.8 router and API endpoints (`/api/schema`, `/api/models/:model/data`, etc.).
   - Implement write-mode guardrails (`--allow-writes`) and production URL validator (`--yes-i-know`).
   - Add auto-browser launcher (`opener` crate).
 

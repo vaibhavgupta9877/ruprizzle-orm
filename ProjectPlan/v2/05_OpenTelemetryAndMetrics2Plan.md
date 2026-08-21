@@ -3,8 +3,9 @@
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
 **Status:** Ready for Execution  
-**Milestone:** v2.0.0-rc.1  
-**Primary Crates:** `crates/runtime`
+**Milestone:** v1.4.0 (Additive, Minor Release)  
+**Primary Crates:** `crates/runtime`  
+**Dependencies Baseline:** `tracing 0.1.41`, `opentelemetry 0.28.0`, `opentelemetry-semantic-conventions 0.28.0`, `metrics 0.24.1`
 
 ---
 
@@ -12,8 +13,8 @@
 
 Production engineering teams operating large-scale distributed systems require standardized OpenTelemetry (OTel) tracing and Prometheus metrics to monitor query latency, connection pool saturation, and slow database operations across APM platforms (Datadog, Honeycomb, New Relic, Grafana Tempo).
 
-In v2, `ruprizzle-runtime` delivers **Observability 2.0**:
-1. **OpenTelemetry Database Semantic Conventions:** Generates compliant OTel spans matching the OpenTelemetry specification (`db.system`, `db.name`, `db.statement`, `db.operation`, `net.peer.name`).
+In **v1.4**, `ruprizzle-runtime` delivers **Observability 2.0**:
+1. **OpenTelemetry Database Semantic Conventions:** Generates compliant OTel spans matching the OpenTelemetry 0.28 specification (`db.system`, `db.name`, `db.statement`, `db.operation`, `net.peer.name`).
 2. **PII-Safe Query Sanitization:** SQL statements recorded in telemetry spans omit literal bind parameters, eliminating risk of secret/PII data leakage into logs.
 3. **Comprehensive Pool & Query Metrics:** Real-time gauges and histograms for active connections, pool acquisition delays, execution duration, and slow query events.
 4. **Zero-Cost Feature Flags:** Behind `features = ["otel", "metrics"]`, compiling down to zero runtime allocations when disabled.

@@ -3,8 +3,9 @@
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
 **Status:** Ready for Execution  
-**Milestone:** v2.2.0-beta.1  
-**Primary Crates:** `crates/runtime`, new adapter crates (`crates/turso`, `crates/d1`, `crates/neon`)
+**Milestone:** v1.5.0 (Additive, Minor Release)  
+**Primary Crates:** `crates/runtime`, new adapter crates (`crates/turso`, `crates/d1`, `crates/neon`)  
+**Dependencies Baseline:** `libsql 0.6.0`, `worker 0.5.0`, `reqwest 0.12.12`, `tungstenite 0.26.0`
 
 ---
 
@@ -12,9 +13,9 @@
 
 Modern Rust web services deploy to Cloudflare Workers, Fastly Compute, AWS Lambda, and Vercel Edge. Standard long-lived TCP connection pools fail in serverless runtimes with short lifespans and restricted HTTP-only egress.
 
-In v2, `ruprizzle` expands its runtime with **first-class Serverless and Edge database adapters**:
-1. **Turso / libSQL (`ruprizzle-turso`):** Embedded SQLite replicas with automatic remote sync over HTTP/WebSocket. Zero-latency local reads combined with remote transactional writes.
-2. **Cloudflare D1 (`ruprizzle-d1`):** WASM-compatible HTTP/Worker adapter binding directly to Cloudflare D1.
+In **v1.5**, `ruprizzle` expands its runtime with **first-class Serverless and Edge database adapters**:
+1. **Turso / libSQL (`ruprizzle-turso`):** Embedded SQLite replicas with automatic remote sync over HTTP/WebSocket using `libsql 0.6`. Zero-latency local reads combined with remote transactional writes.
+2. **Cloudflare D1 (`ruprizzle-d1`):** WASM-compatible HTTP/Worker adapter binding directly to Cloudflare D1 via `worker 0.5` or REST API.
 3. **Neon Serverless Postgres (`ruprizzle-neon`):** WebSocket and HTTP query pipeline bypassing TCP connection limits via Neon's connection pooler.
 4. **Unified Seam Architecture:** All adapters implement the standard `Pool` and `Executor` traits, ensuring **identical query builder syntax** regardless of execution environment.
 
@@ -32,8 +33,8 @@ graph TD
         Executor --> MySqlPool["sqlx::MySqlPool"]
     end
 
-    subgraph "Edge & Serverless Drivers (v2)"
-        Executor --> TursoAdapter["ruprizzle-turso (libSQL Sync)"]
+    subgraph "Edge & Serverless Drivers (v1.5)"
+        Executor --> TursoAdapter["ruprizzle-turso (libSQL 0.6 Sync)"]
         Executor --> D1Adapter["ruprizzle-d1 (Cloudflare D1 WASM/HTTP)"]
         Executor --> NeonAdapter["ruprizzle-neon (Serverless WebSocket)"]
     end
@@ -95,13 +96,13 @@ let users = User::find_many().all(&pool).await?;
 
 ### Task 2: Implement `crates/turso` Adapter
 - [ ] Create `crates/turso` workspace member.
-- [ ] Implement `TursoPool` wrapping `libsql::Builder`.
+- [ ] Implement `TursoPool` wrapping `libsql::Builder` (`libsql 0.6.0`).
 - [ ] Implement query compilation and row decoding bridging `libsql::Row` to `ruprizzle_runtime::Value`.
 
 ### Task 3: Implement `crates/d1` Adapter
 - [ ] Create `crates/d1` workspace member.
 - [ ] Implement HTTP client for Cloudflare D1 API.
-- [ ] Add WASM feature flag for native Cloudflare Workers runtime bindings.
+- [ ] Add WASM feature flag for native Cloudflare Workers runtime bindings (`worker 0.5.0`).
 
 ### Task 4: Implement `crates/neon` Adapter
 - [ ] Create `crates/neon` workspace member.

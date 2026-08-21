@@ -3,17 +3,18 @@
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
 **Status:** Ready for Execution  
-**Milestone:** v2.0.0-alpha.1  
-**Primary Crates:** `crates/runtime`, `crates/migrate`, `crates/cli`, `crates/dialect`, `crates/testkit`
+**Milestone:** v2.0.0 (Major Breaking Milestone)  
+**Primary Crates:** `crates/runtime`, `crates/migrate`, `crates/cli`, `crates/dialect`, `crates/testkit`  
+**Dependencies Baseline:** `sqlx 0.9.0`, `rusqlite 0.40.0`, Rust 1.86.0
 
 ---
 
 ## 1. Context, Objectives & Scope
 
-In `ruprizzle-orm` 1.0, `crates/runtime/src/lib.rs` exports `pub use sqlx;` and `sqlite-rusqlite` re-exports `rusqlite::Row` and `rusqlite::types`. Because these are part of ruprizzle's public API surface, major upgrades to upstream drivers (`sqlx 0.8 -> 0.9`, `rusqlite 0.32 -> 0.40`) are breaking changes reserved strictly for the v2.0 major milestone.
+In `ruprizzle-orm` 1.0, `crates/runtime/src/lib.rs` exports `pub use sqlx;` and `sqlite-rusqlite` re-exports `rusqlite::Row` and `rusqlite::types`. Because these are part of ruprizzle's public API surface, major upgrades to upstream drivers (`sqlx 0.8 -> 0.9`, `rusqlite 0.32 -> 0.40`) are breaking changes reserved strictly for the **v2.0 major milestone**.
 
-By executing this modernization first in Phase 1:
-1. We upgrade to `sqlx 0.9.0` and `rusqlite 0.40.0` before writing new v2 executor logic, preventing duplicate refactors.
+By executing this modernization in **v2.0**:
+1. We upgrade to `sqlx 0.9.0` and `rusqlite 0.40.0` across all executor and migration paths.
 2. We raise the workspace Minimum Supported Rust Version (MSRV) to **1.86** (required by sqlx 0.9).
 3. We eliminate the `RUSTSEC-2023-0071` security advisory exception in `deny.toml` by utilizing sqlx 0.9's decoupled `mysql-rsa` feature flags.
 

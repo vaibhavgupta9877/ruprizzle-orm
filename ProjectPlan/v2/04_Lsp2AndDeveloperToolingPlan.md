@@ -3,16 +3,17 @@
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
 **Status:** Ready for Execution  
-**Milestone:** v2.0.0-beta.2  
-**Primary Crates:** `crates/lsp`, `crates/parser`, `crates/core`, `editor/vscode`
+**Milestone:** v1.2.0 (Additive, Minor Release)  
+**Primary Crates:** `crates/lsp`, `crates/parser`, `crates/core`, `editor/vscode`  
+**Dependencies Baseline:** `tower-lsp 0.20.0`, `lsp-types 0.97.0`, VS Code Engine `^1.96.0`, `@vscode/vsce 3.2.0`
 
 ---
 
 ## 1. Context, Objectives & Scope
 
-Writing `.ruprizzle` schemas without rich editor intelligence, real-time error underlines, and instant completions slows down developer velocity. 
+Writing `.ruprizzle` schemas without rich editor intelligence, real-time error underlines, and instant completions slows down developer velocity compared to TypeScript or modern Prisma 7.9+ schemas.
 
-In v2, `crates/lsp` and the VS Code extension (`editor/vscode`) are upgraded into a **first-class Language Server Protocol (LSP 2.0) implementation** rivaling Prisma and Rust-Analyzer:
+In **v1.2**, `crates/lsp` and the VS Code extension (`editor/vscode`) are upgraded into a **first-class Language Server Protocol (LSP 2.0) implementation** using `tower-lsp 0.20` and `lsp-types 0.97`:
 - **Intelligent Autocompletions:** Context-aware completion of attributes, types, and relation parameters (`fields`, `references`).
 - **Semantic Hover Tooltips:** Markdown documentation explaining attributes, data types, and dialect differences.
 - **Go-To-Definition & References:** Seamless navigation between relations and models.
@@ -26,7 +27,7 @@ In v2, `crates/lsp` and the VS Code extension (`editor/vscode`) are upgraded int
 
 ```mermaid
 graph TD
-    Client["VS Code / Neovim / Helix (LSP Client)"] <--> |JSON-RPC over stdio| Server["crates/lsp (tower-lsp)"]
+    Client["VS Code / Neovim / Helix (LSP Client)"] <--> |JSON-RPC over stdio| Server["crates/lsp (tower-lsp 0.20)"]
     Server --> Parser["ruprizzle-parser"]
     Server --> IR["ruprizzle-core IR"]
     Server --> Completion["completion.rs (Context Autocomplete)"]
@@ -37,8 +38,8 @@ graph TD
 ```
 
 ### 2.1 Context-Aware Autocompletion (`completion.rs`)
-- **Model Body Context:** Suggests scalar types (`Int`, `BigInt`, `String`, `Boolean`, `DateTime`, `Json`, `Decimal`, `Bytes`, `Vector`), declared enums, and existing model names.
-- **Field Attribute Context (`@`):** Suggests `@id`, `@default(...)`, `@unique`, `@updatedAt`, `@relation(...)`, `@map("...")`, `@db.VarChar(...)`.
+- **Model Body Context:** Suggests scalar types (`Int`, `BigInt`, `String`, `Boolean`, `DateTime`, `Json`, `Decimal`, `Bytes`, `Vector`, `Point`, `Polygon`), declared enums, and existing model names.
+- **Field Attribute Context (`@`):** Suggests `@id`, `@default(...)`, `@unique`, `@updatedAt`, `@deletedAt`, `@relation(...)`, `@map("...")`, `@db.VarChar(...)`.
 - **Block Attribute Context (`@@`):** Suggests `@@id([...])`, `@@unique([...])`, `@@index([...])`, `@@map("...")`, `@@tenant(...)`, `@@policy(...)`.
 - **Relation Arguments Context:**
   - `fields: [` $\to$ autocompletes scalar fields of the current model.
@@ -67,6 +68,7 @@ model User {
   role      Role     @default(USER)
   posts     Post[]
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 ```
 
@@ -106,7 +108,7 @@ model User {
 
 ### Task 6: VS Code Extension Packaging & CI
 - [ ] In `editor/vscode`:
-  - Update `package.json` with configuration properties (`ruprizzle.lsp.path`, `ruprizzle.trace.server`).
+  - Update `package.json` with configuration properties (`ruprizzle.lsp.path`, `ruprizzle.trace.server`) and VS Code engine `^1.96.0`.
   - Configure automated build and release GitHub Action for `.vsix` generation and publishing to VS Code Marketplace & Open VSX.
 
 ---

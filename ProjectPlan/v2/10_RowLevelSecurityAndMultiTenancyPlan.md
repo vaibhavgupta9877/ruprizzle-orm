@@ -3,7 +3,7 @@
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
 **Status:** Ready for Execution  
-**Milestone:** v2.2.0-rc.1  
+**Milestone:** v2.0.0 (Major Breaking Milestone)  
 **Primary Crates:** `crates/core`, `crates/parser`, `crates/dialect`, `crates/migrate`, `crates/runtime`
 
 ---
@@ -12,7 +12,7 @@
 
 Building multi-tenant B2B SaaS applications requires ironclad tenant data isolation. Forcing developers to manually append `.where(tenant_id.eq(current_tenant))` to every single application query is error-prone and a leading cause of data leakage vulnerabilities.
 
-In v2, `ruprizzle` delivers **declarative Multi-Tenancy & Row-Level Security (RLS)**:
+In **v2.0**, `ruprizzle` delivers **declarative Multi-Tenancy & Row-Level Security (RLS)**:
 1. **Schema DSL Directives:** Declarative `@@tenant(field)` and `@@policy(op, expr)` attributes in `schema.ruprizzle`.
 2. **Native Postgres RLS DDL:** Automatic generation of `ENABLE ROW LEVEL SECURITY` and `CREATE POLICY` statements in the migration engine.
 3. **Transparent Query Scoping on SQLite & MySQL:** Automatically injects tenant predicates into query ASTs on engines lacking native RLS.

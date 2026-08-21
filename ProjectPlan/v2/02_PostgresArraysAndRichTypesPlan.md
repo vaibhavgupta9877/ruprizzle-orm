@@ -3,7 +3,7 @@
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
 **Status:** Ready for Execution  
-**Milestone:** v2.0.0-alpha.2  
+**Milestone:** v1.1.0 (Additive, Minor Release)  
 **Primary Crates:** `crates/core`, `crates/dialect`, `crates/runtime`, `crates/codegen`
 
 ---
@@ -12,7 +12,7 @@
 
 PostgreSQL developers heavily rely on native array types (`TEXT[]`, `INT[]`, `UUID[]`, `TIMESTAMP[]`) for tags, permissions/roles, and multi-tenant scopes. In `ruprizzle` 1.0, array values had partial support and were serialized to JSON strings in several SQLx encoders or lacked rich query filter operators.
 
-### Objectives
+### Objectives in v1.1
 1. **First-Class Array Binding:** Ensure `Value::Array(Vec<Value>)` serializes into native PostgreSQL array binary and text formats across `sqlx::Postgres` and native `tokio-postgres`.
 2. **Rich Query Filter API:** Provide type-safe array operations on `Column<M, Vec<T>>`:
    - `.has(elem)` $\to$ `val = ANY(column)`

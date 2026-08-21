@@ -3,8 +3,9 @@
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
 **Status:** Ready for Execution  
-**Milestone:** v2.2.0-alpha.1  
-**Primary Crates:** `crates/core`, `crates/parser`, `crates/dialect`, `crates/migrate`, `crates/runtime`
+**Milestone:** v2.0.0 (Major Breaking Milestone)  
+**Primary Crates:** `crates/core`, `crates/parser`, `crates/dialect`, `crates/migrate`, `crates/runtime`  
+**Dependencies Baseline:** `pgvector 0.4.0`, `sqlite-vec 0.1.6`
 
 ---
 
@@ -12,7 +13,7 @@
 
 Rust is rapidly becoming the language of choice for high-throughput AI agents, Retrieval-Augmented Generation (RAG) pipelines, and real-time embedding indexing. Previously, developers using ORMs had to drop down to raw SQL strings to perform vector similarity searches and manage vector index migrations.
 
-In v2, `ruprizzle` delivers **first-class AI Vector Search**:
+In **v2.0**, `ruprizzle` delivers **first-class AI Vector Search**:
 1. **Schema DSL Vector Type:** Declarative `Vector(dimension)` column definition with compile-time dimension validation.
 2. **Migration Engine Vector Indexes:** Automated DDL generation for `pgvector` (`HNSW`, `IVFFlat`) and `sqlite-vec` extensions.
 3. **Type-Safe Nearest-Neighbor Query API:** Ergonomic query builder operations (`.nearest_neighbors()`, `.with_distance()`) supporting Cosine, Euclidean (L2), and Dot Product distance metrics.
@@ -60,6 +61,7 @@ pub enum IndexType {
     Gist,
     Hnsw,
     Ivfflat,
+    FullText,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

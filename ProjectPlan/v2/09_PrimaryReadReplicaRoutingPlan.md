@@ -3,16 +3,16 @@
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
 **Status:** Ready for Execution  
-**Milestone:** v2.2.0-beta.2  
+**Milestone:** v1.4.0 (Additive, Minor Release)  
 **Primary Crates:** `crates/runtime`
 
 ---
 
 ## 1. Context, Objectives & Scope
 
-Production architectures scale query throughput by distributing read traffic across multiple database read replicas while routing write operations and transactions exclusively to the primary writer instance.
+Production architectures scale query throughput by distributing read traffic across multiple database read replicas while routing write operations and transactions exclusively to the primary writer instance. Prisma charges for this under its paid Prisma Accelerate service; `ruprizzle` provides it natively in **v1.4**.
 
-In v2, `ruprizzle-runtime` introduces **intelligent connection routing**:
+In **v1.4**, `ruprizzle-runtime` introduces **intelligent connection routing**:
 1. **Multi-Pool Connection Manager (`RoutedPool`):** Manages a single primary pool alongside multiple read replica pools with active health checking and load balancing (Round Robin, Least Connections, Random).
 2. **Automatic Query Classification:** `SELECT` queries automatically route to replicas; `INSERT`, `UPDATE`, `DELETE`, and active transactions (`Tx`) route directly to the primary.
 3. **Explicit Consistency Overrides:** Simple `.use_primary()` and `.use_replica()` modifiers on any query builder.

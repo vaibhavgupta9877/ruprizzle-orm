@@ -3,7 +3,7 @@
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
 **Status:** Ready for Execution  
-**Milestone:** v2.0.0-beta.1  
+**Milestone:** v1.2.0 (Additive, Minor Release)  
 **Primary Crates:** `crates/check`, `crates/cli`, `crates/runtime`, `crates/core`
 
 ---
@@ -12,9 +12,7 @@
 
 Modern CI/CD workflows require static guarantees that application queries, raw SQL fragments, and generated filter expressions remain in sync with `schema.ruprizzle` **without requiring an active database server running during CI**.
 
-In `ruprizzle` 1.0, `crates/check` provided initial query manifest validation. In v2, `ruprizzle check` matures into a complete, AST-level zero-DB query type-checker and GitHub Actions CI gate.
-
-### Key Capabilities
+In **v1.2**, `ruprizzle check` matures into a complete, AST-level zero-DB query type-checker and GitHub Actions CI gate:
 1. **Query Manifest Schema (`query-manifest.json`):** Standardized JSON format emitted at build-time or query macro expansion capturing SQL string, parameter types, expected return types, and source code location.
 2. **Deep Semantic AST Validation:**
    - Validates table existence and table alias scoping.
