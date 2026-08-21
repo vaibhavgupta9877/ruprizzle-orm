@@ -9,9 +9,10 @@
 > (`ProjectPlan/ProductionReadinessSolPlan.md` V1-01) and the `sqlite-rusqlite`
 > feature suite compile failures are **closed**; the `stream_unbuffered` `Box::leak`
 > issue (V1-04) is also **closed** because the current source no longer contains
-> `Box::leak` in the streaming path and all streaming tests pass. The remaining
-> current blockers are the SQLite multi-change migration planner (V1-03),
-> RC/publish/feedback window (V1-05), and coverage/mutation evidence (V1-06).
+> `Box::leak` in the streaming path and all streaming tests pass. The SQLite
+> multi-change migration planner (V1-03) is also **fixed**. The remaining current
+> blockers are the RC/publish/feedback window (V1-05) and coverage/mutation
+> evidence (V1-06).
 
 **Project:** `ruprizzle-orm`
 **Workspace version:** `1.0.0-rc.1`

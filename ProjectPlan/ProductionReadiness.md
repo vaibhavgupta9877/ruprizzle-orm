@@ -583,14 +583,14 @@ This is a **pre-RC rescoring** (§13 → §15). The final W6-05 assessment
 | 1 | Correctness & testing | 20% | **9.5** | `cargo test --workspace` passes (all crates, ~400 tests), `cargo test -p ruprizzle --features sqlite-rusqlite` passes, and the 15.56 h / 0-error `rusqlite` soak evidence is on record. Stale `diagnostics_snapshot.rs` reference no longer fails; `xtask harden` now runs the panic, arithmetic/indexing, and injection audits. |
 | 2 | Security | 15% | **9.5** | `forbid(unsafe_code)`, parameterised binding, `cargo-deny`, injection tests, `xtask harden`, and private reporting unchanged. `RUSTSEC-2023-0071` remains excepted through the MySQL dependency path. |
 | 3 | Operability & observability | 15% | **8.5** | Tracing, slow-query events, `PoolStats`, and soak health logging are strong. Prometheus/OTel exporter is still not implemented. |
-| 4 | Data safety & migrations | 15% | **8.5** | Transactional application, checksums, drift detection, destructive gating, and cross-dialect migrations are strong. SQLite multi-change migration planning is still a known limitation (V1-03; see `ProductionReadinessSolPlan.md`). |
+| 4 | Data safety & migrations | 15% | **9.0** | Transactional application, checksums, drift detection, destructive gating, cross-dialect migrations, and the SQLite multi-change planner fix are all strong. The deep SQLite round-trip property now exercises multiple simultaneous column adds. |
 | 5 | Architecture & design | 10% | **9.5** | Query builder, driver abstraction, multi-dialect handling, and relation modelling remain sound. |
 | 6 | CI/CD & release engineering | 10% | **8.5** | `xtask` hardening and workspace tests are green and the `1.0.0-rc.1` tag can be placed at HEAD, but the branch is still ahead of `origin` and the release workflow has not run end-to-end. |
 | 7 | Documentation | 5% | **9.5** | `mdbook build` and `cargo doc` pass with zero warnings; ADRs, soak report, and comparison docs are current. |
 | 8 | API stability & semver | 5% | **8.5** | `1.0.0-rc.1` in `Cargo.toml` and the tag will be placed at current `dev-v0-2` HEAD, but the package is not yet on crates.io and the two-week RC window has not started. |
 | 9 | Performance | 5% | **10.0** | 1.46 B operations at 0 errors over 15.56 h; pool saturation observed but non-fatal. |
 
-**Weighted total: 9.08 / 10 → 91 / 100.**
+**Weighted total: 9.15 / 10 → 92 / 100.**
 
 ### Verification performed
 
@@ -609,4 +609,4 @@ This is a **pre-RC rescoring** (§13 → §15). The final W6-05 assessment
 1. **RC lifecycle (W6-04):** re-tag `1.0.0-rc.1` at current `dev-v0-2` HEAD, push, and publish to crates.io.
 2. **RC feedback window (W6-04):** run the minimum two-week RC window and collect an external upgrade report.
 3. **Final rescoring (W6-05):** re-score against the live RC, targeting ≥ 92/100.
-4. **SQLite multi-change migration (V1-03):** the `local/deep-tests` property still excludes multi-change diffs. Closing this would raise Data safety to 9.0 and is tracked in `ProductionReadinessSolPlan.md`.
+4. ~~SQLite multi-change migration (V1-03)~~ — **fixed 2026-08-21**; the `local/deep-tests` SQLite round-trip property now exercises multiple simultaneous column adds.

@@ -41,7 +41,7 @@
 | `cargo xtask harden` | Pass |
 | `sqlite-rusqlite` feature suite | Pass |
 | 48-hour soak | Waived after 15.56 cumulative hours, 1.46 B ops, 0 errors (see `docs/SoakReport.md`) |
-| SQLite multi-change migration property | Excluded by `prop_assume!(changes.len() <= 1)` (V1-03 still open) |
+| SQLite multi-change migration property | Now exercised by `local/deep-tests/tests/migrate_sqlite_roundtrip.rs` with no `prop_assume` limit (V1-03 fixed) |
 | Migration mutation score | About 28.6% of viable measured mutants killed |
 | Runtime mutation baseline | Incomplete |
 | Overall line coverage | About 68% |
@@ -341,9 +341,9 @@ git commit -m "docs: record accepted 15.56-hour / 1.46 B ops / 0 errors soak evi
 
 ---
 
-## V1-03 · Fix SQLite multi-change migration planning
+## V1-03 · Fix SQLite multi-change migration planning — **completed 2026-08-21**
 
-**Why:** The migration property suite explicitly skips multi-change diffs because adding multiple required columns can generate a rebuild that selects a column not yet present in the source table.
+**Why:** The migration property suite explicitly skipped multi-change diffs because adding multiple required columns generated a rebuild that selected a column not yet present in the source table. The planner now builds the rebuild source from the table as it exists after previous changes, so multi-add (and multi-alter/rename) SQLite migrations are safe.
 
 **Files:**
 - Modify: `crates/migrate/src/plan.rs:113-145,315-359`
