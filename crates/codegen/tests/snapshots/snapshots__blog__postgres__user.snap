@@ -636,6 +636,8 @@ impl ::ruprizzle::Model for User {
         "created_at",
         "updated_at",
     ];
+    const DELETED_AT_COLUMN: Option<&'static str> = None;
+    const UPDATED_AT_COLUMN: Option<&'static str> = Some("updated_at");
 }
 /// Table name for this model.
 pub const TABLE: &str = "users";

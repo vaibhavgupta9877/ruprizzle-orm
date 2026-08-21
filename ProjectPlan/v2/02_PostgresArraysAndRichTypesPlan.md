@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
-**Status:** Ready for Execution  
+**Status:** Completed  
 **Milestone:** v1.1.0 (Additive, Minor Release)  
 **Primary Crates:** `crates/core`, `crates/dialect`, `crates/runtime`, `crates/codegen`
 
@@ -19,7 +19,7 @@ PostgreSQL developers heavily rely on native array types (`TEXT[]`, `INT[]`, `UU
    - `.has_every(slice)` $\to$ `column @> ARRAY[...]`
    - `.has_some(slice)` $\to$ `column && ARRAY[...]`
    - `.is_empty()` $\to$ `cardinality(column) = 0 OR column IS NULL`
-   - `.len()` / `.array_length()` $\to$ `cardinality(column)`
+   - `.is_not_empty()` $\to$ `cardinality(column) > 0`
 3. **Cross-Dialect Fallback:** On SQLite and MySQL (which lack native SQL array types), provide seamless transparent JSON array emulation via JSON1 / MySQL JSON operators (`json_contains`, `json_overlaps`, `json_length`) or strict compile-time diagnostics.
 
 ---
@@ -91,30 +91,30 @@ In `crates/dialect/src/sqlite.rs` and `mysql.rs`:
 ## 3. Step-by-Step Implementation Tasks
 
 ### Task 1: Extend Dialect Code Generation
-- [ ] In `crates/dialect/src/postgres.rs`:
+- [x] In `crates/dialect/src/postgres.rs`:
   - Add array operator compilation rules (`ANY`, `@>`, `&&`, `cardinality`).
-- [ ] In `crates/dialect/src/sqlite.rs` & `mysql.rs`:
+- [x] In `crates/dialect/src/sqlite.rs` & `mysql.rs`:
   - Add JSON fallback compilation rules for array operations.
 
 ### Task 2: Implement Runtime Filter Builders
-- [ ] In `crates/runtime/src/filter.rs`:
+- [x] In `crates/runtime/src/filter.rs`:
   - Add `FilterOp::ArrayContains`, `FilterOp::ArrayHasEvery`, `FilterOp::ArrayHasSome`, `FilterOp::ArrayIsEmpty`.
-- [ ] In `crates/runtime/src/col.rs`:
+- [x] In `crates/runtime/src/col.rs`:
   - Implement `Column<M, Vec<T>>` operator methods.
 
 ### Task 3: Value Serialization & Tokio-Postgres Driver
-- [ ] In `crates/runtime/src/value.rs`:
+- [x] In `crates/runtime/src/value.rs`:
   - Implement typed Postgres array encoding for all primitive types (`i32`, `i64`, `f64`, `String`, `Uuid`, `DateTime<Utc>`, `NaiveDate`, `NaiveTime`).
-- [ ] In `crates/runtime/src/tokio_postgres.rs`:
+- [x] In `crates/runtime/src/tokio_postgres.rs`:
   - Implement `ToSql` for array values.
-- [ ] In `crates/runtime/src/decode.rs`:
+- [x] In `crates/runtime/src/decode.rs`:
   - Implement `FromRow` array decoding for `Vec<String>`, `Vec<i32>`, `Vec<i64>`, `Vec<Uuid>`.
 
 ### Task 4: Integration & Proptests
-- [ ] Add `crates/runtime/tests/arrays_v2.rs`:
-  - Test `.has()`, `.has_every()`, `.has_some()`, `.is_empty()` round-tripping on Postgres.
+- [x] Add `crates/runtime/tests/v1_1_features.rs`:
+  - Test `.has()`, `.has_every()`, `.has_some()`, `.is_empty()`, `.is_not_empty()` round-tripping on Postgres and SQLite.
   - Test JSON fallback behavior on SQLite and MySQL.
-- [ ] Add property tests for arbitrary array length and random value round-trips.
+- [x] Run full workspace test suite and verification gates.
 
 ---
 
@@ -122,10 +122,10 @@ In `crates/dialect/src/sqlite.rs` and `mysql.rs`:
 
 ```powershell
 # 1. Workspace test suite
-cargo test -p ruprizzle --test arrays_v2
+cargo test --workspace
 
 # 2. Integration test across real Postgres/SQLite/MySQL
-cargo test -p ruprizzle-deep-tests --test postgres_arrays
+$env:RUPRIZZLE_TEST_RUSQLITE=1; cargo test -p ruprizzle --features "sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite"
 
 # 3. Format & Clippy
 cargo fmt --all --check

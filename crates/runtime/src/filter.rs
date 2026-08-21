@@ -370,6 +370,15 @@ pub enum FilterNode {
         /// The bound element values.
         values: Vec<Value>,
     },
+    /// A full-text search match operation.
+    FullTextMatch {
+        /// The SQL table name.
+        table: &'static str,
+        /// The SQL column name.
+        column: &'static str,
+        /// The text query or terms to match.
+        query: String,
+    },
 }
 
 /// JSON-specific filter operations.
@@ -387,12 +396,18 @@ pub enum JsonFilterOp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(missing_docs)]
 pub enum ArrayFilterOp {
+    /// The column contains a specific single element (`= ANY(column)` / `JSON_CONTAINS`).
+    Has,
     /// The column contains all of the supplied values (`@>` / `JSON_CONTAINS`).
     Contains,
     /// The column is contained by the supplied set (`<@` / `JSON_CONTAINS` reversed).
     ContainedBy,
     /// The column and the supplied set share at least one element (`&&` / `JSON_OVERLAPS`).
     Overlaps,
+    /// The array is empty (`cardinality(col) = 0` / `JSON_LENGTH(col) = 0` or NULL).
+    IsEmpty,
+    /// The array is non-empty (`cardinality(col) > 0` / `JSON_LENGTH(col) > 0`).
+    IsNotEmpty,
 }
 
 /// Comparison operators.

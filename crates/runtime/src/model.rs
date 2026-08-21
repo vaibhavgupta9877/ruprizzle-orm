@@ -156,4 +156,10 @@ pub trait Model: RowDecode {
     /// projections and keeps the old `SELECT *` behaviour for hand-written
     /// model impls.
     const COLUMNS: &'static [&'static str] = &[];
+
+    /// The soft-delete timestamp column name, if configured with `@deletedAt`.
+    const DELETED_AT_COLUMN: Option<&'static str> = None;
+
+    /// The audit update timestamp column name, if configured with `@updatedAt`.
+    const UPDATED_AT_COLUMN: Option<&'static str> = None;
 }

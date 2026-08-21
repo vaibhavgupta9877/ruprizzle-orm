@@ -621,6 +621,8 @@ impl ::ruprizzle::Model for OrderItem {
         "quantity",
         "unit_price",
     ];
+    const DELETED_AT_COLUMN: Option<&'static str> = None;
+    const UPDATED_AT_COLUMN: Option<&'static str> = None;
 }
 /// Table name for this model.
 pub const TABLE: &str = "order_items";

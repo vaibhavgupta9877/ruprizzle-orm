@@ -44,6 +44,8 @@ pub struct SelectQuery<'db, M: Model, Out = M, I = ()> {
     ctes: Vec<Cte>,
     includes: I,
     join: Option<JoinSpec>,
+    with_deleted: bool,
+    only_deleted: bool,
     _out: PhantomData<fn() -> Out>,
 }
 
@@ -92,6 +94,8 @@ where
             ctes: Vec::new(),
             includes: (),
             join: None,
+            with_deleted: false,
+            only_deleted: false,
             _out: PhantomData,
         }
     }
@@ -315,6 +319,20 @@ where
         self.join_with::<J, Join2<Maybe<M>, Maybe<J>>>(JoinKind::Full, Some(alias), on)
     }
 
+    /// Includes soft-deleted rows in the query results (disables default `WHERE deleted_at IS NULL`).
+    pub fn with_deleted(mut self) -> Self {
+        self.with_deleted = true;
+        self.only_deleted = false;
+        self
+    }
+
+    /// Queries *only* soft-deleted rows (`WHERE deleted_at IS NOT NULL`).
+    pub fn only_deleted(mut self) -> Self {
+        self.with_deleted = false;
+        self.only_deleted = true;
+        self
+    }
+
     fn join_with<J: Model, O>(
         self,
         kind: JoinKind,
@@ -338,6 +356,8 @@ where
                 right_alias,
                 on: on.into(),
             }),
+            with_deleted: self.with_deleted,
+            only_deleted: self.only_deleted,
             _out: PhantomData,
         }
     }
@@ -356,7 +376,7 @@ where
         set.push_entries(&mut entries);
         AggregateQuery {
             exec: self.exec,
-            filter: self.filter,
+            filter: self.effective_filter(),
             aggregates: entries,
             group_by: Vec::new(),
             having: Filter::new(FilterNode::And(Vec::new())),
@@ -394,6 +414,8 @@ where
             ctes: self.ctes,
             includes: include,
             join: self.join,
+            with_deleted: self.with_deleted,
+            only_deleted: self.only_deleted,
             _out: PhantomData,
         }
     }
@@ -411,6 +433,8 @@ where
             ctes: self.ctes,
             includes: (),
             join: None,
+            with_deleted: self.with_deleted,
+            only_deleted: self.only_deleted,
             _out: PhantomData,
         }
     }
@@ -451,6 +475,29 @@ where
         Ok(())
     }
 
+    /// Returns the effective filter incorporating soft-delete filters if configured on the model.
+    pub(crate) fn effective_filter(&self) -> Filter<M> {
+        let mut filter = self.filter.clone();
+        if let Some(col) = M::DELETED_AT_COLUMN {
+            if !self.with_deleted {
+                if self.only_deleted {
+                    filter = filter.and(Filter::new(FilterNode::Null {
+                        table: M::TABLE,
+                        column: col,
+                        negated: true,
+                    }));
+                } else {
+                    filter = filter.and(Filter::new(FilterNode::Null {
+                        table: M::TABLE,
+                        column: col,
+                        negated: false,
+                    }));
+                }
+            }
+        }
+        filter
+    }
+
     /// Compiles the main query (without the CTE `WITH` prefix) to SQL and binds.
     ///
     /// # Errors
@@ -460,6 +507,7 @@ where
     pub(crate) fn to_sql_without_cte(&self) -> Result<CompiledSql, Error> {
         self.check_join_support()?;
         let dialect = self.exec.dialect();
+        let eff_filter = self.effective_filter();
         if let Some(ref join) = self.join {
             Ok(join_select_with_columns::<M>(
                 dialect,
@@ -470,7 +518,7 @@ where
                 join.right_alias,
                 join.kind,
                 &join.on.node,
-                &self.filter.node,
+                &eff_filter.node,
                 &self.order,
                 self.limit,
                 self.offset,
@@ -481,7 +529,7 @@ where
                 dialect,
                 M::TABLE,
                 &self.projection,
-                &self.filter.node,
+                &eff_filter.node,
                 &self.order,
                 self.limit,
                 self.offset,
@@ -555,7 +603,8 @@ where
     pub async fn count(self) -> Result<i64, Error> {
         self.check_join_support()?;
         let dialect = self.exec.dialect();
-        let compiled = crate::compile::count::<M>(dialect, M::TABLE, &self.filter.node);
+        let eff_filter = self.effective_filter();
+        let compiled = crate::compile::count::<M>(dialect, M::TABLE, &eff_filter.node);
         let compiled = crate::compile::with_cte_prefix(dialect, &self.ctes, compiled);
 
         #[cfg(feature = "sqlite-rusqlite")]
@@ -598,7 +647,8 @@ where
     pub async fn exists(self) -> Result<bool, Error> {
         self.check_join_support()?;
         let dialect = self.exec.dialect();
-        let compiled = crate::compile::exists::<M>(dialect, M::TABLE, &self.filter.node);
+        let eff_filter = self.effective_filter();
+        let compiled = crate::compile::exists::<M>(dialect, M::TABLE, &eff_filter.node);
         let compiled = crate::compile::with_cte_prefix(dialect, &self.ctes, compiled);
 
         #[cfg(feature = "sqlite-rusqlite")]
@@ -1846,6 +1896,21 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
     pub fn all_rows(mut self) -> Self {
         self.all_rows = true;
         self
+    }
+
+    /// Sets the model's soft-delete column (`@deletedAt`) to the current timestamp (`now()`).
+    ///
+    /// # Errors
+    /// Returns an error if the model does not have a `@deletedAt` column configured.
+    pub fn soft_delete(self) -> Result<Self, Error> {
+        let col = M::DELETED_AT_COLUMN.ok_or_else(|| {
+            Error::Message(format!(
+                "Model '{}' does not have a @deletedAt column configured",
+                M::TABLE
+            ))
+        })?;
+        let now = chrono::Utc::now().to_rfc3339();
+        Ok(self.set(Column::<M, String>::new(M::TABLE, col), now))
     }
 
     /// Attaches a many-to-many nested write to this update.

@@ -489,6 +489,8 @@ impl ::ruprizzle::Model for Account {
         "display_name",
         "created_at",
     ];
+    const DELETED_AT_COLUMN: Option<&'static str> = None;
+    const UPDATED_AT_COLUMN: Option<&'static str> = None;
 }
 /// Table name for this model.
 pub const TABLE: &str = "accounts";

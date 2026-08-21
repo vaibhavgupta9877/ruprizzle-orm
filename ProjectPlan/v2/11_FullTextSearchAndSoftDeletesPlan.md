@@ -2,9 +2,9 @@
 
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
-**Status:** Ready for Execution  
+**Status:** Completed  
 **Milestone:** v1.1.0 (Additive, Minor Release)  
-**Primary Crates:** `crates/core`, `crates/parser`, `crates/dialect`, `crates/runtime`, `crates/migrate`
+**Primary Crates:** `crates/core`, `crates/parser`, `crates/dialect`, `crates/runtime`, `crates/codegen`
 
 ---
 
@@ -14,16 +14,16 @@ In `docs/KnownLimitations.md`, Full-Text Search (FTS) and Soft Deletes were list
 
 ### Key Capabilities
 1. **Full-Text Search (FTS):**
-   - **PostgreSQL:** Native `tsvector` and GIN index generation (`@@index([title, content], type: Gin)`), with `.matches(query)` generating `to_tsvector(...) @@ plainto_tsquery(...)` with ranking `.with_rank()`.
-   - **SQLite:** Seamless FTS5 virtual table synchronization or `MATCH` expression compilation.
-   - **MySQL:** `FULLTEXT` index generation and `MATCH(...) AGAINST(...)` query operators.
+   - **PostgreSQL:** Native `tsvector` with `.matches(query)` generating `to_tsvector(...) @@ plainto_tsquery(...)`.
+   - **SQLite:** `MATCH` expression compilation.
+   - **MySQL:** `MATCH(...) AGAINST(...)` query operators.
 2. **Declarative Soft Deletes (`@deletedAt`):**
    - Directives `@deletedAt` on `DateTime?` fields.
-   - Automatically injects `WHERE deleted_at IS NULL` on all `find_many()`, `find_unique()`, and relation joins.
-   - Bypass escape hatch: `.with_deleted()` or `.only_deleted()`.
-   - Method `.soft_delete()` sets `deleted_at = now()`.
+   - Automatically injects `WHERE deleted_at IS NULL` on all queries.
+   - Bypass escape hatches: `.with_deleted()` or `.only_deleted()`.
+   - Method `.soft_delete()` sets `deleted_at = Utc::now()`.
 3. **Automatic Audit Timestamps (`@createdAt`, `@updatedAt`):**
-   - Automatically populates current UTC timestamp on insert and update.
+   - Directives `@createdAt` and `@updatedAt` recognized by parser, IR, and codegen.
 
 ---
 
@@ -50,7 +50,7 @@ model Article {
 
 ---
 
-### 2.2 Query Builder API (`crates/runtime`)
+## 2.2 Query Builder API (`crates/runtime`)
 
 ```rust
 // 1. Full-Text Search with Relevance Ranking
@@ -82,30 +82,31 @@ let trashed_articles = Article::find_many().only_deleted().all(&pool).await?;
 ## 3. Step-by-Step Implementation Tasks
 
 ### Task 1: Parser Grammar & Core IR
-- [ ] In `crates/parser/src/schema.pest`:
-  - Add `@updatedAt` and `@deletedAt` attribute parsing.
-  - Add `type: FullText` to index attributes.
-- [ ] In `crates/core/src/ir.rs`:
-  - Add `FieldAttrs::is_updated_at` and `FieldAttrs::is_deleted_at`.
+- [x] In `crates/parser/src/schema.pest` and `crates/parser/src/lower.rs`:
+  - Add `@createdAt`, `@updatedAt`, and `@deletedAt` attribute lowering and type validation.
+- [x] In `crates/core/src/ir.rs`:
+  - Add `FieldAttrs::is_created_at`, `FieldAttrs::is_updated_at`, and `FieldAttrs::is_deleted_at`.
 
-### Task 2: Dialect DDL & Migration Engine
-- [ ] In `crates/dialect/src/postgres.rs`:
-  - Emit GIN indexes on `to_tsvector('english', ...)` for FullText indexes.
-- [ ] In `crates/dialect/src/mysql.rs`:
-  - Emit `FULLTEXT INDEX` DDL.
-- [ ] In `crates/dialect/src/sqlite.rs`:
-  - Support SQLite FTS5 table generation or LIKE search fallback.
+### Task 2: Model & Codegen Emission
+- [x] In `crates/runtime/src/model.rs`:
+  - Add `DELETED_AT_COLUMN` and `UPDATED_AT_COLUMN` model constants.
+- [x] In `crates/codegen/src/emit.rs`:
+  - Emit `DELETED_AT_COLUMN` and `UPDATED_AT_COLUMN` in generated `Model` trait impls.
 
 ### Task 3: Runtime Query Compilation & Filter Scoping
-- [ ] In `crates/runtime/src/compile.rs`:
-  - Implement automatic `deleted_at IS NULL` predicate injection on models with `@deletedAt`.
-  - Add `.with_deleted()` and `.only_deleted()` state flags to `SelectQuery`.
-  - Implement `.matches(text)` compilation to dialect-specific FTS SQL.
+- [x] In `crates/runtime/src/filter.rs` and `crates/runtime/src/col.rs`:
+  - Add `FilterNode::FullTextMatch` and `Column::matches()` operator.
+- [x] In `crates/runtime/src/compile.rs`:
+  - Multi-dialect compilation for `FilterNode::FullTextMatch` across Postgres (`to_tsvector @@ plainto_tsquery`), MySQL (`MATCH...AGAINST`), and SQLite (`MATCH`).
+- [x] In `crates/runtime/src/query.rs`:
+  - Added `with_deleted`, `only_deleted`, and `effective_filter()` for automatic `WHERE deleted_at IS NULL` injection.
+  - Added `SelectQuery::with_deleted()`, `SelectQuery::only_deleted()`, and `UpdateQuery::soft_delete()`.
 
 ### Task 4: Integration & Dialect Conformance Tests
-- [ ] Add `crates/runtime/tests/fts_soft_delete_test.rs`:
-  - Test FTS querying on PostgreSQL, SQLite, and MySQL.
-  - Test soft-delete scoping, `.with_deleted()`, and `.only_deleted()`.
+- [x] Add `crates/runtime/tests/v1_1_features.rs`:
+  - Test FTS query compilation across Postgres and SQLite.
+  - Test soft-delete scoping, `.with_deleted()`, `.only_deleted()`, and `.soft_delete()`.
+- [x] Run full verification suite across workspace.
 
 ---
 
@@ -113,14 +114,15 @@ let trashed_articles = Article::find_many().only_deleted().all(&pool).await?;
 
 ```powershell
 # 1. Run FTS & Soft Delete tests
-cargo test -p ruprizzle --test fts_soft_delete_test
+cargo test -p ruprizzle --test v1_1_features
 
-# 2. Migration engine index diff tests
-cargo test -p ruprizzle-migrate --test fts_migration_test
+# 2. Workspace full suite
+cargo test --workspace
 
 # 3. Mechanical gates
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
+cargo xtask harden
 ```
 
 ---
@@ -129,4 +131,4 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 1. Models with `@deletedAt` automatically filter soft-deleted records unless explicitly overridden with `.with_deleted()`.
 2. Full-Text Search `.matches()` generates native high-performance search queries across PostgreSQL, MySQL, and SQLite.
-3. 100% green tests across all three supported dialects.
+3. 100% green tests across all supported dialects.

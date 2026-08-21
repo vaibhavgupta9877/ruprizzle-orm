@@ -1,6 +1,5 @@
 ---
 source: crates/codegen/tests/snapshots.rs
-assertion_line: 55
 expression: content
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
@@ -356,6 +355,8 @@ impl ::ruprizzle::Model for Post {
     const TABLE: &'static str = "posts";
     const PRIMARY_KEY: &'static str = "id";
     const COLUMNS: &'static [&'static str] = &["id"];
+    const DELETED_AT_COLUMN: Option<&'static str> = None;
+    const UPDATED_AT_COLUMN: Option<&'static str> = None;
 }
 /// Table name for this model.
 pub const TABLE: &str = "posts";

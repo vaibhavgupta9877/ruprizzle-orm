@@ -271,6 +271,26 @@ impl<M> Column<M, String> {
             value: Value::Str(format!("%{pattern}%").into()),
         })
     }
+
+    /// Full-text search match (`to_tsvector @@ plainto_tsquery` on Postgres, `MATCH...AGAINST` on MySQL, `MATCH` on SQLite).
+    pub fn matches(self, query: impl Into<String>) -> Filter<M> {
+        Filter::new(FilterNode::FullTextMatch {
+            table: self.table,
+            column: self.column,
+            query: query.into(),
+        })
+    }
+}
+
+impl<M> Column<M, Option<String>> {
+    /// Full-text search match for optional string column.
+    pub fn matches(self, query: impl Into<String>) -> Filter<M> {
+        Filter::new(FilterNode::FullTextMatch {
+            table: self.table,
+            column: self.column,
+            query: query.into(),
+        })
+    }
 }
 
 impl<M, T> Column<M, Option<T>> {
@@ -372,6 +392,16 @@ impl<M> Column<M, serde_json::Value> {
 }
 
 impl<M, T: Encodable> Column<M, Vec<T>> {
+    /// `value = ANY(column)` (Postgres) or single element containment.
+    pub fn has<V: Into<T>>(self, value: V) -> Filter<M> {
+        Filter::new(FilterNode::Array {
+            table: self.table,
+            column: self.column,
+            op: ArrayFilterOp::Has,
+            values: vec![value.into().to_value()],
+        })
+    }
+
     /// `column @> ARRAY[values]` (Postgres) or JSON array containment.
     pub fn contains<V: Into<T>>(self, values: impl IntoIterator<Item = V>) -> Filter<M> {
         Filter::new(FilterNode::Array {
@@ -380,6 +410,11 @@ impl<M, T: Encodable> Column<M, Vec<T>> {
             op: ArrayFilterOp::Contains,
             values: values.into_iter().map(|v| v.into().to_value()).collect(),
         })
+    }
+
+    /// Alias for [`contains`](Column::contains): column contains all given values.
+    pub fn has_every<V: Into<T>>(self, values: impl IntoIterator<Item = V>) -> Filter<M> {
+        self.contains(values)
     }
 
     /// `column <@ ARRAY[values]` (Postgres) or JSON array subset.
@@ -399,6 +434,31 @@ impl<M, T: Encodable> Column<M, Vec<T>> {
             column: self.column,
             op: ArrayFilterOp::Overlaps,
             values: values.into_iter().map(|v| v.into().to_value()).collect(),
+        })
+    }
+
+    /// Alias for [`overlaps`](Column::overlaps): column has at least one of the given values.
+    pub fn has_some<V: Into<T>>(self, values: impl IntoIterator<Item = V>) -> Filter<M> {
+        self.overlaps(values)
+    }
+
+    /// Array is empty (`cardinality(col) = 0` on Postgres / `JSON_LENGTH(col) = 0` on SQLite/MySQL).
+    pub fn is_empty(self) -> Filter<M> {
+        Filter::new(FilterNode::Array {
+            table: self.table,
+            column: self.column,
+            op: ArrayFilterOp::IsEmpty,
+            values: Vec::new(),
+        })
+    }
+
+    /// Array is not empty (`cardinality(col) > 0` on Postgres / `JSON_LENGTH(col) > 0` on SQLite/MySQL).
+    pub fn is_not_empty(self) -> Filter<M> {
+        Filter::new(FilterNode::Array {
+            table: self.table,
+            column: self.column,
+            op: ArrayFilterOp::IsNotEmpty,
+            values: Vec::new(),
         })
     }
 }

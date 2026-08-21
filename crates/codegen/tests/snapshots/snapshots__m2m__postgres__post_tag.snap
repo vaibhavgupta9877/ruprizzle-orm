@@ -576,6 +576,8 @@ impl ::ruprizzle::Model for PostTag {
     const TABLE: &'static str = "post_tags";
     const PRIMARY_KEY: &'static str = "post_id";
     const COLUMNS: &'static [&'static str] = &["post_id", "tag_id"];
+    const DELETED_AT_COLUMN: Option<&'static str> = None;
+    const UPDATED_AT_COLUMN: Option<&'static str> = None;
 }
 /// Table name for this model.
 pub const TABLE: &str = "post_tags";

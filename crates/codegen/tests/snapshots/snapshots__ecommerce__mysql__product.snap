@@ -474,6 +474,8 @@ impl ::ruprizzle::Model for Product {
     const TABLE: &'static str = "products";
     const PRIMARY_KEY: &'static str = "id";
     const COLUMNS: &'static [&'static str] = &["id", "sku", "name", "price"];
+    const DELETED_AT_COLUMN: Option<&'static str> = None;
+    const UPDATED_AT_COLUMN: Option<&'static str> = None;
 }
 /// Table name for this model.
 pub const TABLE: &str = "products";

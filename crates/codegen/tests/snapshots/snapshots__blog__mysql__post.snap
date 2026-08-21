@@ -633,6 +633,8 @@ impl ::ruprizzle::Model for Post {
         "author_id",
         "created_at",
     ];
+    const DELETED_AT_COLUMN: Option<&'static str> = None;
+    const UPDATED_AT_COLUMN: Option<&'static str> = None;
 }
 /// Table name for this model.
 pub const TABLE: &str = "posts";

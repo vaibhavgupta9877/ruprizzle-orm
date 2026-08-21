@@ -1264,20 +1264,70 @@ impl<'d> Compiler<'d> {
     /// Emit an array column predicate for the current dialect.
     fn push_array_op(&mut self, table: &str, column: &str, op: ArrayFilterOp, values: &[Value]) {
         match self.dialect.name() {
-            "postgres" => {
-                self.push_quoted(table);
-                self.push('.');
-                self.push_quoted(column);
-                self.push(' ');
-                self.push_str(match op {
-                    ArrayFilterOp::Contains => "@>",
-                    ArrayFilterOp::ContainedBy => "<@",
-                    ArrayFilterOp::Overlaps => "&&",
-                });
-                self.push(' ');
-                self.push_bind(Value::Array(values.to_vec()));
-            }
+            "postgres" => match op {
+                ArrayFilterOp::Has => {
+                    let val = values.first().cloned().unwrap_or(Value::Null);
+                    self.push_bind(val);
+                    self.push_str(" = ANY(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push(')');
+                }
+                ArrayFilterOp::Contains => {
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(" @> ");
+                    self.push_bind(Value::Array(values.to_vec()));
+                }
+                ArrayFilterOp::ContainedBy => {
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(" <@ ");
+                    self.push_bind(Value::Array(values.to_vec()));
+                }
+                ArrayFilterOp::Overlaps => {
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(" && ");
+                    self.push_bind(Value::Array(values.to_vec()));
+                }
+                ArrayFilterOp::IsEmpty => {
+                    self.push_str("(cardinality(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(") IS NULL OR cardinality(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(") = 0)");
+                }
+                ArrayFilterOp::IsNotEmpty => {
+                    self.push_str("cardinality(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(") > 0");
+                }
+            },
             "mysql" => match op {
+                ArrayFilterOp::Has => {
+                    self.push_str("JSON_CONTAINS(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(", ");
+                    if let Some(val) = values.first() {
+                        self.push_json_array(std::slice::from_ref(val));
+                    } else {
+                        self.push_str("JSON_ARRAY()");
+                    }
+                    self.push_str(", '$')");
+                }
                 ArrayFilterOp::Contains => {
                     self.push_str("JSON_CONTAINS(");
                     self.push_quoted(table);
@@ -1305,11 +1355,39 @@ impl<'d> Compiler<'d> {
                     self.push_json_array(values);
                     self.push_str(")");
                 }
+                ArrayFilterOp::IsEmpty => {
+                    self.push_str("(JSON_LENGTH(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(") IS NULL OR JSON_LENGTH(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(") = 0)");
+                }
+                ArrayFilterOp::IsNotEmpty => {
+                    self.push_str("JSON_LENGTH(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(") > 0");
+                }
             },
             _ => {
                 // SQLite and the Any fallback: the column stores a JSON array and we
                 // use the JSON1 `json_each` table-valued function.
                 match op {
+                    ArrayFilterOp::Has => {
+                        let val = values.first().cloned().unwrap_or(Value::Null);
+                        self.push_str("EXISTS (SELECT 1 FROM json_each(");
+                        self.push_quoted(table);
+                        self.push('.');
+                        self.push_quoted(column);
+                        self.push_str(") WHERE json_each.value = ");
+                        self.push_bind(val);
+                        self.push_str(")");
+                    }
                     ArrayFilterOp::Contains => {
                         if values.is_empty() {
                             self.push_str("1");
@@ -1368,7 +1446,57 @@ impl<'d> Compiler<'d> {
                         }
                         self.push_str("))");
                     }
+                    ArrayFilterOp::IsEmpty => {
+                        self.push_str("(json_array_length(");
+                        self.push_quoted(table);
+                        self.push('.');
+                        self.push_quoted(column);
+                        self.push_str(") IS NULL OR json_array_length(");
+                        self.push_quoted(table);
+                        self.push('.');
+                        self.push_quoted(column);
+                        self.push_str(") = 0)");
+                    }
+                    ArrayFilterOp::IsNotEmpty => {
+                        self.push_str("json_array_length(");
+                        self.push_quoted(table);
+                        self.push('.');
+                        self.push_quoted(column);
+                        self.push_str(") > 0");
+                    }
                 }
+            }
+        }
+    }
+
+    /// Emit a full-text search match predicate for the current dialect.
+    fn push_full_text_match(&mut self, table: &str, column: &str, query: &str) {
+        match self.dialect.name() {
+            "postgres" => {
+                self.push_str("to_tsvector('english', ");
+                self.push_quoted(table);
+                self.push('.');
+                self.push_quoted(column);
+                self.push_str(") @@ plainto_tsquery('english', ");
+                self.push_bind(Value::Str(query.to_string().into()));
+                self.push(')');
+            }
+            "mysql" => {
+                self.push_str("MATCH(");
+                self.push_quoted(table);
+                self.push('.');
+                self.push_quoted(column);
+                self.push_str(") AGAINST(");
+                self.push_bind(Value::Str(query.to_string().into()));
+                self.push_str(" IN NATURAL LANGUAGE MODE)");
+            }
+            _ => {
+                // SQLite: if FTS table/column is used with MATCH or fallback LIKE match
+                self.push_quoted(table);
+                self.push('.');
+                self.push_quoted(column);
+                self.push_str(" MATCH ");
+                self.push_bind(Value::Str(query.to_string().into()));
             }
         }
     }
@@ -1676,6 +1804,13 @@ impl<'d> Compiler<'d> {
                 values,
             } => {
                 self.push_array_op(table, column, *op, values);
+            }
+            FilterNode::FullTextMatch {
+                table,
+                column,
+                query,
+            } => {
+                self.push_full_text_match(table, column, query);
             }
         }
     }

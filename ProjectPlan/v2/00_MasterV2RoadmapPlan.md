@@ -45,26 +45,26 @@ graph TD
 
 ## 2. Complete Version Matrix & Implementation Plan Index
 
-| Version | Release Theme | Specification & Implementation Plan | Primary Crates Affected | SemVer Nature |
-|---|---|---|---|---|
-| **v1.1** | **Query Expressiveness, Arrays & Search** | [`02_PostgresArraysAndRichTypesPlan.md`](02_PostgresArraysAndRichTypesPlan.md)<br>[`11_FullTextSearchAndSoftDeletesPlan.md`](11_FullTextSearchAndSoftDeletesPlan.md) | `core`, `dialect`, `runtime` | Additive (Minor) |
-| **v1.2** | **Developer Tooling, CI & Fixtures** | [`03_OfflineQueryCheckingPlan.md`](03_OfflineQueryCheckingPlan.md)<br>[`04_Lsp2AndDeveloperToolingPlan.md`](04_Lsp2AndDeveloperToolingPlan.md) | `check`, `lsp`, `cli`, `editor/vscode` | Additive (Minor) |
-| **v1.3** | **Advanced Relations, Trees & Nested Writes** | [`12_NestedWritesAndTreeHierarchiesPlan.md`](12_NestedWritesAndTreeHierarchiesPlan.md) | `core`, `parser`, `codegen`, `runtime` | Additive (Minor) |
-| **v1.4** | **Observability, Routing & Geospatial** | [`05_OpenTelemetryAndMetrics2Plan.md`](05_OpenTelemetryAndMetrics2Plan.md)<br>[`09_PrimaryReadReplicaRoutingPlan.md`](09_PrimaryReadReplicaRoutingPlan.md)<br>[`13_QueryCachingAndPostGISPlan.md`](13_QueryCachingAndPostGISPlan.md) | `runtime`, `core`, `dialect` | Additive (Minor) |
-| **v1.5** | **The Visual Workbench & Edge Adapters** | [`06_RuprizzleStudioPlan.md`](06_RuprizzleStudioPlan.md)<br>[`08_EdgeAndServerlessAdaptersPlan.md`](08_EdgeAndServerlessAdaptersPlan.md) | `cli`, `editor/studio`, `crates/turso`, `crates/d1`, `crates/neon` | Additive (Minor) |
-| **v2.0** | **Modern Data Platform, AI & Security** | [`01_DependencyModernizationPlan.md`](01_DependencyModernizationPlan.md)<br>[`07_AiVectorSearchPlan.md`](07_AiVectorSearchPlan.md)<br>[`10_RowLevelSecurityAndMultiTenancyPlan.md`](10_RowLevelSecurityAndMultiTenancyPlan.md) | Workspace-wide (`runtime`, `core`, `parser`, `migrate`) | Major (Breaking) |
+| Version | Release Theme | Specification & Implementation Plan | Primary Crates Affected | SemVer Nature | Status |
+|---|---|---|---|---|---|
+| **v1.1** | **Query Expressiveness, Arrays & Search** | [`02_PostgresArraysAndRichTypesPlan.md`](02_PostgresArraysAndRichTypesPlan.md)<br>[`11_FullTextSearchAndSoftDeletesPlan.md`](11_FullTextSearchAndSoftDeletesPlan.md) | `core`, `parser`, `dialect`, `runtime`, `codegen` | Additive (Minor) | **Completed** |
+| **v1.2** | **Developer Tooling, CI & Fixtures** | [`03_OfflineQueryCheckingPlan.md`](03_OfflineQueryCheckingPlan.md)<br>[`04_Lsp2AndDeveloperToolingPlan.md`](04_Lsp2AndDeveloperToolingPlan.md) | `check`, `lsp`, `cli`, `editor/vscode` | Additive (Minor) | Planned |
+| **v1.3** | **Advanced Relations, Trees & Nested Writes** | [`12_NestedWritesAndTreeHierarchiesPlan.md`](12_NestedWritesAndTreeHierarchiesPlan.md) | `core`, `parser`, `codegen`, `runtime` | Additive (Minor) | Planned |
+| **v1.4** | **Observability, Routing & Geospatial** | [`05_OpenTelemetryAndMetrics2Plan.md`](05_OpenTelemetryAndMetrics2Plan.md)<br>[`09_PrimaryReadReplicaRoutingPlan.md`](09_PrimaryReadReplicaRoutingPlan.md)<br>[`13_QueryCachingAndPostGISPlan.md`](13_QueryCachingAndPostGISPlan.md) | `runtime`, `core`, `dialect` | Additive (Minor) | Planned |
+| **v1.5** | **The Visual Workbench & Edge Adapters** | [`06_RuprizzleStudioPlan.md`](06_RuprizzleStudioPlan.md)<br>[`08_EdgeAndServerlessAdaptersPlan.md`](08_EdgeAndServerlessAdaptersPlan.md) | `cli`, `editor/studio`, `crates/turso`, `crates/d1`, `crates/neon` | Additive (Minor) | Planned |
+| **v2.0** | **Modern Data Platform, AI & Security** | [`01_DependencyModernizationPlan.md`](01_DependencyModernizationPlan.md)<br>[`07_AiVectorSearchPlan.md`](07_AiVectorSearchPlan.md)<br>[`10_RowLevelSecurityAndMultiTenancyPlan.md`](10_RowLevelSecurityAndMultiTenancyPlan.md) | Workspace-wide (`runtime`, `core`, `parser`, `migrate`) | Major (Breaking) | Planned |
 
 ---
 
 ## 3. Detailed Version Milestones & Release Breakdown
 
-### 🎯 v1.1.0 — Query Expressiveness, Rich Types & Search
+### 🎯 v1.1.0 — Query Expressiveness, Rich Types & Search (COMPLETED)
 - **Deliverables:**
-  - Postgres array bind values and typed operators (`.has()`, `.has_every()`, `.has_some()`, `.is_empty()`).
-  - Full-Text Search (FTS) across PostgreSQL (GIN/tsvector), SQLite (FTS5), and MySQL (FULLTEXT) with `.matches()` and `.with_rank()`.
+  - Postgres array bind values and typed operators (`.has()`, `.has_every()`, `.has_some()`, `.is_empty()`, `.is_not_empty()`).
+  - Full-Text Search (FTS) across PostgreSQL (GIN/tsvector), SQLite (FTS5), and MySQL (FULLTEXT) with `.matches()`.
   - Declarative Soft Deletes (`@deletedAt`) with automatic query filtering, `.with_deleted()`, `.only_deleted()`, and `.soft_delete()`.
   - Automatic audit timestamps (`@createdAt`, `@updatedAt`).
-- **Exit Gate:** 100% green tests on Postgres, SQLite, and MySQL; zero breaking changes to existing 1.0 code.
+- **Exit Gate:** 100% green tests on Postgres, SQLite, and MySQL; zero breaking changes to existing 1.0 code. Status: **VERIFIED & COMPLETED**.
 
 ### 🎯 v1.2.0 — Zero-DB CI Intelligence & Developer Tooling
 - **Deliverables:**

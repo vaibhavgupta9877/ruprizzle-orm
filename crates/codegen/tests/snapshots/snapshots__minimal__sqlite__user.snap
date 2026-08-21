@@ -395,6 +395,8 @@ impl ::ruprizzle::Model for User {
     const TABLE: &'static str = "users";
     const PRIMARY_KEY: &'static str = "id";
     const COLUMNS: &'static [&'static str] = &["id", "email", "name"];
+    const DELETED_AT_COLUMN: Option<&'static str> = None;
+    const UPDATED_AT_COLUMN: Option<&'static str> = None;
 }
 /// Table name for this model.
 pub const TABLE: &str = "users";

@@ -593,6 +593,28 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
 
     let aggregate_tokens = emit_aggregate_structs(schema, model);
 
+    let deleted_at_col = model
+        .fields
+        .values()
+        .find(|f| f.attrs.is_deleted_at)
+        .map(|f| f.column.as_str());
+
+    let deleted_at_tokens = match deleted_at_col {
+        Some(c) => quote! { Some(#c) },
+        None => quote! { None },
+    };
+
+    let updated_at_col = model
+        .fields
+        .values()
+        .find(|f| f.attrs.is_updated_at)
+        .map(|f| f.column.as_str());
+
+    let updated_at_tokens = match updated_at_col {
+        Some(c) => quote! { Some(#c) },
+        None => quote! { None },
+    };
+
     let header = header();
     let tokens = quote! {
         #header
@@ -744,6 +766,8 @@ fn model_rs(schema: &Schema, model: &Model) -> String {
             const TABLE: &'static str = #table;
             const PRIMARY_KEY: &'static str = #primary_key;
             const COLUMNS: &'static [&'static str] = &[ #( #columns ),* ];
+            const DELETED_AT_COLUMN: Option<&'static str> = #deleted_at_tokens;
+            const UPDATED_AT_COLUMN: Option<&'static str> = #updated_at_tokens;
         }
 
         /// Table name for this model.

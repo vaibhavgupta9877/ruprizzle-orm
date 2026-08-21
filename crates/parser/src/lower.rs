@@ -400,6 +400,8 @@ fn lower_field(
         is_id: decl.has_attr("id"),
         is_unique: decl.has_attr("unique"),
         is_updated_at: decl.has_attr("updatedAt"),
+        is_created_at: decl.has_attr("createdAt"),
+        is_deleted_at: decl.has_attr("deletedAt"),
         ignore: decl.has_attr("ignore"),
         native_type: native_type(decl),
         renamed_from: decl
@@ -566,6 +568,27 @@ fn check_attribute_targets(decl: &FieldDecl, kind: &FieldKind, diags: &mut Diagn
             found: described.clone(),
             advice: Some("`@updatedAt` stamps a timestamp, so it needs a `DateTime` field".into()),
             span: decl.attr("updatedAt").map_or(decl.span, |a| a.span).into(),
+        });
+    }
+
+    if decl.has_attr("createdAt") && !matches!(kind, FieldKind::Scalar(ScalarType::DateTime)) {
+        diags.push(SchemaError::InvalidAttributeTarget {
+            attribute: "createdAt".to_owned(),
+            found: described.clone(),
+            advice: Some("`@createdAt` stamps a timestamp, so it needs a `DateTime` field".into()),
+            span: decl.attr("createdAt").map_or(decl.span, |a| a.span).into(),
+        });
+    }
+
+    if decl.has_attr("deletedAt") && !matches!(kind, FieldKind::Scalar(ScalarType::DateTime)) {
+        diags.push(SchemaError::InvalidAttributeTarget {
+            attribute: "deletedAt".to_owned(),
+            found: described.clone(),
+            advice: Some(
+                "`@deletedAt` stamps a soft-delete timestamp, so it needs a `DateTime?` field"
+                    .into(),
+            ),
+            span: decl.attr("deletedAt").map_or(decl.span, |a| a.span).into(),
         });
     }
 
