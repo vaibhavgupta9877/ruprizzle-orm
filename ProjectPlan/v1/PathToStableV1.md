@@ -74,7 +74,7 @@ fastest `bulk_insert_1000` at 1,383 µs (prax 1,059, Diesel 6,690, Prisma 14,142
 7,553 µs versus Sea-ORM 20,857 and Prisma 40,867. **Performance is not this plan's problem.**
 Every workstream below is capability, operability, or assurance.
 
-> **Current position (2026-08-18):** `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo deny check advisories`, and `cargo xtask harden` all pass. Unit tests and SQLite/MySQL/Postgres integration tests pass. W0–W4 (W4-02 waived on accepted 15.56 h / 1.46 B ops / 0 errors soak evidence), W5-01 through W5-06, W5-07 (LSP), and compile-time query checking (`ruprizzle check` in `crates/check`) are functionally complete and tested. The remaining open work is the release process: W6-04 (cut `1.0.0-rc.1`), W6-05 (rescoring against the RC), and the release-automation exercise.
+> **Current position (2026-08-21):** `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'`, `cargo deny check advisories`, and `cargo xtask harden` all pass. A pre-RC production-readiness re-score of **91 / 100** is recorded in `ProjectPlan/ProductionReadiness.md` §15. W0–W4 (W4-02 waived on accepted 15.56 h / 1.46 B ops / 0 errors soak evidence), W5-01 through W5-06, W5-07 (LSP), and compile-time query checking (`ruprizzle check` in `crates/check`) are functionally complete and tested. The remaining open work is the release process: W6-04 (cut/push `1.0.0-rc.1`), W6-05 (rescoring against the published RC), and the release-automation exercise.
 
 ---
 

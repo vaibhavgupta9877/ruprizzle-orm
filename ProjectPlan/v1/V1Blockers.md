@@ -1,6 +1,6 @@
 # ruprizzle-orm v1.0.0 readiness analysis
 
-**Date:** 2026-08-18 (updated)  
+**Date:** 2026-08-21 (updated)  
 **Branch:** `dev-v0-2`  
 **HEAD:** current `dev-v0-2`  
 **Workspace version:** `1.0.0-rc.1`  
@@ -19,10 +19,10 @@ The code is feature-rich and the workstreams up through W5 (including W5-07 LSP 
 - `cargo xtask harden` **passes**.
 - `cargo deny check advisories` **passes** (with a documented exception for `RUSTSEC-2023-0071` because no patched `rsa` release is available).
 - `cargo doc --workspace --no-deps` **passes** without warnings.
-- No `1.0.0-rc.1` tag exists and no RC feedback window has been run — and `ProjectPlan/v1/PathToStableV1.md` explicitly forbids skipping that.
+- A local `1.0.0-rc.1` tag exists but is 20+ commits behind `dev-v0-2` HEAD; no RC feedback window has been run — and `ProjectPlan/v1/PathToStableV1.md` explicitly forbids skipping that.
 - The W4-02 48-hour `rusqlite` soak has been **waived**. The resumable segmented soak accumulated **15.56 h (56,028.6 s), 1,464,277,925 operations, and 0 errors** before the maintainer accepted the evidence and stopped the remaining 32.4 % of the 48-hour target. The earlier 47-minute and ~11-hour failures were due to SQLite lock-contention and Windows `disk I/O error` / `os error 1450` events; the root cause (WAL mode, 60-second busy timeout, Condvar checkout, `spawn_blocking`, and non-panicking log writes) is fixed. 60-second and 1-hour validation runs remain clean. See `docs/SoakReport.md`.
 
-The workspace version is `1.0.0-rc.1`; the tag and crates.io publish are pending the W6-04 release-candidate cut and W6-05 re-scoring. The W4-02 48-hour soak is waived.
+The workspace version is `1.0.0-rc.1`; the tag should be moved to current HEAD and crates.io publish is pending the W6-04 release-candidate cut and W6-05 re-scoring. The W4-02 48-hour soak is waived. The pre-RC production-readiness score has been re-scored to **91 / 100** (`ProjectPlan/ProductionReadiness.md` §15) while the RC feedback window is still pending.
 
 ---
 
@@ -45,10 +45,10 @@ The workspace version is `1.0.0-rc.1`; the tag and crates.io publish are pending
 |------|--------------|
 | Version | `1.0.0-rc.1` (`Cargo.toml` workspace package) |
 | Branch | `dev-v0-2` |
-| Tags | none (no `1.0.0-rc.1`) |
-| Production-readiness score (last self-assessment) | **82 / 100** at `7636f44` (`ProjectPlan/ProductionReadiness.md`); rescoring is pending `1.0.0-rc.1` |
+| Tags | local `1.0.0-rc.1` exists but is 20+ commits behind HEAD; not pushed to `origin` |
+| Production-readiness score (last self-assessment) | **91 / 100** pre-RC (`ProjectPlan/ProductionReadiness.md` §15); final rescoring (≥ 92) is pending `1.0.0-rc.1` on crates.io and the RC feedback window |
 | Plan status | W0–W5 marked complete; W4-02 48-hour soak **waived** after 15.56 h / 1.46 B ops / 0 errors; W6-04/W6-05 (RC tag + final assessment) still to execute (`ProjectPlan/v1/PathToStableV1.md`) |
-| Tests (live, excluding stale integration test) | **all green** — `cargo xtask harden` passes; `cargo test -p ruprizzle --test soak --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'` with `RUPRIZZLE_TEST_RUSQLITE=1` passes for 60 s (2.6 M ops) and 1 h (84.2 M ops, 0 errors); the W4-02 48-hour soak is **waived** after a resumable segmented run reached 15.56 h / 1.46 B ops / 0 errors |
+| Tests (live) | **all green** — `cargo test --workspace`, `cargo test -p ruprizzle-integration-tests`, and `cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'` all pass; the W4-02 48-hour soak is **waived** after a resumable segmented run reached 15.56 h / 1.46 B ops / 0 errors |
 | `cargo fmt --all --check` | **passes** |
 | `cargo clippy --workspace --all-targets` | **passes** |
 | `cargo xtask harden` | **passes** |

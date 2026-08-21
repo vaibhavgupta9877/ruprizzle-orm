@@ -34,8 +34,8 @@
 | Phase 1 — Version/stale-claim cleanup | completed | README.md, docs/README.md, announcement, FAQ, SUMMARY, book.toml, Operations, CHANGELOG updated to 1.0.0-rc.1. |
 | Phase 2 — Core usage guides | completed | QueryGuide.md and RelationsGuide.md expanded with all required sections and snippets. |
 | Phase 3 — Runnable example project | completed | `examples/blog/` created with Cargo.toml, .env.example, README, and src/main.rs. |
-| Phase 4 — Doc verification | completed | `mdbook build`, `cargo doc`, `cargo xtask fmt`, and `cargo xtask lint` pass. `cargo xtask test` blocked by an environmental Postgres `No space left on device` failure; Rust unit tests pass. |
-| Phase 5 — Release finalization | pending | blocked on rescoring, RC publish, and GA cut; the 48-hour W4-02 soak is waived. |
+| Phase 4 — Doc verification | completed | `mdbook build`, `cargo doc`, `cargo xtask fmt`, `cargo xtask lint`, `cargo xtask test`, and `cargo xtask harden` all pass on `dev-v0-2`. |
+| Phase 5 — Release finalization | pending | blocked on RC publish, two-week feedback window, final rescoring (≥ 92/100), and GA cut; the 48-hour W4-02 soak is waived. |
 
 ---
 
