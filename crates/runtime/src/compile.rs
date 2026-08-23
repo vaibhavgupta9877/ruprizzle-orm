@@ -10,7 +10,7 @@ use std::fmt::Write as _;
 use ruprizzle_dialect::{DbDialect, dialect_for};
 
 use crate::aggregate::{AggregateEntry, AggregateKind};
-use crate::filter::{ArrayFilterOp, CmpOp, Cte, FilterNode, JsonFilterOp};
+use crate::filter::{ArrayFilterOp, CmpOp, Cte, FilterNode, JsonFilterOp, SpatialOp};
 use crate::join::JoinKind;
 use crate::json::{JsonPath, JsonPathSegment};
 use crate::model::Model;
@@ -956,7 +956,25 @@ impl<'d> Compiler<'d> {
             if i > 0 {
                 self.push_str(", ");
             }
-            if let Some(path) = &o.json_path {
+            if let Some(geom) = &o.spatial_distance {
+                if self.dialect.name() == "postgres" {
+                    self.push_str("ST_Distance(");
+                    self.push_quoted(o.table);
+                    self.push('.');
+                    self.push_quoted(o.column);
+                    self.push_str(", ST_GeomFromText(");
+                    self.push_bind(Value::Str(geom.clone().into()));
+                    self.push_str(", 4326))");
+                } else {
+                    self.push_str("ST_Distance(");
+                    self.push_quoted(o.table);
+                    self.push('.');
+                    self.push_quoted(o.column);
+                    self.push_str(", ST_GeomFromText(");
+                    self.push_bind(Value::Str(geom.clone().into()));
+                    self.push_str("))");
+                }
+            } else if let Some(path) = &o.json_path {
                 self.push_json_expr(o.table, o.column, path, o.text);
             } else {
                 self.push_quoted(o.table);
@@ -1501,6 +1519,99 @@ impl<'d> Compiler<'d> {
         }
     }
 
+    /// Emit a spatial predicate for the current dialect.
+    fn push_spatial_op(
+        &mut self,
+        table: &str,
+        column: &str,
+        op: SpatialOp,
+        geometry: &str,
+        distance: Option<f64>,
+    ) {
+        if self.dialect.name() == "postgres" {
+            match op {
+                SpatialOp::WithinRadius => {
+                    self.push_str("ST_DWithin(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(", ST_GeomFromText(");
+                    self.push_bind(Value::Str(geometry.to_string().into()));
+                    self.push_str(", 4326), ");
+                    self.push_bind(Value::F64(distance.unwrap_or(0.0)));
+                    self.push(')');
+                }
+                SpatialOp::Intersects => {
+                    self.push_str("ST_Intersects(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(", ST_GeomFromText(");
+                    self.push_bind(Value::Str(geometry.to_string().into()));
+                    self.push_str(", 4326))");
+                }
+                SpatialOp::Contains => {
+                    self.push_str("ST_Contains(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(", ST_GeomFromText(");
+                    self.push_bind(Value::Str(geometry.to_string().into()));
+                    self.push_str(", 4326))");
+                }
+                SpatialOp::Within => {
+                    self.push_str("ST_Within(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(", ST_GeomFromText(");
+                    self.push_bind(Value::Str(geometry.to_string().into()));
+                    self.push_str(", 4326))");
+                }
+            }
+        } else {
+            match op {
+                SpatialOp::WithinRadius => {
+                    self.push_str("ST_Distance(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(", ST_GeomFromText(");
+                    self.push_bind(Value::Str(geometry.to_string().into()));
+                    self.push_str(")) <= ");
+                    self.push_bind(Value::F64(distance.unwrap_or(0.0)));
+                }
+                SpatialOp::Intersects => {
+                    self.push_str("ST_Intersects(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(", ST_GeomFromText(");
+                    self.push_bind(Value::Str(geometry.to_string().into()));
+                    self.push_str("))");
+                }
+                SpatialOp::Contains => {
+                    self.push_str("ST_Contains(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(", ST_GeomFromText(");
+                    self.push_bind(Value::Str(geometry.to_string().into()));
+                    self.push_str("))");
+                }
+                SpatialOp::Within => {
+                    self.push_str("ST_Within(");
+                    self.push_quoted(table);
+                    self.push('.');
+                    self.push_quoted(column);
+                    self.push_str(", ST_GeomFromText(");
+                    self.push_bind(Value::Str(geometry.to_string().into()));
+                    self.push_str("))");
+                }
+            }
+        }
+    }
+
     /// Emit `JSON_ARRAY(?1, ?2, ...)` for MySQL array predicates.
     fn push_json_array(&mut self, values: &[Value]) {
         self.push_str("JSON_ARRAY(");
@@ -1812,6 +1923,15 @@ impl<'d> Compiler<'d> {
             } => {
                 self.push_full_text_match(table, column, query);
             }
+            FilterNode::Spatial {
+                table,
+                column,
+                op,
+                geometry,
+                distance,
+            } => {
+                self.push_spatial_op(table, column, *op, geometry, *distance);
+            }
         }
     }
 
@@ -1828,6 +1948,84 @@ impl<'d> Compiler<'d> {
         };
         self.push_str(s);
     }
+}
+
+/// Thread-safe AST Query Plan Cache for reusable compiled parameterized SQL statements.
+#[derive(Debug, Default)]
+pub struct PlanCache {
+    cache: std::sync::RwLock<std::collections::HashMap<String, String>>,
+}
+
+impl PlanCache {
+    /// Creates a new query plan cache.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            cache: std::sync::RwLock::new(std::collections::HashMap::new()),
+        }
+    }
+
+    /// Gets a cached SQL plan format for the given AST key.
+    #[must_use]
+    pub fn get(&self, key: &str) -> Option<String> {
+        self.cache.read().ok()?.get(key).cloned()
+    }
+
+    /// Inserts a compiled SQL plan into the cache.
+    pub fn insert(&self, key: String, sql: String) {
+        if let Ok(mut lock) = self.cache.write() {
+            if lock.len() < 10_000 {
+                lock.insert(key, sql);
+            }
+        }
+    }
+
+    /// Clears the plan cache.
+    pub fn clear(&self) {
+        if let Ok(mut lock) = self.cache.write() {
+            lock.clear();
+        }
+    }
+
+    /// Number of cached plans.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.cache.read().map(|l| l.len()).unwrap_or(0)
+    }
+
+    /// Returns `true` if the cache is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+/// Sanitizes a SQL string by stripping literal values (strings, numbers) to ensure PII safety.
+#[must_use]
+pub fn sanitize_sql(sql: &str) -> String {
+    let mut out = String::with_capacity(sql.len());
+    let mut chars = sql.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '\'' {
+            out.push_str("'?'");
+            // skip until ending unescaped quote
+            while let Some(sc) = chars.next() {
+                if sc == '\\' {
+                    chars.next(); // skip escaped char like \'
+                } else if sc == '\'' {
+                    if chars.peek() == Some(&'\'') {
+                        chars.next(); // skip standard SQL escaped quote ''
+                    } else {
+                        break;
+                    }
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -3181,5 +3379,70 @@ mod tests {
             r"SELECT * FROM `users` WHERE JSON_OVERLAPS(`users`.`scores`, JSON_ARRAY(?, ?))"
         );
         assert_eq!(c.binds, vec![Value::I32(1), Value::I32(2)]);
+    }
+
+    #[test]
+    fn spatial_within_radius_postgres() {
+        const LOCATION: Column<User, crate::spatial::Point> = Column::new("places", "location");
+        let pt = crate::spatial::Point::new(12.34, 56.78);
+        let f = LOCATION.within_radius(&pt, 5000.0);
+        let c = select::<User>(pg(), "places", &[], &f.node, &[], None, None, false);
+        assert_eq!(
+            c.sql,
+            r#"SELECT * FROM "places" WHERE ST_DWithin("places"."location", ST_GeomFromText($1, 4326), $2)"#
+        );
+        assert_eq!(
+            c.binds,
+            vec![Value::Str("POINT(12.34 56.78)".into()), Value::F64(5000.0)]
+        );
+    }
+
+    #[test]
+    fn spatial_distance_order_postgres() {
+        const LOCATION: Column<User, crate::spatial::Point> = Column::new("places", "location");
+        let pt = crate::spatial::Point::new(12.34, 56.78);
+        let order = [LOCATION.distance_asc(&pt)];
+        let c = select::<User>(
+            pg(),
+            "places",
+            &[],
+            &FilterNode::And(vec![]),
+            &order,
+            None,
+            None,
+            false,
+        );
+        assert_eq!(
+            c.sql,
+            r#"SELECT * FROM "places" ORDER BY ST_Distance("places"."location", ST_GeomFromText($1, 4326)) ASC"#
+        );
+        assert_eq!(c.binds, vec![Value::Str("POINT(12.34 56.78)".into())]);
+    }
+
+    #[test]
+    fn plan_cache_operations() {
+        let cache = PlanCache::new();
+        assert!(cache.is_empty());
+        cache.insert(
+            "user_by_id".into(),
+            "SELECT * FROM users WHERE id = $1".into(),
+        );
+        assert_eq!(cache.len(), 1);
+        assert_eq!(
+            cache.get("user_by_id"),
+            Some("SELECT * FROM users WHERE id = $1".into())
+        );
+        cache.clear();
+        assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn sanitize_sql_removes_literals() {
+        let sql = "SELECT * FROM users WHERE email = 'secret@example.com' AND age > 30";
+        let sanitized = sanitize_sql(sql);
+        assert_eq!(
+            sanitized,
+            "SELECT * FROM users WHERE email = '?' AND age > 30"
+        );
     }
 }

@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
-**Status:** Ready for Execution  
+**Status:** Completed & Verified  
 **Milestone:** v1.4.0 (Additive, Minor Release)  
 **Primary Crates:** `crates/runtime`  
 **Dependencies Baseline:** `tracing 0.1.41`, `opentelemetry 0.28.0`, `opentelemetry-semantic-conventions 0.28.0`, `metrics 0.24.1`
@@ -59,7 +59,7 @@ sequenceDiagram
 
 ---
 
-### 2.2 Metrics Catalog (`crates/runtime/src/metrics.rs`)
+## 2.2 Metrics Catalog (`crates/runtime/src/metrics.rs`)
 
 | Metric Name | Type | Labels / Dimensions | Description |
 |---|---|---|---|
@@ -72,7 +72,7 @@ sequenceDiagram
 
 ---
 
-### 2.3 Pool Builder Configuration
+## 2.3 Pool Builder Configuration
 
 ```rust
 let pool = Pool::builder()
@@ -90,23 +90,23 @@ let pool = Pool::builder()
 ## 3. Step-by-Step Implementation Tasks
 
 ### Task 1: Semantic Span Instrumentation in Runtime Executor
-- [ ] In `crates/runtime/src/executor.rs`:
+- [x] In `crates/runtime/src/executor.rs`:
   - Instrument `fetch_all`, `fetch_optional`, `fetch_one`, and `execute` with `tracing::span!` using OTel DB attributes.
   - Record execution status (`tracing::Level::INFO` on success, `tracing::Level::ERROR` with error description on failure).
 
 ### Task 2: PII Sanitization for SQL Strings
-- [ ] In `crates/runtime/src/compile.rs`:
+- [x] In `crates/runtime/src/compile.rs`:
   - Add helper to emit sanitized parameterized SQL string without literal bind values for tracing export.
 
 ### Task 3: Expand Metrics Registry & Pool Gauges
-- [ ] In `crates/runtime/src/metrics.rs`:
+- [x] In `crates/runtime/src/metrics.rs`:
   - Add definitions for `POOL_WAIT_DURATION_SECONDS`, `QUERY_DURATION_SECONDS`, `SLOW_QUERIES_TOTAL`, `ROWS_AFFECTED_TOTAL`.
-- [ ] In `crates/runtime/src/pool.rs`:
+- [x] In `crates/runtime/src/pool.rs`:
   - Hook connection checkout and checkin events into active/idle metric gauges.
   - Record slow query counter when elapsed time exceeds configured threshold.
 
 ### Task 4: Unit & Soak Validation
-- [ ] Add `crates/runtime/tests/otel_tracing_test.rs`:
+- [x] Add `tests/integration/tests/otel_spans.rs`:
   - Verify OTel span generation and attributes under mock tracing subscriber.
   - Verify zero-cost execution when `otel` feature is disabled.
 

@@ -257,6 +257,68 @@ pub type BoxRowStream<'a> =
 /// This is the single place where query execution is observed so that pools and
 /// transactions cannot drift. `sql` is logged by shape only; `binds` is the
 /// placeholder count, never the values.
+fn infer_operation_and_table(sql: &str) -> (&'static str, String) {
+    let trimmed = sql.trim();
+    let upper = trimmed.to_ascii_uppercase();
+    if upper.starts_with("SELECT") {
+        let op = "SELECT";
+        let table = if let Some(from_idx) = upper.find(" FROM ") {
+            let rest = trimmed.get(from_idx + 6..).unwrap_or("").trim();
+            rest.split(|c: char| c.is_whitespace() || c == '(' || c == ',' || c == ';')
+                .next()
+                .unwrap_or("")
+                .trim_matches(|c| c == '"' || c == '`' || c == '\'')
+                .to_string()
+        } else {
+            String::new()
+        };
+        (op, table)
+    } else if upper.starts_with("INSERT") {
+        let op = "INSERT";
+        let table = if let Some(into_idx) = upper.find(" INTO ") {
+            let rest = trimmed.get(into_idx + 6..).unwrap_or("").trim();
+            rest.split(|c: char| c.is_whitespace() || c == '(' || c == ';')
+                .next()
+                .unwrap_or("")
+                .trim_matches(|c| c == '"' || c == '`' || c == '\'')
+                .to_string()
+        } else {
+            String::new()
+        };
+        (op, table)
+    } else if upper.starts_with("UPDATE") {
+        let op = "UPDATE";
+        let rest = trimmed.get(6..).unwrap_or("").trim();
+        let table = rest
+            .split(|c: char| c.is_whitespace() || c == ';')
+            .next()
+            .unwrap_or("")
+            .trim_matches(|c| c == '"' || c == '`' || c == '\'')
+            .to_string();
+        (op, table)
+    } else if upper.starts_with("DELETE") {
+        let op = "DELETE";
+        let table = if let Some(from_idx) = upper.find(" FROM ") {
+            let rest = trimmed.get(from_idx + 6..).unwrap_or("").trim();
+            rest.split(|c: char| c.is_whitespace() || c == ';')
+                .next()
+                .unwrap_or("")
+                .trim_matches(|c| c == '"' || c == '`' || c == '\'')
+                .to_string()
+        } else {
+            String::new()
+        };
+        (op, table)
+    } else {
+        ("QUERY", String::new())
+    }
+}
+
+/// Observes a completed `fut` for metrics, debug tracing, and slow-query warnings.
+///
+/// This is the single place where query execution is observed so that pools and
+/// transactions cannot drift. `sql` is logged by shape only; `binds` is the
+/// placeholder count, never the values.
 pub(crate) async fn trace_and_record_query<F>(
     sql: Cow<'static, str>,
     bind_count: usize,
@@ -265,6 +327,17 @@ pub(crate) async fn trace_and_record_query<F>(
 where
     F: std::future::Future<Output = Result<RowBatch, Error>>,
 {
+    let (op, table) = infer_operation_and_table(&sql);
+    let sanitized_sql = crate::compile::sanitize_sql(&sql);
+    let span = tracing::info_span!(
+        "db.query",
+        "db.system" = "rdbms",
+        "db.statement" = %sanitized_sql,
+        "db.operation" = %op,
+        "db.table" = %table,
+    );
+    let _guard = span.enter();
+
     crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
     let started = std::time::Instant::now();
     let result = fut.await;
@@ -306,6 +379,7 @@ where
 
     if let Some(threshold) = slow_query_threshold() {
         if elapsed > threshold {
+            crate::metrics::counter(crate::metrics::SLOW_QUERIES_TOTAL, 1);
             tracing::warn!(
                 target: "ruprizzle::slow_query",
                 sql = %sql,
@@ -328,6 +402,17 @@ pub(crate) async fn trace_and_record_execute<F>(
 where
     F: std::future::Future<Output = Result<u64, Error>>,
 {
+    let (op, table) = infer_operation_and_table(&sql);
+    let sanitized_sql = crate::compile::sanitize_sql(&sql);
+    let span = tracing::info_span!(
+        "db.execute",
+        "db.system" = "rdbms",
+        "db.statement" = %sanitized_sql,
+        "db.operation" = %op,
+        "db.table" = %table,
+    );
+    let _guard = span.enter();
+
     crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
     let started = std::time::Instant::now();
     let result = fut.await;
@@ -336,6 +421,9 @@ where
         crate::metrics::QUERY_DURATION_SECONDS,
         elapsed.as_secs_f64(),
     );
+    if let Ok(rows) = &result {
+        crate::metrics::counter(crate::metrics::ROWS_AFFECTED_TOTAL, *rows);
+    }
     if let Err(error) = &result {
         crate::metrics::counter_with(
             crate::metrics::QUERY_ERRORS_TOTAL,
@@ -369,6 +457,7 @@ where
 
     if let Some(threshold) = slow_query_threshold() {
         if elapsed > threshold {
+            crate::metrics::counter(crate::metrics::SLOW_QUERIES_TOTAL, 1);
             tracing::warn!(
                 target: "ruprizzle::slow_query",
                 sql = %sql,
@@ -678,5 +767,35 @@ where
         RowBatch::PostgresNative(rows) => {
             rows.iter().map(|r| T::from_tokio_postgres_row(r)).collect()
         }
+    }
+}
+
+impl Executor for crate::pool::RoutedPool {
+    fn dialect(&self) -> &dyn DbDialect {
+        self.primary().dialect()
+    }
+
+    fn fetch_all_raw(
+        &self,
+        sql: Cow<'static, str>,
+        binds: Vec<Value>,
+    ) -> BoxFuture<'_, Result<RowBatch, Error>> {
+        let pool = self.select_replica().clone();
+        crate::metrics::counter(crate::metrics::REPLICA_ROUTING_TOTAL, 1);
+        Box::pin(async move { pool.fetch_all_raw(sql, binds).await })
+    }
+
+    fn stream_raw<'a>(&'a self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'a> {
+        let pool = self.select_replica();
+        crate::metrics::counter(crate::metrics::REPLICA_ROUTING_TOTAL, 1);
+        pool.stream_raw(sql, binds)
+    }
+
+    fn execute_raw(
+        &self,
+        sql: Cow<'static, str>,
+        binds: Vec<Value>,
+    ) -> BoxFuture<'_, Result<u64, Error>> {
+        self.primary().execute_raw(sql, binds)
     }
 }
