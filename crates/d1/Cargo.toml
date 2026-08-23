@@ -1,0 +1,31 @@
+[package]
+name        = "ruprizzle-d1"
+description = "Cloudflare D1 edge database adapter for the ruprizzle ORM"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+authors.workspace      = true
+homepage.workspace     = true
+readme                 = "README.md"
+documentation          = "https://docs.rs/ruprizzle-d1"
+keywords    = ["orm", "cloudflare", "d1", "sqlite", "edge", "wasm"]
+categories  = ["database", "wasm"]
+
+[dependencies]
+ruprizzle         = { workspace = true }
+ruprizzle-core    = { workspace = true }
+ruprizzle-dialect = { workspace = true }
+serde             = { workspace = true }
+serde_json        = { workspace = true }
+thiserror         = { workspace = true }
+tokio             = { workspace = true }
+futures-core      = "0.3"
+futures-util      = { version = "0.3", default-features = false, features = ["std", "alloc"] }
+
+[dev-dependencies]
+tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[package.metadata.docs.rs]
+all-features = true
