@@ -82,6 +82,8 @@ pub enum RowBatch {
     /// Rows from the native `tokio-postgres` backend.
     #[cfg(feature = "postgres-tokio-postgres")]
     PostgresNative(Vec<tokio_postgres::Row>),
+    /// Rows from edge and serverless adapters (Turso, Cloudflare D1, Neon).
+    Edge(Vec<std::collections::HashMap<String, Value>>),
 }
 
 impl RowBatch {
@@ -97,6 +99,7 @@ impl RowBatch {
             Self::Rusqlite(rows) => rows.is_empty(),
             #[cfg(feature = "postgres-tokio-postgres")]
             Self::PostgresNative(rows) => rows.is_empty(),
+            Self::Edge(rows) => rows.is_empty(),
         }
     }
 
@@ -112,6 +115,7 @@ impl RowBatch {
             Self::Rusqlite(rows) => rows.len(),
             #[cfg(feature = "postgres-tokio-postgres")]
             Self::PostgresNative(rows) => rows.len(),
+            Self::Edge(rows) => rows.len(),
         }
     }
 
@@ -129,6 +133,7 @@ impl RowBatch {
             (Self::Rusqlite(a), Self::Rusqlite(b)) => a.extend(b),
             #[cfg(feature = "postgres-tokio-postgres")]
             (Self::PostgresNative(a), Self::PostgresNative(b)) => a.extend(b),
+            (Self::Edge(a), Self::Edge(b)) => a.extend(b),
             _ => {
                 return Err(Error::Message(
                     "cannot merge row batches from different backends".into(),
@@ -136,6 +141,15 @@ impl RowBatch {
             }
         }
         Ok(())
+    }
+
+    /// Returns the edge rows if this batch was produced by an edge driver.
+    #[must_use]
+    pub fn as_edge_rows(&self) -> Option<&[std::collections::HashMap<String, Value>]> {
+        match self {
+            Self::Edge(rows) => Some(rows),
+            _ => None,
+        }
     }
 }
 
@@ -152,6 +166,7 @@ impl std::fmt::Debug for RowBatch {
             Self::PostgresNative(rows) => {
                 f.debug_tuple("PostgresNative").field(&rows.len()).finish()
             }
+            Self::Edge(rows) => f.debug_tuple("Edge").field(&rows.len()).finish(),
         }
     }
 }
@@ -246,6 +261,8 @@ pub enum RawRow {
     /// A row from the native `tokio-postgres` backend.
     #[cfg(feature = "postgres-tokio-postgres")]
     PostgresNative(tokio_postgres::Row),
+    /// A row from edge and serverless adapters (Turso, Cloudflare D1, Neon).
+    Edge(std::collections::HashMap<String, Value>),
 }
 
 /// A boxed stream of raw rows.
@@ -567,6 +584,9 @@ impl futures_core::Stream for DeferredRowStream<'_> {
                             .into_iter()
                             .map(RawRow::PostgresNative)
                             .collect::<Vec<_>>(),
+                        RowBatch::Edge(rows) => {
+                            rows.into_iter().map(RawRow::Edge).collect::<Vec<_>>()
+                        }
                     }
                     .into_iter();
                 }
@@ -767,6 +787,9 @@ where
         RowBatch::PostgresNative(rows) => {
             rows.iter().map(|r| T::from_tokio_postgres_row(r)).collect()
         }
+        RowBatch::Edge(_) => Err(Error::Message(
+            "RowBatch::Edge cannot be decoded via sqlx FromRow; use custom edge decoder or typed edge adapter".into(),
+        )),
     }
 }
 

@@ -734,6 +734,9 @@ where
                     crate::executor::RawRow::Rusqlite(r) => Out::from_owned_row(&r),
                     #[cfg(feature = "postgres-tokio-postgres")]
                     crate::executor::RawRow::PostgresNative(r) => Out::from_tokio_postgres_row(&r),
+                    crate::executor::RawRow::Edge(_) => Err(Error::Message(
+                        "RawRow::Edge cannot be streamed into sqlx FromRow; use custom edge decoder".into(),
+                    )),
                 })
             })
         })
