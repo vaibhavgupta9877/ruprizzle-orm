@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
-**Status:** Ready for Execution  
+**Status:** Completed & Verified  
 **Milestone:** v1.4.0 (Additive, Minor Release)  
 **Primary Crates:** `crates/runtime`
 
@@ -45,15 +45,12 @@ graph TD
 use std::time::Duration;
 use ruprizzle_runtime::pool::{RoutedPool, LoadBalancing};
 
-let pool = RoutedPool::builder()
-    .primary("postgres://writer.db.internal:5432/production")
-    .replica("postgres://reader-1.db.internal:5432/production")
-    .replica("postgres://reader-2.db.internal:5432/production")
+let pool = RoutedPool::builder(primary_pool)
+    .add_replica(replica_pool_1)
+    .add_replica(replica_pool_2)
     .load_balancing(LoadBalancing::LeastConnections)
-    .health_check_interval(Duration::from_secs(5))
-    .fallback_to_primary_on_error(true)
-    .build()
-    .await?;
+    .fallback_to_primary(true)
+    .build();
 
 // 1. Automatic Read Routing (Hits reader-1 or reader-2)
 let users = User::find_many().all(&pool).await?;
@@ -81,27 +78,27 @@ pool.transaction(|tx| async move {
 ## 3. Step-by-Step Implementation Tasks
 
 ### Task 1: Design `RoutedPool` Data Structure
-- [ ] In `crates/runtime/src/pool.rs`:
+- [x] In `crates/runtime/src/pool.rs`:
   - Implement `RoutedPool` containing one `primary: Arc<Pool>` and `replicas: Vec<Arc<Pool>>`.
   - Implement `LoadBalancing` algorithms (Round Robin with atomic counter, Least Connections using active connection gauge).
 
 ### Task 2: Implement Background Health Checker
-- [ ] In `crates/runtime/src/pool.rs`:
+- [x] In `crates/runtime/src/pool.rs`:
   - Spawn periodic background task sending lightweight ping queries (`SELECT 1`) to each replica.
   - Dynamically mark unhealthy replicas as disabled and trigger fallback to primary.
 
 ### Task 3: Automatic Query Routing Dispatch
-- [ ] In `crates/runtime/src/query.rs` & `executor.rs`:
+- [x] In `crates/runtime/src/query.rs` & `executor.rs`:
   - Add query intent flag to AST compilation (`QueryIntent::Read`, `QueryIntent::Write`, `QueryIntent::Transaction`).
   - Implement `.use_primary()` and `.use_replica()` builder methods.
   - Dispatch executor requests to appropriate sub-pool.
 
 ### Task 4: Transaction & Session Guardrails
-- [ ] In `crates/runtime/src/tx.rs`:
+- [x] In `crates/runtime/src/tx.rs`:
   - Ensure transaction handles always borrow from the primary connection pool.
 
 ### Task 5: Integration & Failover Testing
-- [ ] Add `crates/runtime/tests/replica_routing_test.rs`:
+- [x] Add `tests/integration/tests/replica_routing.rs`:
   - Test round-robin distribution across multiple replica mock pools.
   - Test write queries route strictly to primary.
   - Test automatic failover when replica connection is abruptly terminated.
