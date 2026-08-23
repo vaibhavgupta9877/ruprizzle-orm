@@ -23,6 +23,9 @@ ruprizzle         = { path = "crates/runtime", version = "1.0.0" }
 ruprizzle-testkit = { path = "crates/testkit", version = "1.0.0" }
 ruprizzle-lsp     = { path = "crates/lsp",     version = "1.0.0" }
 ruprizzle-check   = { path = "crates/check",   version = "1.0.0" }
+ruprizzle-turso   = { path = "crates/turso",   version = "1.0.0" }
+ruprizzle-d1      = { path = "crates/d1",      version = "1.0.0" }
+ruprizzle-neon    = { path = "crates/neon",    version = "1.0.0" }
 
 # --- external ---
 pest         = "2.8"
