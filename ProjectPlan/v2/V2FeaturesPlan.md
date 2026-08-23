@@ -64,15 +64,15 @@ All detailed, task-by-task engineering plans are recorded as markdown files with
 3. [**`02_PostgresArraysAndRichTypesPlan.md`**](02_PostgresArraysAndRichTypesPlan.md) — Postgres Array Bind Values & Rich Native Types [Target: **v1.1** — **COMPLETED**]
 4. [**`03_OfflineQueryCheckingPlan.md`**](03_OfflineQueryCheckingPlan.md) — Offline / Compile-Time Query Verification (`ruprizzle check`) [Target: **v1.2** — **COMPLETED**]
 5. [**`04_Lsp2AndDeveloperToolingPlan.md`**](04_Lsp2AndDeveloperToolingPlan.md) — Ruprizzle LSP 2.0 & Developer Tooling [Target: **v1.2** — **COMPLETED**]
-6. [**`05_OpenTelemetryAndMetrics2Plan.md`**](05_OpenTelemetryAndMetrics2Plan.md) — OpenTelemetry Semantic DB Spans & Prometheus Metrics 2.0 [Target: **v1.4**]
+6. [**`05_OpenTelemetryAndMetrics2Plan.md`**](05_OpenTelemetryAndMetrics2Plan.md) — OpenTelemetry Semantic DB Spans & Prometheus Metrics 2.0 [Target: **v1.4** — **COMPLETED**]
 7. [**`06_RuprizzleStudioPlan.md`**](06_RuprizzleStudioPlan.md) — Ruprizzle Studio Embedded Visual Data & Schema Workbench [Target: **v1.5**]
 8. [**`07_AiVectorSearchPlan.md`**](07_AiVectorSearchPlan.md) — AI & Vector Search (`pgvector` & `sqlite-vec`) [Target: **v2.0**]
 9. [**`08_EdgeAndServerlessAdaptersPlan.md`**](08_EdgeAndServerlessAdaptersPlan.md) — Edge & Serverless Database Adapters (Turso, D1, Neon) [Target: **v1.5**]
-10. [**`09_PrimaryReadReplicaRoutingPlan.md`**](09_PrimaryReadReplicaRoutingPlan.md) — Primary / Read-Replica Connection Routing [Target: **v1.4**]
+10. [**`09_PrimaryReadReplicaRoutingPlan.md`**](09_PrimaryReadReplicaRoutingPlan.md) — Primary / Read-Replica Connection Routing [Target: **v1.4** — **COMPLETED**]
 11. [**`10_RowLevelSecurityAndMultiTenancyPlan.md`**](10_RowLevelSecurityAndMultiTenancyPlan.md) — Row-Level Security (RLS) & Multi-Tenant Primitives [Target: **v2.0**]
 12. [**`11_FullTextSearchAndSoftDeletesPlan.md`**](11_FullTextSearchAndSoftDeletesPlan.md) — Full-Text Search, Soft Deletes & Audit Timestamps [Target: **v1.1** — **COMPLETED**]
 13. [**`12_NestedWritesAndTreeHierarchiesPlan.md`**](12_NestedWritesAndTreeHierarchiesPlan.md) — Advanced Relations, Tree Hierarchies & Nested Writes [Target: **v1.3** — **COMPLETED**]
-14. [**`13_QueryCachingAndPostGISPlan.md`**](13_QueryCachingAndPostGISPlan.md) — Query Result & Plan Caching, PostGIS Geospatial [Target: **v1.4**]
+14. [**`13_QueryCachingAndPostGISPlan.md`**](13_QueryCachingAndPostGISPlan.md) — Query Result & Plan Caching, PostGIS Geospatial [Target: **v1.4** — **COMPLETED**]
 15. [**`14_CompetitiveAnalysisAndMarketGains.md`**](14_CompetitiveAnalysisAndMarketGains.md) — Comprehensive Competitive Analysis & Strategic Market Gains
 
 ---
