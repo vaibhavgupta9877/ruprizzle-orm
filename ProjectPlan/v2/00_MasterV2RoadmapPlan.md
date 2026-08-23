@@ -50,7 +50,7 @@ graph TD
 | **v1.1** | **Query Expressiveness, Arrays & Search** | [`02_PostgresArraysAndRichTypesPlan.md`](02_PostgresArraysAndRichTypesPlan.md)<br>[`11_FullTextSearchAndSoftDeletesPlan.md`](11_FullTextSearchAndSoftDeletesPlan.md) | `core`, `parser`, `dialect`, `runtime`, `codegen` | Additive (Minor) | **Completed** |
 | **v1.2** | **Developer Tooling, CI & Fixtures** | [`03_OfflineQueryCheckingPlan.md`](03_OfflineQueryCheckingPlan.md)<br>[`04_Lsp2AndDeveloperToolingPlan.md`](04_Lsp2AndDeveloperToolingPlan.md) | `check`, `lsp`, `cli`, `editor/vscode` | Additive (Minor) | **Completed** |
 | **v1.3** | **Advanced Relations, Trees & Nested Writes** | [`12_NestedWritesAndTreeHierarchiesPlan.md`](12_NestedWritesAndTreeHierarchiesPlan.md) | `core`, `parser`, `codegen`, `runtime` | Additive (Minor) | **Completed** |
-| **v1.4** | **Observability, Routing & Geospatial** | [`05_OpenTelemetryAndMetrics2Plan.md`](05_OpenTelemetryAndMetrics2Plan.md)<br>[`09_PrimaryReadReplicaRoutingPlan.md`](09_PrimaryReadReplicaRoutingPlan.md)<br>[`13_QueryCachingAndPostGISPlan.md`](13_QueryCachingAndPostGISPlan.md) | `runtime`, `core`, `dialect` | Additive (Minor) | Planned |
+| **v1.4** | **Observability, Routing & Geospatial** | [`05_OpenTelemetryAndMetrics2Plan.md`](05_OpenTelemetryAndMetrics2Plan.md)<br>[`09_PrimaryReadReplicaRoutingPlan.md`](09_PrimaryReadReplicaRoutingPlan.md)<br>[`13_QueryCachingAndPostGISPlan.md`](13_QueryCachingAndPostGISPlan.md) | `runtime`, `core`, `dialect` | Additive (Minor) | **Completed** |
 | **v1.5** | **The Visual Workbench & Edge Adapters** | [`06_RuprizzleStudioPlan.md`](06_RuprizzleStudioPlan.md)<br>[`08_EdgeAndServerlessAdaptersPlan.md`](08_EdgeAndServerlessAdaptersPlan.md) | `cli`, `editor/studio`, `crates/turso`, `crates/d1`, `crates/neon` | Additive (Minor) | Planned |
 | **v2.0** | **Modern Data Platform, AI & Security** | [`01_DependencyModernizationPlan.md`](01_DependencyModernizationPlan.md)<br>[`07_AiVectorSearchPlan.md`](07_AiVectorSearchPlan.md)<br>[`10_RowLevelSecurityAndMultiTenancyPlan.md`](10_RowLevelSecurityAndMultiTenancyPlan.md) | Workspace-wide (`runtime`, `core`, `parser`, `migrate`) | Major (Breaking) | Planned |
 
@@ -82,13 +82,13 @@ graph TD
   - Polymorphic column filtering (`.filter_type()`).
 - **Exit Gate:** Nested mutations and tree queries pass unit and integration tests across arbitrary relational graph depths. Status: **VERIFIED & COMPLETED**.
 
-### 🎯 v1.4.0 — Production Observability, Caching & Scaled Data Routing
+### 🎯 v1.4.0 — Production Observability, Caching & Scaled Data Routing (COMPLETED)
 - **Deliverables:**
   - OpenTelemetry 2.0 semantic database spans (`db.system`, `db.statement.sanitized`, `db.operation`) and Prometheus metrics exporter (`ruprizzle_pool_connections_active`, `ruprizzle_query_duration_seconds`).
   - Primary / Read-Replica connection pool manager (`RoutedPool`) with automatic `SELECT` load balancing, primary write routing, and health failover.
   - Query result caching (in-memory LRU + Redis) with automatic mutation invalidation, plus AST query plan caching.
   - PostGIS geospatial scalar types (`Point`, `Polygon`, `MultiPolygon`) and spatial distance queries (`.within_radius()`, `.distance_to()`).
-- **Exit Gate:** OTel spans conform to OpenTelemetry DB semantic conventions; read replicas distribute queries under high load soak tests.
+- **Exit Gate:** OTel spans conform to OpenTelemetry DB semantic conventions; read replicas distribute queries under high load soak tests. Status: **VERIFIED & COMPLETED**.
 
 ### 🎯 v1.5.0 — Ruprizzle Studio & Edge Database Adapters
 - **Deliverables:**
