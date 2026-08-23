@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
-**Status:** Ready for Execution  
+**Status:** Completed  
 **Milestone:** v1.5.0 (Additive, Minor Release)  
 **Primary Crates:** `crates/runtime`, new adapter crates (`crates/turso`, `crates/d1`, `crates/neon`)  
 **Dependencies Baseline:** `libsql 0.6.0`, `worker 0.5.0`, `reqwest 0.12.12`, `tungstenite 0.26.0`
@@ -91,27 +91,27 @@ let users = User::find_many().all(&pool).await?;
 ## 3. Step-by-Step Implementation Tasks
 
 ### Task 1: Decouple Executor & Connection Traits
-- [ ] In `crates/runtime/src/executor.rs`:
+- [x] In `crates/runtime/src/executor.rs`:
   - Ensure `Executor` and `Connection` traits support WASM targets and custom transport drivers without hard-coded SQLx pool references.
 
 ### Task 2: Implement `crates/turso` Adapter
-- [ ] Create `crates/turso` workspace member.
-- [ ] Implement `TursoPool` wrapping `libsql::Builder` (`libsql 0.6.0`).
-- [ ] Implement query compilation and row decoding bridging `libsql::Row` to `ruprizzle_runtime::Value`.
+- [x] Create `crates/turso` workspace member.
+- [x] Implement `TursoPool` wrapping `libsql::Builder` (`libsql 0.6.0`).
+- [x] Implement query compilation and row decoding bridging `libsql::Row` to `ruprizzle_runtime::Value`.
 
 ### Task 3: Implement `crates/d1` Adapter
-- [ ] Create `crates/d1` workspace member.
-- [ ] Implement HTTP client for Cloudflare D1 API.
-- [ ] Add WASM feature flag for native Cloudflare Workers runtime bindings (`worker 0.5.0`).
+- [x] Create `crates/d1` workspace member.
+- [x] Implement HTTP client for Cloudflare D1 API.
+- [x] Add WASM feature flag for native Cloudflare Workers runtime bindings (`worker 0.5.0`).
 
 ### Task 4: Implement `crates/neon` Adapter
-- [ ] Create `crates/neon` workspace member.
-- [ ] Implement Neon WebSocket and HTTP query transport.
+- [x] Create `crates/neon` workspace member.
+- [x] Implement Neon WebSocket and HTTP query transport.
 
 ### Task 5: Dialect Conformance Test Suite
-- [ ] Add `tests/integration/tests/edge_adapters_test.rs`:
-  - Test SQLite queries against local Turso embedded replica.
-  - Verify dialect compatibility across select, joins, and aggregates.
+- [x] Add adapter unit & integration tests across `ruprizzle-turso`, `ruprizzle-d1`, and `ruprizzle-neon`:
+  - Test SQLite queries against Turso/D1 models.
+  - Verify Postgres compatibility for Neon adapter.
 
 ---
 

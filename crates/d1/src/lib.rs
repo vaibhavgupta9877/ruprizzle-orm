@@ -23,6 +23,7 @@
 
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
+#![allow(clippy::unused_async)]
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -35,7 +36,7 @@ use ruprizzle_dialect::{DbDialect, SqliteDialect};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-/// Dialect instance for Cloudflare D1 (SQLite compatible).
+/// Dialect instance for Cloudflare D1 (`SQLite` compatible).
 static SQLITE_DIALECT: SqliteDialect = SqliteDialect;
 
 /// Error returned by Cloudflare D1 operations.
@@ -171,11 +172,7 @@ impl D1Pool {
     }
 
     /// Executes a SQL query against the D1 backend.
-    async fn execute_internal(
-        &self,
-        sql: &str,
-        binds: &[Value],
-    ) -> Result<RowBatch, D1Error> {
+    async fn execute_internal(&self, sql: &str, binds: &[Value]) -> Result<RowBatch, D1Error> {
         let trimmed = sql.trim();
         let upper = trimmed.to_uppercase();
 

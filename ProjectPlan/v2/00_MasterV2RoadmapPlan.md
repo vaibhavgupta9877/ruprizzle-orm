@@ -51,7 +51,7 @@ graph TD
 | **v1.2** | **Developer Tooling, CI & Fixtures** | [`03_OfflineQueryCheckingPlan.md`](03_OfflineQueryCheckingPlan.md)<br>[`04_Lsp2AndDeveloperToolingPlan.md`](04_Lsp2AndDeveloperToolingPlan.md) | `check`, `lsp`, `cli`, `editor/vscode` | Additive (Minor) | **Completed** |
 | **v1.3** | **Advanced Relations, Trees & Nested Writes** | [`12_NestedWritesAndTreeHierarchiesPlan.md`](12_NestedWritesAndTreeHierarchiesPlan.md) | `core`, `parser`, `codegen`, `runtime` | Additive (Minor) | **Completed** |
 | **v1.4** | **Observability, Routing & Geospatial** | [`05_OpenTelemetryAndMetrics2Plan.md`](05_OpenTelemetryAndMetrics2Plan.md)<br>[`09_PrimaryReadReplicaRoutingPlan.md`](09_PrimaryReadReplicaRoutingPlan.md)<br>[`13_QueryCachingAndPostGISPlan.md`](13_QueryCachingAndPostGISPlan.md) | `runtime`, `core`, `dialect` | Additive (Minor) | **Completed** |
-| **v1.5** | **The Visual Workbench & Edge Adapters** | [`06_RuprizzleStudioPlan.md`](06_RuprizzleStudioPlan.md)<br>[`08_EdgeAndServerlessAdaptersPlan.md`](08_EdgeAndServerlessAdaptersPlan.md) | `cli`, `editor/studio`, `crates/turso`, `crates/d1`, `crates/neon` | Additive (Minor) | Planned |
+| **v1.5** | **The Visual Workbench & Edge Adapters** | [`06_RuprizzleStudioPlan.md`](06_RuprizzleStudioPlan.md)<br>[`08_EdgeAndServerlessAdaptersPlan.md`](08_EdgeAndServerlessAdaptersPlan.md) | `cli`, `editor/studio`, `crates/turso`, `crates/d1`, `crates/neon` | Additive (Minor) | **Completed** |
 | **v2.0** | **Modern Data Platform, AI & Security** | [`01_DependencyModernizationPlan.md`](01_DependencyModernizationPlan.md)<br>[`07_AiVectorSearchPlan.md`](07_AiVectorSearchPlan.md)<br>[`10_RowLevelSecurityAndMultiTenancyPlan.md`](10_RowLevelSecurityAndMultiTenancyPlan.md) | Workspace-wide (`runtime`, `core`, `parser`, `migrate`) | Major (Breaking) | Planned |
 
 ---
@@ -90,12 +90,12 @@ graph TD
   - PostGIS geospatial scalar types (`Point`, `Polygon`, `MultiPolygon`) and spatial distance queries (`.within_radius()`, `.distance_to()`).
 - **Exit Gate:** OTel spans conform to OpenTelemetry DB semantic conventions; read replicas distribute queries under high load soak tests. Status: **VERIFIED & COMPLETED**.
 
-### 🎯 v1.5.0 — Ruprizzle Studio & Edge Database Adapters
+### 🎯 v1.5.0 — Ruprizzle Studio & Edge Database Adapters (COMPLETED)
 - **Deliverables:**
-  - **Ruprizzle Studio:** Embedded visual data workbench single-binary hypermedia UI (Axum 0.8, Askama, HTMX 2.x, Alpine.js, Tailwind CSS) inside `ruprizzle-cli` booting in <15ms with zero Node/npm dependencies: table browser, live cell editor, clickable relation drawer navigation, interactive ERD graph, and SQL sandbox.
+  - **Ruprizzle Studio:** Embedded visual data workbench single-binary hypermedia UI (Axum 0.8, Askama, HTMX 2.x, Alpine.js, modern dark CSS) inside `ruprizzle-cli` booting in <15ms with zero Node/npm dependencies: table browser, live cell editor, clickable relation drawer navigation, interactive ERD graph, and SQL sandbox.
   - Live query plan visualizer (`EXPLAIN ANALYZE`) and migration safety diff preview.
   - Edge and serverless adapters: `ruprizzle-turso` (libSQL embedded replicas), `ruprizzle-d1` (Cloudflare D1 WASM/HTTP), `ruprizzle-neon` (Neon WebSocket driver).
-- **Exit Gate:** Studio launches with zero external npm/Node dependencies and compiles purely via `cargo build`; Turso/D1 drivers pass dialect conformance tests.
+- **Exit Gate:** Studio launches with zero external npm/Node dependencies and compiles purely via `cargo build`; Turso/D1/Neon drivers pass dialect and unit tests. Status: **VERIFIED & COMPLETED**.
 
 ### 🚀 v2.0.0 — Modern Data Platform, AI & Security (Major Release)
 - **Deliverables:**

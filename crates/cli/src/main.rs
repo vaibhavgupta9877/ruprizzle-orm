@@ -31,6 +31,8 @@ use ruprizzle_migrate::{Change, MigrationMeta, Migrator, diff, down_sql, up_sql}
 
 mod introspect;
 mod seed;
+#[cfg(feature = "studio")]
+mod studio;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -104,6 +106,30 @@ enum Command {
         /// Diagnostic output format (`pretty`, `json`, `github`).
         #[arg(long, default_value = "pretty")]
         format: String,
+    },
+
+    /// Launch the embedded pure-Rust visual workbench (Ruprizzle Studio).
+    #[cfg(feature = "studio")]
+    Studio {
+        /// Port to listen on (default 5555).
+        #[arg(long, default_value_t = 5555)]
+        port: u16,
+
+        /// Host address to bind to (default 127.0.0.1).
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+
+        /// Permit mutating write operations (inserts, updates, deletes).
+        #[arg(long)]
+        allow_writes: bool,
+
+        /// Override safety guardrail against production database URLs.
+        #[arg(long)]
+        yes_i_know: bool,
+
+        /// Disable auto-opening the web browser on launch.
+        #[arg(long)]
+        no_browser: bool,
     },
 }
 
@@ -235,6 +261,26 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Command::Db(DbCommand::Seed) => db_seed(&cli.schema, cli.verbose).await,
         Command::Lsp { stdio } => run_lsp(*stdio).await,
         Command::Check { manifest, format } => run_check(&cli.schema, manifest, format),
+        #[cfg(feature = "studio")]
+        Command::Studio {
+            port,
+            host,
+            allow_writes,
+            yes_i_know,
+            no_browser,
+        } => {
+            let db_url = resolve_database_url(&cli.schema, cli.verbose).ok();
+            let config = studio::StudioConfig {
+                port: *port,
+                host: host.clone(),
+                schema_path: PathBuf::from(&cli.schema),
+                database_url: db_url,
+                allow_writes: *allow_writes,
+                yes_i_know: *yes_i_know,
+                no_browser: *no_browser,
+            };
+            studio::run_studio(config).await
+        }
     }
 }
 

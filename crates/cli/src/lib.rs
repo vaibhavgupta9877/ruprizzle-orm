@@ -15,3 +15,6 @@
 //! ---
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
+
+#[cfg(feature = "studio")]
+pub mod studio;

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Migration Safety Diff — Ruprizzle Studio{% endblock %}
+{% block nav_diff %}active{% endblock %}
+{% block page_title %}Migration Safety Diff{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Schema Drift &amp; Migration Safety Classification</h3>
+      <p class="card-description">Compares current <code>schema.ruprizzle</code> against database catalog.</p>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:12px;">
+    {% for change in changes %}
+    <div style="background:#121215; border:1px solid #27272a; border-radius:8px; padding:16px; display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <div style="font-weight:600; color:#fff; font-size:14px; margin-bottom:4px;">{{ change.title }}</div>
+        <div style="color:#a1a1aa; font-size:12px;">{{ change.description }}</div>
+      </div>
+      <div>
+        {% if change.risk == "SAFE" %}
+        <span class="badge badge-safe">✓ SAFE</span>
+        {% else if change.risk == "CAUTION" %}
+        <span class="badge badge-caution">⚠ CAUTION</span>
+        {% else %}
+        <span class="badge badge-destructive">⛔ DESTRUCTIVE</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+    {% if changes.is_empty() %}
+    <div style="text-align:center; padding:40px; color:#10b981;">
+      ✓ Schema is completely in sync with database catalog. Zero drift detected.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

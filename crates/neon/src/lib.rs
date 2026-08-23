@@ -1,7 +1,7 @@
-//! Neon serverless PostgreSQL database adapter for the `ruprizzle` ORM.
+//! Neon serverless `PostgreSQL` database adapter for the `ruprizzle` ORM.
 //!
 //! Provides [`NeonPool`] and [`NeonPoolBuilder`] for connecting to Neon
-//! Serverless PostgreSQL using WebSocket or HTTP connection pooling.
+//! Serverless `PostgreSQL` using WebSocket or HTTP connection pooling.
 //!
 //! # Example
 //!
@@ -23,6 +23,7 @@
 
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
+#![allow(clippy::unused_async)]
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -35,7 +36,7 @@ use ruprizzle_dialect::{DbDialect, PostgresDialect};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-/// Dialect instance for Neon Serverless (PostgreSQL compatible).
+/// Dialect instance for Neon Serverless (`PostgreSQL` compatible).
 static POSTGRES_DIALECT: PostgresDialect = PostgresDialect;
 
 /// Error returned by Neon serverless operations.
@@ -67,7 +68,7 @@ impl From<NeonError> for ruprizzle::Error {
 /// Configuration options for connecting to Neon serverless Postgres.
 #[derive(Debug, Clone, Default)]
 pub struct NeonConfig {
-    /// Full PostgreSQL connection string (`postgres://...`).
+    /// Full `PostgreSQL` connection string (`postgres://...`).
     pub connection_string: Option<String>,
     /// Neon endpoint host (`ep-xxx.neon.tech`).
     pub endpoint: Option<String>,
@@ -99,7 +100,7 @@ impl NeonPoolBuilder {
         }
     }
 
-    /// Sets the full PostgreSQL connection string.
+    /// Sets the full `PostgreSQL` connection string.
     #[must_use]
     pub fn connection_string(mut self, url: impl Into<String>) -> Self {
         self.config.connection_string = Some(url.into());
@@ -168,7 +169,7 @@ struct NeonPoolInner {
     memory_store: RwLock<HashMap<String, Vec<HashMap<String, Value>>>>,
 }
 
-/// A connection pool managing access to Neon Serverless PostgreSQL.
+/// A connection pool managing access to Neon Serverless `PostgreSQL`.
 #[derive(Debug, Clone)]
 pub struct NeonPool {
     inner: Arc<NeonPoolInner>,
@@ -209,11 +210,7 @@ impl NeonPool {
     }
 
     /// Executes a SQL query against the Neon backend.
-    async fn execute_internal(
-        &self,
-        sql: &str,
-        binds: &[Value],
-    ) -> Result<RowBatch, NeonError> {
+    async fn execute_internal(&self, sql: &str, binds: &[Value]) -> Result<RowBatch, NeonError> {
         let trimmed = sql.trim();
         let upper = trimmed.to_uppercase();
 

@@ -1,31 +1,31 @@
-//! Turso and libSQL edge database adapter for the `ruprizzle` ORM.
+//! Turso and libSQL database adapter for the `ruprizzle` ORM.
 //!
 //! Provides [`TursoPool`] and [`TursoPoolBuilder`] for connecting to remote
-//! Turso libSQL databases or running embedded SQLite replicas with automatic
-//! remote synchronization over HTTP/WebSocket.
+//! Turso libSQL databases or running embedded `SQLite` replicas with automatic
+//! background synchronization.
 //!
 //! # Example
 //!
 //! ```no_run
 //! use ruprizzle_turso::TursoPool;
-//! use std::time::Duration;
 //!
 //! # async fn doc() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //! let pool = TursoPool::builder()
 //!     .local_path("local_replica.db")
-//!     .sync_url("libsql://my-db.turso.io")
-//!     .auth_token("secret_token")
-//!     .sync_interval(Duration::from_secs(60))
+//!     .sync_url("libsql://your-db.turso.io")
+//!     .auth_token("your_turso_token")
 //!     .build()
 //!     .await?;
 //!
-//! println!("Turso pool connected to: {:?}", pool.sync_url());
+//! let stats = pool.sync().await?;
+//! println!("Frames synced: {}", stats.frames_synced);
 //! # Ok(())
 //! # }
 //! ```
 
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
+#![allow(clippy::unused_async)]
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -40,7 +40,7 @@ use ruprizzle_dialect::{DbDialect, SqliteDialect};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-/// Dialect instance for Turso / libSQL (SQLite compatible).
+/// Dialect instance for Turso / libSQL (`SQLite` compatible).
 static SQLITE_DIALECT: SqliteDialect = SqliteDialect;
 
 /// Error returned by Turso and libSQL operations.
@@ -106,7 +106,7 @@ impl TursoPoolBuilder {
         Self::default()
     }
 
-    /// Sets the local SQLite file path for the embedded replica.
+    /// Sets the local `SQLite` file path for the embedded replica.
     #[must_use]
     pub fn local_path(mut self, path: impl Into<PathBuf>) -> Self {
         self.config.local_path = Some(path.into());
@@ -149,7 +149,8 @@ impl TursoPoolBuilder {
     pub async fn build(self) -> Result<TursoPool, TursoError> {
         if self.config.local_path.is_none() && self.config.sync_url.is_none() {
             return Err(TursoError::Config(
-                "at least one of `local_path` or `sync_url` must be configured for TursoPool".into(),
+                "at least one of `local_path` or `sync_url` must be configured for TursoPool"
+                    .into(),
             ));
         }
 
@@ -219,11 +220,7 @@ impl TursoPool {
     }
 
     /// Executes an in-memory or remote query against the Turso backend.
-    async fn execute_internal(
-        &self,
-        sql: &str,
-        binds: &[Value],
-    ) -> Result<RowBatch, TursoError> {
+    async fn execute_internal(&self, sql: &str, binds: &[Value]) -> Result<RowBatch, TursoError> {
         let trimmed = sql.trim();
         let upper = trimmed.to_uppercase();
 

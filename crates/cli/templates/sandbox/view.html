@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}SQL Sandbox — Ruprizzle Studio{% endblock %}
+{% block nav_sandbox %}active{% endblock %}
+{% block page_title %}SQL Sandbox &amp; Playground{% endblock %}
+
+{% block content %}
+<div style="display:flex; flex-direction:column; gap:20px; flex:1;">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title">Interactive SQL Query Execution</h3>
+        <p class="card-description">Execute raw queries against your database with execution timing metrics.</p>
+      </div>
+    </div>
+
+    <form hx-post="/studio/sandbox/execute" hx-target="#sandbox-results">
+      <textarea name="sql" class="code-textarea" placeholder="SELECT * FROM users LIMIT 10;">SELECT 1 as result, 'Ruprizzle Studio' as engine;</textarea>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+        <span style="font-size:12px; color:#71717a;">Press Execute to run against connected database</span>
+        <button type="submit" class="btn btn-primary">
+          <span>⚡ Execute Query</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div id="sandbox-results">
+    <div class="card">
+      <div style="color:#71717a; text-align:center; padding:30px;">
+        Query results and latency breakdown will appear here.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

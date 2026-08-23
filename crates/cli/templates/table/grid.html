@@ -1,0 +1,86 @@
+<div style="overflow-x: auto;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        {% for field in fields %}
+        <th>
+          <div style="display:flex; align-items:center; gap:6px;">
+            {% if field.is_id %}<span>🔑</span>{% endif %}
+            <span>{{ field.name }}</span>
+            <span style="font-size:10px; color:#71717a; font-weight:normal;">{{ field.type_name }}</span>
+          </div>
+        </th>
+        {% endfor %}
+        {% if allow_writes %}
+        <th style="width:60px; text-align:center;">Actions</th>
+        {% endif %}
+      </tr>
+    </thead>
+    <tbody id="table-body">
+      {% for row in rows %}
+      <tr id="row-{{ row.id }}">
+        {% for cell in row.cells %}
+        <td x-data="{ editing: false, value: '{{ cell.value }}' }">
+          <div x-show="!editing" @dblclick="{% if allow_writes %}editing = true{% endif %}">
+            {% if cell.is_relation %}
+            <span class="cell-relation" hx-get="/studio/relations/{{ cell.relation_target }}/{{ cell.value }}" hx-target="#relation-drawer">
+              ↗ {{ cell.value }}
+            </span>
+            {% else if cell.is_id %}
+            <span class="cell-pk">{{ cell.value }}</span>
+            {% else if cell.is_null %}
+            <span class="cell-null">null</span>
+            {% else %}
+            <span>{{ cell.value }}</span>
+            {% endif %}
+          </div>
+          {% if allow_writes %}
+          <div x-show="editing" style="display:none;">
+            <input type="text" class="input-text" style="padding:2px 6px; font-size:12px; width:100%;"
+                   x-model="value"
+                   hx-patch="/studio/models/{{ current_model }}/rows/{{ row.id }}/cell?column={{ cell.column_name }}"
+                   hx-vals="js:{ value: value }"
+                   hx-target="#row-{{ row.id }}"
+                   hx-swap="outerHTML"
+                   @keydown.enter="editing = false"
+                   @keydown.escape="editing = false"
+                   @blur="editing = false">
+          </div>
+          {% endif %}
+        </td>
+        {% endfor %}
+        {% if allow_writes %}
+        <td style="text-align:center;">
+          <button class="btn btn-danger btn-sm" hx-delete="/studio/models/{{ current_model }}/rows/{{ row.id }}"
+                  hx-target="#row-{{ row.id }}" hx-swap="outerHTML"
+                  onclick="return confirm('Delete this record?')">
+            🗑
+          </button>
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+      {% if rows.is_empty() %}
+      <tr>
+        <td colspan="{{ fields.len() + 1 }}" style="text-align:center; padding:40px; color:#71717a;">
+          No records found.
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+<div style="padding:12px 16px; border-top:1px solid #27272a; display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#a1a1aa;">
+  <span>Showing <strong>{{ rows.len() }}</strong> records (Page {{ page }})</span>
+  <div style="display:flex; gap:6px;">
+    {% if page > 1 %}
+    <button class="btn btn-secondary btn-sm" hx-get="/studio/models/{{ current_model }}/table?page={{ page - 1 }}" hx-target="#grid-container">
+      Previous
+    </button>
+    {% endif %}
+    <button class="btn btn-secondary btn-sm" hx-get="/studio/models/{{ current_model }}/table?page={{ page + 1 }}" hx-target="#grid-container">
+      Next
+    </button>
+  </div>
+</div>
