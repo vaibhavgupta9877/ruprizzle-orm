@@ -706,9 +706,7 @@ impl RoutedPool {
                 healthy.get(target).map_or(&self.primary, |r| &r.pool)
             }
             LoadBalancing::LeastConnections => {
-                let best = healthy
-                    .iter()
-                    .min_by_key(|r| r.active_connections());
+                let best = healthy.iter().min_by_key(|r| r.active_connections());
                 best.map_or(&self.primary, |r| &r.pool)
             }
             LoadBalancing::Random => {
