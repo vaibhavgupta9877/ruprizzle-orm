@@ -343,6 +343,30 @@ fn is_type_compatible(scalar: ScalarType, type_name: &str) -> bool {
         ScalarType::Uuid => matches!(norm.as_str(), "uuid" | "uuid::uuid" | "string" | "str"),
         ScalarType::Json => true,
         ScalarType::Bytes => matches!(norm.as_str(), "bytes" | "vec<u8>" | "&[u8]" | "blob"),
+        ScalarType::Point => matches!(
+            norm.as_str(),
+            "point" | "spatial::point" | "ruprizzle::spatial::point" | "string" | "str"
+        ),
+        ScalarType::Polygon => matches!(
+            norm.as_str(),
+            "polygon" | "spatial::polygon" | "ruprizzle::spatial::polygon" | "string" | "str"
+        ),
+        ScalarType::MultiPolygon => matches!(
+            norm.as_str(),
+            "multipolygon"
+                | "spatial::multipolygon"
+                | "ruprizzle::spatial::multipolygon"
+                | "string"
+                | "str"
+        ),
+        ScalarType::LineString => matches!(
+            norm.as_str(),
+            "linestring"
+                | "spatial::linestring"
+                | "ruprizzle::spatial::linestring"
+                | "string"
+                | "str"
+        ),
     }
 }
 

@@ -325,6 +325,10 @@ pub(crate) fn rust_type_for(f: &Field) -> RustType {
             FieldKind::Scalar(ScalarType::Uuid) => RustType::Uuid,
             FieldKind::Scalar(ScalarType::Json) => RustType::Json,
             FieldKind::Scalar(ScalarType::Bytes) => RustType::Bytes,
+            FieldKind::Scalar(ScalarType::Point) => RustType::Point,
+            FieldKind::Scalar(ScalarType::Polygon) => RustType::Polygon,
+            FieldKind::Scalar(ScalarType::MultiPolygon) => RustType::MultiPolygon,
+            FieldKind::Scalar(ScalarType::LineString) => RustType::LineString,
             FieldKind::Enum(name) => RustType::Enum(name.as_str().to_owned()),
             FieldKind::List(inner) => RustType::Vec(Box::new(kind_to_rust(inner))),
         }

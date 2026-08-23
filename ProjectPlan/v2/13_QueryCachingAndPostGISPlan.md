@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
-**Status:** Ready for Execution  
+**Status:** Completed & Verified  
 **Milestone:** v1.4.0 (Additive, Minor Release)  
 **Primary Crates:** `crates/core`, `crates/parser`, `crates/dialect`, `crates/runtime`, `crates/migrate`
 
@@ -80,25 +80,25 @@ let stores_in_region = StoreLocation::find_many()
 ## 3. Step-by-Step Implementation Tasks
 
 ### Task 1: Result Cache Layer & Tagged Invalidation
-- [ ] In `crates/runtime/src/cache.rs`:
+- [x] In `crates/runtime/src/cache.rs`:
   - Implement `QueryCache` trait with `MokaCache` (in-memory LRU) and optional `RedisCache`.
   - Implement automatic tag invalidation triggered by `InsertQuery`, `UpdateQuery`, and `DeleteQuery`.
 
 ### Task 2: AST Plan Cache Optimization
-- [ ] In `crates/runtime/src/compile.rs`:
+- [x] In `crates/runtime/src/compile.rs`:
   - Implement query hash cache storing pre-compiled SQL format strings to skip AST construction.
 
 ### Task 3: Spatial Types, IR & Pest Grammar
-- [ ] In `crates/parser/src/schema.pest` & `crates/core/src/ir.rs`:
+- [x] In `crates/parser/src/schema.pest` & `crates/core/src/ir.rs`:
   - Add `Point`, `Polygon`, `LineString` scalar types.
   - Add `IndexType::Gist`.
-- [ ] In `crates/dialect/src/postgres.rs`:
+- [x] In `crates/dialect/src/postgres.rs`:
   - Emit PostGIS DDL and spatial distance operators (`ST_DWithin`, `ST_Distance`, `ST_Intersects`).
 
 ### Task 4: Integration & Geospatial Conformance Tests
-- [ ] Add `crates/runtime/tests/geospatial_test.rs`:
+- [x] Add `tests/integration/tests/geospatial.rs`:
   - Test PostGIS point creation, spatial indexing, and distance queries.
-- [ ] Add `crates/runtime/tests/query_caching_test.rs`:
+- [x] Add `tests/integration/tests/query_caching.rs`:
   - Test cache hits, expiration, and invalidation upon row updates.
 
 ---

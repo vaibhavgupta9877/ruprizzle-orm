@@ -667,6 +667,7 @@ expression: schema
               ]
             }
           ],
+          "index_type": null,
           "where_clause": null,
           "span": {
             "start": 1665,

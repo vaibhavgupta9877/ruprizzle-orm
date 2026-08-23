@@ -833,12 +833,25 @@ fn lower_indexes(
         .map(|attr| {
             let targets = index_targets(attr);
             let columns = target_columns(&targets, fields);
+            let index_type = attr
+                .named("type")
+                .and_then(|v| v.as_ident().or_else(|| v.as_str()))
+                .and_then(|t| match t.to_ascii_lowercase().as_str() {
+                    "gist" => Some(ruprizzle_core::ir::IndexType::Gist),
+                    "gin" => Some(ruprizzle_core::ir::IndexType::Gin),
+                    "btree" => Some(ruprizzle_core::ir::IndexType::BTree),
+                    "hash" => Some(ruprizzle_core::ir::IndexType::Hash),
+                    "spgist" => Some(ruprizzle_core::ir::IndexType::SpGist),
+                    "brin" => Some(ruprizzle_core::ir::IndexType::Brin),
+                    _ => None,
+                });
             IndexDef {
                 db_name: attr
                     .named("map")
                     .and_then(Value::as_str)
                     .map_or_else(|| naming::index_name(table, &columns), str::to_owned),
                 targets,
+                index_type,
                 where_clause: attr
                     .named("where")
                     .and_then(Value::as_str)
@@ -1621,6 +1634,7 @@ fn resolve_implicit_many_to_many(
         indexes: vec![IndexDef {
             db_name: format!("{join_model_name}_B_index"),
             targets: vec![IndexTarget::Field(FieldName::from("b"), SortOrder::Asc)],
+            index_type: None,
             where_clause: None,
             span: Span::EMPTY,
         }],

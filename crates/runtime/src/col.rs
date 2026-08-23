@@ -3,10 +3,11 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::filter::{ArrayFilterOp, CmpOp, Filter, FilterNode, JsonFilterOp, Subquery};
+use crate::filter::{ArrayFilterOp, CmpOp, Filter, FilterNode, JsonFilterOp, SpatialOp, Subquery};
 use crate::join::JoinOn;
 use crate::json::{JsonColumn, JsonPath, JsonPathSegment, JsonSet};
 use crate::order::OrderBy;
+use crate::spatial::{Point, Polygon};
 use crate::value::{Encodable, Ordered, Value};
 
 /// A typed token for a physical column.
@@ -289,6 +290,144 @@ impl<M> Column<M, Option<String>> {
             table: self.table,
             column: self.column,
             query: query.into(),
+        })
+    }
+}
+
+impl<M> Column<M, Point> {
+    /// Geospatial radius filter (`ST_DWithin(column, point, distance_in_meters)`).
+    pub fn within_radius(self, point: &Point, distance_meters: f64) -> Filter<M> {
+        Filter::new(FilterNode::Spatial {
+            table: self.table,
+            column: self.column,
+            op: SpatialOp::WithinRadius,
+            geometry: point.to_wkt(),
+            distance: Some(distance_meters),
+        })
+    }
+
+    /// Spatial distance expression ordering ascending (`ST_Distance(column, point) ASC`).
+    pub fn distance_asc(self, point: &Point) -> OrderBy<M> {
+        OrderBy::spatial_distance(self.table, self.column, point.to_wkt(), false)
+    }
+
+    /// Spatial distance expression ordering descending (`ST_Distance(column, point) DESC`).
+    pub fn distance_desc(self, point: &Point) -> OrderBy<M> {
+        OrderBy::spatial_distance(self.table, self.column, point.to_wkt(), true)
+    }
+
+    /// Geospatial intersection check against a polygon (`ST_Intersects`).
+    pub fn intersects(self, polygon: &Polygon) -> Filter<M> {
+        Filter::new(FilterNode::Spatial {
+            table: self.table,
+            column: self.column,
+            op: SpatialOp::Intersects,
+            geometry: polygon.to_wkt(),
+            distance: None,
+        })
+    }
+
+    /// Geospatial containment check (`ST_Within(point, polygon)`).
+    pub fn within_polygon(self, polygon: &Polygon) -> Filter<M> {
+        Filter::new(FilterNode::Spatial {
+            table: self.table,
+            column: self.column,
+            op: SpatialOp::Within,
+            geometry: polygon.to_wkt(),
+            distance: None,
+        })
+    }
+}
+
+impl<M> Column<M, Option<Point>> {
+    /// Geospatial radius filter for optional point column.
+    pub fn within_radius(self, point: &Point, distance_meters: f64) -> Filter<M> {
+        Filter::new(FilterNode::Spatial {
+            table: self.table,
+            column: self.column,
+            op: SpatialOp::WithinRadius,
+            geometry: point.to_wkt(),
+            distance: Some(distance_meters),
+        })
+    }
+
+    /// Spatial distance expression ordering ascending for optional point.
+    pub fn distance_asc(self, point: &Point) -> OrderBy<M> {
+        OrderBy::spatial_distance(self.table, self.column, point.to_wkt(), false)
+    }
+
+    /// Spatial distance expression ordering descending for optional point.
+    pub fn distance_desc(self, point: &Point) -> OrderBy<M> {
+        OrderBy::spatial_distance(self.table, self.column, point.to_wkt(), true)
+    }
+
+    /// Geospatial intersection check for optional point.
+    pub fn intersects(self, polygon: &Polygon) -> Filter<M> {
+        Filter::new(FilterNode::Spatial {
+            table: self.table,
+            column: self.column,
+            op: SpatialOp::Intersects,
+            geometry: polygon.to_wkt(),
+            distance: None,
+        })
+    }
+}
+
+impl<M> Column<M, Polygon> {
+    /// Geospatial intersection check (`ST_Intersects`).
+    pub fn intersects(self, polygon: &Polygon) -> Filter<M> {
+        Filter::new(FilterNode::Spatial {
+            table: self.table,
+            column: self.column,
+            op: SpatialOp::Intersects,
+            geometry: polygon.to_wkt(),
+            distance: None,
+        })
+    }
+
+    /// Geospatial containment check (`ST_Contains(column, point)`).
+    pub fn contains_point(self, point: &Point) -> Filter<M> {
+        Filter::new(FilterNode::Spatial {
+            table: self.table,
+            column: self.column,
+            op: SpatialOp::Contains,
+            geometry: point.to_wkt(),
+            distance: None,
+        })
+    }
+
+    /// Geospatial containment check (`ST_Contains(column, polygon)`).
+    pub fn contains(self, polygon: &Polygon) -> Filter<M> {
+        Filter::new(FilterNode::Spatial {
+            table: self.table,
+            column: self.column,
+            op: SpatialOp::Contains,
+            geometry: polygon.to_wkt(),
+            distance: None,
+        })
+    }
+}
+
+impl<M> Column<M, Option<Polygon>> {
+    /// Geospatial intersection check for optional polygon.
+    pub fn intersects(self, polygon: &Polygon) -> Filter<M> {
+        Filter::new(FilterNode::Spatial {
+            table: self.table,
+            column: self.column,
+            op: SpatialOp::Intersects,
+            geometry: polygon.to_wkt(),
+            distance: None,
+        })
+    }
+
+    /// Geospatial containment check for optional polygon.
+    pub fn contains(self, polygon: &Polygon) -> Filter<M> {
+        Filter::new(FilterNode::Spatial {
+            table: self.table,
+            column: self.column,
+            op: SpatialOp::Contains,
+            geometry: polygon.to_wkt(),
+            distance: None,
         })
     }
 }

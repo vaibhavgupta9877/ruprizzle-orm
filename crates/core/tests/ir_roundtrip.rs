@@ -149,6 +149,7 @@ fn blog_schema() -> Schema {
             indexes: vec![IndexDef {
                 db_name: "users_email_idx".to_owned(),
                 targets: vec![IndexTarget::Field(FieldName::new("email"), SortOrder::Asc)],
+                index_type: None,
                 where_clause: None,
                 span: Span::new(80, 95),
             }],

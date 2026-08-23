@@ -923,7 +923,11 @@ fn emit_from_row_field(
             | ruprizzle_core::ir::ScalarType::DateTime
             | ruprizzle_core::ir::ScalarType::Date
             | ruprizzle_core::ir::ScalarType::Time
-            | ruprizzle_core::ir::ScalarType::Uuid => {
+            | ruprizzle_core::ir::ScalarType::Uuid
+            | ruprizzle_core::ir::ScalarType::Point
+            | ruprizzle_core::ir::ScalarType::Polygon
+            | ruprizzle_core::ir::ScalarType::MultiPolygon
+            | ruprizzle_core::ir::ScalarType::LineString => {
                 let helper =
                     format_ident!("{}", if optional { "text_opt_idx" } else { "text_idx" });
                 quote! { ::ruprizzle::decode::#helper(#row_expr, #idx_expr)? }
@@ -1148,7 +1152,11 @@ fn scalar_rusqlite_expr(
         | ScalarType::DateTime
         | ScalarType::Date
         | ScalarType::Time
-        | ScalarType::Uuid => {
+        | ScalarType::Uuid
+        | ScalarType::Point
+        | ScalarType::Polygon
+        | ScalarType::MultiPolygon
+        | ScalarType::LineString => {
             if optional {
                 quote! { ::ruprizzle::rusqlite::parse_opt::<#inner_ty>(row, #idx)? }
             } else {
@@ -1368,6 +1376,10 @@ fn scalar_type_tokens(st: ScalarType) -> TokenStream {
         ScalarType::Uuid => quote! { Uuid },
         ScalarType::Json => quote! { JsonValue },
         ScalarType::Bytes => quote! { Vec<u8> },
+        ScalarType::Point => quote! { ::ruprizzle::spatial::Point },
+        ScalarType::Polygon => quote! { ::ruprizzle::spatial::Polygon },
+        ScalarType::MultiPolygon => quote! { ::ruprizzle::spatial::MultiPolygon },
+        ScalarType::LineString => quote! { ::ruprizzle::spatial::LineString },
     }
 }
 

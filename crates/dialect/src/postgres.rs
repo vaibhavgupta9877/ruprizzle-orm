@@ -147,8 +147,16 @@ impl DbDialect for PostgresDialect {
 
     fn create_index(&self, m: &Model, ix: &IndexDef) -> Vec<Stmt> {
         let cols = render_index_targets(self, m, &ix.targets);
+        let using = match ix.index_type {
+            Some(ruprizzle_core::ir::IndexType::Gist) => " USING GIST",
+            Some(ruprizzle_core::ir::IndexType::Gin) => " USING GIN",
+            Some(ruprizzle_core::ir::IndexType::Hash) => " USING HASH",
+            Some(ruprizzle_core::ir::IndexType::SpGist) => " USING SPGIST",
+            Some(ruprizzle_core::ir::IndexType::Brin) => " USING BRIN",
+            _ => "",
+        };
         let mut sql = format!(
-            "CREATE INDEX {} ON {} ({})",
+            "CREATE INDEX {} ON {}{using} ({})",
             self.quote_ident(&ix.db_name),
             self.quote_ident(&m.table),
             cols
@@ -269,7 +277,7 @@ impl DbDialect for PostgresDialect {
             deferrable_fks: true,
             json_type: JsonSupport::Native,
             max_query_params: 65_535,
-            postgis: false,
+            postgis: true,
             window_functions: true,
         }
     }
@@ -289,6 +297,10 @@ fn pg_type_name(ty: ScalarType) -> &'static str {
         ScalarType::Uuid => "UUID",
         ScalarType::Json => "JSONB",
         ScalarType::Bytes => "BYTEA",
+        ScalarType::Point => "GEOMETRY(Point, 4326)",
+        ScalarType::Polygon => "GEOMETRY(Polygon, 4326)",
+        ScalarType::MultiPolygon => "GEOMETRY(MultiPolygon, 4326)",
+        ScalarType::LineString => "GEOMETRY(LineString, 4326)",
     }
 }
 

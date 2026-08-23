@@ -171,6 +171,14 @@ pub enum RustType {
     Json,
     /// `Vec<u8>`.
     Bytes,
+    /// `ruprizzle::Point`.
+    Point,
+    /// `ruprizzle::Polygon`.
+    Polygon,
+    /// `ruprizzle::MultiPolygon`.
+    MultiPolygon,
+    /// `ruprizzle::LineString`.
+    LineString,
     /// A generated enum with the given name.
     Enum(String),
     /// `Option<T>`.

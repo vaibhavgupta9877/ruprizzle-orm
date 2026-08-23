@@ -396,6 +396,14 @@ pub enum ScalarType {
     Json,
     /// Opaque binary. Rust `Vec<u8>`.
     Bytes,
+    /// 2D geometric point (lat, lng / x, y).
+    Point,
+    /// 2D geometric polygon.
+    Polygon,
+    /// 2D geometric multi-polygon.
+    MultiPolygon,
+    /// 2D geometric linestring.
+    LineString,
 }
 
 impl ScalarType {
@@ -403,7 +411,8 @@ impl ScalarType {
     #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         use ScalarType::{
-            BigInt, Boolean, Bytes, Date, DateTime, Decimal, Float, Int, Json, String, Time, Uuid,
+            BigInt, Boolean, Bytes, Date, DateTime, Decimal, Float, Int, Json, LineString,
+            MultiPolygon, Point, Polygon, String, Time, Uuid,
         };
         Some(match s {
             "String" => String,
@@ -418,6 +427,10 @@ impl ScalarType {
             "Uuid" => Uuid,
             "Json" => Json,
             "Bytes" => Bytes,
+            "Point" => Point,
+            "Polygon" => Polygon,
+            "MultiPolygon" => MultiPolygon,
+            "LineString" => LineString,
             _ => return None,
         })
     }
@@ -426,7 +439,8 @@ impl ScalarType {
     #[must_use]
     pub const fn as_str(&self) -> &'static str {
         use ScalarType::{
-            BigInt, Boolean, Bytes, Date, DateTime, Decimal, Float, Int, Json, String, Time, Uuid,
+            BigInt, Boolean, Bytes, Date, DateTime, Decimal, Float, Int, Json, LineString,
+            MultiPolygon, Point, Polygon, String, Time, Uuid,
         };
         match self {
             String => "String",
@@ -441,6 +455,10 @@ impl ScalarType {
             Uuid => "Uuid",
             Json => "Json",
             Bytes => "Bytes",
+            Point => "Point",
+            Polygon => "Polygon",
+            MultiPolygon => "MultiPolygon",
+            LineString => "LineString",
         }
     }
 
@@ -458,6 +476,10 @@ impl ScalarType {
         ScalarType::Uuid,
         ScalarType::Json,
         ScalarType::Bytes,
+        ScalarType::Point,
+        ScalarType::Polygon,
+        ScalarType::MultiPolygon,
+        ScalarType::LineString,
     ];
 }
 
@@ -548,6 +570,23 @@ impl PrimaryKey {
     }
 }
 
+/// The index method / type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum IndexType {
+    /// B-Tree index (default).
+    BTree,
+    /// Generalized Search Tree index (`PostGIS` / spatial).
+    Gist,
+    /// Generalized Inverted Index (arrays / full-text / jsonb).
+    Gin,
+    /// Hash index.
+    Hash,
+    /// Space-partitioned `GiST`.
+    SpGist,
+    /// Block Range Index.
+    Brin,
+}
+
 /// An `@@index([...])` declaration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndexDef {
@@ -556,6 +595,9 @@ pub struct IndexDef {
     /// Indexed targets, in index order — which determines what the index can
     /// serve, so it is never sorted.
     pub targets: Vec<IndexTarget>,
+    /// Optional index type (e.g. `Gist`, `Gin`, `BTree`).
+    #[serde(default)]
+    pub index_type: Option<IndexType>,
     /// Optional partial-index predicate (`WHERE` clause).
     pub where_clause: Option<String>,
     /// Source location of the declaration.

@@ -243,6 +243,7 @@ impl<M, T> JsonColumn<M, T> {
             desc: false,
             json_path: Some(self.path.clone()),
             text: self.text,
+            spatial_distance: None,
             _marker: PhantomData,
         }
     }
@@ -255,6 +256,7 @@ impl<M, T> JsonColumn<M, T> {
             desc: true,
             json_path: Some(self.path.clone()),
             text: self.text,
+            spatial_distance: None,
             _marker: PhantomData,
         }
     }

@@ -379,6 +379,32 @@ pub enum FilterNode {
         /// The text query or terms to match.
         query: String,
     },
+    /// A spatial / geospatial column operation.
+    Spatial {
+        /// The SQL table name.
+        table: &'static str,
+        /// The SQL column name.
+        column: &'static str,
+        /// The spatial operator.
+        op: SpatialOp,
+        /// The geometry value (WKT formatted).
+        geometry: String,
+        /// Optional distance in meters (e.g. for `WithinRadius`).
+        distance: Option<f64>,
+    },
+}
+
+/// Spatial / PostGIS filter operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpatialOp {
+    /// Distance between geometries is within radius (`ST_DWithin`).
+    WithinRadius,
+    /// Geometries spatially intersect (`ST_Intersects`).
+    Intersects,
+    /// Geometry A completely contains geometry B (`ST_Contains`).
+    Contains,
+    /// Geometry A is completely within geometry B (`ST_Within`).
+    Within,
 }
 
 /// JSON-specific filter operations.

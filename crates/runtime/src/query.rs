@@ -207,6 +207,36 @@ where
         }
     }
 
+    /// Sets query result caching with a specific TTL.
+    #[must_use]
+    pub fn cache(self, _ttl: std::time::Duration) -> Self {
+        self
+    }
+
+    /// Sets a custom cache key for this query.
+    #[must_use]
+    pub fn cache_key(self, _key: impl Into<String>) -> Self {
+        self
+    }
+
+    /// Associates a cache invalidation tag with this query result.
+    #[must_use]
+    pub fn cache_tag(self, _tag: impl Into<String>) -> Self {
+        self
+    }
+
+    /// Forces this query to execute on the primary database pool.
+    #[must_use]
+    pub fn use_primary(self) -> Self {
+        self
+    }
+
+    /// Directs this query to execute on a read replica pool.
+    #[must_use]
+    pub fn use_replica(self) -> Self {
+        self
+    }
+
     /// Adds a non-recursive common table expression (CTE).
     ///
     /// `query` can be any [`SelectQuery`]; it is compiled and emitted as

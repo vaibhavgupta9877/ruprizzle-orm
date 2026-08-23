@@ -39,7 +39,11 @@ impl DbDialect for SqliteDialect {
                 | ScalarType::Date
                 | ScalarType::Time
                 | ScalarType::Uuid
-                | ScalarType::Json,
+                | ScalarType::Json
+                | ScalarType::Point
+                | ScalarType::Polygon
+                | ScalarType::MultiPolygon
+                | ScalarType::LineString,
             )
             | FieldKind::Enum(_)
             | FieldKind::Relation(_)
@@ -229,7 +233,11 @@ fn sqlite_type_name(ty: ScalarType) -> &'static str {
         | ScalarType::Date
         | ScalarType::Time
         | ScalarType::Uuid
-        | ScalarType::Json => "TEXT",
+        | ScalarType::Json
+        | ScalarType::Point
+        | ScalarType::Polygon
+        | ScalarType::MultiPolygon
+        | ScalarType::LineString => "TEXT",
         ScalarType::Int | ScalarType::BigInt | ScalarType::Boolean => "INTEGER",
         ScalarType::Float => "REAL",
         ScalarType::Bytes => "BLOB",

@@ -29,6 +29,7 @@
 #![warn(missing_docs, clippy::all)]
 
 pub mod aggregate;
+pub mod cache;
 pub mod col;
 pub mod compile;
 pub mod counting;
@@ -55,6 +56,7 @@ pub mod rel;
 pub mod related;
 #[cfg(feature = "sqlite-rusqlite")]
 pub mod rusqlite;
+pub mod spatial;
 #[cfg(feature = "postgres-tokio-postgres")]
 pub mod tokio_postgres;
 pub mod tx;
@@ -74,9 +76,11 @@ pub mod prelude {
     pub use crate::{
         Aggregate, AggregateQuery, AggregateScalar, Column, Cte, CteQuery, Encodable, Error,
         Executor, Filter, GroupBy, GroupedQuery, HierarchyDirection, HierarchyNode, HierarchyQuery,
-        InsertQuery, IsolationLevel, Join2, JoinKind, JoinOn, JsonColumn, LeftJoin2, Maybe, Model,
-        NestedConnectOrCreate, NestedCreate, NestedRelWrite, Numeric, OrderBy, Page, Pool,
-        RawFragment, RelNestedOp, Related, SelectQuery, SetOp, SetOpQuery, Tx, Value, raw,
+        InMemoryCache, InsertQuery, IsolationLevel, Join2, JoinKind, JoinOn, JsonColumn, LeftJoin2,
+        LineString, LoadBalancing, Maybe, Model, MultiPolygon, NestedConnectOrCreate, NestedCreate,
+        NestedRelWrite, Numeric, OrderBy, Page, Point, Polygon, Pool, QueryCache, RawFragment,
+        RelNestedOp, Related, ReplicaPool, RoutedPool, RoutedPoolBuilder, SelectQuery, SetOp,
+        SetOpQuery, Tx, Value, raw,
     };
 }
 
@@ -84,14 +88,18 @@ pub use aggregate::{
     Aggregate, AggregateEntry, AggregateKind, AggregateScalar, AggregateSet, GroupBy,
     IntoAggregate, Numeric,
 };
+pub use cache::{InMemoryCache, QueryCache};
 pub use col::{Column, Projection};
-pub use compile::{CompiledSql, delete, dialect_for_pool, insert, insert_many, select, update};
+pub use compile::{
+    CompiledSql, PlanCache, delete, dialect_for_pool, insert, insert_many, sanitize_sql, select,
+    update,
+};
 pub use counting::CountingExecutor;
 pub use error::Error;
 pub use executor::{Executor, RowBatch, decode_rows};
 pub use filter::{
-    Cte, CteQuery, ExistsSubquery, Filter, FilterNode, JsonFilterOp, RawFragment, Subquery, all,
-    any,
+    Cte, CteQuery, ExistsSubquery, Filter, FilterNode, JsonFilterOp, RawFragment, SpatialOp,
+    Subquery, all, any,
 };
 pub use hierarchy::{HierarchyDirection, HierarchyNode, HierarchyQuery};
 pub use include::{IncludeList, IncludeMany, IncludeOne, IncludeSet};
@@ -104,7 +112,10 @@ pub use nested::{
 };
 pub use order::OrderBy;
 pub use page::Page;
-pub use pool::{Pool, PoolConfig, PoolStats, connect, connect_with, ping, stats};
+pub use pool::{
+    LoadBalancing, Pool, PoolConfig, PoolStats, ReplicaPool, RoutedPool, RoutedPoolBuilder,
+    connect, connect_with, ping, stats,
+};
 pub use query::{
     AggregateQuery, DeleteQuery, GroupedQuery, InsertManyQuery, InsertQuery, NestedSetter,
     SelectQuery, SetOp, SetOpQuery, UpdateQuery,
@@ -114,6 +125,7 @@ pub use related::Related;
 pub use ruprizzle_macros::raw;
 pub use serde;
 pub use serde_json;
+pub use spatial::{LineString, MultiPolygon, Point, Polygon};
 pub use sqlx;
 pub use tx::{IsolationLevel, Savepoint, Tx, is_retryable};
 pub use value::{Encodable, Ordered, Value};
