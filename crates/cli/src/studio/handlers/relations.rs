@@ -27,9 +27,8 @@ pub async fn render_relation_drawer(
     Path((model_name, id)): Path<(String, String)>,
     State(state): State<Arc<AppState>>,
 ) -> Response {
-    let model = match state.schema.model(&model_name) {
-        Some(m) => m,
-        None => return (StatusCode::NOT_FOUND, "Model not found").into_response(),
+    let Some(model) = state.schema.model(&model_name) else {
+        return (StatusCode::NOT_FOUND, "Model not found").into_response();
     };
 
     let mut fields = Vec::new();

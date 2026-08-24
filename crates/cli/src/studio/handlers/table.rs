@@ -95,14 +95,13 @@ pub async fn render_table_view(
     Query(query): Query<TableQuery>,
     State(state): State<Arc<AppState>>,
 ) -> Response {
-    let model = match state.schema.model(&model_name) {
-        Some(m) => m,
-        None => return (StatusCode::NOT_FOUND, "Model not found").into_response(),
+    let Some(model) = state.schema.model(&model_name) else {
+        return (StatusCode::NOT_FOUND, "Model not found").into_response();
     };
 
     let fields = extract_field_infos(model);
     let page = query.page.unwrap_or(1);
-    let rows = fetch_model_rows(model, page, query.search.as_deref()).await;
+    let rows = fetch_model_rows(model, page, query.search.as_deref());
 
     let tmpl = TableViewTemplate {
         models: &state.models,
@@ -130,14 +129,13 @@ pub async fn render_table_grid(
     Query(query): Query<TableQuery>,
     State(state): State<Arc<AppState>>,
 ) -> Response {
-    let model = match state.schema.model(&model_name) {
-        Some(m) => m,
-        None => return (StatusCode::NOT_FOUND, "Model not found").into_response(),
+    let Some(model) = state.schema.model(&model_name) else {
+        return (StatusCode::NOT_FOUND, "Model not found").into_response();
     };
 
     let fields = extract_field_infos(model);
     let page = query.page.unwrap_or(1);
-    let rows = fetch_model_rows(model, page, query.search.as_deref()).await;
+    let rows = fetch_model_rows(model, page, query.search.as_deref());
 
     let tmpl = TableGridTemplate {
         current_model: &model_name,
@@ -171,9 +169,8 @@ pub async fn insert_row(
             .into_response();
     }
 
-    let model = match state.schema.model(&model_name) {
-        Some(m) => m,
-        None => return (StatusCode::NOT_FOUND, "Model not found").into_response(),
+    let Some(model) = state.schema.model(&model_name) else {
+        return (StatusCode::NOT_FOUND, "Model not found").into_response();
     };
 
     let generated_id = form.get("id").cloned().unwrap_or_else(|| "1".to_string());
@@ -232,18 +229,16 @@ pub async fn patch_cell(
             .into_response();
     }
 
-    let model = match state.schema.model(&model_name) {
-        Some(m) => m,
-        None => return (StatusCode::NOT_FOUND, "Model not found").into_response(),
+    let Some(model) = state.schema.model(&model_name) else {
+        return (StatusCode::NOT_FOUND, "Model not found").into_response();
     };
 
-    let field = match model
+    let Some(field) = model
         .fields
         .values()
         .find(|f| f.name.as_str() == query.column)
-    {
-        Some(f) => f,
-        None => return (StatusCode::BAD_REQUEST, "Column not found").into_response(),
+    else {
+        return (StatusCode::BAD_REQUEST, "Column not found").into_response();
     };
 
     let updated_value = form.value.unwrap_or_default();
@@ -306,7 +301,7 @@ fn extract_field_infos(model: &ruprizzle_core::ir::Model) -> Vec<FieldInfo> {
         .collect()
 }
 
-async fn fetch_model_rows(
+fn fetch_model_rows(
     model: &ruprizzle_core::ir::Model,
     _page: usize,
     _search: Option<&str>,

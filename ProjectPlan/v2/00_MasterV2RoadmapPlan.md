@@ -126,3 +126,13 @@ cargo xtask harden
 # 4. Documentation
 cargo doc --workspace --no-deps
 ```
+
+---
+
+## 5. Audit & Quality Fixes Verification Log (v1.1 - v1.5)
+
+- **Trait Bound Mismatch in Integration Tests (`tests/integration/tests/geospatial.rs`)**: Resolved `Location` mock model `RowDecode` requirement by implementing `FromRusqliteRow`, `FromOwnedRow`, and `tokio_postgres_default_row!(Location)` under respective driver feature flags.
+- **Studio Clippy Quality (`crates/cli/src/studio/handlers/`)**: Refactored `match` expressions into idiomatic `let ... else` in `relations.rs` and `table.rs`, and eliminated `unused_async` on `fetch_model_rows`.
+- **Query Cache Memory Leak Prevention (`crates/runtime/src/cache.rs`)**: Fixed secondary tag index retention when multi-tagged cache entries are invalidated via `invalidate_tag`, and verified with dedicated test coverage.
+- **Mechanical Gates**: 100% passing across `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `$env:RUPRIZZLE_TEST_RUSQLITE=1`, `cargo doc`, and `cargo xtask harden`.
+

@@ -162,9 +162,28 @@ impl QueryCache for InMemoryCache {
         };
 
         if !keys_to_remove.is_empty() {
+            let mut other_tags_to_prune: Vec<(String, String)> = Vec::new();
             if let Ok(mut entries) = self.entries.write() {
-                for key in keys_to_remove {
-                    entries.remove(&key);
+                for key in &keys_to_remove {
+                    if let Some(entry) = entries.remove(key) {
+                        for t in entry.tags {
+                            if t != tag {
+                                other_tags_to_prune.push((t, key.clone()));
+                            }
+                        }
+                    }
+                }
+            }
+            if !other_tags_to_prune.is_empty() {
+                if let Ok(mut tag_index) = self.tag_index.write() {
+                    for (t, k) in other_tags_to_prune {
+                        if let Some(set) = tag_index.get_mut(&t) {
+                            set.remove(&k);
+                            if set.is_empty() {
+                                tag_index.remove(&t);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -218,5 +237,19 @@ mod tests {
         assert_eq!(cache.get("user_1"), None);
         assert_eq!(cache.get("user_2"), None);
         assert_eq!(cache.get("post_1"), Some(b"data3".to_vec()));
+
+        // Ensure "admins" tag index was pruned when user_2 was removed
+        assert!(cache.tag_index.read().unwrap().get("admins").is_none());
+    }
+
+    #[test]
+    fn cache_secondary_tag_cleanup() {
+        let cache = InMemoryCache::new(100);
+        cache.set("shared", b"shared_data".to_vec(), None, &["t1", "t2", "t3"]);
+        assert_eq!(cache.tag_index.read().unwrap().len(), 3);
+
+        cache.invalidate_tag("t2");
+        assert_eq!(cache.get("shared"), None);
+        assert_eq!(cache.tag_index.read().unwrap().len(), 0);
     }
 }

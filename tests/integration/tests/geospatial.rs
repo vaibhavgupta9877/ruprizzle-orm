@@ -76,6 +76,23 @@ impl<'r> sqlx::FromRow<'r, sqlx::mysql::MySqlRow> for Location {
     }
 }
 
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Location);
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Location {
+    fn from_rusqlite_row(_: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
+        Ok(Location)
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Location {
+    fn from_owned_row(_: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Location)
+    }
+}
+
 impl Model for Location {
     const TABLE: &'static str = "locations";
     const PRIMARY_KEY: &'static str = "id";
