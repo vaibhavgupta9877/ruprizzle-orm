@@ -4,9 +4,7 @@ This page covers the feature line developed on `dev-v2-x` after `1.0.0`.
 
 > **Release status.** All of it shipped as **`1.5.0`** (tag `v1.5.0`). The workspace
 > never moved off `1.0.0` while these five milestones landed, so the intermediate
-> numbers were never cut and one minor version carries the whole line. The three edge
-> adapter crates are the exception: they are `publish = false` in-memory stubs and are
-> **not** on crates.io — see [v1.5](#v15--ruprizzle-studio) below.
+> numbers were never cut and one minor version carries the whole line.
 >
 > This line was assessed and initially **blocked**; the findings and what each of them
 > became are in
@@ -266,23 +264,47 @@ Two limits worth knowing:
   `turso.io` in the URL. It will not catch an RDS endpoint or a bare IP. Treat it as a
   speed bump.
 
-### `ruprizzle-turso`, `ruprizzle-d1`, `ruprizzle-neon` — in-memory stubs, not published
+### `ruprizzle-turso` and `ruprizzle-d1` — adapters over their providers’ HTTP APIs
 
-**These are not database adapters and are not on crates.io** (`publish = false`). None
-declares a driver dependency — no `libsql`, no Cloudflare `worker`, no HTTP client.
-`InMemoryTursoStub`, `InMemoryD1Stub` and `InMemoryNeonStub` implement `Executor`
-against a process-local `HashMap`: writes are lost when the process exits, and any
-credential you pass is stored and never transmitted. `InMemoryTursoStub::sync()` always
-returns `TursoError::Unsupported`.
+Both are real drivers, published, and tested end to end against a local HTTP server
+so neither the tests nor a contributor need an account.
 
-They exist so code written against the `Executor` trait can be exercised without a
-database. To reach these providers for real today:
+| Crate | Protocol | Endpoint |
+|---|---|---|
+| `ruprizzle-turso` | [Hrana 2 over HTTP](https://github.com/tursodatabase/libsql/blob/main/docs/HRANA_3_SPEC.md) | `POST {url}/v2/pipeline` |
+| `ruprizzle-d1` | [Cloudflare REST API](https://developers.cloudflare.com/api/resources/d1/) | `POST /accounts/{account}/d1/database/{database}/query` |
 
-- **Neon** speaks ordinary Postgres over TLS — pass its connection string straight to
-  `ruprizzle::connect`. No adapter crate is involved.
-- **Turso** — point `ruprizzle::connect` at the SQLite file of an embedded replica you
-  synchronise yourself.
-- **Cloudflare D1** has no supported path yet; use `wrangler` or the D1 HTTP API.
+```rust,no_run
+let pool = TursoPool::builder()
+    .url("libsql://your-db.turso.io")
+    .auth_token(std::env::var("TURSO_AUTH_TOKEN")?)
+    .build()?;
+```
+
+Both speak the SQLite dialect, bind parameters positionally with `?`, and store
+booleans as `1` and `0`. Credentials are sent as bearer tokens and are redacted from
+`Debug` output.
+
+What they do not do, in both cases for the same reason — one HTTP request per
+statement, with no server-side session:
+
+- **No interactive transactions.** `BEGIN` and `COMMIT` sent separately would not
+  share a connection. Batch the work into one statement, or use a SQLite file
+  through `ruprizzle::connect`.
+- **No streaming transport.** `stream_raw` is a streaming *interface*; the whole
+  result set arrives in one response.
+
+Turso also has no embedded-replica support — that needs the native libSQL library —
+and D1 takes no binary parameter over HTTP, so a `Bytes` value is refused rather than
+mangled. Inside a Cloudflare Worker you have a D1 binding, which is faster and needs
+no token; `ruprizzle-d1` is for talking to D1 from outside one.
+
+### There is no Neon adapter
+
+`ruprizzle-neon` has been deleted. Neon speaks ordinary Postgres over TLS, so its
+connection string goes straight to `ruprizzle::connect` and an adapter crate would
+have been a wrapper around nothing. The stub was carrying a promise the provider
+never needed.
 
 The genuinely useful piece of this milestone is underneath: the runtime `Executor` trait
 is now decoupled from `sqlx`, so a third-party backend can implement it directly.

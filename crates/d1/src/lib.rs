@@ -1,79 +1,96 @@
-//! In-memory Cloudflare D1 **test double** for the `ruprizzle` ORM.
+//! Cloudflare D1 adapter for the `ruprizzle` ORM.
 //!
-//! # This crate performs no network I/O
+//! [`D1Pool`] implements [`ruprizzle::Executor`] against a D1 database through the
+//! [Cloudflare REST API][api]: each statement is one
+//! `POST /accounts/{account}/d1/database/{database}/query`, authenticated with an
+//! API token.
 //!
-//! [`InMemoryD1Stub`] implements [`ruprizzle::Executor`] against a process-local
-//! `HashMap`. It does **not** call the Cloudflare D1 REST API, does not run inside a
-//! Worker, and never transmits the configured `api_token` anywhere. Every value
-//! written through it is lost when the process exits.
+//! [api]: https://developers.cloudflare.com/api/resources/d1/
 //!
-//! It exists so that code written against the `Executor` trait can be exercised
-//! without a database, and so that the shape of a future real adapter is pinned down.
-//! It is **not** published to crates.io (`publish = false`) and must not be used as a
-//! production backend.
+//! # What this adapter does and does not do
 //!
-//! # Supported subset
+//! This is the adapter for code that talks to D1 **from outside** a Worker — a CLI, a
+//! migration job, a server. Inside a Worker you have a D1 binding, which is faster
+//! and needs no token; this crate does not use bindings.
 //!
-//! - `SELECT ... FROM <table>` returns every row previously inserted for `<table>`.
-//!   Filters, joins, ordering, and limits are **ignored**.
-//! - `INSERT INTO <table> (a, b) VALUES (...)` appends one row, naming the bound
-//!   values after the declared column list. Without a column list the binds are
-//!   named `col_0`, `col_1`, ....
-//! - Every other statement is accepted and discarded.
+//! Every statement is one HTTP request, so there is no interactive transaction:
+//! `BEGIN` and `COMMIT` sent separately would not share a connection and are not
+//! supported. D1's HTTP interface also takes no binary parameter, so [`ruprizzle`]
+//! `Bytes` values are refused rather than mangled — store them encoded in a text
+//! column.
 //!
 //! # Example
 //!
 //! ```no_run
-//! use ruprizzle_d1::InMemoryD1Stub;
+//! use ruprizzle::Executor;
+//! use ruprizzle::value::Value;
+//! use ruprizzle_d1::D1Pool;
 //!
 //! # async fn doc() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//! let pool = InMemoryD1Stub::builder()
-//!     .account_id("cf_account_123")
-//!     .database_id("d1_database_uuid")
-//!     .build()
-//!     .await?;
+//! let pool = D1Pool::builder()
+//!     .account_id(std::env::var("CLOUDFLARE_ACCOUNT_ID")?)
+//!     .database_id(std::env::var("D1_DATABASE_ID")?)
+//!     .api_token(std::env::var("CLOUDFLARE_API_TOKEN")?)
+//!     .build()?;
 //!
-//! assert_eq!(pool.database_id(), Some("d1_database_uuid"));
+//! let rows = pool
+//!     .fetch_all_raw("SELECT id, email FROM users WHERE id = ?".into(), vec![Value::I64(7)])
+//!     .await?;
+//! # let _ = rows;
 //! # Ok(())
 //! # }
 //! ```
 
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
-#![allow(clippy::unused_async)]
+
+mod api;
 
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use futures_core::future::BoxFuture;
+use futures_util::StreamExt as _;
 use ruprizzle::executor::{BoxRowStream, Executor, RawRow, RowBatch};
 use ruprizzle::value::Value;
 use ruprizzle_dialect::{DbDialect, SqliteDialect};
 use thiserror::Error;
-use tokio::sync::RwLock;
 
-/// Dialect instance for Cloudflare D1 (`SQLite` compatible).
+use api::{Envelope, QueryRequest};
+
+/// Dialect instance for D1, which is `SQLite`.
 static SQLITE_DIALECT: SqliteDialect = SqliteDialect;
 
-/// Error returned by Cloudflare D1 operations.
+/// The Cloudflare API root, overridable for testing and for private gateways.
+const DEFAULT_ENDPOINT: &str = "https://api.cloudflare.com/client/v4";
+
+/// How long to wait for a single statement before giving up.
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Errors raised by the D1 adapter.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum D1Error {
-    /// Configuration error.
-    #[error("D1 configuration error: {0}")]
+    /// The pool was configured with something it cannot use.
+    #[error("d1 configuration error: {0}")]
     Config(String),
 
-    /// HTTP request or API error.
-    #[error("D1 API error: {0}")]
-    Api(String),
+    /// The request never completed: DNS, TLS, connection or timeout.
+    #[error("d1 transport error: {0}")]
+    Transport(String),
 
-    /// Query execution error.
-    #[error("D1 query error: {0}")]
+    /// Cloudflare answered, but not with an envelope we can read.
+    #[error("d1 protocol error: {0}")]
+    Protocol(String),
+
+    /// Cloudflare reported the statement as failed.
+    #[error("d1 query error: {0}")]
     Query(String),
 
-    /// Internal error.
-    #[error("internal D1 error: {0}")]
-    Internal(String),
+    /// The operation has no representation in D1's HTTP interface.
+    #[error("unsupported by the D1 HTTP adapter: {0}")]
+    Unsupported(String),
 }
 
 impl From<D1Error> for ruprizzle::Error {
@@ -82,202 +99,210 @@ impl From<D1Error> for ruprizzle::Error {
     }
 }
 
-/// Configuration options for connecting to Cloudflare D1.
-#[derive(Debug, Clone, Default)]
-pub struct D1Config {
-    /// Cloudflare Account ID.
-    pub account_id: Option<String>,
-    /// Cloudflare D1 Database ID (UUID).
-    pub database_id: Option<String>,
-    /// Cloudflare API Bearer token.
-    pub api_token: Option<String>,
-    /// Custom REST API endpoint (e.g. for Miniflare local development).
-    pub endpoint: Option<String>,
-}
-
-/// Builder for creating configured [`InMemoryD1Stub`] instances.
+/// Builder for [`D1Pool`].
 #[derive(Debug, Default)]
-pub struct InMemoryD1StubBuilder {
-    config: D1Config,
+pub struct D1PoolBuilder {
+    account_id: Option<String>,
+    database_id: Option<String>,
+    api_token: Option<String>,
+    endpoint: Option<String>,
+    timeout: Option<Duration>,
 }
 
-impl InMemoryD1StubBuilder {
-    /// Creates a new builder with default configuration.
+impl D1PoolBuilder {
+    /// Creates a builder with no configuration.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Sets the Cloudflare Account ID.
+    /// Sets the Cloudflare account that owns the database.
     #[must_use]
     pub fn account_id(mut self, id: impl Into<String>) -> Self {
-        self.config.account_id = Some(id.into());
+        self.account_id = Some(id.into());
         self
     }
 
-    /// Sets the Cloudflare D1 Database ID.
+    /// Sets the D1 database UUID.
     #[must_use]
     pub fn database_id(mut self, id: impl Into<String>) -> Self {
-        self.config.database_id = Some(id.into());
+        self.database_id = Some(id.into());
         self
     }
 
-    /// Sets the Cloudflare API Bearer token.
+    /// Sets the API token, sent as a bearer credential on every request.
+    ///
+    /// The token needs the `D1:edit` permission on the account.
     #[must_use]
     pub fn api_token(mut self, token: impl Into<String>) -> Self {
-        self.config.api_token = Some(token.into());
+        self.api_token = Some(token.into());
         self
     }
 
-    /// Sets a custom REST API endpoint.
+    /// Overrides the API root. Defaults to `https://api.cloudflare.com/client/v4`.
     #[must_use]
     pub fn endpoint(mut self, url: impl Into<String>) -> Self {
-        self.config.endpoint = Some(url.into());
+        self.endpoint = Some(url.into());
         self
     }
 
-    /// Builds and initializes the [`InMemoryD1Stub`].
+    /// Overrides the per-statement timeout. Defaults to 30 seconds.
+    #[must_use]
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    /// Builds the pool.
+    ///
+    /// This does not contact Cloudflare; the first statement does. Nothing here can
+    /// tell you the token is valid or the database exists.
     ///
     /// # Errors
     ///
-    /// Returns [`D1Error::Config`] if required credentials are missing.
-    pub async fn build(self) -> Result<InMemoryD1Stub, D1Error> {
-        if self.config.database_id.is_none() && self.config.endpoint.is_none() {
-            return Err(D1Error::Config(
-                "`database_id` or `endpoint` must be configured for InMemoryD1Stub".into(),
-            ));
-        }
+    /// Returns [`D1Error::Config`] when the account, database or token is missing,
+    /// and when the HTTP client cannot be constructed (which on most platforms means
+    /// no usable TLS root store).
+    pub fn build(self) -> Result<D1Pool, D1Error> {
+        let account_id = self
+            .account_id
+            .ok_or_else(|| D1Error::Config("no `account_id` was configured".into()))?;
+        let database_id = self
+            .database_id
+            .ok_or_else(|| D1Error::Config("no `database_id` was configured".into()))?;
+        let api_token = self.api_token.ok_or_else(|| {
+            D1Error::Config("no `api_token` was configured; the D1 REST API is not open".into())
+        })?;
 
-        let inner = Arc::new(InMemoryD1StubInner {
-            config: self.config,
-            memory_store: RwLock::new(HashMap::new()),
-        });
+        let root = self.endpoint.unwrap_or_else(|| DEFAULT_ENDPOINT.to_owned());
+        let query_url = format!(
+            "{}/accounts/{account_id}/d1/database/{database_id}/query",
+            root.trim_end_matches('/')
+        );
 
-        Ok(InMemoryD1Stub { inner })
-    }
-}
+        let http = reqwest::Client::builder()
+            .timeout(self.timeout.unwrap_or(DEFAULT_TIMEOUT))
+            .build()
+            .map_err(|e| D1Error::Config(format!("cannot build the HTTP client: {e}")))?;
 
-#[derive(Debug)]
-struct InMemoryD1StubInner {
-    config: D1Config,
-    memory_store: RwLock<HashMap<String, Vec<HashMap<String, Value>>>>,
-}
-
-/// A connection pool managing access to Cloudflare D1.
-#[derive(Debug, Clone)]
-pub struct InMemoryD1Stub {
-    inner: Arc<InMemoryD1StubInner>,
-}
-
-impl InMemoryD1Stub {
-    /// Returns a new [`InMemoryD1StubBuilder`].
-    #[must_use]
-    pub fn builder() -> InMemoryD1StubBuilder {
-        InMemoryD1StubBuilder::new()
-    }
-
-    /// Returns the configured database ID, if any.
-    #[must_use]
-    pub fn database_id(&self) -> Option<&str> {
-        self.inner.config.database_id.as_deref()
-    }
-
-    /// Returns the configured account ID, if any.
-    #[must_use]
-    pub fn account_id(&self) -> Option<&str> {
-        self.inner.config.account_id.as_deref()
-    }
-
-    /// Executes a SQL query against the D1 backend.
-    async fn execute_internal(&self, sql: &str, binds: &[Value]) -> Result<RowBatch, D1Error> {
-        let trimmed = sql.trim();
-        let upper = trimmed.to_uppercase();
-
-        if upper.starts_with("SELECT") {
-            let mut store = self.inner.memory_store.write().await;
-            let table_name = extract_table_name(trimmed);
-            let rows = store.entry(table_name).or_default().clone();
-            Ok(RowBatch::Edge(rows))
-        } else if upper.starts_with("INSERT") {
-            let mut store = self.inner.memory_store.write().await;
-            let table_name = extract_table_name(trimmed);
-            let columns = extract_insert_columns(trimmed);
-            let mut row = HashMap::new();
-            for (idx, val) in binds.iter().enumerate() {
-                let name = columns
-                    .get(idx)
-                    .cloned()
-                    .unwrap_or_else(|| format!("col_{idx}"));
-                row.insert(name, val.clone());
-            }
-            store.entry(table_name).or_default().push(row);
-            Ok(RowBatch::Edge(Vec::new()))
-        } else {
-            Ok(RowBatch::Edge(Vec::new()))
-        }
-    }
-}
-
-/// Extracts the declared column list of an `INSERT INTO t (a, b) VALUES ...`.
-///
-/// Returns an empty vector when the statement declares no column list, in which case
-/// the caller falls back to positional `col_N` names.
-fn extract_insert_columns(sql: &str) -> Vec<String> {
-    let upper = sql.to_uppercase();
-    let Some(into_idx) = upper.find(" INTO ") else {
-        return Vec::new();
-    };
-    let Some(rest) = sql.get(into_idx + 6..) else {
-        return Vec::new();
-    };
-    let Some(open) = rest.find('(') else {
-        return Vec::new();
-    };
-    let (Some(before), Some(from_open)) = (rest.get(..open), rest.get(open + 1..)) else {
-        return Vec::new();
-    };
-    let Some(close) = from_open.find(')') else {
-        return Vec::new();
-    };
-    // Only a column list may sit between the table name and the first `(`.
-    if before.split_whitespace().count() != 1 {
-        return Vec::new();
-    }
-    let Some(list) = from_open.get(..close) else {
-        return Vec::new();
-    };
-    list.split(',')
-        .map(|c| {
-            c.trim()
-                .trim_matches(|ch| ch == '"' || ch == '`' || ch == '\'')
-                .to_string()
+        Ok(D1Pool {
+            inner: Arc::new(D1PoolInner {
+                http,
+                query_url,
+                account_id,
+                database_id,
+                api_token,
+            }),
         })
-        .filter(|c| !c.is_empty())
-        .collect()
-}
-
-fn extract_table_name(sql: &str) -> String {
-    let upper = sql.to_uppercase();
-    if let Some(from_idx) = upper.find(" FROM ") {
-        let rest = sql.get(from_idx + 6..).unwrap_or("").trim();
-        rest.split(|c: char| c.is_whitespace() || c == ';' || c == '(')
-            .next()
-            .unwrap_or("default")
-            .trim_matches(|c| c == '"' || c == '`' || c == '\'')
-            .to_string()
-    } else if let Some(into_idx) = upper.find(" INTO ") {
-        let rest = sql.get(into_idx + 6..).unwrap_or("").trim();
-        rest.split(|c: char| c.is_whitespace() || c == ';' || c == '(')
-            .next()
-            .unwrap_or("default")
-            .trim_matches(|c| c == '"' || c == '`' || c == '\'')
-            .to_string()
-    } else {
-        "default".to_string()
     }
 }
 
-impl Executor for InMemoryD1Stub {
+struct D1PoolInner {
+    http: reqwest::Client,
+    /// The full `…/query` URL every statement is posted to.
+    query_url: String,
+    account_id: String,
+    database_id: String,
+    api_token: String,
+}
+
+/// Redacts the API token.
+///
+/// `D1Pool` is held inside application state that is routinely logged, and a derived
+/// `Debug` would put a Cloudflare credential in the log line.
+impl std::fmt::Debug for D1PoolInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("D1PoolInner")
+            .field("query_url", &self.query_url)
+            .field("account_id", &self.account_id)
+            .field("database_id", &self.database_id)
+            .field("api_token", &"<redacted>")
+            // `http` is omitted: a `reqwest::Client` renders as an opaque blob that
+            // tells a reader nothing the URL has not already said.
+            .finish_non_exhaustive()
+    }
+}
+
+/// A handle to a Cloudflare D1 database over the REST API.
+///
+/// Cloning is cheap and shares one connection pool, so clone this rather than
+/// building a second one.
+#[derive(Debug, Clone)]
+pub struct D1Pool {
+    inner: Arc<D1PoolInner>,
+}
+
+impl D1Pool {
+    /// Returns a new [`D1PoolBuilder`].
+    #[must_use]
+    pub fn builder() -> D1PoolBuilder {
+        D1PoolBuilder::new()
+    }
+
+    /// The Cloudflare account this pool queries.
+    #[must_use]
+    pub fn account_id(&self) -> &str {
+        &self.inner.account_id
+    }
+
+    /// The D1 database this pool queries.
+    #[must_use]
+    pub fn database_id(&self) -> &str {
+        &self.inner.database_id
+    }
+
+    /// Sends one statement and returns Cloudflare's result for it.
+    async fn query(&self, sql: &str, binds: &[Value]) -> Result<api::QueryResult, D1Error> {
+        let params = binds
+            .iter()
+            .map(api::to_json)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let response = self
+            .inner
+            .http
+            .post(&self.inner.query_url)
+            .bearer_auth(&self.inner.api_token)
+            .json(&QueryRequest {
+                sql: sql.to_owned(),
+                params,
+            })
+            .send()
+            .await
+            .map_err(|e| D1Error::Transport(e.to_string()))?;
+
+        let status = response.status();
+        let text = response
+            .text()
+            .await
+            .map_err(|e| D1Error::Transport(format!("cannot read the response body: {e}")))?;
+
+        // Cloudflare returns its `{success, errors}` envelope on 4xx as well, and
+        // that envelope carries the useful message, so it is parsed first and the
+        // status is only reported when the body is unreadable.
+        match serde_json::from_str::<Envelope>(&text) {
+            Ok(envelope) => envelope.single_result(),
+            Err(e) if status.is_success() => Err(D1Error::Protocol(format!(
+                "cannot parse the D1 response: {e}; body was {}",
+                truncate(&text, 512)
+            ))),
+            Err(_) => Err(D1Error::Protocol(format!(
+                "Cloudflare answered {status}: {}",
+                truncate(&text, 512)
+            ))),
+        }
+    }
+}
+
+/// Shortens `text` to at most `limit` characters, on a character boundary.
+fn truncate(text: &str, limit: usize) -> Cow<'_, str> {
+    match text.char_indices().nth(limit) {
+        Some((end, _)) => Cow::Owned(format!("{}…", &text[..end])),
+        None => Cow::Borrowed(text),
+    }
+}
+
+impl Executor for D1Pool {
     fn dialect(&self) -> &dyn DbDialect {
         &SQLITE_DIALECT
     }
@@ -288,9 +313,8 @@ impl Executor for InMemoryD1Stub {
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<RowBatch, ruprizzle::Error>> {
         Box::pin(async move {
-            self.execute_internal(&sql, &binds)
-                .await
-                .map_err(ruprizzle::Error::from)
+            let result = self.query(&sql, &binds).await?;
+            Ok(RowBatch::Edge(result.into_edge_rows()))
         })
     }
 
@@ -299,24 +323,27 @@ impl Executor for InMemoryD1Stub {
         sql: Cow<'static, str>,
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<u64, ruprizzle::Error>> {
-        Box::pin(async move {
-            self.execute_internal(&sql, &binds)
-                .await
-                .map(|b| b.len() as u64)
-                .map_err(ruprizzle::Error::from)
-        })
+        Box::pin(async move { Ok(self.query(&sql, &binds).await?.meta.changes) })
     }
 
     fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
-        let fut = self.fetch_all_raw(sql, binds);
-        Box::pin(futures_util::stream::once(async move {
-            fut.await.and_then(|batch| {
-                let first = batch.as_edge_rows().and_then(|r| r.first()).cloned();
-                first
-                    .map(RawRow::Edge)
-                    .ok_or_else(|| ruprizzle::Error::Message("empty result".into()))
-            })
-        }))
+        // D1 returns the whole result set in one response, so this fetches and then
+        // yields. It is a streaming interface, not a streaming transport: memory use
+        // is that of the full result.
+        Box::pin(
+            futures_util::stream::once(self.fetch_all_raw(sql, binds)).flat_map(|batch| {
+                let rows = match batch {
+                    Ok(RowBatch::Edge(rows)) => {
+                        rows.into_iter().map(RawRow::Edge).map(Ok).collect()
+                    }
+                    Ok(_) => vec![Err(ruprizzle::Error::Message(
+                        "the D1 adapter only produces edge rows".into(),
+                    ))],
+                    Err(e) => vec![Err(e)],
+                };
+                futures_util::stream::iter(rows)
+            }),
+        )
     }
 }
 
@@ -324,86 +351,66 @@ impl Executor for InMemoryD1Stub {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_d1_builder_config() {
-        let pool = InMemoryD1Stub::builder()
-            .account_id("account_xyz")
-            .database_id("d1_uuid_456")
-            .api_token("secret_bearer")
+    fn pool() -> D1Pool {
+        D1Pool::builder()
+            .account_id("acct")
+            .database_id("db-uuid")
+            .api_token("secret-token")
             .build()
-            .await
-            .unwrap();
-
-        assert_eq!(pool.account_id(), Some("account_xyz"));
-        assert_eq!(pool.database_id(), Some("d1_uuid_456"));
+            .unwrap()
     }
 
-    #[tokio::test]
-    async fn test_d1_executor_query() {
-        let pool = InMemoryD1Stub::builder()
-            .database_id("d1_test_db")
-            .build()
-            .await
-            .unwrap();
-
-        assert_eq!(pool.dialect().name(), "sqlite");
-
-        let rows = pool
-            .fetch_all_raw(Cow::Borrowed("SELECT * FROM users"), Vec::new())
-            .await
-            .unwrap();
-        assert!(rows.is_empty());
+    #[test]
+    fn the_query_url_is_built_from_the_account_and_database() {
+        let pool = pool();
+        assert_eq!(
+            pool.inner.query_url,
+            "https://api.cloudflare.com/client/v4/accounts/acct/d1/database/db-uuid/query"
+        );
     }
 
-    #[tokio::test]
-    async fn insert_round_trips_under_declared_column_names() {
-        let pool = InMemoryD1Stub::builder()
-            .database_id("d1_test_db")
+    #[test]
+    fn an_overridden_endpoint_keeps_the_path_shape() {
+        let pool = D1Pool::builder()
+            .account_id("a")
+            .database_id("b")
+            .api_token("t")
+            .endpoint("http://127.0.0.1:9999/")
             .build()
-            .await
             .unwrap();
-
-        pool.execute_raw(
-            Cow::Borrowed("INSERT INTO users (id, email) VALUES (?, ?)"),
-            vec![Value::I64(7), Value::Str("a@b.c".into())],
-        )
-        .await
-        .unwrap();
-
-        let batch = pool
-            .fetch_all_raw(Cow::Borrowed("SELECT * FROM users"), Vec::new())
-            .await
-            .unwrap();
-        let rows = batch.as_edge_rows().unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].get("id"), Some(&Value::I64(7)));
-        assert_eq!(rows[0].get("email"), Some(&Value::Str("a@b.c".into())));
+        assert_eq!(
+            pool.inner.query_url,
+            "http://127.0.0.1:9999/accounts/a/d1/database/b/query"
+        );
     }
 
-    #[tokio::test]
-    async fn writes_do_not_survive_a_new_stub() {
-        let first = InMemoryD1Stub::builder()
-            .database_id("d1_test_db")
-            .build()
-            .await
-            .unwrap();
-        first
-            .execute_raw(
-                Cow::Borrowed("INSERT INTO users (id) VALUES (?)"),
-                vec![Value::I64(1)],
-            )
-            .await
-            .unwrap();
+    #[test]
+    fn every_credential_is_required() {
+        assert!(matches!(
+            D1Pool::builder().database_id("b").api_token("t").build(),
+            Err(D1Error::Config(_))
+        ));
+        assert!(matches!(
+            D1Pool::builder().account_id("a").api_token("t").build(),
+            Err(D1Error::Config(_))
+        ));
+        assert!(matches!(
+            D1Pool::builder().account_id("a").database_id("b").build(),
+            Err(D1Error::Config(_))
+        ));
+    }
 
-        let second = InMemoryD1Stub::builder()
-            .database_id("d1_test_db")
-            .build()
-            .await
-            .unwrap();
-        let batch = second
-            .fetch_all_raw(Cow::Borrowed("SELECT * FROM users"), Vec::new())
-            .await
-            .unwrap();
-        assert!(batch.is_empty(), "the stub stores nothing outside itself");
+    #[test]
+    fn the_api_token_is_not_in_debug_output() {
+        let rendered = format!("{:?}", pool());
+        assert!(
+            !rendered.contains("secret-token"),
+            "the API token must not be in Debug output: {rendered}"
+        );
+    }
+
+    #[test]
+    fn the_dialect_is_sqlite() {
+        assert_eq!(pool().dialect().name(), "sqlite");
     }
 }

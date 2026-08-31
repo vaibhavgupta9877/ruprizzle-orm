@@ -1,87 +1,96 @@
-//! In-memory Turso / libSQL **test double** for the `ruprizzle` ORM.
+//! Turso / libSQL adapter for the `ruprizzle` ORM.
 //!
-//! # This crate performs no network I/O
+//! [`TursoPool`] implements [`ruprizzle::Executor`] by sending each statement to a
+//! libSQL server over the [Hrana 2 HTTP protocol][hrana] — `POST {url}/v2/pipeline`
+//! with the SQL and its bound parameters, and one result set back. It works against
+//! Turso's hosted databases and against any `sqld` you run yourself.
 //!
-//! [`InMemoryTursoStub`] implements [`ruprizzle::Executor`] against a process-local
-//! `HashMap`. It does **not** open a libSQL connection, does not contact a Turso
-//! primary, does not read or write a local replica file, and never transmits the
-//! configured `auth_token` anywhere. Every value written through it is lost when the
-//! process exits.
+//! [hrana]: https://github.com/tursodatabase/libsql/blob/main/docs/HRANA_3_SPEC.md
 //!
-//! It exists so that code written against the `Executor` trait can be exercised
-//! without a database, and so that the shape of a future real adapter is pinned down.
-//! It is **not** published to crates.io (`publish = false`) and must not be used as a
-//! production backend. For real Turso access today, point [`ruprizzle::connect`] at
-//! the `SQLite` file of an embedded replica you synchronise yourself.
+//! # What this adapter does and does not do
 //!
-//! # Supported subset
+//! Every statement is one HTTP request. There is no server-side session, so there is
+//! no interactive transaction: `BEGIN` and `COMMIT` sent as separate statements would
+//! land on unrelated connections and are not supported. Batch the work into a single
+//! statement, or use a `SQLite` file through [`ruprizzle::connect`] when you need
+//! multi-statement transactions.
 //!
-//! - `SELECT ... FROM <table>` returns every row previously inserted for `<table>`.
-//!   Filters, joins, ordering, and limits are **ignored**.
-//! - `INSERT INTO <table> (a, b) VALUES (...)` appends one row, naming the bound
-//!   values after the declared column list. Without a column list the binds are
-//!   named `col_0`, `col_1`, ....
-//! - Every other statement is accepted and discarded.
+//! Embedded replicas — a local `SQLite` file kept in sync with a remote primary — need
+//! the native libSQL library and are out of scope here. If you already have a replica
+//! file, point [`ruprizzle::connect`] at it as an ordinary `SQLite` database.
 //!
 //! # Example
 //!
 //! ```no_run
-//! use ruprizzle_turso::InMemoryTursoStub;
+//! use ruprizzle::Executor;
+//! use ruprizzle::value::Value;
+//! use ruprizzle_turso::TursoPool;
 //!
 //! # async fn doc() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//! let pool = InMemoryTursoStub::builder()
-//!     .local_path("local_replica.db")
-//!     .sync_url("libsql://your-db.turso.io")
-//!     .build()
-//!     .await?;
+//! let pool = TursoPool::builder()
+//!     .url("libsql://your-db.turso.io")
+//!     .auth_token(std::env::var("TURSO_AUTH_TOKEN")?)
+//!     .build()?;
 //!
-//! // `sync()` always fails: there is nothing to synchronise with.
-//! assert!(pool.sync().await.is_err());
+//! let rows = pool
+//!     .fetch_all_raw("SELECT id, email FROM users WHERE id = ?".into(), vec![Value::I64(7)])
+//!     .await?;
+//! # let _ = rows;
 //! # Ok(())
 //! # }
 //! ```
 
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
-#![allow(clippy::unused_async)]
+
+mod hrana;
 
 use std::borrow::Cow;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
 use futures_core::future::BoxFuture;
+use futures_util::StreamExt as _;
 use ruprizzle::executor::{BoxRowStream, Executor, RawRow, RowBatch};
 use ruprizzle::value::Value;
 use ruprizzle_dialect::{DbDialect, SqliteDialect};
 use thiserror::Error;
-use tokio::sync::RwLock;
 
-/// Dialect instance for Turso / libSQL (`SQLite` compatible).
+use hrana::{Pipeline, PipelineResponse, Stmt};
+
+/// Dialect instance for Turso / libSQL, which is `SQLite` compatible.
 static SQLITE_DIALECT: SqliteDialect = SqliteDialect;
 
-/// Error returned by Turso and libSQL operations.
+/// How long to wait for a single statement before giving up.
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Errors raised by the Turso adapter.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum TursoError {
-    /// Configuration or builder error.
+    /// The pool was configured with something it cannot use.
     #[error("turso configuration error: {0}")]
     Config(String),
 
-    /// Connection or synchronization error.
-    #[error("turso sync error: {0}")]
-    Sync(String),
+    /// The request never completed: DNS, TLS, connection or timeout.
+    #[error("turso transport error: {0}")]
+    Transport(String),
 
-    /// Query execution error.
-    #[error("turso query error: {0}")]
-    Query(String),
+    /// The server answered, but not with a `/v2/pipeline` response we can read.
+    #[error("turso protocol error: {0}")]
+    Protocol(String),
 
-    /// Internal error.
-    #[error("internal turso error: {0}")]
-    Internal(String),
+    /// The server rejected the statement.
+    #[error("turso query error: {message}{}", .code.as_deref().map(|c| format!(" ({c})")).unwrap_or_default())]
+    Query {
+        /// The message the server sent.
+        message: String,
+        /// The `SQLITE_*` code, when the server sent one.
+        code: Option<String>,
+    },
 
-    /// The operation is not implemented by the in-memory stub.
-    #[error("unsupported by the in-memory Turso stub: {0}")]
+    /// The operation has no representation in `SQLite` or in stateless HTTP.
+    #[error("unsupported by the Turso HTTP adapter: {0}")]
     Unsupported(String),
 }
 
@@ -91,245 +100,227 @@ impl From<TursoError> for ruprizzle::Error {
     }
 }
 
-/// Statistics reported after synchronization with a remote primary database.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct SyncStats {
-    /// Number of frames received from the primary.
-    pub frames_synced: usize,
-    /// Whether local changes were pushed to primary.
-    pub pushed_local_writes: bool,
-}
-
-/// Configuration options for connecting to a Turso database.
-#[derive(Debug, Clone, Default)]
-pub struct TursoConfig {
-    /// Path to the local embedded replica file.
-    pub local_path: Option<PathBuf>,
-    /// Remote synchronization URL (`libsql://...` or `https://...`).
-    pub sync_url: Option<String>,
-    /// Authentication token for remote Turso organization.
-    pub auth_token: Option<String>,
-    /// Periodic background sync interval.
-    pub sync_interval: Option<Duration>,
-    /// Enable read-your-writes consistency across replicas.
-    pub read_your_writes: bool,
-}
-
-/// Builder for creating configured [`InMemoryTursoStub`] instances.
+/// Builder for [`TursoPool`].
 #[derive(Debug, Default)]
-pub struct InMemoryTursoStubBuilder {
-    config: TursoConfig,
+pub struct TursoPoolBuilder {
+    url: Option<String>,
+    auth_token: Option<String>,
+    timeout: Option<Duration>,
 }
 
-impl InMemoryTursoStubBuilder {
-    /// Creates a new builder with default configuration.
+impl TursoPoolBuilder {
+    /// Creates a builder with no configuration.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Sets the local `SQLite` file path for the embedded replica.
+    /// Sets the database URL.
+    ///
+    /// `libsql://…` and `wss://…` are accepted and rewritten to `https://`; an
+    /// explicit `http://` or `https://` is used as given.
     #[must_use]
-    pub fn local_path(mut self, path: impl Into<PathBuf>) -> Self {
-        self.config.local_path = Some(path.into());
+    pub fn url(mut self, url: impl Into<String>) -> Self {
+        self.url = Some(url.into());
         self
     }
 
-    /// Sets the remote Turso synchronization URL.
-    #[must_use]
-    pub fn sync_url(mut self, url: impl Into<String>) -> Self {
-        self.config.sync_url = Some(url.into());
-        self
-    }
-
-    /// Sets the authentication token.
+    /// Sets the bearer token sent with every request.
+    ///
+    /// Omit it only for a local `sqld` that runs without authentication.
     #[must_use]
     pub fn auth_token(mut self, token: impl Into<String>) -> Self {
-        self.config.auth_token = Some(token.into());
+        self.auth_token = Some(token.into());
         self
     }
 
-    /// Sets the periodic sync interval for embedded replicas.
+    /// Overrides the per-statement timeout. Defaults to 30 seconds.
     #[must_use]
-    pub fn sync_interval(mut self, interval: Duration) -> Self {
-        self.config.sync_interval = Some(interval);
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
         self
     }
 
-    /// Enables read-your-writes consistency.
-    #[must_use]
-    pub fn read_your_writes(mut self, enabled: bool) -> Self {
-        self.config.read_your_writes = enabled;
-        self
-    }
-
-    /// Builds and connects the [`InMemoryTursoStub`].
+    /// Builds the pool.
+    ///
+    /// This does not contact the server; the first statement does. Nothing here can
+    /// tell you the token is valid, so failures surface where the query is issued.
     ///
     /// # Errors
     ///
-    /// Returns [`TursoError::Config`] if neither local path nor sync URL is provided.
-    pub async fn build(self) -> Result<InMemoryTursoStub, TursoError> {
-        if self.config.local_path.is_none() && self.config.sync_url.is_none() {
-            return Err(TursoError::Config(
-                "at least one of `local_path` or `sync_url` must be configured for InMemoryTursoStub"
-                    .into(),
-            ));
-        }
+    /// Returns [`TursoError::Config`] if no URL was set or its scheme is not one of
+    /// `libsql`, `ws`, `wss`, `http` or `https`, and if the HTTP client cannot be
+    /// constructed (which on most platforms means no usable TLS root store).
+    pub fn build(self) -> Result<TursoPool, TursoError> {
+        let url = self
+            .url
+            .ok_or_else(|| TursoError::Config("no database URL was configured".into()))?;
+        let endpoint = pipeline_endpoint(&url)?;
 
-        let inner = Arc::new(InMemoryTursoStubInner {
-            config: self.config,
-            memory_store: RwLock::new(HashMap::new()),
+        let http = reqwest::Client::builder()
+            .timeout(self.timeout.unwrap_or(DEFAULT_TIMEOUT))
+            .build()
+            .map_err(|e| TursoError::Config(format!("cannot build the HTTP client: {e}")))?;
+
+        Ok(TursoPool {
+            inner: Arc::new(TursoPoolInner {
+                http,
+                endpoint,
+                database_url: url,
+                auth_token: self.auth_token,
+            }),
+        })
+    }
+}
+
+/// Rewrites a database URL into the `/v2/pipeline` endpoint to post to.
+///
+/// `libsql://` and `wss://` are the schemes Turso publishes; both speak HTTPS to the
+/// same host. `ws://` and `http://` are for a local `sqld` without TLS.
+fn pipeline_endpoint(url: &str) -> Result<String, TursoError> {
+    let (scheme, rest) = url.split_once("://").ok_or_else(|| {
+        TursoError::Config(format!("`{url}` has no scheme; expected `libsql://…`"))
+    })?;
+    let base = match scheme {
+        "libsql" | "wss" | "https" => "https",
+        "ws" | "http" => "http",
+        other => {
+            return Err(TursoError::Config(format!(
+                "unsupported scheme `{other}`; expected libsql, wss, ws, https or http"
+            )));
+        }
+    };
+    if rest.is_empty() {
+        return Err(TursoError::Config(format!("`{url}` names no host")));
+    }
+    Ok(format!(
+        "{base}://{}/v2/pipeline",
+        rest.trim_end_matches('/')
+    ))
+}
+
+struct TursoPoolInner {
+    http: reqwest::Client,
+    /// The full `…/v2/pipeline` URL every request is posted to.
+    endpoint: String,
+    /// The URL as configured, for diagnostics. Never contains the token.
+    database_url: String,
+    auth_token: Option<String>,
+}
+
+/// Redacts the auth token.
+///
+/// `TursoPool` is held inside application state that is routinely logged, and a
+/// derived `Debug` would put a database credential in the log line.
+impl std::fmt::Debug for TursoPoolInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TursoPoolInner")
+            .field("endpoint", &self.endpoint)
+            .field("database_url", &self.database_url)
+            .field(
+                "auth_token",
+                &self.auth_token.as_ref().map(|_| "<redacted>"),
+            )
+            // `http` is omitted: a `reqwest::Client` renders as an opaque blob that
+            // tells a reader nothing the endpoint has not already said.
+            .finish_non_exhaustive()
+    }
+}
+
+/// A handle to a libSQL database over Hrana HTTP.
+///
+/// Cloning is cheap and shares one connection pool, so clone this rather than
+/// building a second one.
+#[derive(Debug, Clone)]
+pub struct TursoPool {
+    inner: Arc<TursoPoolInner>,
+}
+
+impl TursoPool {
+    /// Returns a new [`TursoPoolBuilder`].
+    #[must_use]
+    pub fn builder() -> TursoPoolBuilder {
+        TursoPoolBuilder::new()
+    }
+
+    /// Connects using a URL and token, the common case.
+    ///
+    /// # Errors
+    ///
+    /// As [`TursoPoolBuilder::build`].
+    pub fn connect(url: &str, auth_token: impl Into<String>) -> Result<Self, TursoError> {
+        Self::builder().url(url).auth_token(auth_token).build()
+    }
+
+    /// The database URL this pool was configured with.
+    #[must_use]
+    pub fn url(&self) -> &str {
+        &self.inner.database_url
+    }
+
+    /// Sends one statement and returns the server's result.
+    async fn pipeline(
+        &self,
+        sql: &str,
+        binds: &[Value],
+        want_rows: bool,
+    ) -> Result<hrana::ExecuteResult, TursoError> {
+        let args = binds
+            .iter()
+            .map(hrana::to_hrana)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let body = Pipeline::one(Stmt {
+            sql: sql.to_owned(),
+            args,
+            want_rows,
         });
 
-        Ok(InMemoryTursoStub { inner })
-    }
-}
-
-#[derive(Debug)]
-struct InMemoryTursoStubInner {
-    config: TursoConfig,
-    memory_store: RwLock<HashMap<String, Vec<HashMap<String, Value>>>>,
-}
-
-/// A connection pool managing access to local and remote Turso libSQL databases.
-#[derive(Debug, Clone)]
-pub struct InMemoryTursoStub {
-    inner: Arc<InMemoryTursoStubInner>,
-}
-
-impl InMemoryTursoStub {
-    /// Returns a new [`InMemoryTursoStubBuilder`].
-    #[must_use]
-    pub fn builder() -> InMemoryTursoStubBuilder {
-        InMemoryTursoStubBuilder::new()
-    }
-
-    /// Connects directly to a Turso database via URL.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`TursoError::Config`] if the URL is empty.
-    pub async fn connect(url: &str) -> Result<Self, TursoError> {
-        Self::builder().sync_url(url).build().await
-    }
-
-    /// Returns the configured local replica path, if any.
-    #[must_use]
-    pub fn local_path(&self) -> Option<&Path> {
-        self.inner.config.local_path.as_deref()
-    }
-
-    /// Returns the configured remote synchronization URL, if any.
-    #[must_use]
-    pub fn sync_url(&self) -> Option<&str> {
-        self.inner.config.sync_url.as_deref()
-    }
-
-    /// Always fails: this stub has no remote primary to synchronize with.
-    ///
-    /// The signature is kept so that a future real adapter can drop in without a
-    /// source change at the call site. It never returns [`SyncStats`].
-    ///
-    /// # Errors
-    ///
-    /// Always returns [`TursoError::Unsupported`].
-    pub async fn sync(&self) -> Result<SyncStats, TursoError> {
-        Err(TursoError::Unsupported(
-            "InMemoryTursoStub performs no network I/O; there is no remote primary to sync with"
-                .into(),
-        ))
-    }
-
-    /// Executes an in-memory or remote query against the Turso backend.
-    async fn execute_internal(&self, sql: &str, binds: &[Value]) -> Result<RowBatch, TursoError> {
-        let trimmed = sql.trim();
-        let upper = trimmed.to_uppercase();
-
-        if upper.starts_with("SELECT") {
-            let mut store = self.inner.memory_store.write().await;
-            let table_name = extract_table_name(trimmed);
-            let rows = store.entry(table_name).or_default().clone();
-            Ok(RowBatch::Edge(rows))
-        } else if upper.starts_with("INSERT") {
-            let mut store = self.inner.memory_store.write().await;
-            let table_name = extract_table_name(trimmed);
-            let columns = extract_insert_columns(trimmed);
-            let mut row = HashMap::new();
-            for (idx, val) in binds.iter().enumerate() {
-                let name = columns
-                    .get(idx)
-                    .cloned()
-                    .unwrap_or_else(|| format!("col_{idx}"));
-                row.insert(name, val.clone());
-            }
-            store.entry(table_name).or_default().push(row);
-            Ok(RowBatch::Edge(Vec::new()))
-        } else {
-            Ok(RowBatch::Edge(Vec::new()))
+        let mut request = self.inner.http.post(&self.inner.endpoint).json(&body);
+        if let Some(token) = &self.inner.auth_token {
+            request = request.bearer_auth(token);
         }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| TursoError::Transport(e.to_string()))?;
+
+        let status = response.status();
+        let text = response
+            .text()
+            .await
+            .map_err(|e| TursoError::Transport(format!("cannot read the response body: {e}")))?;
+
+        if !status.is_success() {
+            // The body is the server's explanation and is worth keeping, but it is
+            // untrusted and unbounded, so it is truncated rather than logged whole.
+            return Err(TursoError::Protocol(format!(
+                "server answered {status}: {}",
+                truncate(&text, 512)
+            )));
+        }
+
+        let parsed: PipelineResponse = serde_json::from_str(&text).map_err(|e| {
+            TursoError::Protocol(format!(
+                "cannot parse the pipeline response: {e}; body was {}",
+                truncate(&text, 512)
+            ))
+        })?;
+
+        hrana::single_execute(parsed)
     }
 }
 
-/// Extracts the declared column list of an `INSERT INTO t (a, b) VALUES ...`.
-///
-/// Returns an empty vector when the statement declares no column list, in which case
-/// the caller falls back to positional `col_N` names.
-fn extract_insert_columns(sql: &str) -> Vec<String> {
-    let upper = sql.to_uppercase();
-    let Some(into_idx) = upper.find(" INTO ") else {
-        return Vec::new();
-    };
-    let Some(rest) = sql.get(into_idx + 6..) else {
-        return Vec::new();
-    };
-    let Some(open) = rest.find('(') else {
-        return Vec::new();
-    };
-    let (Some(before), Some(from_open)) = (rest.get(..open), rest.get(open + 1..)) else {
-        return Vec::new();
-    };
-    let Some(close) = from_open.find(')') else {
-        return Vec::new();
-    };
-    // Only a column list may sit between the table name and the first `(`.
-    if before.split_whitespace().count() != 1 {
-        return Vec::new();
-    }
-    let Some(list) = from_open.get(..close) else {
-        return Vec::new();
-    };
-    list.split(',')
-        .map(|c| {
-            c.trim()
-                .trim_matches(|ch| ch == '"' || ch == '`' || ch == '\'')
-                .to_string()
-        })
-        .filter(|c| !c.is_empty())
-        .collect()
-}
-
-fn extract_table_name(sql: &str) -> String {
-    let upper = sql.to_uppercase();
-    if let Some(from_idx) = upper.find(" FROM ") {
-        let rest = sql.get(from_idx + 6..).unwrap_or("").trim();
-        rest.split(|c: char| c.is_whitespace() || c == ';' || c == '(')
-            .next()
-            .unwrap_or("default")
-            .trim_matches(|c| c == '"' || c == '`' || c == '\'')
-            .to_string()
-    } else if let Some(into_idx) = upper.find(" INTO ") {
-        let rest = sql.get(into_idx + 6..).unwrap_or("").trim();
-        rest.split(|c: char| c.is_whitespace() || c == ';' || c == '(')
-            .next()
-            .unwrap_or("default")
-            .trim_matches(|c| c == '"' || c == '`' || c == '\'')
-            .to_string()
-    } else {
-        "default".to_string()
+/// Shortens `text` to at most `limit` characters, on a character boundary.
+fn truncate(text: &str, limit: usize) -> Cow<'_, str> {
+    match text.char_indices().nth(limit) {
+        Some((end, _)) => Cow::Owned(format!("{}…", &text[..end])),
+        None => Cow::Borrowed(text),
     }
 }
 
-impl Executor for InMemoryTursoStub {
+impl Executor for TursoPool {
     fn dialect(&self) -> &dyn DbDialect {
         &SQLITE_DIALECT
     }
@@ -340,9 +331,8 @@ impl Executor for InMemoryTursoStub {
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<RowBatch, ruprizzle::Error>> {
         Box::pin(async move {
-            self.execute_internal(&sql, &binds)
-                .await
-                .map_err(ruprizzle::Error::from)
+            let result = self.pipeline(&sql, &binds, true).await?;
+            Ok(RowBatch::Edge(result.into_edge_rows()?))
         })
     }
 
@@ -352,23 +342,31 @@ impl Executor for InMemoryTursoStub {
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<u64, ruprizzle::Error>> {
         Box::pin(async move {
-            self.execute_internal(&sql, &binds)
-                .await
-                .map(|b| b.len() as u64)
-                .map_err(ruprizzle::Error::from)
+            // `want_rows: false` so an `INSERT … RETURNING` does not ship a result
+            // set across the network that the caller has said it will not read.
+            let result = self.pipeline(&sql, &binds, false).await?;
+            Ok(result.affected_row_count)
         })
     }
 
     fn stream_raw(&self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'_> {
-        let fut = self.fetch_all_raw(sql, binds);
-        Box::pin(futures_util::stream::once(async move {
-            fut.await.and_then(|batch| {
-                let first = batch.as_edge_rows().and_then(|r| r.first()).cloned();
-                first
-                    .map(RawRow::Edge)
-                    .ok_or_else(|| ruprizzle::Error::Message("empty result".into()))
-            })
-        }))
+        // Hrana over HTTP returns the whole result set in one response, so this
+        // fetches and then yields. It is a streaming interface, not a streaming
+        // transport: memory use is that of the full result.
+        Box::pin(
+            futures_util::stream::once(self.fetch_all_raw(sql, binds)).flat_map(|batch| {
+                let rows = match batch {
+                    Ok(RowBatch::Edge(rows)) => {
+                        rows.into_iter().map(RawRow::Edge).map(Ok).collect()
+                    }
+                    Ok(_) => vec![Err(ruprizzle::Error::Message(
+                        "the Turso adapter only produces edge rows".into(),
+                    ))],
+                    Err(e) => vec![Err(e)],
+                };
+                futures_util::stream::iter(rows)
+            }),
+        )
     }
 }
 
@@ -376,82 +374,52 @@ impl Executor for InMemoryTursoStub {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_turso_builder_config() {
-        let pool = InMemoryTursoStub::builder()
-            .local_path("test.db")
-            .sync_url("libsql://example.turso.io")
-            .auth_token("token_123")
-            .sync_interval(Duration::from_secs(30))
-            .read_your_writes(true)
-            .build()
-            .await
-            .unwrap();
-
-        assert_eq!(pool.local_path(), Some(Path::new("test.db")));
-        assert_eq!(pool.sync_url(), Some("libsql://example.turso.io"));
+    #[test]
+    fn turso_urls_are_rewritten_to_the_pipeline_endpoint() {
+        assert_eq!(
+            pipeline_endpoint("libsql://db.turso.io").unwrap(),
+            "https://db.turso.io/v2/pipeline"
+        );
+        assert_eq!(
+            pipeline_endpoint("wss://db.turso.io/").unwrap(),
+            "https://db.turso.io/v2/pipeline"
+        );
+        assert_eq!(
+            pipeline_endpoint("http://127.0.0.1:8080").unwrap(),
+            "http://127.0.0.1:8080/v2/pipeline"
+        );
     }
 
-    #[tokio::test]
-    async fn test_turso_executor_query_and_sync() {
-        let pool = InMemoryTursoStub::connect("libsql://demo.turso.io")
-            .await
-            .unwrap();
+    #[test]
+    fn an_unusable_url_is_refused_at_build_time() {
+        assert!(matches!(
+            pipeline_endpoint("db.turso.io"),
+            Err(TursoError::Config(_))
+        ));
+        assert!(matches!(
+            pipeline_endpoint("postgres://db.turso.io"),
+            Err(TursoError::Config(_))
+        ));
+        assert!(matches!(
+            TursoPool::builder().auth_token("t").build(),
+            Err(TursoError::Config(_))
+        ));
+    }
+
+    #[test]
+    fn the_configured_url_is_reported_without_the_token() {
+        let pool = TursoPool::connect("libsql://db.turso.io", "secret-token").unwrap();
+        assert_eq!(pool.url(), "libsql://db.turso.io");
+        let rendered = format!("{pool:?}");
+        assert!(
+            !rendered.contains("secret-token"),
+            "the auth token must not be in Debug output: {rendered}"
+        );
+    }
+
+    #[test]
+    fn the_dialect_is_sqlite() {
+        let pool = TursoPool::connect("libsql://db.turso.io", "t").unwrap();
         assert_eq!(pool.dialect().name(), "sqlite");
-
-        let err = pool.sync().await.unwrap_err();
-        assert!(matches!(err, TursoError::Unsupported(_)));
-
-        let rows = pool
-            .fetch_all_raw(Cow::Borrowed("SELECT * FROM users"), Vec::new())
-            .await
-            .unwrap();
-        assert!(rows.is_empty());
-    }
-
-    #[tokio::test]
-    async fn insert_round_trips_under_declared_column_names() {
-        let pool = InMemoryTursoStub::connect("libsql://demo.turso.io")
-            .await
-            .unwrap();
-
-        pool.execute_raw(
-            Cow::Borrowed("INSERT INTO users (id, email) VALUES (?, ?)"),
-            vec![Value::I64(7), Value::Str("a@b.c".into())],
-        )
-        .await
-        .unwrap();
-
-        let batch = pool
-            .fetch_all_raw(Cow::Borrowed("SELECT * FROM users"), Vec::new())
-            .await
-            .unwrap();
-        let rows = batch.as_edge_rows().unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].get("id"), Some(&Value::I64(7)));
-        assert_eq!(rows[0].get("email"), Some(&Value::Str("a@b.c".into())));
-    }
-
-    #[tokio::test]
-    async fn writes_do_not_survive_a_new_stub() {
-        let first = InMemoryTursoStub::connect("libsql://demo.turso.io")
-            .await
-            .unwrap();
-        first
-            .execute_raw(
-                Cow::Borrowed("INSERT INTO users (id) VALUES (?)"),
-                vec![Value::I64(1)],
-            )
-            .await
-            .unwrap();
-
-        let second = InMemoryTursoStub::connect("libsql://demo.turso.io")
-            .await
-            .unwrap();
-        let batch = second
-            .fetch_all_raw(Cow::Borrowed("SELECT * FROM users"), Vec::new())
-            .await
-            .unwrap();
-        assert!(batch.is_empty(), "the stub stores nothing outside itself");
     }
 }

@@ -51,7 +51,7 @@ graph TD
 | **v1.2** | **Developer Tooling, CI & Fixtures** | [`03_OfflineQueryCheckingPlan.md`](03_OfflineQueryCheckingPlan.md)<br>[`04_Lsp2AndDeveloperToolingPlan.md`](04_Lsp2AndDeveloperToolingPlan.md) | `check`, `lsp`, `cli`, `editor/vscode` | Additive (Minor) | **Completed** |
 | **v1.3** | **Advanced Relations, Trees & Nested Writes** | [`12_NestedWritesAndTreeHierarchiesPlan.md`](12_NestedWritesAndTreeHierarchiesPlan.md) | `core`, `parser`, `codegen`, `runtime` | Additive (Minor) | **Completed** |
 | **v1.4** | **Observability, Routing & Geospatial** | [`05_OpenTelemetryAndMetrics2Plan.md`](05_OpenTelemetryAndMetrics2Plan.md)<br>[`09_PrimaryReadReplicaRoutingPlan.md`](09_PrimaryReadReplicaRoutingPlan.md)<br>[`13_QueryCachingAndPostGISPlan.md`](13_QueryCachingAndPostGISPlan.md) | `runtime`, `core`, `dialect` | Additive (Minor) | **Completed** |
-| **v1.5** | **The Visual Workbench & Edge Adapters** | [`06_RuprizzleStudioPlan.md`](06_RuprizzleStudioPlan.md)<br>[`08_EdgeAndServerlessAdaptersPlan.md`](08_EdgeAndServerlessAdaptersPlan.md) | `cli`, `editor/studio`, `crates/turso`, `crates/d1`, `crates/neon` | Additive (Minor) | ⚠️ **Blocked** |
+| **v1.5** | **The Visual Workbench & Edge Adapters** | [`06_RuprizzleStudioPlan.md`](06_RuprizzleStudioPlan.md)<br>[`08_EdgeAndServerlessAdaptersPlan.md`](08_EdgeAndServerlessAdaptersPlan.md) | `cli`, `editor/studio`, `crates/turso`, `crates/d1` | Additive (Minor) | **Completed** |
 | **v2.0** | **Modern Data Platform, AI & Security** | [`01_DependencyModernizationPlan.md`](01_DependencyModernizationPlan.md)<br>[`07_AiVectorSearchPlan.md`](07_AiVectorSearchPlan.md)<br>[`10_RowLevelSecurityAndMultiTenancyPlan.md`](10_RowLevelSecurityAndMultiTenancyPlan.md) | Workspace-wide (`runtime`, `core`, `parser`, `migrate`) | Major (Breaking) | Planned |
 
 ---
@@ -92,28 +92,35 @@ graph TD
 
 ### 🎯 v1.5.0 — Ruprizzle Studio & Edge Database Adapters (**BLOCKED — NOT COMPLETE**)
 
-> **Status correction (2026-08-31).** This milestone was previously marked COMPLETED. It is not.
-> The readiness assessment in [`ProductionReadinessV1_5.md`](ProductionReadinessV1_5.md) scores the
-> line **56/100, VERDICT: BLOCK**. The deliverables below exist as compiling, linting, passing code
-> that does not perform the function it describes:
+> **Status correction (2026-08-31), and its resolution (2026-09-01).** This milestone was
+> marked COMPLETED when it was not. The readiness assessment in
+> [`ProductionReadinessV1_5.md`](ProductionReadinessV1_5.md) scored the line **56/100,
+> VERDICT: BLOCK**: the deliverables existed as compiling, linting, passing code that did
+> not perform the function it described.
 >
-> - `ruprizzle-turso`, `ruprizzle-d1` and `ruprizzle-neon` declare **no driver dependency** and store
->   rows in a process-local `HashMap`. `TursoPool::sync()` returns hardcoded zeros. They are also in
->   no publish list, so a `v1.5.0` tag would not ship them.
-> - Studio's table browser, cell editor, row delete, SQL sandbox, EXPLAIN tree and migration safety
->   diff never query the database. `AppState.pool` is constructed and never read. The migration diff
->   reports `SAFE` for every model unconditionally.
-> - Studio is behind a non-default feature that **no CI job enables**, so none of it is gated.
+> - `ruprizzle-turso`, `ruprizzle-d1` and `ruprizzle-neon` declared **no driver dependency**
+>   and stored rows in a process-local `HashMap`. `TursoPool::sync()` returned hardcoded
+>   zeros. They were also in no publish list, so a `v1.5.0` tag would not have shipped them.
+> - Studio's table browser, cell editor, row delete, SQL sandbox, EXPLAIN tree and migration
+>   safety diff never queried the database. `AppState.pool` was constructed and never read.
+>   The migration diff reported `SAFE` for every model unconditionally.
+> - Studio was behind a non-default feature that **no CI job enabled**, so none of it was gated.
 >
-> The exit gate below was satisfiable without the features working, because it tested that the code
-> compiles and that unit tests pass — and the unit tests assert the stub behaviour. Rewrite the gate
-> to require a live round-trip against each backend before re-marking this milestone.
+> The exit gate was satisfiable without the features working, because it tested that the code
+> compiles and that unit tests pass — and the unit tests asserted the stub behaviour.
+>
+> **All of it is now closed.** §8 and §10 of the assessment record what each item became.
+> Studio queries the database on every screen; `ruprizzle-turso` speaks Hrana 2 over HTTP and
+> `ruprizzle-d1` the Cloudflare REST API, both published and both covered end to end against a
+> local HTTP server; `ruprizzle-neon` was deleted, because Neon is ordinary Postgres over TLS
+> and needs no adapter. The `studio` feature is gated in CI and in the release pipeline.
+
 - **Deliverables:**
   - **Ruprizzle Studio:** Embedded visual data workbench single-binary hypermedia UI (Axum 0.8, Askama, HTMX 2.x, Alpine.js, modern dark CSS) inside `ruprizzle-cli` booting in <15ms with zero Node/npm dependencies: table browser, live cell editor, clickable relation drawer navigation, interactive ERD graph, and SQL sandbox.
   - Live query plan visualizer (`EXPLAIN ANALYZE`) and migration safety diff preview.
-  - Edge and serverless adapters: `ruprizzle-turso` (libSQL embedded replicas), `ruprizzle-d1` (Cloudflare D1 WASM/HTTP), `ruprizzle-neon` (Neon WebSocket driver).
-- **Exit Gate (insufficient — see the status correction above):** Studio launches with zero external npm/Node dependencies and compiles purely via `cargo build`; Turso/D1/Neon drivers pass dialect and unit tests. Status: **BLOCKED**.
-- **Replacement exit gate:** each adapter completes a live write-then-read round-trip against a real Turso / D1 / Neon instance in CI; Studio's table, sandbox, EXPLAIN and diff routes are asserted against a seeded database, not against fixtures; the three crates are added to every publish list and to `PANIC_BUDGET`; a `--features studio` CI job runs clippy and tests.
+  - Edge and serverless adapters: `ruprizzle-turso` (Hrana 2 over HTTP) and `ruprizzle-d1` (Cloudflare REST API). ~~`ruprizzle-neon` (Neon WebSocket driver)~~ — dropped: Neon is Postgres over TLS.
+- **Exit Gate (insufficient — see the status correction above):** Studio launches with zero external npm/Node dependencies and compiles purely via `cargo build`; Turso/D1/Neon drivers pass dialect and unit tests. Status: superseded.
+- **Replacement exit gate — met:** each adapter completes a write-then-read round trip over its real wire protocol, asserted against a local HTTP server so the gate needs no provider account; Studio's table, sandbox, EXPLAIN and diff routes are asserted against a seeded database, not against fixtures; the adapter crates are in `PUBLISH_ORDER`, in `release.yml` and in `PANIC_BUDGET`, with a `publish coverage` audit that fails if one falls out again; a `--features studio` CI job runs clippy and tests.
 
 ### 🚀 v2.0.0 — Modern Data Platform, AI & Security (Major Release)
 - **Deliverables:**

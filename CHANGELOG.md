@@ -18,8 +18,8 @@ intermediate numbers were never cut and this release carries all of them.
 `1.5.0` was assessed and **blocked** at
 [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md);
 that document's §8 records the remediation this release contains. The v1.5 surface it
-found fabricated — Studio's data plane, the migration safety diff, the three edge
-adapters — is either wired to a real database or renamed and withheld from crates.io.
+found fabricated — Studio's data plane, the migration safety diff, the edge adapters —
+is now wired to a real database, or, where the crate had no reason to exist, deleted.
 
 ### Added — v1.1 (query expressiveness, rich types, search)
 
@@ -66,6 +66,10 @@ adapters — is either wired to a real database or renamed and withheld from cra
   foreign-key drawer, SQL sandbox, `EXPLAIN` plan viewer and a migration safety diff.
   Every data screen queries the connected database; where it cannot, it says so instead
   of rendering something that looks like data.
+- **`ruprizzle-turso`** — a Turso / libSQL adapter over the Hrana 2 HTTP protocol
+  (`POST {url}/v2/pipeline`), working against Turso's hosted databases and any `sqld`.
+- **`ruprizzle-d1`** — a Cloudflare D1 adapter over the Cloudflare REST API, for code
+  that talks to D1 from outside a Worker.
 - **`cargo xtask harden` gained a `publish coverage` audit**, which fails when a
   publishable workspace crate is missing from the release pipeline or when
   `release.yml` disagrees with it.
@@ -108,24 +112,30 @@ adapters — is either wired to a real database or renamed and withheld from cra
 - **Studio would bind its unauthenticated mutation routes to any interface.**
   `--allow-writes` on a non-loopback host is now refused without `--yes-i-know`, and a
   non-loopback bind warns at startup.
+- **The edge adapter crates declared no driver and stored rows in a process-local
+  `HashMap`.** `ruprizzle-turso` and `ruprizzle-d1` are now real drivers over their
+  providers' HTTP APIs, with end-to-end tests against a local server so neither the
+  test suite nor a contributor needs an account. `ruprizzle-neon` was deleted instead:
+  see **Removed**.
 - **The LSP offered `@@tenant` and `@@policy`**, neither of which the parser, codegen
   or migration engine act on. Both are removed from completion and hover. Row-level
   security and multi-tenancy remain unimplemented.
 
-### Not published
+### Removed
 
-- **`ruprizzle-turso`, `ruprizzle-d1` and `ruprizzle-neon` are `publish = false`.**
-  They are in-memory test doubles, not database adapters: no driver dependency, no
-  network I/O, credentials stored and never transmitted, and writes lost when the
-  process exits. Their types are named for that (`InMemoryTursoStub`,
-  `InMemoryD1Stub`, `InMemoryNeonStub`) and their docs and READMEs open by saying so.
-  Neon speaks ordinary Postgres over TLS, so pass a Neon connection string to
-  `ruprizzle::connect` instead; for Turso, point it at an embedded replica file.
+- **`ruprizzle-neon` is gone.** Neon speaks ordinary Postgres over TLS, so its
+  connection string goes straight to `ruprizzle::connect` and an adapter crate is a
+  wrapper around nothing. The crate was an in-memory stub with no route to becoming
+  anything else. It was never published, so nothing on crates.io breaks.
 
 ### Known gaps
 
 - Row-level security and multi-tenancy are not implemented.
 - Studio has no authentication.
+- The `turso` and `d1` adapters send one HTTP request per statement, so neither
+  supports interactive transactions, and `stream_raw` on both is a streaming
+  interface over a fully buffered response. Turso has no embedded-replica support,
+  which needs the native libSQL library.
 
 
 ## [1.0.0] - 2026-08-21

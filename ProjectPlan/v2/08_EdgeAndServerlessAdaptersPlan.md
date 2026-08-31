@@ -2,10 +2,34 @@
 
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
-**Status:** Completed  
+**Status:** Delivered 2026-09-01, differently from this plan — see the note below  
 **Milestone:** v1.5.0 (Additive, Minor Release)  
 **Primary Crates:** `crates/runtime`, new adapter crates (`crates/turso`, `crates/d1`, `crates/neon`)  
 **Dependencies Baseline:** `libsql 0.6.0`, `worker 0.5.0`, `reqwest 0.12.12`, `tungstenite 0.26.0`
+
+---
+
+> **What actually shipped (2026-09-01).** Every task below was ticked while the three
+> crates declared no driver dependency and stored rows in a process-local `HashMap`;
+> [`ProductionReadinessV1_5.md`](ProductionReadinessV1_5.md) §4.1 found this and §10.2
+> records the rewrite. The plan is kept as written, because the gap between it and the
+> result is the point. What exists now differs from it in three ways:
+>
+> - **Turso** is a remote HTTP client speaking **Hrana 2** (`POST {url}/v2/pipeline`),
+>   not a `libsql`-backed embedded replica. Embedded replicas need the native libSQL
+>   library, which is a build dependency this workspace does not take on. A replica file
+>   you sync yourself is an ordinary `SQLite` database for `ruprizzle::connect`.
+> - **D1** is the Cloudflare REST API only. There is no `worker` binding and no
+>   `wasm32-unknown-unknown` target support: inside a Worker you already have a binding,
+>   and this crate is for reaching D1 from outside one.
+> - **Neon has no adapter and no crate.** Neon speaks ordinary Postgres over TLS, so its
+>   connection string goes to `ruprizzle::connect`. A WebSocket driver would duplicate
+>   `sqlx-postgres` for a benefit that only exists on WASM, which this ORM does not
+>   target. `crates/neon` was deleted rather than implemented.
+>
+> Both adapters are covered end to end against a local HTTP server, so the suite needs no
+> provider account. Neither supports interactive transactions: one HTTP request per
+> statement means no server-side session.
 
 ---
 

@@ -16,10 +16,10 @@ had no external consumers to collect feedback from. See
 public dependencies (the 1.0 line is pinned to `sqlx 0.8`), and
 [Known limitations](KnownLimitations.md) for the honest boundaries.
 
-`1.0.0` is also the newest release you can install. The v1.1–v1.5 work on
-`dev-v2-x` ([what's new](WhatsNewV1_1ToV1_5.md)) is not on crates.io: the v1.1–v1.4
-features are complete, but Ruprizzle Studio and the Turso/D1/Neon adapters are
-non-functional shells and the release is blocked until that is resolved.
+The v1.1–v1.5 line ([what's new](WhatsNewV1_1ToV1_5.md)) shipped as `1.5.0`,
+adding Ruprizzle Studio and the Turso and D1 adapters. There is no Neon adapter:
+Neon is Postgres over TLS, so its connection string goes straight to
+`ruprizzle::connect`.
 
 ## How is it different from Diesel or SeaORM?
 

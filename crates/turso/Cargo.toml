@@ -1,9 +1,6 @@
 [package]
 name        = "ruprizzle-turso"
-description = "In-memory Turso/libSQL test double for the ruprizzle ORM (no network I/O; unpublished)"
-# Not published: this crate is an in-memory test double, not a working
-# database adapter. See ProjectPlan/v2/ProductionReadinessV1_5.md section 4.1.
-publish     = false
+description = "Turso / libSQL adapter for the ruprizzle ORM, over the Hrana HTTP protocol"
 version.workspace      = true
 edition.workspace      = true
 rust-version.workspace = true
@@ -11,24 +8,24 @@ license.workspace      = true
 repository.workspace   = true
 authors.workspace      = true
 homepage.workspace     = true
+documentation          = "https://docs.rs/ruprizzle-turso"
 readme                 = "README.md"
 keywords    = ["orm", "turso", "libsql", "sqlite", "edge"]
 categories  = ["database"]
 
 [dependencies]
 ruprizzle         = { workspace = true }
-ruprizzle-core    = { workspace = true }
 ruprizzle-dialect = { workspace = true }
 serde             = { workspace = true }
 serde_json        = { workspace = true }
 thiserror         = { workspace = true }
-tokio             = { workspace = true }
+reqwest           = { workspace = true }
+base64            = { workspace = true }
 futures-core      = "0.3"
 futures-util      = { version = "0.3", default-features = false, features = ["std", "alloc"] }
 
 [dev-dependencies]
-tempfile          = { workspace = true }
-tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio             = { workspace = true, features = ["macros", "rt-multi-thread", "net", "io-util"] }
 
 [package.metadata.docs.rs]
 all-features = true

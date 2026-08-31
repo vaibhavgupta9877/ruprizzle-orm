@@ -58,6 +58,8 @@ const PUBLISH_ORDER: &[&str] = &[
     "ruprizzle-migrate",
     "ruprizzle-codegen",
     "ruprizzle-cli",
+    "ruprizzle-turso",
+    "ruprizzle-d1",
 ];
 
 /// Per-crate ceiling for `unwrap()` / `expect()` / `panic!` in `src/`.
@@ -77,12 +79,10 @@ const PANIC_BUDGET: &[(&str, usize)] = &[
     ("crates/codegen", 1),
     ("crates/migrate", 2),
     ("crates/cli", 2),
-    // The three edge adapters are `publish = false` in-memory stubs, but they are
-    // workspace source and are held to the same ceiling. See
-    // ProjectPlan/v2/ProductionReadinessV1_5.md section 4.4.
+    // The edge adapters hold at zero: both were rewritten as real drivers after the
+    // audit became a gate, so there is no legacy count to grandfather.
     ("crates/turso", 0),
     ("crates/d1", 0),
-    ("crates/neon", 0),
 ];
 
 /// Per-crate ceilings for arithmetic (`/`, `%`) and direct indexing (`x[i]`)
@@ -107,7 +107,6 @@ const BUDGETS: &[(&str, usize, usize)] = &[
     ("crates/cli", 0, 4),
     ("crates/turso", 0, 0),
     ("crates/d1", 0, 0),
-    ("crates/neon", 0, 0),
 ];
 
 fn main() -> ExitCode {
@@ -667,7 +666,8 @@ fn cfg_contains_test(tokens: &proc_macro2::TokenStream) -> bool {
 /// Checks that no publishable workspace crate has fallen out of the release
 /// pipeline, and that the workflow publishes the same crates in the same order.
 ///
-/// This exists because `ruprizzle-turso`, `ruprizzle-d1` and `ruprizzle-neon` were
+/// This exists because `ruprizzle-turso`, `ruprizzle-d1` and the since-deleted
+/// `ruprizzle-neon` were
 /// added to the workspace and appeared in no publish list, no package check and no
 /// panic budget for a whole release line, without any gate noticing. Keeping the
 /// list by hand is what failed; this audit is what stops it failing again.

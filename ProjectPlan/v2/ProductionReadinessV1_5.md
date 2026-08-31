@@ -23,7 +23,12 @@ sits alongside `ProjectPlan/ProductionReadiness.md` §17 (89/100 for `1.0.0`).
 > §1–§7 below are preserved as written — they are the record of what the tree looked
 > like at `f2d898a` and the argument for the block, and rewriting them would erase the
 > finding. **§8 records what each item became, and §9 the gate results afterwards.**
-> Read those two before acting on anything above them.
+> Read those before acting on anything above them.
+>
+> **Update 2026-09-01.** The two items §9 left open by choice are also closed:
+> **§10.1** makes the parser reject unknown attributes, and **§10.2** replaces the
+> adapter stubs with real drivers and deletes the one crate that had no reason to
+> exist.
 
 | Axis | Score | Grade | `1.0.0` (§17) |
 |---|---|---|---|
@@ -640,9 +645,8 @@ packaging: they are `publish = false` and outside the pipeline by design.
 - ~~The parser accepts unknown block attributes and lowering discards them silently
   (§8.6).~~ **Closed in [§10.1](#101--the-parser-rejects-unknown-attributes-v19).**
 - `askama` 0.12 (§5.3), folded into the v2 dependency work as the assessment suggested.
-- The three adapters are stubs, not drivers. Real `libsql`, D1 HTTP and Neon
-  WebSocket implementations remain unwritten; the crates now say so instead of
-  implying otherwise.
+- ~~The three adapters are stubs, not drivers.~~ **Closed in
+  [§10.2](#102--the-adapters-are-drivers-and-one-of-them-is-gone).**
 
 ---
 
@@ -690,3 +694,77 @@ changing.
 Fixtures `v19_unknown_block_attribute` and `v19_unknown_field_attribute` join the
 executable rule table in `crates/parser/tests/invalid.rs`, which also asserts that
 every diagnostic points somewhere and offers a fix.
+
+
+### 10.2 — The adapters are drivers, and one of them is gone
+
+§8.1 took the assessment's second exit: rename the stubs for what they were and keep
+them off crates.io. That was the honest thing to do with an hour's work, and it left
+the actual problem — three crates named for databases they could not reach — exactly
+where it was.
+
+**`ruprizzle-neon` was deleted.** Neon is Postgres over TLS. A Neon connection string
+already works with [`ruprizzle::connect`], and a WebSocket driver would reimplement
+`sqlx-postgres` for a benefit that only exists on WASM, which this ORM does not
+target. There was nothing for the crate to become, so the right size for it is zero.
+It was never published, so nothing on crates.io breaks. `docs/`, `README.md`,
+`RELEASES.md` and the roadmap now say that Neon needs no adapter, rather than
+promising one.
+
+[`ruprizzle::connect`]: https://docs.rs/ruprizzle/latest/ruprizzle/fn.connect.html
+
+**`ruprizzle-turso` speaks Hrana 2 over HTTP.** Every statement is one
+`POST {url}/v2/pipeline` carrying the SQL and its bound parameters, with a `close`
+step so no server-side session is left open. `libsql://` and `wss://` URLs are
+rewritten to `https://`; the token is a bearer credential. It works against Turso's
+hosted databases and any `sqld`.
+
+This is deliberately **not** the `libsql` crate. Embedded replicas need the native
+libSQL library, a C build dependency across three release targets, and the crate's
+current release is a pre-release. Hrana is a documented wire protocol that can be
+implemented against a socket and tested without one. A replica file you synchronise
+yourself remains an ordinary `SQLite` database for `ruprizzle::connect`, and the crate
+docs say so rather than leaving the reader to work it out.
+
+**`ruprizzle-d1` speaks the Cloudflare REST API.** One
+`POST /accounts/{account}/d1/database/{database}/query` per statement, with the API
+token as a bearer credential. It is for reaching D1 from **outside** a Worker — a CLI,
+a migration job, a server. Inside a Worker there is already a binding, which is faster
+and needs no token, and this crate does not pretend to replace it.
+
+**What both refuse, rather than fake.** One HTTP request per statement means no
+interactive transaction, and both say so instead of accepting a lone `BEGIN` that
+would land on an unrelated connection. `stream_raw` is a streaming *interface* over a
+fully buffered response, documented as such. A parameter with no representation on the
+wire — an array for either, bytes for D1 — is an error raised **before** the request is
+sent, which the tests assert by checking the server saw nothing. A server integer that
+does not parse is a protocol error, not a silent zero.
+
+**Credentials.** Both `Debug` impls are hand-written to redact the token, because a
+pool handle ends up inside application state that gets logged. Two tests assert the
+token is absent from the rendered output.
+
+**Verification without an account.** Each crate has an end-to-end suite against a
+local `TcpListener` that speaks enough HTTP/1.1 to answer one request: 7 tests for
+Turso, 6 for D1, on top of 23 protocol unit tests. They assert the request the adapter
+actually built — path, bearer header, encoded parameters, the closing pipeline step —
+and the rows, affected-row counts, statement errors, HTTP failures and transport
+failures it reads back. `cargo test -p ruprizzle-turso -p ruprizzle-d1` needs no
+network and no provider.
+
+A live round trip against a real Turso database and a real D1 database is still
+unperformed. The wire format is pinned by both providers' published specifications and
+by these tests; what remains unverified is that the specifications match the running
+services.
+
+**Pipeline.** Both crates lost `publish = false`, gained a `documentation` field, and
+were added to `PUBLISH_ORDER` and to `release.yml` — which the §8.4 `publish coverage`
+audit required, and would have failed without. Their panic and arithmetic/indexing
+budgets stay at zero. `deny.toml` gained one licence, `CDLA-Permissive-2.0`, for
+`webpki-roots`: Mozilla's CA root store, which is data rather than code, reached
+through `rustls`. `rustls` rather than the platform TLS stack so that a build needs no
+OpenSSL headers on any release target.
+
+**Still open.** Neither adapter has been run against the live service. Turso has no
+embedded-replica support. D1 has no Worker binding and no `wasm32` target support.
+Each of those is now a documented boundary rather than a silent one.

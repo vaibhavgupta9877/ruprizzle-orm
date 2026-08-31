@@ -122,3 +122,11 @@ jobs:
         run: sleep 30
       - if: steps.mode.outputs.publish == 'true'
         run: cargo publish -p ruprizzle-cli --no-verify
+      - if: steps.mode.outputs.publish == 'true'
+        run: sleep 30
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle-turso --no-verify
+      - if: steps.mode.outputs.publish == 'true'
+        run: sleep 30
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle-d1 --no-verify

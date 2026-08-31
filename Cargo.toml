@@ -25,7 +25,6 @@ ruprizzle-lsp     = { path = "crates/lsp",     version = "1.5.0" }
 ruprizzle-check   = { path = "crates/check",   version = "1.5.0" }
 ruprizzle-turso   = { path = "crates/turso",   version = "1.5.0" }
 ruprizzle-d1      = { path = "crates/d1",      version = "1.5.0" }
-ruprizzle-neon    = { path = "crates/neon",    version = "1.5.0" }
 
 # --- external ---
 pest         = "2.8"
@@ -53,6 +52,10 @@ notify       = "8"
 walkdir      = "2"
 criterion    = "0.8"
 tower-lsp    = { version = "0.20", default-features = false, features = ["runtime-tokio"] }
+# The edge adapters speak HTTP. `rustls` rather than the platform TLS stack so a
+# `cargo build` needs no OpenSSL headers on any of the three release targets.
+reqwest      = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "charset"] }
+base64       = "0.22"
 
 [profile.dev]
 # Codegen output and sqlx make debug builds heavy; this trims link time without

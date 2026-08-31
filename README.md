@@ -15,7 +15,7 @@ It combines the best parts of Prisma and Drizzle:
 
 Postgres, SQLite, and MySQL/MariaDB are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver. A native `rusqlite` backend is also available for SQLite via the `sqlite-rusqlite` Cargo feature.
 
-> **Status:** `1.5.0` is the **latest release** (tag `v1.5.0`), carrying the whole v1.1–v1.5 feature line — array filters, full-text search, soft deletes, offline query checking, nested writes, tree hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and Ruprizzle Studio — described in [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md). The line was assessed and initially blocked; the findings and the remediation are recorded in [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md). The three edge adapter crates (`turso`, `d1`, `neon`) are **not published**: they are in-memory test doubles that perform no network I/O.
+> **Status:** `1.5.0` is the **latest release** (tag `v1.5.0`), carrying the whole v1.1–v1.5 feature line — array filters, full-text search, soft deletes, offline query checking, nested writes, tree hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and Ruprizzle Studio — described in [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md). The line was assessed and initially blocked; the findings and the remediation are recorded in [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md). The `turso` and `d1` adapters are real drivers over their providers’ HTTP APIs; there is no Neon adapter, because Neon is ordinary Postgres.
 >
 > P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is covered by semantic versioning from `1.0.0` onward. Two gates were waived on the way, both in writing: the 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors (`docs/SoakReport.md`), and the two-week RC feedback window, for want of any external consumer to collect feedback from ([Stability](docs/Stability.md#waiver-the-100-rc1-feedback-window-2026-08-21)). Note that the 1.0 line is pinned to `sqlx 0.8`, which ruprizzle re-exports as part of its own public API. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
 
@@ -473,13 +473,12 @@ The workspace is split so that parser and codegen never enter the user's runtime
 | `crates/testkit` | `ruprizzle-testkit` | Dual-database test harness | no | ✅ complete |
 | `crates/check` | `ruprizzle-check` | Offline SQL validation against the schema | **yes (published)** | ✅ complete |
 | `crates/lsp` | `ruprizzle-lsp` | Language server for `schema.ruprizzle` | **yes (published)** | ✅ complete |
-| `crates/turso` | `ruprizzle-turso` | Turso / libSQL adapter | not published | ⚠️ non-functional shell |
-| `crates/d1` | `ruprizzle-d1` | Cloudflare D1 adapter | not published | ⚠️ non-functional shell |
-| `crates/neon` | `ruprizzle-neon` | Neon serverless Postgres adapter | not published | ⚠️ non-functional shell |
+| `crates/turso` | `ruprizzle-turso` | Turso / libSQL adapter over Hrana HTTP | **yes (published)** | ✅ complete |
+| `crates/d1` | `ruprizzle-d1` | Cloudflare D1 adapter over the REST API | **yes (published)** | ✅ complete |
 
-Published crates are available on [crates.io](https://crates.io/crates/ruprizzle). `crates/testkit` is the only crate in the workspace marked `publish = false`; it is used by the integration suite and is not published.
+Published crates are available on [crates.io](https://crates.io/crates/ruprizzle). `crates/testkit` and `xtask` are the only workspace crates marked `publish = false`; the first is used by the integration suite, the second is build automation.
 
-> ⚠️ **The three adapter crates do not work.** They declare no driver dependency and store rows in a process-local `HashMap` that is discarded on exit. They are absent from the release pipeline and must not be published until implemented. See [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md) §4.1.
+> **There is no Neon adapter, and there should not be one.** Neon is Postgres over TLS: pass its connection string to `ruprizzle::connect`. `ruprizzle-neon` was an in-memory stub with no route to becoming anything else, and has been deleted. See [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md) §10.2.
 
 The pipeline is:
 
@@ -521,7 +520,7 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 
 ## Status and roadmap
 
-`1.5.0` is the current release (tag `v1.5.0`); the ten publishable crates move together at that version, and `1.0.0` (2026-08-21) preceded it. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
+`1.5.0` is the current release (tag `v1.5.0`); the twelve publishable crates move together at that version, and `1.0.0` (2026-08-21) preceded it. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
 
 ### The unreleased v1.1–v1.5 line
 
@@ -533,9 +532,9 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 | v1.2 | `ruprizzle check`, LSP 2.0, declarative seeding | ✅ implemented, gates green |
 | v1.3 | Implicit m2m, nested writes, tree hierarchies | ✅ implemented, gates green |
 | v1.4 | OpenTelemetry, replica routing, query cache, PostGIS | ✅ implemented, gates green |
-| v1.5 | Ruprizzle Studio, Turso/D1/Neon adapters | ⚠️ **blocked** — shells, not implementations |
+| v1.5 | Ruprizzle Studio, Turso and D1 adapters | ✅ implemented, gates green |
 
-The v1.1–v1.5 line shipped as `1.5.0`. It was assessed at 56/100 and **blocked** before release: the three adapter crates and most of Studio's data plane returned fabricated results rather than querying a database, and Studio's "migration safety diff" reported `SAFE` unconditionally. §8 of [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md) records what each of those became.
+The v1.1–v1.5 line shipped as `1.5.0`. It was assessed at 56/100 and **blocked** before release: the edge adapter crates and most of Studio's data plane returned fabricated results rather than querying a database, and Studio's "migration safety diff" reported `SAFE` unconditionally. §8 and §10 of [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md) records what each of those became.
 
 The plan behind the `1.0.0` release, including the two decisions it turned on, is `ProjectPlan/v1/V1StableRelease.md`. What remains open:
 

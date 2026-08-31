@@ -34,10 +34,9 @@ exists to prevent
 The public API is covered by semantic versioning from `1.0.0` onward. What counts as
 public, and what a breaking change is, is defined in [Stability](Stability.md).
 
-Crates marked `publish = false` are outside the semver promise: `ruprizzle-testkit`,
-`xtask`, and the three in-memory adapter stubs (`ruprizzle-turso`, `ruprizzle-d1`,
-`ruprizzle-neon`). They still carry the workspace version, because they are built from
-the same tree.
+Crates marked `publish = false` are outside the semver promise: `ruprizzle-testkit`
+and `xtask`. They still carry the workspace version, because they are built from the
+same tree.
 
 ## Cutting a release
 

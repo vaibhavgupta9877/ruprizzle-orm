@@ -1,31 +1,64 @@
 # ruprizzle-d1
 
-**Status: in-memory test double — not a working Cloudflare D1 adapter, and not published to crates.io.**
+Cloudflare D1 adapter for the [ruprizzle](https://github.com/vaibhavgupta9877/ruprizzle-orm) ORM.
 
-## What this crate actually does
+`D1Pool` implements `ruprizzle::Executor` against a D1 database through the
+[Cloudflare REST API](https://developers.cloudflare.com/api/resources/d1/): each
+statement is one `POST /accounts/{account}/d1/database/{database}/query`,
+authenticated with an API token.
 
-`ruprizzle-d1` implements `ruprizzle::Executor` against a process-local `HashMap`.
-It performs **no network I/O**: the Cloudflare D1 REST API is never called and the crate does not run inside a
-Worker. Any credential passed to
-the builder is stored and never transmitted. Every value written through it is lost
-when the process exits.
+```rust,no_run
+use ruprizzle::Executor;
+use ruprizzle::value::Value;
+use ruprizzle_d1::D1Pool;
 
-It exists so code written against the `Executor` trait can be exercised without a
-database, and so the shape of a future real adapter is pinned down. `publish = false`
-is set in `Cargo.toml`; do not use it as a production backend.
+# async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+let pool = D1Pool::builder()
+    .account_id(std::env::var("CLOUDFLARE_ACCOUNT_ID")?)
+    .database_id(std::env::var("D1_DATABASE_ID")?)
+    .api_token(std::env::var("CLOUDFLARE_API_TOKEN")?)
+    .build()?;
 
-## Supported subset
+let rows = pool
+    .fetch_all_raw("SELECT id, email FROM users WHERE id = ?".into(), vec![Value::I64(7)])
+    .await?;
+# Ok(())
+# }
+```
 
-- `SELECT ... FROM <table>` returns every row previously inserted for `<table>`.
-  Filters, joins, ordering and limits are ignored.
-- `INSERT INTO <table> (a, b) VALUES (...)` appends one row, naming the bound values
-  after the declared column list (`col_0`, `col_1`, ... when none is declared).
-- Every other statement is accepted and discarded.
+The token needs the `D1:edit` permission on the account. It is sent as a bearer
+credential and is redacted from `Debug` output.
 
-## Connecting to Cloudflare D1 for real today
+## When to use it
 
-There is no supported path yet. Use the Cloudflare `wrangler` tooling or the D1
-HTTP API directly until a real adapter lands.
+This is the adapter for code that talks to D1 **from outside** a Worker — a CLI, a
+migration job, a server. Inside a Worker you have a D1 binding, which is faster and
+needs no token; this crate does not use bindings.
+
+## What it does not do
+
+- **No interactive transactions.** Every statement is one HTTP request, so `BEGIN` and
+  `COMMIT` sent separately would not share a connection.
+- **No binary parameters.** D1's HTTP interface takes only JSON scalars, so a `Bytes`
+  value is refused rather than mangled. Store it hex- or base64-encoded in a text
+  column.
+- **No streaming transport.** `stream_raw` is a streaming *interface*: the whole result
+  set arrives in one response, so memory use is that of the full result.
+- **No column type information.** D1 answers in JSON, so an integer column and a text
+  column holding digits are told apart by JSON type alone.
+
+## Dialect
+
+SQLite. Placeholders are `?`, and booleans bind as `1` and `0` — D1 refuses a JSON
+boolean parameter.
+
+## Testing
+
+`cargo test -p ruprizzle-d1` runs the envelope unit tests and an end-to-end suite
+against a local HTTP server, which asserts the request the adapter builds — path,
+bearer token and bound parameters — as well as how it reads rows, change counts,
+Cloudflare's error envelope and transport failures. No network access and no
+Cloudflare account are needed.
 
 ## License
 

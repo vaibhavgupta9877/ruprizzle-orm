@@ -25,13 +25,13 @@ the wire protocol and pooling; we do not write a driver.
 is complete, MySQL/MariaDB support is shipped, and the public API is covered by
 semantic versioning from this release onward.
 
-The `dev-v2-x` branch carries an unreleased v1.1–v1.5 feature line — array
-filters, full-text search, soft deletes, offline query checking, nested writes,
-tree hierarchies, OpenTelemetry, read-replica routing, query caching and PostGIS.
-See [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md). **It has not been tagged.**
-Ruprizzle Studio's data plane and the three edge adapters (`turso`, `d1`, `neon`)
-are non-functional shells, so the release is blocked; the assessment is
-[`ProjectPlan/v2/ProductionReadinessV1_5.md`](../ProjectPlan/v2/ProductionReadinessV1_5.md).
+The v1.1–v1.5 feature line shipped as `1.5.0` — array filters, full-text search,
+soft deletes, offline query checking, nested writes, tree hierarchies,
+OpenTelemetry, read-replica routing, query caching, PostGIS and Ruprizzle Studio.
+See [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md). It was assessed and
+initially blocked — Studio's data plane and the edge adapters returned fabricated
+results rather than querying a database — and the findings and the remediation are
+in [`ProjectPlan/v2/ProductionReadinessV1_5.md`](../ProjectPlan/v2/ProductionReadinessV1_5.md).
 
 Two things were waived on the way here, both in writing rather than by omission:
 the W4-02 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors

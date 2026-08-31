@@ -38,6 +38,10 @@ allow = [
     "Unicode-3.0",
     "Zlib",
     "CC0-1.0",
+    # `webpki-roots`, which is Mozilla's CA root store rather than code, and is
+    # licensed under a permissive *data* licence. It reaches us through `rustls`,
+    # which the edge adapters use so that a build needs no OpenSSL headers.
+    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.9
 

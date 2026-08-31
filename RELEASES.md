@@ -25,15 +25,17 @@ and a migration safety diff.
 is the reason it looks the way it does. Studio's data plane returned fabricated values
 without querying the database, its migration safety diff reported `SAFE` for every
 model without opening a connection, and the three edge adapters were in-memory
-`HashMap`s with a database's name on them. §8 of
+`HashMap`s with a database's name on them. §8 and §10 of
 [ProjectPlan/v2/ProductionReadinessV1_5.md](ProjectPlan/v2/ProductionReadinessV1_5.md)
-records what each of those became. In short: Studio queries the database on every
-screen and says so plainly when it cannot, and the three adapters are renamed to
-`InMemory*Stub` and marked `publish = false` — they are **not on crates.io** and are
-not database adapters.
+record what each of those became. In short: Studio queries the database on every
+screen and says so plainly when it cannot.
 
-For Neon, pass the connection string to `ruprizzle::connect`; it is ordinary Postgres
-over TLS and needs no adapter crate.
+The adapters were rewritten rather than renamed. `ruprizzle-turso` speaks Hrana 2 over
+HTTP to Turso or any `sqld`; `ruprizzle-d1` speaks the Cloudflare REST API. Both are
+published, and both are tested end to end against a local HTTP server, so neither the
+test suite nor a contributor needs a provider account. `ruprizzle-neon` was deleted:
+Neon is ordinary Postgres over TLS, so its connection string goes straight to
+`ruprizzle::connect` and an adapter crate would wrap nothing.
 
 Full detail in [CHANGELOG.md](CHANGELOG.md#150---2026-08-31).
 

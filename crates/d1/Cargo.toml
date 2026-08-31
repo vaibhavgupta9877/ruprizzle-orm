@@ -1,9 +1,6 @@
 [package]
 name        = "ruprizzle-d1"
-description = "In-memory Cloudflare D1 test double for the ruprizzle ORM (no network I/O; unpublished)"
-# Not published: this crate is an in-memory test double, not a working
-# database adapter. See ProjectPlan/v2/ProductionReadinessV1_5.md section 4.1.
-publish     = false
+description = "Cloudflare D1 adapter for the ruprizzle ORM, over the Cloudflare REST API"
 version.workspace      = true
 edition.workspace      = true
 rust-version.workspace = true
@@ -11,23 +8,23 @@ license.workspace      = true
 repository.workspace   = true
 authors.workspace      = true
 homepage.workspace     = true
+documentation          = "https://docs.rs/ruprizzle-d1"
 readme                 = "README.md"
-keywords    = ["orm", "cloudflare", "d1", "sqlite", "edge", "wasm"]
-categories  = ["database", "wasm"]
+keywords    = ["orm", "cloudflare", "d1", "sqlite", "edge"]
+categories  = ["database"]
 
 [dependencies]
 ruprizzle         = { workspace = true }
-ruprizzle-core    = { workspace = true }
 ruprizzle-dialect = { workspace = true }
 serde             = { workspace = true }
 serde_json        = { workspace = true }
 thiserror         = { workspace = true }
-tokio             = { workspace = true }
+reqwest           = { workspace = true }
 futures-core      = "0.3"
 futures-util      = { version = "0.3", default-features = false, features = ["std", "alloc"] }
 
 [dev-dependencies]
-tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio             = { workspace = true, features = ["macros", "rt-multi-thread", "net", "io-util"] }
 
 [package.metadata.docs.rs]
 all-features = true
