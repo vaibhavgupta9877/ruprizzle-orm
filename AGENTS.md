@@ -47,7 +47,7 @@
   cargo clippy --workspace --all-targets -- -D warnings
   cargo test --workspace
   $env:RUPRIZZLE_TEST_RUSQLITE=1; cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'
-  cargo doc --workspace --no-deps
+  cargo doc --workspace --no-deps --all-features
   cargo xtask harden
   ```
 
@@ -58,7 +58,6 @@
 
 ## Default branch
 
-- The repository default branch is now `dev-v0-2`. It was created from
-  `perf/research-harnesses` after merging `w2-phase`, `w3-phase`, `w4-phase`,
-  and `w5-phase` with `--no-ff`. Unless the user says otherwise or manually
-  changes branches, use `dev-v0-2` as the base for all future work.
+- The repository default branch is `dev-v1-0-0-rc` for the 1.0.0 release line.
+  Unless the user says otherwise or manually changes branches, use
+  `dev-v1-0-0-rc` as the base for all future work.

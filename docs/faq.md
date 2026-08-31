@@ -39,13 +39,14 @@ hidden query engine binary.
 
 ## Does it support compile-time query checking?
 
-Yes. Use `ruprizzle check` with a query manifest captured from tests or examples.
+Yes. Use `ruprizzle check --manifest <path>` with a query manifest captured from tests or examples.
 See [ADR-012](adr/ADR-012-OfflineQueryChecking.md) for the design.
 
 ## Is there an LSP?
 
-Yes. `ruprizzle-lsp` provides completion, diagnostics, and go-to-definition for
-`schema.ruprizzle`. A VS Code extension is in `editor/`.
+Yes. `ruprizzle lsp` (and the `ruprizzle-lsp` crate) provide completion, hover,
+formatting, diagnostics, and go-to-definition for `schema.ruprizzle`. A VS Code
+extension is in `editor/`.
 
 ## How do I report bugs or request features?
 

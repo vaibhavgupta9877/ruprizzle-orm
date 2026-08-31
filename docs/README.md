@@ -16,7 +16,9 @@ A schema-first ORM for Rust that combines the best parts of Prisma and Drizzle:
 
 PostgreSQL, MySQL/MariaDB, and SQLite 3+ are supported behind a dialect trait, so more
 backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for
-the wire protocol and pooling; we do not write a driver.
+the wire protocol and pooling; we do not write a driver. Native driver features
+are also available: `sqlite-rusqlite` for synchronous SQLite and an experimental
+`postgres-tokio-postgres` for PostgreSQL.
 
 ## Status
 
@@ -120,12 +122,22 @@ mod db;
 
 | Step | Command |
 |---|---|---|
-| Scaffold a project | `ruprizzle init --provider postgres\|sqlite` |
+| Scaffold a project | `ruprizzle init --provider postgres\|postgresql\|sqlite\|mysql\|mariadb` |
 | Generate the client | `ruprizzle generate` |
 | Auto-watch in dev | `ruprizzle generate --watch` |
 | Create & apply a migration | `ruprizzle migrate dev --name <name>` |
 | Apply migrations in CI/prod | `ruprizzle migrate deploy` |
+| Check migration status | `ruprizzle migrate status` |
+| Mark a migration applied | `ruprizzle migrate resolve <id>` |
+| Reset and replay migrations | `ruprizzle migrate reset --force` |
+| Squash migration history | `ruprizzle migrate squash --force` |
 | Validate for CI | `ruprizzle validate` |
+| Canonicalise schema | `ruprizzle format` |
+| Introspect an existing database | `ruprizzle db pull` |
+| Seed fixture data | `ruprizzle db seed` |
+| Prototype schema push | `ruprizzle db push` |
+| Run the language server | `ruprizzle lsp` |
+| Offline query check | `ruprizzle check --manifest <path>` |
 
 `migrate dev` and `migrate deploy` are deliberately separate: the production
 command never diffs or writes migration files, so habit cannot carry a dangerous

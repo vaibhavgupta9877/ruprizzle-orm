@@ -6,7 +6,7 @@
 
 A schema-first ORM for Rust: typed queries, relations, and automatic migrations.
 
-`ruprizzle` is the runtime crate that you use in your application. Combine a declarative `schema.ruprizzle` file with the `ruprizzle-cli` code generator and you get a fully typed query builder, migrations, and relation `include` support for Postgres and SQLite behind a single API.
+`ruprizzle` is the runtime crate that you use in your application. Combine a declarative `schema.ruprizzle` file with the `ruprizzle-cli` code generator and you get a fully typed query builder, migrations, and relation `include` support for PostgreSQL, MySQL/MariaDB, and SQLite behind a single API. Optional native-driver feature flags (`sqlite-rusqlite`, `postgres-tokio-postgres`) and an optional `metrics` feature are also available.
 
 ## Features
 
@@ -16,23 +16,23 @@ A schema-first ORM for Rust: typed queries, relations, and automatic migrations.
 - **Migrations** — diff your schema against the live database and generate `up.sql` / `down.sql`.
 - **Raw SQL, safely** — `raw!` macro for fragments that are bound, not interpolated.
 - **Transactions** — explicit `Tx::begin` / `commit` / `rollback` and isolation-level helpers.
-- **Multi-backend** — the same code runs on Postgres and SQLite.
+- **Multi-backend** — the same code runs on PostgreSQL, MySQL/MariaDB, and SQLite.
 
 ## Example
 
 ```rust
-use ruprizzle::{Model, InsertQuery, SelectQuery, Column};
-use generated_client::{Db, User, UserColumn};
+use ruprizzle::{Column, InsertQuery, SelectQuery};
+use generated_client::{Db, User, EMAIL};
 
 let db = Db::connect("sqlite://app.db").await?;
 
 let user = InsertQuery::<User>::new(db.raw_pool())
-    .set(UserColumn::email, "hello@example.com")
-    .exec_one()
+    .set(EMAIL, "hello@example.com")
+    .exec()
     .await?;
 
 let users = SelectQuery::<User>::new(db.raw_pool())
-    .filter(UserColumn::email.contains("@example.com"))
+    .filter(EMAIL.contains("@example.com"))
     .fetch_all()
     .await?;
 ```

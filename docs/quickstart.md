@@ -79,6 +79,9 @@ This diffs the empty database against the schema, writes a migration under
 
 ```bash
 cargo add ruprizzle tokio --features tokio/full
+cargo add dotenvy
+cargo add sqlx@0.8.6 --no-default-features --features "runtime-tokio-rustls,postgres"
+cargo add serde
 ```
 
 Or edit `Cargo.toml`:
@@ -87,6 +90,9 @@ Or edit `Cargo.toml`:
 [dependencies]
 ruprizzle = "1.0.0"
 tokio = { version = "1", features = ["full"] }
+dotenvy = "0.15"
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio-rustls", "postgres"] }
+serde = "1.0.229"
 ```
 
 ## 6. Write the first query
@@ -98,14 +104,17 @@ mod db;
 
 #[tokio::main]
 async fn main() -> Result<(), ruprizzle::Error> {
-    let db = db::Db::connect(&std::env::var("DATABASE_URL")?).await?;
+    dotenvy::dotenv().ok();
+    let db_url =
+        std::env::var("DATABASE_URL").map_err(|e| ruprizzle::Error::Message(e.to_string()))?;
+    let db = db::Db::connect(&db_url).await?;
 
     let alice = db
         .user()
         .create(db::UserInsert {
             id: None,
             email: "alice@example.com".into(),
-            name: Some("Alice".into()),
+            name: "Alice".into(),
         })
         .exec()
         .await?;
@@ -136,10 +145,10 @@ Change `schema.ruprizzle` and run:
 
 ```bash
 ruprizzle migrate dev --name add_field
-ruprizzle generate
 ```
 
-Or, for live code generation while you edit:
+`migrate dev` already regenerates the client. For live code generation while you
+edit the schema without migrating, use:
 
 ```bash
 ruprizzle generate --watch

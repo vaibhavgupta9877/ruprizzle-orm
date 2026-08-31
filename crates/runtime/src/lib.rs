@@ -9,7 +9,7 @@
 //! # Backends
 //!
 //! By default `ruprizzle` builds on `sqlx::Any`, which lets the same binary talk
-//! to Postgres and SQLite. You can opt into native-driver paths:
+//! to PostgreSQL, MySQL/MariaDB, and SQLite. You can opt into native-driver paths:
 //!
 //! * **`sqlite-rusqlite`** — a synchronous `rusqlite` backend that skips the
 //!   `sqlx::Any` text round-trip for SQLite. Enable it in `Cargo.toml` and use a

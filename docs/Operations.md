@@ -71,7 +71,9 @@ Enable the `metrics` feature and install a recorder.
 | `ruprizzle_query_total` | counter | — | Total executed statements. |
 | `ruprizzle_query_duration_seconds` | histogram | — | Query latency. |
 | `ruprizzle_query_errors_total` | counter | `kind` | Errors by `Error::kind()`. |
-| `ruprizzle_slow_query_total` | counter | — | Slow-query warnings. |
+
+Slow queries are emitted as `WARN` events on the `ruprizzle::slow_query` tracing
+target, not as a metric counter.
 
 ### Pool metrics
 
@@ -126,10 +128,8 @@ Interpretation:
 Suggested thresholds for a health dashboard:
 
 - **Error rate**: `rate(ruprizzle_query_errors_total[5m]) > 0.01/sec`.
-- **Slow query rate**: `rate(ruprizzle_slow_query_total[5m]) > 0.1/sec`.
+- **Slow query rate**: use the `ruprizzle_query_duration_seconds` histogram (e.g. p99 above your `PoolConfig::slow_query_threshold`) or watch `WARN` events on the `ruprizzle::slow_query` tracing target.
 - **Pool saturation**: `ruprizzle_pool_waiters > 0` for more than 30 seconds.
-- **Connection churn**: `rate(ruprizzle_pool_disconnect_total[5m]) > 0.05/sec`
-  (requires W3-04 connection metrics).
 - **Migrations stuck**: `ruprizzle_migration_applied_total` not increasing while
   a deployment is expected.
 

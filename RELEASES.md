@@ -2,6 +2,34 @@
 
 For a sectioned, versioned changelog, see [CHANGELOG.md](CHANGELOG.md).
 
+## 1.0.0
+
+The first stable release (2026-08-21, tag `v1.0.0`). The public API is covered by
+semantic versioning from this version onward. There are no API changes from
+`1.0.0-rc.1`; the release is documentation, packaging, and dependency polish.
+
+- Added `package.metadata.docs.rs` `all-features = true` so docs.rs covers
+  `sqlite-rusqlite`, `postgres-tokio-postgres`, and `metrics`.
+- Pinned the 1.0 line to `sqlx 0.8` and documented public dependencies.
+- Added a documentation-only `src/lib.rs` to `ruprizzle-cli` so docs.rs builds it.
+- Fixed two broken intra-doc links behind optional features.
+- Refreshed README, guides, FAQ, and crate READMEs for the 1.0.0 feature set.
+
+## 1.0.0-rc.1
+
+Release candidate (2026-08-21, tag `v1.0.0-rc.1`). Added MySQL/MariaDB support,
+LSP, offline query checking, aggregates, advanced SQL, and native drivers.
+
+- MySQL/MariaDB dialect and driver path.
+- `ruprizzle-lsp` language server and VS Code extension.
+- `ruprizzle check` for offline query validation.
+- Query builder: aggregates, `GROUP BY`/`HAVING`, explicit `JOIN`s, CTEs, set
+  operations, `EXISTS`/`IN` subqueries, JSON and array operators, prepared
+  statements, streaming, and nested writes.
+- Many-to-many relations through explicit join models.
+- CLI: `db pull`, `db seed`, `migrate squash`, `migrate resolve`, `migrate reset`.
+- Native `tokio-postgres` and `rusqlite` driver feature flags.
+- `metrics` feature for query, pool, and migration telemetry.
 
 ## 0.1.0-alpha.2
 

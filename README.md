@@ -13,7 +13,7 @@ It combines the best parts of Prisma and Drizzle:
 - **Prisma's** declarative schema as the single source of truth, with a generated typed client, automatic migration diffing, and nested relation loading.
 - **Drizzle's** SQL transparency — no hidden query engine, no sidecar binary, and `.to_sql()` on every builder so you always know what is being sent to the database.
 
-Postgres, SQLite, and MySQL/MariaDB are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver. A native `rusqlite` backend is also available for SQLite via the `sqlite-rusqlite` Cargo feature.
+PostgreSQL, MySQL/MariaDB, and SQLite 3+ are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver. Native driver features are also available: `sqlite-rusqlite` for synchronous SQLite, and an experimental `postgres-tokio-postgres` for PostgreSQL. See [Dialects](#dialects) below for details.
 
 > **Status:** `1.0.0` is **published on crates.io** (2026-08-21, tag `v1.0.0`). P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is covered by semantic versioning from this release onward. Two gates were waived on the way, both in writing: the 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors (`docs/SoakReport.md`), and the two-week RC feedback window, for want of any external consumer to collect feedback from ([Stability](docs/Stability.md#waiver-the-100-rc1-feedback-window-2026-08-21)). Note that the 1.0 line is pinned to `sqlx 0.8`, which ruprizzle re-exports as part of its own public API. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
 
@@ -103,7 +103,7 @@ let sql = db
     .user()
     .find_many()
     .filter(user::EMAIL.eq("alice@example.com"))
-    .to_sql();
+    .to_sql()?;
 ```
 
 Wrong-typed and cross-model filters are compile errors, not runtime ones:
@@ -154,12 +154,19 @@ ruprizzle tries to give you all three at once:
 
 ### Query builder
 
-- **CRUD builders**: `select`, `find_many`, `find_by_id`, `find_unique`, `insert`, `insert_many`, `upsert`, `update`, `delete`.
-- **Type-safe filters** for equality, inequality, ordering, `IN` sets, nullability, and string matching (`starts_with`, `ends_with`, `contains`).
-- **Filter combinators**: `.and(...)`, `.or(...)`, `all([...])`, `any([...])`.
+- **CRUD builders**: generated repositories expose `find_many`, `create`, `create_many`, `update`, and `delete`. Low-level `select`, `insert`, `update`, and `delete` entry points are also available.
+- **Type-safe filters** for equality, inequality, ordering, `IN`/`NOT IN` sets, nullability, `BETWEEN`, and string matching (`starts_with`, `ends_with`, `contains`, `ilike`).
+- **Filter combinators**: `.and(...)`, `.or(...)`, `all([...])`, `any([...])`, plus conditional `*_if` variants on every builder.
 - **Projections** to select only the columns you need.
-- **Ordering, pagination, and cursor helpers** (`limit`, `offset`, `after`, `before`, `paginate(Page::new(1, 20))`).
+- **Ordering, pagination, and cursor helpers** (`limit`, `offset`, `after`, `before`, `.page(size)`).
+- **Count and exists** shortcuts for `SELECT COUNT(*)` and `SELECT 1 ... LIMIT 1`.
 - **Distinct** selection support.
+- **Aggregates and grouping** (`sum`, `avg`, `min`, `max`, `count`, `count_distinct`, `group_by`, `having`).
+- **CTEs** (`with`, `with_recursive`) and **set operations** (`union`, `union_all`, `intersect`, `except`).
+- **Explicit typed joins** (`inner_join`, `left_join`, `right_join`, `full_join`, including aliased variants for self-joins).
+- **JSON and array operators** (`get`, `get_text`, `at`, `has_key`, `contains`, `contained_by`, `overlaps`).
+- **Prepared statements** with rebindable placeholders.
+- **Streaming** (`stream`, `stream_unbuffered`).
 - **SQL transparency**: `.to_sql()` returns the compiled SQL with placeholders for every query.
 
 ### Relations and `include`
@@ -181,14 +188,16 @@ ruprizzle tries to give you all three at once:
 
 ### CLI
 
-- `ruprizzle init --provider postgres|sqlite|mysql` — scaffold schema, `.env`, `.gitignore`, and `migrations/`.
+- `ruprizzle init --provider postgres|postgresql|sqlite|mysql|mariadb` — scaffold schema, `.env`, `.gitignore`, and `migrations/`.
 - `ruprizzle generate` and `ruprizzle generate --watch` — generate the typed client.
 - `ruprizzle validate` — CI-friendly schema validation.
 - `ruprizzle format` — canonicalise the schema file.
-- `ruprizzle migrate dev|deploy|status|resolve|reset` — see [CLI workflow](#cli-workflow).
+- `ruprizzle migrate dev|deploy|status|resolve|reset|squash` — see [CLI workflow](#cli-workflow).
 - `ruprizzle db pull` — introspect an existing database into `schema.ruprizzle`.
-- `ruprizzle db seed` — transactionally apply idempotent `seeds/main.json` data (legacy `main.sql` remains supported).
+- `ruprizzle db seed` — transactionally apply idempotent `seeds/main.json` data (legacy `seeds/main.sql` is also supported).
 - `ruprizzle db push` — direct schema push without migration files.
+- `ruprizzle lsp` — run the language server for `schema.ruprizzle` over stdio.
+- `ruprizzle check --manifest <path>` — offline query and raw-fragment validation against the schema.
 
 A declarative seed file maps model or table names to row arrays:
 
@@ -205,10 +214,12 @@ Rows must include their primary key; repeated runs update the existing row inste
 - **Portable MySQL DML**: inserts use a primary-key follow-up lookup because MySQL has no DML `RETURNING`; upserts use `ON DUPLICATE KEY UPDATE`.
 - **SQLite table rebuilds** for destructive column changes are handled automatically.
 - **UUID and JSON** are mapped idiomatically per dialect (`uuid`/`jsonb` on Postgres, `char(36)`/`json` on MySQL, and text on SQLite where native storage is unavailable).
+- **Native driver feature flags**: `sqlite-rusqlite` swaps SQLite to the synchronous `rusqlite` driver (use `driver=rusqlite` in the URL); `postgres-tokio-postgres` is an experimental native PostgreSQL driver.
+- **`metrics` feature**: enables `metrics` crate integration for query, pool, and migration counters, histograms, and gauges (see [`docs/Operations.md`](docs/Operations.md)).
 
 ### Transactions and escape hatches
 
-- **First-class transactions**: `db.raw_pool().begin().await?`, `tx.commit().await?`, `tx.rollback().await?`. Builders take `&dyn Executor`, so the same query works against a pool or a transaction.
+- **First-class transactions**: `db.raw_pool().begin().await?`, `tx.commit().await?`, `tx.rollback().await?`. `SelectQuery` and raw execution work against any `&dyn Executor`, so the same code runs against a pool or a transaction. The generated `Db` also exposes `transaction`, `transaction_with`, and `transaction_retrying` helpers.
 - **Isolation levels**: `ReadUncommitted`, `ReadCommitted`, `RepeatableRead`, `Serializable`.
 - **Raw SQL execution**: `db.raw_pool().fetch_all_raw(sql, params).await?` and `db.raw_pool().execute_raw(sql, params).await?`.
 - **Retry helpers**: `ruprizzle::is_retryable(&error)` for transient error handling.
@@ -240,6 +251,7 @@ ruprizzle init --provider postgres
 # edit schema.ruprizzle
 ruprizzle migrate dev --name init
 # add `mod db;` to src/main.rs
+# then add dependencies: ruprizzle, tokio, dotenvy, sqlx 0.8.6, serde
 cargo run
 ```
 
@@ -270,13 +282,19 @@ mod db;
 
 #[tokio::main]
 async fn main() -> Result<(), ruprizzle::Error> {
-    let db = db::Db::connect(&std::env::var("DATABASE_URL")?).await?;
+    dotenvy::dotenv().ok();
+    let db_url =
+        std::env::var("DATABASE_URL").map_err(|e| ruprizzle::Error::Message(e.to_string()))?;
+    let db = db::Db::connect(&db_url).await?;
 
     db.user()
         .create(db::UserInsert {
             id: None,
             email: "alice@example.com".into(),
             name: Some("Alice".into()),
+            role: Some(db::enums::Role::Admin),
+            created_at: None,
+            updated_at: None,
         })
         .exec()
         .await?;
@@ -333,6 +351,9 @@ let user = db
         id: None,
         email: "alice@example.com".into(),
         name: Some("Alice".into()),
+        role: Some(db::enums::Role::Admin),
+        created_at: None,
+        updated_at: None,
     })
     .exec()
     .await?;
@@ -376,9 +397,9 @@ use ruprizzle::prelude::*;
 
 let mut tx = db.raw_pool().begin().await?;
 
-let user = InsertQuery::new(&tx)
-    .set(db::user::EMAIL, "a@b.c")
-    .exec()
+let users = SelectQuery::<User>::new(&tx)
+    .filter(user::EMAIL.ends_with("@example.com"))
+    .fetch_all()
     .await?;
 
 if should_commit {
@@ -410,14 +431,22 @@ See the [query guide](docs/QueryGuide.md) and [relations guide](docs/RelationsGu
 
 | Step | Command |
 |---|---|
-| Scaffold a project | `ruprizzle init --provider postgres\|sqlite` |
+| Scaffold a project | `ruprizzle init --provider postgres\|postgresql\|sqlite\|mysql\|mariadb` |
 | Generate the client | `ruprizzle generate` |
 | Auto-watch in dev | `ruprizzle generate --watch` |
 | Create & apply a migration | `ruprizzle migrate dev --name <name>` |
 | Apply migrations in CI/prod | `ruprizzle migrate deploy` |
 | Check migration status | `ruprizzle migrate status` |
+| Mark a migration applied | `ruprizzle migrate resolve <id>` |
+| Reset and replay migrations | `ruprizzle migrate reset --force` |
+| Squash migration history | `ruprizzle migrate squash --force` |
 | Validate for CI | `ruprizzle validate` |
 | Canonicalise schema | `ruprizzle format` |
+| Introspect an existing database | `ruprizzle db pull` |
+| Seed fixture data | `ruprizzle db seed` |
+| Prototype schema push | `ruprizzle db push` |
+| Run the language server | `ruprizzle lsp` |
+| Offline query check | `ruprizzle check --manifest <path>` |
 
 `migrate dev` and `migrate deploy` are deliberately separate: the production command never diffs or writes migration files, so habit cannot carry a dangerous prototyping invocation into CI.
 
@@ -468,6 +497,8 @@ The workspace is split so that parser and codegen never enter the user's runtime
 | `crates/macros` | `ruprizzle-macros` | `#[derive(FromRow)]` passthrough, `raw!` | **yes (published)** | ✅ complete |
 | `crates/migrate` | `ruprizzle-migrate` | Snapshot, diff, plan, apply | transitively | ✅ complete |
 | `crates/cli` | `ruprizzle-cli` | The `ruprizzle` binary | **yes (published)** | ✅ complete |
+| `crates/lsp` | `ruprizzle-lsp` | Language server for `schema.ruprizzle` | **yes (published)** | ✅ complete |
+| `crates/check` | `ruprizzle-check` | Offline / compile-time query checking | **yes (published)** | ✅ complete |
 | `crates/testkit` | `ruprizzle-testkit` | Dual-database test harness | no | ✅ complete |
 
 Published crates are available on [crates.io](https://crates.io/crates/ruprizzle). `crates/testkit` is the only crate in the workspace marked `publish = false`; it is used by the integration suite and is not published.
@@ -506,7 +537,7 @@ The latest cross-ORM SQLite run (2026-08-18, 06:04 UTC, 1 warm-up + 10 measured 
 | `include_posts` | 21,139.9 µs | **7,553.3 µs** | Diesel 3,627.0 µs, prax 10,741.2 µs, Sea-ORM 20,856.5 µs |
 | `bulk_insert_1000` | 1,912.4 µs | 1,383.1 µs | **prax 1,059.0 µs**, Drizzle 9,069.6 µs, Sea-ORM 6,027.3 µs |
 
-The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchronous native `rusqlite` crate and is enabled with the `sqlite-rusqlite` feature. Postgres still uses `sqlx` in both variants. For the Postgres-vs-sqlx overhead report and the `sqlx::Any` text-marshalling note, see [docs/performance.md](docs/performance.md). Generated-crate compile-time benchmarks are automated via `cargo xtask bench-compile`.
+The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchronous native `rusqlite` crate; enable it with the `sqlite-rusqlite` feature and `driver=rusqlite` in the URL. The experimental `postgres-tokio-postgres` feature swaps the PostgreSQL connection to the native `tokio-postgres` driver. The `metrics` feature enables `metrics` crate integration for query, pool, and migration telemetry. For the Postgres-vs-sqlx overhead report and the `sqlx::Any` text-marshalling note, see [docs/performance.md](docs/performance.md). Generated-crate compile-time benchmarks are automated via `cargo xtask bench-compile`.
 
 ---
 
@@ -531,15 +562,12 @@ See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md), the
 
 ## Known limitations
 
-This is an honest beta. The boundaries are documented so you can decide whether ruprizzle is right for your project today.
+This is an honest list of boundaries. It is a feature, not an apology: knowing the limits up front is how you decide whether ruprizzle is right for your project today.
 
 - **Heuristic renames** are suggested automatically; add `@renamedFrom` to confirm a data-preserving rename. The diff never guesses silently.
 - **`db push`** does not write migration files and is only for prototyping.
-- **LSP for `schema.ruprizzle`** is available via `ruprizzle-lsp` and the VS Code
-  extension in `editor/`. Syntax highlighting is also available as a TextMate
-  grammar.
-- **Offline query checking** (`ruprizzle check`) is available using query
-  manifests captured at test time.
+- **LSP for `schema.ruprizzle`** is available via the `ruprizzle lsp` CLI command and the `ruprizzle-lsp` crate, plus the VS Code extension in `editor/`. Syntax highlighting is also available as a TextMate grammar.
+- **Offline query checking** is available via `ruprizzle check --manifest <path>` against query manifests captured at test time.
 - **`Decimal` on SQLite** is stored as text by the default `sqlx::Any` path.
   The `sqlite-rusqlite` feature parses it back from text at decode time. If
   you need exact decimal math on SQLite, use `Int` minor units or a PostgreSQL
@@ -550,7 +578,7 @@ This is an honest beta. The boundaries are documented so you can decide whether 
   approximated because JSON1 has no containment operator.
 - **Polymorphic relations, recursive tree loading beyond the current depth-limited
   `include`, soft deletes, full-text search, and PostGIS types** are deferred to
-  0.2+.
+  1.2+.
 
 See [docs/KnownLimitations.md](docs/KnownLimitations.md) for the full list and [docs/MigratingFrom.md](docs/MigratingFrom.md) for cheat-sheets when moving from Diesel, SeaORM, or sqlx.
 
@@ -574,7 +602,7 @@ Without Docker, `cargo test` still passes: the Postgres half of each dual-databa
 ## Planning documents
 
 - [MasterPlan](ProjectPlan/ImplementationPlan/MasterPlan.md) — scope, timeline, progress tracker
-- [Decisions and risks](ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md) — ADRs, kill criteria, what is deferred to 0.2
+- [Decisions and risks](ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md) — ADRs, kill criteria, and deferred features
 - [Release notes](RELEASES.md) — what changed in each published version
 - [Changelog](CHANGELOG.md) — the full, sectioned changelog
 

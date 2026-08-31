@@ -11,7 +11,7 @@ Shared intermediate representation (IR), diagnostics, spans, and schema fingerpr
 ## Responsibilities
 
 - **IR types** (`ir::Schema`, `ir::Model`, `ir::Field`, `ir::Relation`, etc.) — the canonical schema model.
-- **Provider and native-type descriptors** — how scalar types map to Postgres and SQLite.
+- **Provider and native-type descriptors** — how scalar types map to PostgreSQL, MySQL/MariaDB, and SQLite.
 - **Span tracking and source locations** — used by the parser and validator for accurate error reporting.
 - **Diagnostics and suggestions** — structured errors with help text and fix hints.
 - **Schema fingerprinting** — a stable hash used to detect schema drift and to version generated clients.
