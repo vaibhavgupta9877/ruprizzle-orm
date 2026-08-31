@@ -328,7 +328,7 @@ names the commit that closed it.
 | 5 | Add a `--features studio` CI job | §4.5 | **DONE** — CI and release gate |
 | 6 | Bump the workspace version and write the changelog | §4.6 | TODO |
 | 7 | Fix `@@tenant` in the LSP | §4.7 | **DONE** — removed, plus `@@policy` |
-| 8 | Studio guardrail copy and version drift | §5.1, §5.2 | TODO |
+| 8 | Studio guardrail copy and version drift | §5.1, §5.2 | §5.1 **DONE**; §5.2 with the bump |
 
 ### 8.1 — Adapters: stub route taken (§4.1)
 
@@ -532,3 +532,34 @@ It is the right end state and would have caught this class of defect at the sour
 but it changes parser behaviour for every existing schema and can turn a currently
 valid file into a failing one, which is a decision for the version bump rather than a
 side effect of an LSP fix. Recorded as follow-up work.
+
+### 8.7 — Studio's guardrail says what it is, and will not publish writes (§5.1)
+
+The substring check is kept — it does catch the common case — but it no longer
+presents itself as protection:
+
+- `is_production_url` is renamed **`looks_like_production_url`**, and its doc comment
+  states plainly that it is a name check, names what it misses (an RDS endpoint, a
+  bare IP, `main-db.internal`) and what it false-positives on
+  (`…/product_catalog_dev`), and says that anything which must not be reachable
+  belongs behind credentials the developer does not hold.
+- The refusal message no longer calls itself a "safety guardrail". It says which
+  substring matched and that this is a name check, not a real safeguard.
+- The test now pins the **negative** cases too: a production RDS endpoint and a bare
+  IP both pass the check, and a development database called `product_catalog_dev`
+  trips it. The limitation is now documented by a failing-if-changed assertion rather
+  than by prose alone.
+
+The second half of §5.1 — no authentication on the mutation routes, with
+`--host 0.0.0.0` one flag away — is addressed by refusing the combination:
+
+- **`--allow-writes` on a non-loopback bind is now a startup error** unless
+  `--yes-i-know` is passed. The message says why: Studio has no authentication, so
+  that bind publishes `INSERT`, `UPDATE` and `DELETE` to every host that can reach the
+  port.
+- A non-loopback bind **without** writes still prints a warning line at startup.
+- `is_loopback_host` parses the address rather than string-matching `127.0.0.1`, so
+  `::1`, `[::1]` and `127.0.0.2` are recognised; a test pins both directions.
+
+This does not make Studio safe to expose — authentication is the real fix and is not
+built. It makes the dangerous combination require an explicit statement of intent.

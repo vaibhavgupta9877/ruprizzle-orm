@@ -16,9 +16,16 @@ use std::sync::Arc;
 
 use handlers::AppState;
 
-/// Checks whether a database URL targets a production or remote environment.
+/// Whether a database URL *looks* like production.
+///
+/// This is a substring match on `prod`, `aws.neon.tech` and `turso.io`. It is a
+/// speed bump, not a guardrail, and the difference matters: it misses every
+/// production database not named for the fact — an RDS endpoint, a bare IP,
+/// `main-db.internal` — and it false-positives on `…/product_catalog_dev`. Do not
+/// describe it to users as protection. Anything that must not be reachable belongs
+/// behind credentials the developer does not hold, not behind this function.
 #[must_use]
-pub fn is_production_url(url: &str) -> bool {
+pub fn looks_like_production_url(url: &str) -> bool {
     let lower = url.to_lowercase();
     lower.contains("prod")
         || lower.contains("production")
@@ -26,12 +33,28 @@ pub fn is_production_url(url: &str) -> bool {
         || lower.contains("turso.io")
 }
 
+/// Whether `host` is a loopback address.
+///
+/// A non-loopback bind puts Studio's unauthenticated mutation routes — including
+/// `DELETE` — on the network. Studio has no authentication of any kind, so the
+/// bind address is the only thing standing between those routes and anyone who can
+/// reach the port.
+#[must_use]
+pub fn is_loopback_host(host: &str) -> bool {
+    let host = host.trim().trim_start_matches('[').trim_end_matches(']');
+    match host.parse::<std::net::IpAddr>() {
+        Ok(ip) => ip.is_loopback(),
+        Err(_) => host.eq_ignore_ascii_case("localhost"),
+    }
+}
+
 /// Runs the Ruprizzle Studio embedded server.
 ///
 /// # Errors
 ///
-/// Returns an error if the schema cannot be parsed, production guardrails are violated,
-/// or the HTTP server fails to bind.
+/// Returns an error if the schema cannot be parsed, the database URL looks like
+/// production without `--yes-i-know`, writes are requested on a non-loopback bind,
+/// the database cannot be reached, or the HTTP server fails to bind.
 pub async fn run_studio(
     config: StudioConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -41,11 +64,21 @@ pub async fn run_studio(
         .map_err(|e| format!("Failed to parse schema: {e}"))?;
 
     let db_url = config.database_url.as_deref().unwrap_or("");
-    if is_production_url(db_url) && !config.yes_i_know {
+    if looks_like_production_url(db_url) && !config.yes_i_know {
         return Err(
-            "Studio blocked connecting to a detected production database URL. Pass --yes-i-know to override this safety guardrail."
+            "The database URL contains `prod`, `aws.neon.tech` or `turso.io`, which usually              means production. This is a name check, not a real safeguard — it misses any              production database not named for the fact. Pass --yes-i-know to proceed."
                 .into(),
         );
+    }
+
+    // Studio has no authentication. Binding it off loopback with writes enabled
+    // publishes DELETE routes to anyone who can reach the port.
+    if !is_loopback_host(&config.host) && config.allow_writes && !config.yes_i_know {
+        return Err(format!(
+            "Refusing to bind Studio to {} with --allow-writes. Studio has no authentication,              so this publishes its INSERT, UPDATE and DELETE routes to every host that can              reach port {}. Drop --allow-writes, bind to 127.0.0.1, or pass --yes-i-know if              the network is genuinely trusted.",
+            config.host, config.port
+        )
+        .into());
     }
 
     // A failed connection used to be swallowed with `.ok()`, which left Studio
@@ -70,9 +103,15 @@ pub async fn run_studio(
 
     println!("⚡ Ruprizzle Studio running at: {url}");
     if config.allow_writes {
-        println!("   Mode: Read-Write Active (--allow-writes)");
+        println!("   Mode: read-write (--allow-writes)");
     } else {
-        println!("   Mode: Read-Only Safe (mutations disabled)");
+        println!("   Mode: read-only (mutations disabled)");
+    }
+    if !is_loopback_host(&config.host) {
+        println!(
+            "   ⚠ Bound to {} — Studio has no authentication, so anyone who can reach              port {} can use it.",
+            config.host, config.port
+        );
     }
 
     if !config.no_browser {

@@ -116,6 +116,9 @@ enum Command {
         port: u16,
 
         /// Host address to bind to (default 127.0.0.1).
+        ///
+        /// Studio has no authentication. Binding off loopback exposes it to
+        /// everyone who can reach the port.
         #[arg(long, default_value = "127.0.0.1")]
         host: String,
 
@@ -123,7 +126,7 @@ enum Command {
         #[arg(long)]
         allow_writes: bool,
 
-        /// Override safety guardrail against production database URLs.
+        /// Proceed past the production-name check and the non-loopback write refusal.
         #[arg(long)]
         yes_i_know: bool,
 

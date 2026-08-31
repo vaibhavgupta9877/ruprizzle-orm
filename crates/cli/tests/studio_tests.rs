@@ -4,7 +4,9 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use ruprizzle_cli::studio::handlers::AppState;
-use ruprizzle_cli::studio::{StudioConfig, create_router, is_production_url};
+use ruprizzle_cli::studio::{
+    StudioConfig, create_router, is_loopback_host, looks_like_production_url,
+};
 use std::sync::Arc;
 use tower::ServiceExt;
 
@@ -38,18 +40,48 @@ model Post {
 }
 
 #[tokio::test]
-async fn test_production_url_guardrail() {
-    assert!(is_production_url(
+async fn the_production_name_check_matches_what_it_claims_to() {
+    assert!(looks_like_production_url(
         "postgres://prod-user:pass@prod.db.com/db"
     ));
-    assert!(is_production_url(
+    assert!(looks_like_production_url(
         "postgresql://user:pass@ep-cool-lake.us-east-2.aws.neon.tech/neondb"
     ));
-    assert!(is_production_url("libsql://my-db.turso.io"));
-    assert!(!is_production_url("sqlite://dev.db"));
-    assert!(!is_production_url(
+    assert!(looks_like_production_url("libsql://my-db.turso.io"));
+    assert!(!looks_like_production_url("sqlite://dev.db"));
+    assert!(!looks_like_production_url(
         "postgres://postgres:postgres@localhost:5432/mydb"
     ));
+
+    // Pinning what it does NOT catch, so nobody mistakes it for a safeguard:
+    // a production RDS endpoint and a bare IP both sail through.
+    assert!(!looks_like_production_url(
+        "postgres://u:p@app-db.cluster-abc.eu-west-1.rds.amazonaws.com/app"
+    ));
+    assert!(!looks_like_production_url(
+        "postgres://u:p@10.0.4.17:5432/app"
+    ));
+    // ...and it false-positives on a development database.
+    assert!(looks_like_production_url(
+        "postgres://u:p@localhost/product_catalog_dev"
+    ));
+}
+
+#[test]
+fn loopback_detection_covers_the_forms_a_user_actually_types() {
+    for host in [
+        "127.0.0.1",
+        "localhost",
+        "LOCALHOST",
+        "::1",
+        "[::1]",
+        "127.0.0.2",
+    ] {
+        assert!(is_loopback_host(host), "{host} is loopback");
+    }
+    for host in ["0.0.0.0", "192.168.1.10", "::", "example.com"] {
+        assert!(!is_loopback_host(host), "{host} is not loopback");
+    }
 }
 
 #[tokio::test]
