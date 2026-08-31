@@ -323,7 +323,7 @@ names the commit that closed it.
 |---|---|---|---|
 | 1 | Decide the fate of the three adapters | §4.1 | **DONE** — stub route taken |
 | 2 | Make Studio's diff screen real or absent | §4.3 | **DONE** — wired to introspection |
-| 3 | Wire the remaining Studio handlers to the pool | §4.2 | TODO |
+| 3 | Wire the remaining Studio handlers to the pool | §4.2 | **DONE** — every route queries |
 | 4 | Add the new crates to all four release lists | §4.4 | TODO |
 | 5 | Add a `--features studio` CI job | §4.5 | TODO |
 | 6 | Bump the workspace version and write the changelog | §4.6 | TODO |
@@ -409,3 +409,51 @@ whose `users` table carries a populated `legacy_notes` column the schema does no
 declare, and asserts the page names the column, marks it `DESTRUCTIVE`, and reports
 "destroys the 1 row(s)". `diff_refuses_to_report_safety_without_a_connection` asserts
 that with no pool the page contains neither `SAFE` nor the zero-drift banner.
+
+### 8.3 — Studio's data plane: wired to the pool (§4.2)
+
+`grep -rn "\.pool" crates/cli/src/studio/` used to return nothing. Every route in the
+§4.2 table now issues real SQL through `crate::studio::db`, and every one of them
+reports failure instead of substituting something that looks like data.
+
+| Route | Was | Is |
+|---|---|---|
+| `GET /studio/models/{m}/table` | Five rows of `"Sample <field>"` | `SELECT` of the model's real columns, ordered by primary key, `LIMIT 50 OFFSET (page-1)*50`; `?search=` compiles to a parameterised `LIKE` across the scalar columns |
+| `POST …/rows` | Echoed the submitted form back | Parameterised `INSERT` of the fields the user filled in, then the row is **read back** and that is what renders — defaults, identities and coercion are visible |
+| `PATCH …/rows/{id}/cell` | Re-rendered the typed value | Parameterised `UPDATE … WHERE pk = ?`; `0` rows matched is `404`; the stored value is re-read so the cell shows what the database kept |
+| `DELETE …/rows/{id}` | `200 OK`, nothing deleted | Parameterised `DELETE`; `200` only when a row was actually removed, `404` otherwise |
+| `POST /studio/sandbox/execute` | Never ran the SQL; always `✓ Query Executed Successfully` with `result=1` | Runs the statement; reads render as the real column names and rows with the real count, writes as the real affected-row count, failures as the database's own message |
+| `POST /studio/explain` | Hardcoded three-node Postgres plan; the query was not read | `EXPLAIN` (`EXPLAIN QUERY PLAN` on SQLite) of the submitted statement, parsed into the tree. `ANALYZE` is never used, so the statement is not executed. Cost and row estimates render **only** where the plan carries them |
+| `GET /studio/relations/{m}/{id}` | `"Linked <field>"` per field | `SELECT … WHERE pk = ?` for the target record; a dangling foreign key says so instead of inventing values |
+
+Cross-cutting:
+
+- **No connection is a visible state, not an empty one.** Each screen renders a red
+  banner naming what could not be done. The table grid says "No rows were read"
+  rather than "No records found", so an unreachable database is not confusable with
+  an empty table — the failure mode §4.2 called out.
+- **Writes are refused for the right reason.** Read-only mode returns `403`;
+  writes-enabled-but-disconnected returns `503`. Previously both paths returned `200`.
+- **Text inputs bind safely into typed columns.** Studio's editors are text boxes, so
+  `db::bind_expr` forces the placeholder to text and casts it to the field's declared
+  scalar type. Values are always bound, never interpolated; identifiers come from the
+  parsed schema and are quoted per provider.
+- **List and relation fields are read-only.** They cannot be represented in a text
+  box, so `db::is_editable` keeps them out of the insert and update paths instead of
+  writing something wrong.
+- **Sandbox output is escaped.** The result table is built by hand from database text,
+  so `html_escape` runs over every column name and cell.
+- `POST /studio/explain` had no caller. The sandbox page now has an "Explain Plan"
+  button that posts the editor's contents to it.
+
+Eleven tests replace the five that checked for HTTP 200 and fixture strings. They
+stand up a real SQLite database and assert the database changed: the `UPDATE` is
+visible in a follow-up `SELECT`, the `DELETE` drops the row count from 2 to 1, a
+`DELETE` of a row that is not there returns `404`, the insert is present in a
+`COUNT(*)`, a refused mutation leaves the table at 2 rows, a failing query surfaces
+`no_such_table`, and the old fabricated strings (`Sample email`,
+`Query Executed Successfully`, `users_pkey`, `0.42..12.80`, `Linked email`) are all
+asserted **absent**.
+
+Dimension 3 (operability) no longer carries the two fabricated diagnostics; dimension
+1 (correctness) no longer rests on tests that assert the fakes behave like fakes.

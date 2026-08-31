@@ -60,6 +60,14 @@
         {% endif %}
       </tr>
       {% endfor %}
+      {% match error %}{% when Some with (message) %}
+      <tr>
+        <td colspan="{{ fields.len() + 1 }}" style="padding:24px; color:#fda4af; background:#1c1416;">
+          <div style="font-weight:600; margin-bottom:4px;">⛔ No rows were read</div>
+          <div style="font-size:12px;">{{ message }}</div>
+        </td>
+      </tr>
+      {% when None %}
       {% if rows.is_empty() %}
       <tr>
         <td colspan="{{ fields.len() + 1 }}" style="text-align:center; padding:40px; color:#71717a;">
@@ -67,6 +75,7 @@
         </td>
       </tr>
       {% endif %}
+      {% endmatch %}
     </tbody>
   </table>
 </div>

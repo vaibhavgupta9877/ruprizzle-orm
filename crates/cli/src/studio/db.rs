@@ -11,9 +11,10 @@
 
 use std::borrow::Cow;
 
-use ruprizzle::sqlx::{ColumnIndex, Decode, Row, Type};
+use ruprizzle::sqlx::{Column, ColumnIndex, Decode, Row, Type};
 use ruprizzle::{Executor, Pool, RowBatch, Value};
-use ruprizzle_core::ir::Provider;
+use ruprizzle_core::ir::{Field, FieldKind, Provider, ScalarType};
+use ruprizzle_dialect::DbDialect;
 
 /// One decoded result row: every column rendered as text, `None` for SQL `NULL`.
 pub type TextRow = Vec<Option<String>>;
@@ -74,6 +75,142 @@ pub async fn fetch_count(pool: &Pool, sql: String, binds: Vec<Value>) -> Result<
             text.parse::<i64>()
                 .map_err(|_| format!("count query returned `{text}`, which is not a number"))
         })
+}
+
+/// Runs a statement and returns the number of affected rows.
+///
+/// # Errors
+///
+/// Returns a display message if the statement fails.
+pub async fn execute(pool: &Pool, sql: String, binds: Vec<Value>) -> Result<u64, String> {
+    pool.execute_raw(Cow::Owned(sql), binds)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Runs `sql` and returns its column names alongside every row rendered as text.
+///
+/// Unlike [`fetch_text_rows`] the shape is not known ahead of time, so each cell is
+/// decoded through a fallback chain. A cell no chain member can read renders as
+/// `<unreadable>` rather than failing the whole query — the user still sees the rest
+/// of their result set, and sees plainly which cell Studio could not read.
+///
+/// Column names come from the first row, so an empty result set reports no columns.
+///
+/// # Errors
+///
+/// Returns a display message if the statement fails.
+pub async fn fetch_dynamic(
+    pool: &Pool,
+    sql: String,
+    binds: Vec<Value>,
+) -> Result<(Vec<String>, Vec<TextRow>), String> {
+    let batch = pool
+        .fetch_all_raw(Cow::Owned(sql), binds)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    match batch {
+        RowBatch::Any(rows) => Ok(dynamic_rows(&rows)),
+        RowBatch::Postgres(rows) => Ok(dynamic_rows(&rows)),
+        RowBatch::Sqlite(rows) => Ok(dynamic_rows(&rows)),
+        RowBatch::Mysql(rows) => Ok(dynamic_rows(&rows)),
+        _ => Err(
+            "this database driver is not supported by Studio; use the default sqlx driver"
+                .to_string(),
+        ),
+    }
+}
+
+/// Builds the SQL expression that binds a user-supplied text value into `field`.
+///
+/// Studio's editors are text inputs, so every value arrives as a string. Binding a
+/// string straight into an `INTEGER` column fails on Postgres, so the placeholder is
+/// forced to text and then cast to the field's own scalar type. String-shaped fields
+/// are bound directly, because `MySQL`'s `CHAR(255)` cast would truncate them.
+#[must_use]
+pub fn bind_expr(
+    dialect: &dyn DbDialect,
+    provider: Provider,
+    index: usize,
+    field: &Field,
+) -> String {
+    let placeholder = dialect.placeholder(index);
+    match scalar_of(field) {
+        Some(ScalarType::String) | None => placeholder,
+        Some(ty) => dialect.cast_expr(&to_text(provider, &placeholder), ty),
+    }
+}
+
+/// The scalar type behind a field, if it has one.
+///
+/// Lists and relations return `None`: Studio's text editors cannot represent them,
+/// and callers use that to keep those cells read-only.
+#[must_use]
+pub fn scalar_of(field: &Field) -> Option<ScalarType> {
+    match &field.kind {
+        FieldKind::Scalar(ty) => Some(*ty),
+        // An enum column takes a text literal.
+        FieldKind::Enum(_) => Some(ScalarType::String),
+        FieldKind::List(_) | FieldKind::Relation(_) => None,
+    }
+}
+
+/// Whether Studio can edit `field` through a plain text input.
+#[must_use]
+pub fn is_editable(field: &Field) -> bool {
+    field.has_column() && scalar_of(field).is_some()
+}
+
+fn dynamic_rows<R>(rows: &[R]) -> (Vec<String>, Vec<TextRow>)
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    String: for<'r> Decode<'r, R::Database> + Type<R::Database>,
+    i64: for<'r> Decode<'r, R::Database> + Type<R::Database>,
+    f64: for<'r> Decode<'r, R::Database> + Type<R::Database>,
+    bool: for<'r> Decode<'r, R::Database> + Type<R::Database>,
+{
+    let Some(first) = rows.first() else {
+        return (Vec::new(), Vec::new());
+    };
+    let names: Vec<String> = first
+        .columns()
+        .iter()
+        .map(|c| c.name().to_string())
+        .collect();
+    let width = names.len();
+
+    let cells = rows
+        .iter()
+        .map(|row| (0..width).map(|idx| cell_text(row, idx)).collect())
+        .collect();
+
+    (names, cells)
+}
+
+fn cell_text<R>(row: &R, idx: usize) -> Option<String>
+where
+    R: Row,
+    usize: ColumnIndex<R>,
+    String: for<'r> Decode<'r, R::Database> + Type<R::Database>,
+    i64: for<'r> Decode<'r, R::Database> + Type<R::Database>,
+    f64: for<'r> Decode<'r, R::Database> + Type<R::Database>,
+    bool: for<'r> Decode<'r, R::Database> + Type<R::Database>,
+{
+    if let Ok(value) = row.try_get::<Option<String>, _>(idx) {
+        return value;
+    }
+    if let Ok(value) = row.try_get::<Option<i64>, _>(idx) {
+        return value.map(|v| v.to_string());
+    }
+    if let Ok(value) = row.try_get::<Option<f64>, _>(idx) {
+        return value.map(|v| v.to_string());
+    }
+    if let Ok(value) = row.try_get::<Option<bool>, _>(idx) {
+        return value.map(|v| v.to_string());
+    }
+    Some("<unreadable>".to_string())
 }
 
 /// Counts every row in `table`.

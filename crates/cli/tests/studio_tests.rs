@@ -90,7 +90,7 @@ async fn test_studio_dashboard_and_erd_endpoints() {
 }
 
 #[tokio::test]
-async fn test_studio_table_view_and_grid() {
+async fn table_browser_says_so_instead_of_inventing_rows_without_a_connection() {
     let schema = sample_schema();
     let config = StudioConfig {
         allow_writes: false,
@@ -99,21 +99,14 @@ async fn test_studio_table_view_and_grid() {
     let state = Arc::new(AppState::new(schema, config, None));
     let app = create_router(state);
 
-    // Full table view
-    let req = Request::builder()
-        .uri("/studio/models/User")
-        .body(Body::empty())
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-
-    // Table grid partial
-    let req = Request::builder()
-        .uri("/studio/models/User/table")
-        .body(Body::empty())
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
+    for uri in ["/studio/models/User", "/studio/models/User/table"] {
+        let body = get_body(app.clone(), uri).await;
+        assert!(body.contains("No rows were read"), "{uri}: {body}");
+        assert!(
+            !body.contains("Sample "),
+            "{uri} still renders fixtures: {body}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -140,8 +133,8 @@ async fn test_studio_write_guardrails() {
     let res = read_only_app.clone().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
 
-    // Read-write state
-    let read_write_state = Arc::new(AppState::new(
+    // Writes enabled but no connection: the write must be refused, not faked.
+    let disconnected_state = Arc::new(AppState::new(
         schema,
         StudioConfig {
             allow_writes: true,
@@ -149,7 +142,7 @@ async fn test_studio_write_guardrails() {
         },
         None,
     ));
-    let read_write_app = create_router(read_write_state);
+    let disconnected_app = create_router(disconnected_state);
 
     let req = Request::builder()
         .method("POST")
@@ -157,8 +150,8 @@ async fn test_studio_write_guardrails() {
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from("name=Alice&email=alice@example.com"))
         .unwrap();
-    let res = read_write_app.clone().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
+    let res = disconnected_app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
 }
 
 #[tokio::test]
@@ -249,4 +242,272 @@ async fn diff_refuses_to_report_safety_without_a_connection() {
     assert!(body.contains("No comparison was made"), "{body}");
     assert!(!body.contains("SAFE"), "{body}");
     assert!(!body.contains("Zero drift detected"), "{body}");
+}
+
+/// A database matching `sample_schema`, seeded with two users and one post.
+async fn seeded_pool(dir: &std::path::Path) -> ruprizzle::Pool {
+    let path = dir.join("seeded.db").to_string_lossy().replace('\\', "/");
+    let pool = ruprizzle::connect(&format!("sqlite://{path}?mode=rwc"))
+        .await
+        .expect("sqlite must connect");
+
+    for sql in [
+        "CREATE TABLE \"users\" (id INTEGER PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL)",
+        "CREATE TABLE \"posts\" (id INTEGER PRIMARY KEY, title TEXT NOT NULL, authorId INTEGER NOT NULL)",
+        "INSERT INTO \"users\" (id, email, name) VALUES (1, 'alice@example.com', 'Alice')",
+        "INSERT INTO \"users\" (id, email, name) VALUES (2, 'bob@example.com', 'Bob')",
+        "INSERT INTO \"posts\" (id, title, authorId) VALUES (10, 'Hello', 1)",
+    ] {
+        ruprizzle::Executor::execute_raw(&pool, std::borrow::Cow::Borrowed(sql), Vec::new())
+            .await
+            .expect("setup statement must run");
+    }
+
+    pool
+}
+
+fn writable_app(pool: ruprizzle::Pool) -> axum::Router {
+    create_router(Arc::new(AppState::new(
+        sample_schema(),
+        StudioConfig {
+            allow_writes: true,
+            ..Default::default()
+        },
+        Some(pool),
+    )))
+}
+
+async fn scalar(pool: &ruprizzle::Pool, sql: &'static str) -> String {
+    let batch =
+        ruprizzle::Executor::fetch_all_raw(pool, std::borrow::Cow::Borrowed(sql), Vec::new())
+            .await
+            .expect("query must run");
+    match batch {
+        ruprizzle::RowBatch::Sqlite(rows) => {
+            use ruprizzle::sqlx::Row as _;
+            rows.first()
+                .map(|r| r.try_get::<String, _>(0).expect("column 0 must be text"))
+                .unwrap_or_default()
+        }
+        other => panic!("unexpected batch: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn table_browser_renders_the_rows_that_are_in_the_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = writable_app(pool);
+
+    let body = get_body(app, "/studio/models/User/table").await;
+    assert!(body.contains("alice@example.com"), "{body}");
+    assert!(body.contains("bob@example.com"), "{body}");
+    // The fixture generator that produced these is gone.
+    assert!(!body.contains("Sample email"), "{body}");
+}
+
+#[tokio::test]
+async fn table_browser_search_filters_against_the_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = writable_app(pool);
+
+    let body = get_body(app, "/studio/models/User/table?search=bob").await;
+    assert!(body.contains("bob@example.com"), "{body}");
+    assert!(!body.contains("alice@example.com"), "{body}");
+}
+
+#[tokio::test]
+async fn patching_a_cell_writes_it_and_shows_what_was_stored() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = writable_app(pool.clone());
+
+    let req = Request::builder()
+        .method("PATCH")
+        .uri("/studio/models/User/rows/1/cell?column=name")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from("value=Alicia"))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    assert!(String::from_utf8_lossy(&body).contains("Alicia"));
+
+    assert_eq!(
+        scalar(&pool, "SELECT name FROM \"users\" WHERE id = 1").await,
+        "Alicia",
+        "the UPDATE must actually reach the database"
+    );
+}
+
+#[tokio::test]
+async fn deleting_a_row_removes_it_and_a_missing_row_is_not_reported_as_success() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = writable_app(pool.clone());
+
+    let req = Request::builder()
+        .method("DELETE")
+        .uri("/studio/models/User/rows/2")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(req).await.unwrap().status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        scalar(&pool, "SELECT CAST(COUNT(*) AS TEXT) FROM \"users\"").await,
+        "1"
+    );
+
+    let req = Request::builder()
+        .method("DELETE")
+        .uri("/studio/models/User/rows/999")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.oneshot(req).await.unwrap().status(),
+        StatusCode::NOT_FOUND,
+        "deleting nothing must not report OK"
+    );
+}
+
+#[tokio::test]
+async fn inserting_a_row_writes_it_and_reads_it_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = writable_app(pool.clone());
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/studio/models/User/rows")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from("name=Carol&email=carol@example.com"))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    assert!(String::from_utf8_lossy(&body).contains("carol@example.com"));
+
+    assert_eq!(
+        scalar(
+            &pool,
+            "SELECT CAST(COUNT(*) AS TEXT) FROM \"users\" WHERE email = 'carol@example.com'"
+        )
+        .await,
+        "1"
+    );
+}
+
+#[tokio::test]
+async fn the_sandbox_runs_the_statement_it_was_given() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = writable_app(pool);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/studio/sandbox/execute")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from("sql=SELECT+email+FROM+%22users%22+ORDER+BY+id"))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8_lossy(&body);
+
+    assert!(body.contains("alice@example.com"), "{body}");
+    assert!(body.contains("bob@example.com"), "{body}");
+    assert!(body.contains("2 row(s)"), "{body}");
+    // The old fixed result table is gone.
+    assert!(!body.contains("Query Executed Successfully"), "{body}");
+}
+
+#[tokio::test]
+async fn the_sandbox_reports_a_failing_statement_as_a_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = writable_app(pool);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/studio/sandbox/execute")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from("sql=SELECT+*+FROM+no_such_table"))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8_lossy(&body);
+
+    assert!(body.contains("Not executed"), "{body}");
+    assert!(body.contains("no_such_table"), "{body}");
+}
+
+#[tokio::test]
+async fn the_sandbox_does_not_execute_mutations_in_read_only_mode() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = create_router(Arc::new(AppState::new(
+        sample_schema(),
+        StudioConfig::default(),
+        Some(pool.clone()),
+    )));
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/studio/sandbox/execute")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from("sql=DELETE+FROM+%22users%22"))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    assert!(String::from_utf8_lossy(&body).contains("Nothing was executed"));
+
+    assert_eq!(
+        scalar(&pool, "SELECT CAST(COUNT(*) AS TEXT) FROM \"users\"").await,
+        "2",
+        "the refused DELETE must not have run"
+    );
+}
+
+#[tokio::test]
+async fn explain_returns_the_database_plan_for_the_submitted_query() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = writable_app(pool);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/studio/explain")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from("sql=SELECT+*+FROM+%22users%22"))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8_lossy(&body);
+
+    // SQLite reports a full scan of `users` for this query.
+    assert!(body.contains("users"), "{body}");
+    // The hardcoded Postgres plan is gone.
+    assert!(!body.contains("0.42..12.80"), "{body}");
+    assert!(!body.contains("users_pkey"), "{body}");
+}
+
+#[tokio::test]
+async fn the_relation_drawer_reads_the_record_it_points_at() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = writable_app(pool);
+
+    let body = get_body(app.clone(), "/studio/relations/User/1").await;
+    assert!(body.contains("alice@example.com"), "{body}");
+    assert!(!body.contains("Linked email"), "{body}");
+
+    let body = get_body(app, "/studio/relations/User/999").await;
+    assert!(
+        body.contains("points at a record that is not there"),
+        "{body}"
+    );
 }

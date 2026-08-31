@@ -11,6 +11,11 @@
   <div class="drawer-body">
     <div class="card" style="padding:16px;">
       <div style="font-size:12px; color:#a1a1aa; margin-bottom:12px; font-weight:500;">Record Attributes</div>
+      {% match error %}{% when Some with (message) %}
+      <div style="background:#1c1416; border:1px solid #f43f5e; border-radius:8px; padding:12px; color:#fda4af; font-size:12px;">
+        {{ message }}
+      </div>
+      {% when None %}{% endmatch %}
       <div style="display:flex; flex-direction:column; gap:8px;">
         {% for field in fields %}
         <div style="display:flex; justify-content:space-between; font-size:13px; border-bottom:1px solid #27272a; padding-bottom:6px;">
