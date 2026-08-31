@@ -136,8 +136,6 @@ fn block_attribute_documentation(attr_path: &str) -> String {
         "unique" => "### `@@unique([...])`\n\nDeclares a composite unique constraint across multiple columns.".to_owned(),
         "index" => "### `@@index([...])`\n\nDeclares a composite or single-column database index.".to_owned(),
         "map" => "### `@@map(\"...\")`\n\nMaps this model to a different physical database table name.".to_owned(),
-        "tenant" => "### `@@tenant(field)`\n\nDeclares this table as multi-tenant, partitioned by the specified field.".to_owned(),
-        "policy" => "### `@@policy(...)`\n\nDeclares row-level security policies (RLS) for fine-grained access control.".to_owned(),
         _ => format!("### `@@{attr_path}`\n\nModel block attribute directive."),
     }
 }

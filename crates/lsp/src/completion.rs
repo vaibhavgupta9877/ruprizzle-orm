@@ -284,6 +284,14 @@ fn field_attribute_items() -> Vec<CompletionItem> {
     ]
 }
 
+/// Block attributes offered inside a `model` body.
+///
+/// This list must only contain attributes the parser and the migration engine
+/// actually act on. `@@tenant` and `@@policy` were offered here for a whole
+/// release line while row-level security and multi-tenancy were unimplemented:
+/// the grammar accepts them, lowering silently drops them, and the user gets no
+/// partitioning and no error. See `ProjectPlan/v2/ProductionReadinessV1_5.md`
+/// section 4.7. Do not add an attribute here before it works end to end.
 fn model_attribute_items() -> Vec<CompletionItem> {
     vec![
         attr_snippet("@@index", "@@index([$1])", "table secondary index"),
@@ -297,16 +305,6 @@ fn model_attribute_items() -> Vec<CompletionItem> {
             "@@map",
             "@@map(\"$1\")",
             "map to a different physical table name",
-        ),
-        attr_snippet(
-            "@@tenant",
-            "@@tenant($1)",
-            "declare multi-tenant partition key",
-        ),
-        attr_snippet(
-            "@@policy",
-            "@@policy($1, for: $2, using: \"$3\")",
-            "declare row-level security policy",
         ),
     ]
 }

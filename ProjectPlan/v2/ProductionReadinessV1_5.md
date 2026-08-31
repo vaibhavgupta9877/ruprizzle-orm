@@ -327,7 +327,7 @@ names the commit that closed it.
 | 4 | Add the new crates to all four release lists | §4.4 | **DONE** — plus an audit |
 | 5 | Add a `--features studio` CI job | §4.5 | **DONE** — CI and release gate |
 | 6 | Bump the workspace version and write the changelog | §4.6 | TODO |
-| 7 | Fix `@@tenant` in the LSP | §4.7 | TODO |
+| 7 | Fix `@@tenant` in the LSP | §4.7 | **DONE** — removed, plus `@@policy` |
 | 8 | Studio guardrail copy and version drift | §5.1, §5.2 | TODO |
 
 ### 8.1 — Adapters: stub route taken (§4.1)
@@ -501,3 +501,34 @@ patched once.
 The `clippy` and `test` jobs still pass no `--features`, which is why the job is
 separate rather than a flag added to an existing one. Both files carry a comment
 pointing back at §4.5 so the next person to touch them knows why the job exists.
+
+### 8.6 — `@@tenant` removed from the LSP (§4.7)
+
+`@@tenant` is gone from `completion.rs` and `hover.rs`, and so is **`@@policy`**,
+which §4.7 did not name but has exactly the same defect: `grep -rn "policy"` across
+`crates/parser/src`, `crates/core/src`, `crates/codegen/src`, `crates/migrate/src` and
+`crates/dialect/src` returns nothing, and row-level security is unimplemented. Leaving
+one of the pair would have left the same trap one keystroke away.
+
+`model_attribute_items` now carries a doc comment stating the rule — an attribute is
+only offered once the parser and the migration engine act on it — and
+`completion_does_not_offer_unimplemented_block_attributes` pins it: `@@index` must
+still be suggested, `@@tenant` and `@@policy` must not.
+
+**Correction to §4.7.** The finding says the editor "suggests an attribute that fails
+to parse". It does not fail to parse. `ruprizzle validate` accepts
+
+```
+model User { id Int @id  org String  @@tenant(org) }
+```
+
+without a diagnostic: the grammar takes any block attribute and `lower.rs` only reads
+`map`, `id`, `index` and `unique`, so everything else is discarded in silence. That is
+worse than the reported behaviour — the developer gets no partitioning, no row-level
+security, and no error telling them so.
+
+**Deliberately not fixed here:** making the parser reject unknown block attributes.
+It is the right end state and would have caught this class of defect at the source,
+but it changes parser behaviour for every existing schema and can turn a currently
+valid file into a failing one, which is a decision for the version bump rather than a
+side effect of an LSP fix. Recorded as follow-up work.
