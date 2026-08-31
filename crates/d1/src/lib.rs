@@ -1,22 +1,39 @@
-//! Cloudflare D1 edge database adapter for the `ruprizzle` ORM.
+//! In-memory Cloudflare D1 **test double** for the `ruprizzle` ORM.
 //!
-//! Provides [`D1Pool`] and [`D1PoolBuilder`] for connecting to Cloudflare D1
-//! databases over the HTTP REST API or in WASM environments (Cloudflare Workers).
+//! # This crate performs no network I/O
+//!
+//! [`InMemoryD1Stub`] implements [`ruprizzle::Executor`] against a process-local
+//! `HashMap`. It does **not** call the Cloudflare D1 REST API, does not run inside a
+//! Worker, and never transmits the configured `api_token` anywhere. Every value
+//! written through it is lost when the process exits.
+//!
+//! It exists so that code written against the `Executor` trait can be exercised
+//! without a database, and so that the shape of a future real adapter is pinned down.
+//! It is **not** published to crates.io (`publish = false`) and must not be used as a
+//! production backend.
+//!
+//! # Supported subset
+//!
+//! - `SELECT ... FROM <table>` returns every row previously inserted for `<table>`.
+//!   Filters, joins, ordering, and limits are **ignored**.
+//! - `INSERT INTO <table> (a, b) VALUES (...)` appends one row, naming the bound
+//!   values after the declared column list. Without a column list the binds are
+//!   named `col_0`, `col_1`, ....
+//! - Every other statement is accepted and discarded.
 //!
 //! # Example
 //!
 //! ```no_run
-//! use ruprizzle_d1::D1Pool;
+//! use ruprizzle_d1::InMemoryD1Stub;
 //!
 //! # async fn doc() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//! let pool = D1Pool::builder()
+//! let pool = InMemoryD1Stub::builder()
 //!     .account_id("cf_account_123")
 //!     .database_id("d1_database_uuid")
-//!     .api_token("cf_api_token")
 //!     .build()
 //!     .await?;
 //!
-//! println!("Connected to Cloudflare D1: {:?}", pool.database_id());
+//! assert_eq!(pool.database_id(), Some("d1_database_uuid"));
 //! # Ok(())
 //! # }
 //! ```
@@ -78,13 +95,13 @@ pub struct D1Config {
     pub endpoint: Option<String>,
 }
 
-/// Builder for creating configured [`D1Pool`] instances.
+/// Builder for creating configured [`InMemoryD1Stub`] instances.
 #[derive(Debug, Default)]
-pub struct D1PoolBuilder {
+pub struct InMemoryD1StubBuilder {
     config: D1Config,
 }
 
-impl D1PoolBuilder {
+impl InMemoryD1StubBuilder {
     /// Creates a new builder with default configuration.
     #[must_use]
     pub fn new() -> Self {
@@ -119,44 +136,44 @@ impl D1PoolBuilder {
         self
     }
 
-    /// Builds and initializes the [`D1Pool`].
+    /// Builds and initializes the [`InMemoryD1Stub`].
     ///
     /// # Errors
     ///
     /// Returns [`D1Error::Config`] if required credentials are missing.
-    pub async fn build(self) -> Result<D1Pool, D1Error> {
+    pub async fn build(self) -> Result<InMemoryD1Stub, D1Error> {
         if self.config.database_id.is_none() && self.config.endpoint.is_none() {
             return Err(D1Error::Config(
-                "`database_id` or `endpoint` must be configured for D1Pool".into(),
+                "`database_id` or `endpoint` must be configured for InMemoryD1Stub".into(),
             ));
         }
 
-        let inner = Arc::new(D1PoolInner {
+        let inner = Arc::new(InMemoryD1StubInner {
             config: self.config,
             memory_store: RwLock::new(HashMap::new()),
         });
 
-        Ok(D1Pool { inner })
+        Ok(InMemoryD1Stub { inner })
     }
 }
 
 #[derive(Debug)]
-struct D1PoolInner {
+struct InMemoryD1StubInner {
     config: D1Config,
     memory_store: RwLock<HashMap<String, Vec<HashMap<String, Value>>>>,
 }
 
 /// A connection pool managing access to Cloudflare D1.
 #[derive(Debug, Clone)]
-pub struct D1Pool {
-    inner: Arc<D1PoolInner>,
+pub struct InMemoryD1Stub {
+    inner: Arc<InMemoryD1StubInner>,
 }
 
-impl D1Pool {
-    /// Returns a new [`D1PoolBuilder`].
+impl InMemoryD1Stub {
+    /// Returns a new [`InMemoryD1StubBuilder`].
     #[must_use]
-    pub fn builder() -> D1PoolBuilder {
-        D1PoolBuilder::new()
+    pub fn builder() -> InMemoryD1StubBuilder {
+        InMemoryD1StubBuilder::new()
     }
 
     /// Returns the configured database ID, if any.
@@ -184,9 +201,14 @@ impl D1Pool {
         } else if upper.starts_with("INSERT") {
             let mut store = self.inner.memory_store.write().await;
             let table_name = extract_table_name(trimmed);
+            let columns = extract_insert_columns(trimmed);
             let mut row = HashMap::new();
             for (idx, val) in binds.iter().enumerate() {
-                row.insert(format!("col_{idx}"), val.clone());
+                let name = columns
+                    .get(idx)
+                    .cloned()
+                    .unwrap_or_else(|| format!("col_{idx}"));
+                row.insert(name, val.clone());
             }
             store.entry(table_name).or_default().push(row);
             Ok(RowBatch::Edge(Vec::new()))
@@ -194,6 +216,39 @@ impl D1Pool {
             Ok(RowBatch::Edge(Vec::new()))
         }
     }
+}
+
+/// Extracts the declared column list of an `INSERT INTO t (a, b) VALUES ...`.
+///
+/// Returns an empty vector when the statement declares no column list, in which case
+/// the caller falls back to positional `col_N` names.
+fn extract_insert_columns(sql: &str) -> Vec<String> {
+    let upper = sql.to_uppercase();
+    let Some(into_idx) = upper.find(" INTO ") else {
+        return Vec::new();
+    };
+    let Some(rest) = sql.get(into_idx + 6..) else {
+        return Vec::new();
+    };
+    let Some(open) = rest.find('(') else {
+        return Vec::new();
+    };
+    let Some(close) = rest[open..].find(')') else {
+        return Vec::new();
+    };
+    // Only a column list may sit between the table name and the first `(`.
+    if rest[..open].split_whitespace().count() != 1 {
+        return Vec::new();
+    }
+    rest[open + 1..open + close]
+        .split(',')
+        .map(|c| {
+            c.trim()
+                .trim_matches(|ch| ch == '"' || ch == '`' || ch == '\'')
+                .to_string()
+        })
+        .filter(|c| !c.is_empty())
+        .collect()
 }
 
 fn extract_table_name(sql: &str) -> String {
@@ -217,7 +272,7 @@ fn extract_table_name(sql: &str) -> String {
     }
 }
 
-impl Executor for D1Pool {
+impl Executor for InMemoryD1Stub {
     fn dialect(&self) -> &dyn DbDialect {
         &SQLITE_DIALECT
     }
@@ -266,7 +321,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_d1_builder_config() {
-        let pool = D1Pool::builder()
+        let pool = InMemoryD1Stub::builder()
             .account_id("account_xyz")
             .database_id("d1_uuid_456")
             .api_token("secret_bearer")
@@ -280,7 +335,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_d1_executor_query() {
-        let pool = D1Pool::builder()
+        let pool = InMemoryD1Stub::builder()
             .database_id("d1_test_db")
             .build()
             .await
@@ -293,5 +348,57 @@ mod tests {
             .await
             .unwrap();
         assert!(rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn insert_round_trips_under_declared_column_names() {
+        let pool = InMemoryD1Stub::builder()
+            .database_id("d1_test_db")
+            .build()
+            .await
+            .unwrap();
+
+        pool.execute_raw(
+            Cow::Borrowed("INSERT INTO users (id, email) VALUES (?, ?)"),
+            vec![Value::I64(7), Value::Str("a@b.c".into())],
+        )
+        .await
+        .unwrap();
+
+        let batch = pool
+            .fetch_all_raw(Cow::Borrowed("SELECT * FROM users"), Vec::new())
+            .await
+            .unwrap();
+        let rows = batch.as_edge_rows().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("id"), Some(&Value::I64(7)));
+        assert_eq!(rows[0].get("email"), Some(&Value::Str("a@b.c".into())));
+    }
+
+    #[tokio::test]
+    async fn writes_do_not_survive_a_new_stub() {
+        let first = InMemoryD1Stub::builder()
+            .database_id("d1_test_db")
+            .build()
+            .await
+            .unwrap();
+        first
+            .execute_raw(
+                Cow::Borrowed("INSERT INTO users (id) VALUES (?)"),
+                vec![Value::I64(1)],
+            )
+            .await
+            .unwrap();
+
+        let second = InMemoryD1Stub::builder()
+            .database_id("d1_test_db")
+            .build()
+            .await
+            .unwrap();
+        let batch = second
+            .fetch_all_raw(Cow::Borrowed("SELECT * FROM users"), Vec::new())
+            .await
+            .unwrap();
+        assert!(batch.is_empty(), "the stub stores nothing outside itself");
     }
 }

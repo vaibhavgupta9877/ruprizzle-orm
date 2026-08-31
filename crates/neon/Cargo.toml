@@ -1,6 +1,9 @@
 [package]
 name        = "ruprizzle-neon"
-description = "Neon serverless PostgreSQL database adapter for the ruprizzle ORM"
+description = "In-memory Neon serverless Postgres test double for the ruprizzle ORM (no network I/O; unpublished)"
+# Not published: this crate is an in-memory test double, not a working
+# database adapter. See ProjectPlan/v2/ProductionReadinessV1_5.md section 4.1.
+publish     = false
 version.workspace      = true
 edition.workspace      = true
 rust-version.workspace = true
@@ -9,7 +12,6 @@ repository.workspace   = true
 authors.workspace      = true
 homepage.workspace     = true
 readme                 = "README.md"
-documentation          = "https://docs.rs/ruprizzle-neon"
 keywords    = ["orm", "neon", "postgres", "serverless", "websocket"]
 categories  = ["database"]
 

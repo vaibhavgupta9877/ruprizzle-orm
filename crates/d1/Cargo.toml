@@ -1,6 +1,9 @@
 [package]
 name        = "ruprizzle-d1"
-description = "Cloudflare D1 edge database adapter for the ruprizzle ORM"
+description = "In-memory Cloudflare D1 test double for the ruprizzle ORM (no network I/O; unpublished)"
+# Not published: this crate is an in-memory test double, not a working
+# database adapter. See ProjectPlan/v2/ProductionReadinessV1_5.md section 4.1.
+publish     = false
 version.workspace      = true
 edition.workspace      = true
 rust-version.workspace = true
@@ -9,7 +12,6 @@ repository.workspace   = true
 authors.workspace      = true
 homepage.workspace     = true
 readme                 = "README.md"
-documentation          = "https://docs.rs/ruprizzle-d1"
 keywords    = ["orm", "cloudflare", "d1", "sqlite", "edge", "wasm"]
 categories  = ["database", "wasm"]
 

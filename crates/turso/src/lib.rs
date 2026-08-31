@@ -1,24 +1,42 @@
-//! Turso and libSQL database adapter for the `ruprizzle` ORM.
+//! In-memory Turso / libSQL **test double** for the `ruprizzle` ORM.
 //!
-//! Provides [`TursoPool`] and [`TursoPoolBuilder`] for connecting to remote
-//! Turso libSQL databases or running embedded `SQLite` replicas with automatic
-//! background synchronization.
+//! # This crate performs no network I/O
+//!
+//! [`InMemoryTursoStub`] implements [`ruprizzle::Executor`] against a process-local
+//! `HashMap`. It does **not** open a libSQL connection, does not contact a Turso
+//! primary, does not read or write a local replica file, and never transmits the
+//! configured `auth_token` anywhere. Every value written through it is lost when the
+//! process exits.
+//!
+//! It exists so that code written against the `Executor` trait can be exercised
+//! without a database, and so that the shape of a future real adapter is pinned down.
+//! It is **not** published to crates.io (`publish = false`) and must not be used as a
+//! production backend. For real Turso access today, point [`ruprizzle::connect`] at
+//! the `SQLite` file of an embedded replica you synchronise yourself.
+//!
+//! # Supported subset
+//!
+//! - `SELECT ... FROM <table>` returns every row previously inserted for `<table>`.
+//!   Filters, joins, ordering, and limits are **ignored**.
+//! - `INSERT INTO <table> (a, b) VALUES (...)` appends one row, naming the bound
+//!   values after the declared column list. Without a column list the binds are
+//!   named `col_0`, `col_1`, ....
+//! - Every other statement is accepted and discarded.
 //!
 //! # Example
 //!
 //! ```no_run
-//! use ruprizzle_turso::TursoPool;
+//! use ruprizzle_turso::InMemoryTursoStub;
 //!
 //! # async fn doc() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//! let pool = TursoPool::builder()
+//! let pool = InMemoryTursoStub::builder()
 //!     .local_path("local_replica.db")
 //!     .sync_url("libsql://your-db.turso.io")
-//!     .auth_token("your_turso_token")
 //!     .build()
 //!     .await?;
 //!
-//! let stats = pool.sync().await?;
-//! println!("Frames synced: {}", stats.frames_synced);
+//! // `sync()` always fails: there is nothing to synchronise with.
+//! assert!(pool.sync().await.is_err());
 //! # Ok(())
 //! # }
 //! ```
@@ -61,6 +79,10 @@ pub enum TursoError {
     /// Internal error.
     #[error("internal turso error: {0}")]
     Internal(String),
+
+    /// The operation is not implemented by the in-memory stub.
+    #[error("unsupported by the in-memory Turso stub: {0}")]
+    Unsupported(String),
 }
 
 impl From<TursoError> for ruprizzle::Error {
@@ -93,13 +115,13 @@ pub struct TursoConfig {
     pub read_your_writes: bool,
 }
 
-/// Builder for creating configured [`TursoPool`] instances.
+/// Builder for creating configured [`InMemoryTursoStub`] instances.
 #[derive(Debug, Default)]
-pub struct TursoPoolBuilder {
+pub struct InMemoryTursoStubBuilder {
     config: TursoConfig,
 }
 
-impl TursoPoolBuilder {
+impl InMemoryTursoStubBuilder {
     /// Creates a new builder with default configuration.
     #[must_use]
     pub fn new() -> Self {
@@ -141,45 +163,45 @@ impl TursoPoolBuilder {
         self
     }
 
-    /// Builds and connects the [`TursoPool`].
+    /// Builds and connects the [`InMemoryTursoStub`].
     ///
     /// # Errors
     ///
     /// Returns [`TursoError::Config`] if neither local path nor sync URL is provided.
-    pub async fn build(self) -> Result<TursoPool, TursoError> {
+    pub async fn build(self) -> Result<InMemoryTursoStub, TursoError> {
         if self.config.local_path.is_none() && self.config.sync_url.is_none() {
             return Err(TursoError::Config(
-                "at least one of `local_path` or `sync_url` must be configured for TursoPool"
+                "at least one of `local_path` or `sync_url` must be configured for InMemoryTursoStub"
                     .into(),
             ));
         }
 
-        let inner = Arc::new(TursoPoolInner {
+        let inner = Arc::new(InMemoryTursoStubInner {
             config: self.config,
             memory_store: RwLock::new(HashMap::new()),
         });
 
-        Ok(TursoPool { inner })
+        Ok(InMemoryTursoStub { inner })
     }
 }
 
 #[derive(Debug)]
-struct TursoPoolInner {
+struct InMemoryTursoStubInner {
     config: TursoConfig,
     memory_store: RwLock<HashMap<String, Vec<HashMap<String, Value>>>>,
 }
 
 /// A connection pool managing access to local and remote Turso libSQL databases.
 #[derive(Debug, Clone)]
-pub struct TursoPool {
-    inner: Arc<TursoPoolInner>,
+pub struct InMemoryTursoStub {
+    inner: Arc<InMemoryTursoStubInner>,
 }
 
-impl TursoPool {
-    /// Returns a new [`TursoPoolBuilder`].
+impl InMemoryTursoStub {
+    /// Returns a new [`InMemoryTursoStubBuilder`].
     #[must_use]
-    pub fn builder() -> TursoPoolBuilder {
-        TursoPoolBuilder::new()
+    pub fn builder() -> InMemoryTursoStubBuilder {
+        InMemoryTursoStubBuilder::new()
     }
 
     /// Connects directly to a Turso database via URL.
@@ -203,20 +225,19 @@ impl TursoPool {
         self.inner.config.sync_url.as_deref()
     }
 
-    /// Explicitly synchronizes the local replica with the remote primary.
+    /// Always fails: this stub has no remote primary to synchronize with.
+    ///
+    /// The signature is kept so that a future real adapter can drop in without a
+    /// source change at the call site. It never returns [`SyncStats`].
     ///
     /// # Errors
     ///
-    /// Returns [`TursoError::Sync`] if remote synchronization fails.
+    /// Always returns [`TursoError::Unsupported`].
     pub async fn sync(&self) -> Result<SyncStats, TursoError> {
-        if self.inner.config.sync_url.is_none() {
-            return Err(TursoError::Sync("no remote sync_url configured".into()));
-        }
-
-        Ok(SyncStats {
-            frames_synced: 0,
-            pushed_local_writes: false,
-        })
+        Err(TursoError::Unsupported(
+            "InMemoryTursoStub performs no network I/O; there is no remote primary to sync with"
+                .into(),
+        ))
     }
 
     /// Executes an in-memory or remote query against the Turso backend.
@@ -232,9 +253,14 @@ impl TursoPool {
         } else if upper.starts_with("INSERT") {
             let mut store = self.inner.memory_store.write().await;
             let table_name = extract_table_name(trimmed);
+            let columns = extract_insert_columns(trimmed);
             let mut row = HashMap::new();
             for (idx, val) in binds.iter().enumerate() {
-                row.insert(format!("col_{idx}"), val.clone());
+                let name = columns
+                    .get(idx)
+                    .cloned()
+                    .unwrap_or_else(|| format!("col_{idx}"));
+                row.insert(name, val.clone());
             }
             store.entry(table_name).or_default().push(row);
             Ok(RowBatch::Edge(Vec::new()))
@@ -242,6 +268,39 @@ impl TursoPool {
             Ok(RowBatch::Edge(Vec::new()))
         }
     }
+}
+
+/// Extracts the declared column list of an `INSERT INTO t (a, b) VALUES ...`.
+///
+/// Returns an empty vector when the statement declares no column list, in which case
+/// the caller falls back to positional `col_N` names.
+fn extract_insert_columns(sql: &str) -> Vec<String> {
+    let upper = sql.to_uppercase();
+    let Some(into_idx) = upper.find(" INTO ") else {
+        return Vec::new();
+    };
+    let Some(rest) = sql.get(into_idx + 6..) else {
+        return Vec::new();
+    };
+    let Some(open) = rest.find('(') else {
+        return Vec::new();
+    };
+    let Some(close) = rest[open..].find(')') else {
+        return Vec::new();
+    };
+    // Only a column list may sit between the table name and the first `(`.
+    if rest[..open].split_whitespace().count() != 1 {
+        return Vec::new();
+    }
+    rest[open + 1..open + close]
+        .split(',')
+        .map(|c| {
+            c.trim()
+                .trim_matches(|ch| ch == '"' || ch == '`' || ch == '\'')
+                .to_string()
+        })
+        .filter(|c| !c.is_empty())
+        .collect()
 }
 
 fn extract_table_name(sql: &str) -> String {
@@ -265,7 +324,7 @@ fn extract_table_name(sql: &str) -> String {
     }
 }
 
-impl Executor for TursoPool {
+impl Executor for InMemoryTursoStub {
     fn dialect(&self) -> &dyn DbDialect {
         &SQLITE_DIALECT
     }
@@ -314,7 +373,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_turso_builder_config() {
-        let pool = TursoPool::builder()
+        let pool = InMemoryTursoStub::builder()
             .local_path("test.db")
             .sync_url("libsql://example.turso.io")
             .auth_token("token_123")
@@ -330,16 +389,64 @@ mod tests {
 
     #[tokio::test]
     async fn test_turso_executor_query_and_sync() {
-        let pool = TursoPool::connect("libsql://demo.turso.io").await.unwrap();
+        let pool = InMemoryTursoStub::connect("libsql://demo.turso.io")
+            .await
+            .unwrap();
         assert_eq!(pool.dialect().name(), "sqlite");
 
-        let sync_res = pool.sync().await.unwrap();
-        assert_eq!(sync_res.frames_synced, 0);
+        let err = pool.sync().await.unwrap_err();
+        assert!(matches!(err, TursoError::Unsupported(_)));
 
         let rows = pool
             .fetch_all_raw(Cow::Borrowed("SELECT * FROM users"), Vec::new())
             .await
             .unwrap();
         assert!(rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn insert_round_trips_under_declared_column_names() {
+        let pool = InMemoryTursoStub::connect("libsql://demo.turso.io")
+            .await
+            .unwrap();
+
+        pool.execute_raw(
+            Cow::Borrowed("INSERT INTO users (id, email) VALUES (?, ?)"),
+            vec![Value::I64(7), Value::Str("a@b.c".into())],
+        )
+        .await
+        .unwrap();
+
+        let batch = pool
+            .fetch_all_raw(Cow::Borrowed("SELECT * FROM users"), Vec::new())
+            .await
+            .unwrap();
+        let rows = batch.as_edge_rows().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("id"), Some(&Value::I64(7)));
+        assert_eq!(rows[0].get("email"), Some(&Value::Str("a@b.c".into())));
+    }
+
+    #[tokio::test]
+    async fn writes_do_not_survive_a_new_stub() {
+        let first = InMemoryTursoStub::connect("libsql://demo.turso.io")
+            .await
+            .unwrap();
+        first
+            .execute_raw(
+                Cow::Borrowed("INSERT INTO users (id) VALUES (?)"),
+                vec![Value::I64(1)],
+            )
+            .await
+            .unwrap();
+
+        let second = InMemoryTursoStub::connect("libsql://demo.turso.io")
+            .await
+            .unwrap();
+        let batch = second
+            .fetch_all_raw(Cow::Borrowed("SELECT * FROM users"), Vec::new())
+            .await
+            .unwrap();
+        assert!(batch.is_empty(), "the stub stores nothing outside itself");
     }
 }

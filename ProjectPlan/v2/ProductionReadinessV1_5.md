@@ -311,3 +311,57 @@ unrecoverable data-loss incident and a post-mortem that ends at a tool which tol
 it had verified something it never looked at. Shipping the three hollow adapters is
 a reputational problem that a patch release can fix; shipping that badge is the one
 failure here that a patch release cannot undo.
+
+---
+
+## 8. Remediation status
+
+Tracks the seven items in §6 against the branch. Updated as each lands; every entry
+names the commit that closed it.
+
+| # | §6 item | Finding | Status |
+|---|---|---|---|
+| 1 | Decide the fate of the three adapters | §4.1 | **DONE** — stub route taken |
+| 2 | Make Studio's diff screen real or absent | §4.3 | TODO |
+| 3 | Wire the remaining Studio handlers to the pool | §4.2 | TODO |
+| 4 | Add the new crates to all four release lists | §4.4 | TODO |
+| 5 | Add a `--features studio` CI job | §4.5 | TODO |
+| 6 | Bump the workspace version and write the changelog | §4.6 | TODO |
+| 7 | Fix `@@tenant` in the LSP | §4.7 | TODO |
+| 8 | Studio guardrail copy and version drift | §5.1, §5.2 | TODO |
+
+### 8.1 — Adapters: stub route taken (§4.1)
+
+§6 item 1 offered two exits. The second was taken, in full:
+
+- `TursoPool` → `InMemoryTursoStub`, `D1Pool` → `InMemoryD1Stub`,
+  `NeonPool` → `InMemoryNeonStub` (builders and inner types renamed to match). The type
+  a user writes down now says what it is.
+- `publish = false` on all three manifests, with a comment pointing back at §4.1. The
+  `documentation = "https://docs.rs/..."` keys are removed — they pointed at pages that
+  will never exist.
+- Crate-level docs and READMEs rewritten. Each opens with a "This crate performs no
+  network I/O" heading that names what specifically does not happen (no libSQL
+  connection, no D1 REST call, no Neon WebSocket), states that credentials are stored
+  and never transmitted, and states that writes are lost on exit. Each documents the
+  exact supported subset — `SELECT ... FROM t` ignores filters, joins, ordering and
+  limits; everything that is not `SELECT` or `INSERT` is discarded — and, for Turso and
+  Neon, points at the route that does work today (`ruprizzle::connect` against an
+  embedded replica file, or against the Neon connection string, since Neon is ordinary
+  Postgres over TLS).
+- `InMemoryTursoStub::sync()` no longer fabricates `SyncStats { frames_synced: 0 }`. It
+  returns the new `TursoError::Unsupported`, always. The signature is kept so a real
+  adapter can drop in later without a call-site change.
+- Bound parameters are no longer stored under invented `col_0`, `col_1` names when the
+  statement declares a column list; `INSERT INTO users (id, email)` now round-trips as
+  `id` and `email`. That makes the stub usable as an honest test double rather than a
+  thing that merely looks like one.
+- Two tests per crate replace the assert-the-fake-is-a-fake pair: one proves the
+  declared-column round trip, one proves that a second stub instance sees none of the
+  first one's writes — the non-persistence is now pinned by a test instead of being an
+  undocumented surprise.
+
+Dimension 4 (data safety) no longer carries the "accepts writes and silently discards
+them" charge: the discard is now stated in the type name, the crate docs, the README
+and a test. Dimension 8 (semver) drops the "three new public crates never through
+`cargo-semver-checks`" concern for these three, since they are no longer publishable.

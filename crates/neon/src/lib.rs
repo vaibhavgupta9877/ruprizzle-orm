@@ -1,22 +1,35 @@
-//! Neon serverless `PostgreSQL` database adapter for the `ruprizzle` ORM.
+//! In-memory Neon serverless `PostgreSQL` **test double** for the `ruprizzle` ORM.
 //!
-//! Provides [`NeonPool`] and [`NeonPoolBuilder`] for connecting to Neon
-//! Serverless `PostgreSQL` using WebSocket or HTTP connection pooling.
+//! # This crate performs no network I/O
+//!
+//! [`InMemoryNeonStub`] implements [`ruprizzle::Executor`] against a process-local
+//! `HashMap`. It does **not** open a WebSocket or HTTP session to a Neon endpoint and
+//! never transmits the configured `auth_token` anywhere. Every value written through
+//! it is lost when the process exits.
+//!
+//! It exists so that code written against the `Executor` trait can be exercised
+//! without a database, and so that the shape of a future real adapter is pinned down.
+//! It is **not** published to crates.io (`publish = false`) and must not be used as a
+//! production backend. Neon speaks ordinary `PostgreSQL` over TLS, so for real Neon
+//! access today pass the Neon connection string straight to [`ruprizzle::connect`].
+//!
+//! # Supported subset
+//!
+//! - `SELECT ... FROM <table>` returns every row previously inserted for `<table>`.
+//!   Filters, joins, ordering, and limits are **ignored**.
+//! - `INSERT INTO <table> (a, b) VALUES (...)` appends one row, naming the bound
+//!   values after the declared column list. Without a column list the binds are
+//!   named `col_0`, `col_1`, ....
+//! - Every other statement is accepted and discarded.
 //!
 //! # Example
 //!
 //! ```no_run
-//! use ruprizzle_neon::NeonPool;
+//! use ruprizzle_neon::InMemoryNeonStub;
 //!
 //! # async fn doc() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//! let pool = NeonPool::builder()
-//!     .endpoint("ep-weathered-snow-123456.us-east-2.aws.neon.tech")
-//!     .auth_token("npg_secret_token")
-//!     .use_websocket(true)
-//!     .build()
-//!     .await?;
-//!
-//! println!("Connected to Neon Postgres endpoint: {:?}", pool.endpoint());
+//! let pool = InMemoryNeonStub::connect("postgres://user:pw@ep-x.neon.tech/neondb").await?;
+//! assert!(pool.connection_string().is_some());
 //! # Ok(())
 //! # }
 //! ```
@@ -82,13 +95,13 @@ pub struct NeonConfig {
     pub max_connections: usize,
 }
 
-/// Builder for creating configured [`NeonPool`] instances.
+/// Builder for creating configured [`InMemoryNeonStub`] instances.
 #[derive(Debug, Default)]
-pub struct NeonPoolBuilder {
+pub struct InMemoryNeonStubBuilder {
     config: NeonConfig,
 }
 
-impl NeonPoolBuilder {
+impl InMemoryNeonStubBuilder {
     /// Creates a new builder with default configuration.
     #[must_use]
     pub fn new() -> Self {
@@ -142,44 +155,45 @@ impl NeonPoolBuilder {
         self
     }
 
-    /// Builds and connects the [`NeonPool`].
+    /// Builds and connects the [`InMemoryNeonStub`].
     ///
     /// # Errors
     ///
     /// Returns [`NeonError::Config`] if neither connection string nor endpoint is provided.
-    pub async fn build(self) -> Result<NeonPool, NeonError> {
+    pub async fn build(self) -> Result<InMemoryNeonStub, NeonError> {
         if self.config.connection_string.is_none() && self.config.endpoint.is_none() {
             return Err(NeonError::Config(
-                "either `connection_string` or `endpoint` must be configured for NeonPool".into(),
+                "either `connection_string` or `endpoint` must be configured for InMemoryNeonStub"
+                    .into(),
             ));
         }
 
-        let inner = Arc::new(NeonPoolInner {
+        let inner = Arc::new(InMemoryNeonStubInner {
             config: self.config,
             memory_store: RwLock::new(HashMap::new()),
         });
 
-        Ok(NeonPool { inner })
+        Ok(InMemoryNeonStub { inner })
     }
 }
 
 #[derive(Debug)]
-struct NeonPoolInner {
+struct InMemoryNeonStubInner {
     config: NeonConfig,
     memory_store: RwLock<HashMap<String, Vec<HashMap<String, Value>>>>,
 }
 
 /// A connection pool managing access to Neon Serverless `PostgreSQL`.
 #[derive(Debug, Clone)]
-pub struct NeonPool {
-    inner: Arc<NeonPoolInner>,
+pub struct InMemoryNeonStub {
+    inner: Arc<InMemoryNeonStubInner>,
 }
 
-impl NeonPool {
-    /// Returns a new [`NeonPoolBuilder`].
+impl InMemoryNeonStub {
+    /// Returns a new [`InMemoryNeonStubBuilder`].
     #[must_use]
-    pub fn builder() -> NeonPoolBuilder {
-        NeonPoolBuilder::new()
+    pub fn builder() -> InMemoryNeonStubBuilder {
+        InMemoryNeonStubBuilder::new()
     }
 
     /// Connects directly using a Postgres connection string.
@@ -222,9 +236,14 @@ impl NeonPool {
         } else if upper.starts_with("INSERT") {
             let mut store = self.inner.memory_store.write().await;
             let table_name = extract_table_name(trimmed);
+            let columns = extract_insert_columns(trimmed);
             let mut row = HashMap::new();
             for (idx, val) in binds.iter().enumerate() {
-                row.insert(format!("col_{idx}"), val.clone());
+                let name = columns
+                    .get(idx)
+                    .cloned()
+                    .unwrap_or_else(|| format!("col_{idx}"));
+                row.insert(name, val.clone());
             }
             store.entry(table_name).or_default().push(row);
             Ok(RowBatch::Edge(Vec::new()))
@@ -232,6 +251,39 @@ impl NeonPool {
             Ok(RowBatch::Edge(Vec::new()))
         }
     }
+}
+
+/// Extracts the declared column list of an `INSERT INTO t (a, b) VALUES ...`.
+///
+/// Returns an empty vector when the statement declares no column list, in which case
+/// the caller falls back to positional `col_N` names.
+fn extract_insert_columns(sql: &str) -> Vec<String> {
+    let upper = sql.to_uppercase();
+    let Some(into_idx) = upper.find(" INTO ") else {
+        return Vec::new();
+    };
+    let Some(rest) = sql.get(into_idx + 6..) else {
+        return Vec::new();
+    };
+    let Some(open) = rest.find('(') else {
+        return Vec::new();
+    };
+    let Some(close) = rest[open..].find(')') else {
+        return Vec::new();
+    };
+    // Only a column list may sit between the table name and the first `(`.
+    if rest[..open].split_whitespace().count() != 1 {
+        return Vec::new();
+    }
+    rest[open + 1..open + close]
+        .split(',')
+        .map(|c| {
+            c.trim()
+                .trim_matches(|ch| ch == '"' || ch == '`' || ch == '\'')
+                .to_string()
+        })
+        .filter(|c| !c.is_empty())
+        .collect()
 }
 
 fn extract_table_name(sql: &str) -> String {
@@ -255,7 +307,7 @@ fn extract_table_name(sql: &str) -> String {
     }
 }
 
-impl Executor for NeonPool {
+impl Executor for InMemoryNeonStub {
     fn dialect(&self) -> &dyn DbDialect {
         &POSTGRES_DIALECT
     }
@@ -304,7 +356,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_neon_builder_config() {
-        let pool = NeonPool::builder()
+        let pool = InMemoryNeonStub::builder()
             .endpoint("ep-dry-lake-123456.us-east-2.aws.neon.tech")
             .auth_token("npg_token_secret")
             .database("main")
@@ -323,7 +375,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_neon_executor_query() {
-        let pool = NeonPool::connect("postgres://user:pass@ep-test.neon.tech/neondb")
+        let pool = InMemoryNeonStub::connect("postgres://user:pass@ep-test.neon.tech/neondb")
             .await
             .unwrap();
 
@@ -334,5 +386,51 @@ mod tests {
             .await
             .unwrap();
         assert!(rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn insert_round_trips_under_declared_column_names() {
+        let pool = InMemoryNeonStub::connect("postgres://u:p@ep-test.neon.tech/neondb")
+            .await
+            .unwrap();
+
+        pool.execute_raw(
+            Cow::Borrowed("INSERT INTO users (id, email) VALUES ($1, $2)"),
+            vec![Value::I64(7), Value::Str("a@b.c".into())],
+        )
+        .await
+        .unwrap();
+
+        let batch = pool
+            .fetch_all_raw(Cow::Borrowed("SELECT * FROM users"), Vec::new())
+            .await
+            .unwrap();
+        let rows = batch.as_edge_rows().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("id"), Some(&Value::I64(7)));
+        assert_eq!(rows[0].get("email"), Some(&Value::Str("a@b.c".into())));
+    }
+
+    #[tokio::test]
+    async fn writes_do_not_survive_a_new_stub() {
+        let first = InMemoryNeonStub::connect("postgres://u:p@ep-test.neon.tech/neondb")
+            .await
+            .unwrap();
+        first
+            .execute_raw(
+                Cow::Borrowed("INSERT INTO users (id) VALUES ($1)"),
+                vec![Value::I64(1)],
+            )
+            .await
+            .unwrap();
+
+        let second = InMemoryNeonStub::connect("postgres://u:p@ep-test.neon.tech/neondb")
+            .await
+            .unwrap();
+        let batch = second
+            .fetch_all_raw(Cow::Borrowed("SELECT * FROM users"), Vec::new())
+            .await
+            .unwrap();
+        assert!(batch.is_empty(), "the stub stores nothing outside itself");
     }
 }
