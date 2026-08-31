@@ -325,7 +325,7 @@ names the commit that closed it.
 | 2 | Make Studio's diff screen real or absent | §4.3 | **DONE** — wired to introspection |
 | 3 | Wire the remaining Studio handlers to the pool | §4.2 | **DONE** — every route queries |
 | 4 | Add the new crates to all four release lists | §4.4 | **DONE** — plus an audit |
-| 5 | Add a `--features studio` CI job | §4.5 | TODO |
+| 5 | Add a `--features studio` CI job | §4.5 | **DONE** — CI and release gate |
 | 6 | Bump the workspace version and write the changelog | §4.6 | TODO |
 | 7 | Fix `@@tenant` in the LSP | §4.7 | TODO |
 | 8 | Studio guardrail copy and version drift | §5.1, §5.2 | TODO |
@@ -485,3 +485,19 @@ nothing noticed when a crate fell out of them for a whole release line. So:
 Dimension 6 (CI/CD) no longer has crates outside the panic budget, and the class of
 defect — a list maintained by hand with no gate behind it — is now closed rather than
 patched once.
+
+### 8.5 — Studio in CI (§4.5)
+
+`grep -rn "studio" .github/workflows/` returned nothing. It now returns two places:
+
+- **`.github/workflows/ci.yml`** has a `studio feature` job running
+  `cargo clippy -p ruprizzle-cli --features studio --all-targets -- -D warnings`
+  and `cargo test -p ruprizzle-cli --features studio`. The Studio tests build their
+  own temp-file SQLite database in-process, so the job needs no service container.
+- **`.github/workflows/release.yml`** runs the same two commands inside the
+  pre-publish verification gate, alongside the existing native-driver feature runs.
+  Neither of those enabled `studio`, so the gate could pass with Studio uncompiled.
+
+The `clippy` and `test` jobs still pass no `--features`, which is why the job is
+separate rather than a flag added to an existing one. Both files carry a comment
+pointing back at §4.5 so the next person to touch them knows why the job exists.
