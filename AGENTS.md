@@ -1,5 +1,15 @@
 # Agent notes
 
+## Build target directory
+
+- This workspace is configured to use `G:\cargo-target` as the shared build
+  target by default (see `.cargo/config.toml`).  This keeps the checkout on `D:`
+  small and centralizes build artifacts.
+- You can override the location at any time with the `CARGO_TARGET_DIR`
+  environment variable.
+- To free build artifacts for this project, run `cargo clean` from the workspace
+  root.  This will remove the directory configured as `target-dir`.
+
 ## Useful commands
 
 - Run the full cross-ORM benchmark suite:
@@ -12,10 +22,9 @@
   `docs/BenchmarkResults.md`.
 
 - Run a single `rusqlite` benchmark trial manually:
-  ```
-  cargo build --example cross_orm_bench -p ruprizzle --release --features sqlite-rusqlite
+  ```powershell
   $env:RUST_BENCH_DRIVER="rusqlite"
-  .\target\release\examples\cross_orm_bench.exe
+  cargo run --example cross_orm_bench -p ruprizzle --release --features sqlite-rusqlite
   ```
 
 - Run the ruprizzle test suite (including rusqlite tests):

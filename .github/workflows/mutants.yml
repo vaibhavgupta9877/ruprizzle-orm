@@ -6,6 +6,11 @@ on:
     - cron: '0 0 * * 1'
   workflow_dispatch:
 
+env:
+  # Override the Windows-only shared target path from .cargo/config.toml
+  # so the Linux mutants runner uses a workspace-local target.
+  CARGO_TARGET_DIR: target
+
 jobs:
   migrate:
     name: cargo-mutants (migrate)
