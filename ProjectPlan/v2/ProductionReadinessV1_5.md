@@ -322,7 +322,7 @@ names the commit that closed it.
 | # | §6 item | Finding | Status |
 |---|---|---|---|
 | 1 | Decide the fate of the three adapters | §4.1 | **DONE** — stub route taken |
-| 2 | Make Studio's diff screen real or absent | §4.3 | TODO |
+| 2 | Make Studio's diff screen real or absent | §4.3 | **DONE** — wired to introspection |
 | 3 | Wire the remaining Studio handlers to the pool | §4.2 | TODO |
 | 4 | Add the new crates to all four release lists | §4.4 | TODO |
 | 5 | Add a `--features studio` CI job | §4.5 | TODO |
@@ -365,3 +365,47 @@ Dimension 4 (data safety) no longer carries the "accepts writes and silently dis
 them" charge: the discard is now stated in the type name, the crate docs, the README
 and a test. Dimension 8 (semver) drops the "three new public crates never through
 `cargo-semver-checks`" concern for these three, since they are no longer publishable.
+
+### 8.2 — Migration safety diff: made real (§4.3)
+
+The single highest-risk item in §7. The handler no longer emits a card per model with
+`risk: "SAFE"` hardcoded. `crates/cli/src/studio/handlers/diff.rs` now:
+
+- reads the live catalog through `ruprizzle_migrate::introspect::pull`, the same
+  introspector `ruprizzle db pull` uses, and compares it against the parsed schema;
+- classifies each difference as `SAFE` / `CAUTION` / `DESTRUCTIVE` from what is
+  actually in the database, not from a literal:
+  - a column the schema drops runs `COUNT(*) ... WHERE col IS NOT NULL` first and is
+    `DESTRUCTIVE` with the real row count in the card when anything would be lost,
+    `CAUTION` when the column is entirely `NULL`;
+  - a `NOT NULL` column added to a non-empty table with no default is `CAUTION`, with
+    the row count that will make the migration fail;
+  - tightening a nullable column to `NOT NULL` counts the `NULL`s and only says `SAFE`
+    when there are none;
+  - creating a missing table, and relaxing a constraint, are `SAFE`, which is true;
+  - a table with no model is `CAUTION` with its row count, since Ruprizzle will not
+    manage it.
+- renders an explicit red "No comparison was made" banner, and **no cards at all**,
+  when there is no connection or the catalog read fails. The old "zero drift detected"
+  green banner is suppressed in that state. A user can no longer read absence of
+  warnings as safety.
+
+Scope is deliberately the same as `ruprizzle_migrate::drift` — tables, columns,
+nullability — and the page's own description now says that column types, indexes and
+foreign keys are *not* compared, rather than implying a completeness it does not have.
+
+Two supporting changes:
+
+- `crates/cli/src/studio/db.rs` is new: the single real data-access path for Studio.
+  It casts to text per provider (not via `DbDialect::cast_expr`, whose MySQL mapping
+  is `CHAR(255)` and would truncate), quotes identifiers per provider, and has no
+  branch that invents a row when a query fails.
+- `run_studio` no longer swallows connection failures with `.ok()`. A supplied
+  `--database-url` that cannot be reached is now a startup error instead of a Studio
+  that silently runs against `None`.
+
+Tests: `diff_reports_real_drift_against_a_live_database` builds a real SQLite database
+whose `users` table carries a populated `legacy_notes` column the schema does not
+declare, and asserts the page names the column, marks it `DESTRUCTIVE`, and reports
+"destroys the 1 row(s)". `diff_refuses_to_report_safety_without_a_connection` asserts
+that with no pool the page contains neither `SAFE` nor the zero-drift banner.

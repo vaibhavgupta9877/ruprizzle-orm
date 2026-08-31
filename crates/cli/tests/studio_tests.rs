@@ -183,3 +183,70 @@ async fn test_studio_static_assets() {
     let res = app.clone().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 }
+
+/// Creates a SQLite database whose shape deliberately disagrees with `sample_schema`:
+/// `users` carries an extra populated `legacy_notes` column, and `posts` does not exist.
+async fn drifted_pool(dir: &std::path::Path) -> ruprizzle::Pool {
+    let path = dir.join("studio.db").to_string_lossy().replace('\\', "/");
+    let pool = ruprizzle::connect(&format!("sqlite://{path}?mode=rwc"))
+        .await
+        .expect("sqlite must connect");
+
+    for sql in [
+        "CREATE TABLE \"users\" (id INTEGER PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL, legacy_notes TEXT)",
+        "INSERT INTO \"users\" (id, email, name, legacy_notes) VALUES (1, 'a@b.c', 'Alice', 'keep me')",
+    ] {
+        ruprizzle::Executor::execute_raw(&pool, std::borrow::Cow::Borrowed(sql), Vec::new())
+            .await
+            .expect("setup statement must run");
+    }
+
+    pool
+}
+
+async fn get_body(app: axum::Router, uri: &str) -> String {
+    let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    String::from_utf8_lossy(&body).into_owned()
+}
+
+#[tokio::test]
+async fn diff_reports_real_drift_against_a_live_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = drifted_pool(dir.path()).await;
+
+    let state = Arc::new(AppState::new(
+        sample_schema(),
+        StudioConfig::default(),
+        Some(pool),
+    ));
+    let body = get_body(create_router(state), "/studio/diff").await;
+
+    // The dropped column holds a value, so it must be called destructive by name,
+    // with the real row count behind it.
+    assert!(body.contains("legacy_notes"), "{body}");
+    assert!(body.contains("DESTRUCTIVE"), "{body}");
+    assert!(body.contains("destroys the 1 row(s)"), "{body}");
+
+    // The missing table is a genuine create, and genuinely safe.
+    assert!(body.contains("Create table `posts`"), "{body}");
+
+    // The old unconditional card must be gone.
+    assert!(!body.contains("structure verified"), "{body}");
+}
+
+#[tokio::test]
+async fn diff_refuses_to_report_safety_without_a_connection() {
+    let state = Arc::new(AppState::new(
+        sample_schema(),
+        StudioConfig::default(),
+        None,
+    ));
+    let body = get_body(create_router(state), "/studio/diff").await;
+
+    assert!(body.contains("No comparison was made"), "{body}");
+    assert!(!body.contains("SAFE"), "{body}");
+    assert!(!body.contains("Zero drift detected"), "{body}");
+}

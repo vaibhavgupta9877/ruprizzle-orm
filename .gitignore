@@ -58,3 +58,6 @@ local/mutants-*.err
 
 # Isolated dev worktrees
 /.worktrees/
+
+# Lockfile of the standalone blog example, regenerated on demand
+/examples/blog/Cargo.lock

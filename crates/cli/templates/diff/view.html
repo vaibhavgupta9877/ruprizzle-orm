@@ -9,9 +9,17 @@
   <div class="card-header">
     <div>
       <h3 class="card-title">Schema Drift &amp; Migration Safety Classification</h3>
-      <p class="card-description">Compares current <code>schema.ruprizzle</code> against database catalog.</p>
+      <p class="card-description">Compares <code>schema.ruprizzle</code> against the live database catalog: tables, columns and nullability. Anything that can lose data is counted against the real table. Column types, indexes and foreign keys are <strong>not</strong> compared.</p>
     </div>
   </div>
+
+  {% match error %}{% when Some with (message) %}
+  <div style="background:#1c1416; border:1px solid #f43f5e; border-radius:8px; padding:16px; color:#fda4af;">
+    <div style="font-weight:600; margin-bottom:4px;">⛔ No comparison was made</div>
+    <div style="font-size:12px;">{{ message }}</div>
+    <div style="font-size:12px; margin-top:8px; color:#a1a1aa;">Nothing below has been verified. Do not read the absence of warnings as safety.</div>
+  </div>
+  {% when None %}{% endmatch %}
 
   <div style="display:flex; flex-direction:column; gap:12px;">
     {% for change in changes %}
@@ -32,7 +40,7 @@
     </div>
     {% endfor %}
 
-    {% if changes.is_empty() %}
+    {% if changes.is_empty() && error.is_none() %}
     <div style="text-align:center; padding:40px; color:#10b981;">
       ✓ Schema is completely in sync with database catalog. Zero drift detected.
     </div>

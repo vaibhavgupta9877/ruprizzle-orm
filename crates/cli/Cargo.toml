@@ -61,6 +61,7 @@ tower-http        = { version = "0.6", features = ["cors", "trace"], optional = 
 [dev-dependencies]
 http-body-util    = "0.1"
 tower             = { version = "0.5", features = ["util"] }
+tempfile          = { workspace = true }
 
 # Build the published API reference with every optional feature enabled, so
 # feature-gated items appear on docs.rs instead of being silently omitted.

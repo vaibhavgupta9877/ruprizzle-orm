@@ -6,6 +6,7 @@
 
 pub mod assets;
 pub mod config;
+pub mod db;
 pub mod handlers;
 pub mod routes;
 
@@ -47,10 +48,17 @@ pub async fn run_studio(
         );
     }
 
+    // A failed connection used to be swallowed with `.ok()`, which left Studio
+    // running against `None` and every data screen quietly empty. Fail loudly
+    // instead: a URL was supplied, so the user expects to be connected.
     let pool = if db_url.is_empty() {
         None
     } else {
-        ruprizzle::connect(db_url).await.ok()
+        Some(
+            ruprizzle::connect(db_url)
+                .await
+                .map_err(|e| format!("Failed to connect to the database: {e}"))?,
+        )
     };
 
     let state = Arc::new(AppState::new(schema, config.clone(), pool));
