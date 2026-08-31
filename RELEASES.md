@@ -2,6 +2,17 @@
 
 For a sectioned, versioned changelog, see [CHANGELOG.md](CHANGELOG.md).
 
+## 1.0.1
+
+Documentation-only patch (2026-08-31, tag `v1.0.1`). No public API changes.
+
+- Refreshed `README.md`, `docs/README.md`, per-crate READMEs, query/relations/
+  migrations/operations/examples/quickstart/FAQ, `RELEASES.md`, and `AGENTS.md`
+  for the 1.0.0 feature set.
+- Updated `docs/BenchmarkResults.md` with the 2026-08-18 cross-ORM run.
+- Fixed `examples/blog` dependencies and `main.rs` so it compiles against the
+  generated client.
+
 ## 1.0.0
 
 The first stable release (2026-08-21, tag `v1.0.0`). The public API is covered by

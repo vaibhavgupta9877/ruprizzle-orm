@@ -2380,7 +2380,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "bytes",
  "chrono",
@@ -2414,7 +2414,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-check"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "ruprizzle-core",
  "ruprizzle-parser",
@@ -2425,7 +2425,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-cli"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "clap",
  "dotenvy",
@@ -2446,7 +2446,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-codegen"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "criterion",
  "insta",
@@ -2461,7 +2461,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "indexmap",
  "miette",
@@ -2473,7 +2473,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-deep-tests"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "futures-util",
  "proptest",
@@ -2489,7 +2489,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-dialect"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "ruprizzle-core",
  "ruprizzle-parser",
@@ -2498,7 +2498,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-integration-tests"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "futures-core",
  "insta",
@@ -2516,7 +2516,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-lsp"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "miette",
  "ruprizzle-core",
@@ -2528,7 +2528,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-macros"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -2540,7 +2540,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-migrate"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "chrono",
  "proptest",
@@ -2561,7 +2561,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-parser"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "indexmap",
  "insta",
@@ -2573,7 +2573,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-testkit"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "ruprizzle",
  "sqlx",
@@ -4166,7 +4166,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "proc-macro2",
  "syn 2.0.119",

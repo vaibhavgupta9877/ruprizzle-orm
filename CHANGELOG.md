@@ -9,6 +9,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 _Nothing yet._
 
 
+## [1.0.1] - 2026-08-31
+
+### Docs
+
+- Refreshed `README.md`, `docs/README.md`, per-crate READMEs, `docs/QueryGuide.md`,
+  `docs/RelationsGuide.md`, `docs/MigrationsGuide.md`, `docs/Operations.md`,
+  `docs/Examples.md`, `docs/quickstart.md`, `docs/faq.md`, `RELEASES.md`, and
+  `AGENTS.md` to reflect the 1.0.0 feature set: MySQL/MariaDB, native `rusqlite`
+  and `tokio-postgres` drivers, `metrics`, `ruprizzle-lsp`, `ruprizzle check`,
+  aggregates, CTEs, explicit joins, set operations, prepared statements,
+  streaming, and nested writes.
+- Updated `docs/BenchmarkResults.md` with the latest 2026-08-18 cross-ORM run and
+  refreshed the summary tables and analysis from `local/cross-orm-bench/results.json`.
+- Fixed `examples/blog` to compile against the generated client by adding `sqlx`
+  and `serde` dependencies and updating the `main.rs` snippet.
+
+### Changed
+
+- `workspace.package.version` and internal workspace dependency versions bumped
+  to `1.0.1`. No public API changes.
+
+
 ## [1.0.0] - 2026-08-21
 
 The first stable release. From this version onward the public API is covered by semantic

@@ -88,7 +88,7 @@ Or edit `Cargo.toml`:
 
 ```toml
 [dependencies]
-ruprizzle = "1.0.0"
+ruprizzle = "1"
 tokio = { version = "1", features = ["full"] }
 dotenvy = "0.15"
 sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio-rustls", "postgres"] }
