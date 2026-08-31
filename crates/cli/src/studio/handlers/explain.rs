@@ -152,9 +152,9 @@ fn parse_line(line: &str) -> ExplainNode {
 /// Extracts the text between `marker` and the next `end` character.
 fn extract_between(text: &str, marker: &str, end: char) -> Option<String> {
     let start = text.find(marker)? + marker.len();
-    let rest = &text[start..];
+    let rest = text.get(start..)?;
     let stop = rest.find(end).unwrap_or(rest.len());
-    Some(rest[..stop].trim().to_string())
+    Some(rest.get(..stop)?.trim().to_string())
 }
 
 #[cfg(test)]

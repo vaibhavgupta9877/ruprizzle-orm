@@ -324,7 +324,7 @@ names the commit that closed it.
 | 1 | Decide the fate of the three adapters | §4.1 | **DONE** — stub route taken |
 | 2 | Make Studio's diff screen real or absent | §4.3 | **DONE** — wired to introspection |
 | 3 | Wire the remaining Studio handlers to the pool | §4.2 | **DONE** — every route queries |
-| 4 | Add the new crates to all four release lists | §4.4 | TODO |
+| 4 | Add the new crates to all four release lists | §4.4 | **DONE** — plus an audit |
 | 5 | Add a `--features studio` CI job | §4.5 | TODO |
 | 6 | Bump the workspace version and write the changelog | §4.6 | TODO |
 | 7 | Fix `@@tenant` in the LSP | §4.7 | TODO |
@@ -457,3 +457,31 @@ asserted **absent**.
 
 Dimension 3 (operability) no longer carries the two fabricated diagnostics; dimension
 1 (correctness) no longer rests on tests that assert the fakes behave like fakes.
+
+### 8.4 — Release pipeline: one list, and a gate that keeps it honest (§4.4)
+
+§6 item 4 said "add the new crates to all four lists". Three of those four lists are
+publish lists, and §8.1 made the three crates `publish = false`, so adding them there
+would be wrong. What was actually wrong is that the lists were maintained by hand and
+nothing noticed when a crate fell out of them for a whole release line. So:
+
+- **The publish sequence is now one constant.** `PUBLISH_ORDER` in
+  `xtask/src/main.rs` is read by `cargo xtask release` and by the
+  `cargo package --list` pre-flight, which each carried their own copy before.
+- **A new `publish coverage` audit** runs inside `cargo xtask harden` and fails if:
+  a workspace crate that is not `publish = false` is missing from `PUBLISH_ORDER`;
+  a crate in `PUBLISH_ORDER` is `publish = false` or is not a workspace crate at all;
+  or `.github/workflows/release.yml` does not publish exactly `PUBLISH_ORDER`, in
+  order. Verified by deleting `publish = false` from `crates/turso/Cargo.toml` and
+  confirming `harden` fails with
+  `not in PUBLISH_ORDER: ruprizzle-turso (add it, or set publish = false in its manifest)`.
+- **The panic and arithmetic/indexing budgets now cover all three adapters** at
+  `0`/`0`/`0`. They are unpublished, but they are workspace source and are held to the
+  same ceiling as everything else. Reaching zero needed the stub's
+  `extract_insert_columns` and Studio's `extract_between` rewritten off direct slice
+  indexing onto `str::get`, which is also a real robustness fix on multi-byte input.
+  No existing budget was raised.
+
+Dimension 6 (CI/CD) no longer has crates outside the panic budget, and the class of
+defect — a list maintained by hand with no gate behind it — is now closed rather than
+patched once.

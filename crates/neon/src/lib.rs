@@ -268,15 +268,20 @@ fn extract_insert_columns(sql: &str) -> Vec<String> {
     let Some(open) = rest.find('(') else {
         return Vec::new();
     };
-    let Some(close) = rest[open..].find(')') else {
+    let (Some(before), Some(from_open)) = (rest.get(..open), rest.get(open + 1..)) else {
+        return Vec::new();
+    };
+    let Some(close) = from_open.find(')') else {
         return Vec::new();
     };
     // Only a column list may sit between the table name and the first `(`.
-    if rest[..open].split_whitespace().count() != 1 {
+    if before.split_whitespace().count() != 1 {
         return Vec::new();
     }
-    rest[open + 1..open + close]
-        .split(',')
+    let Some(list) = from_open.get(..close) else {
+        return Vec::new();
+    };
+    list.split(',')
         .map(|c| {
             c.trim()
                 .trim_matches(|ch| ch == '"' || ch == '`' || ch == '\'')
