@@ -3,7 +3,7 @@ members = ["crates/*", "tests/integration", "local/deep-tests", "xtask"]
 resolver = "3"
 
 [workspace.package]
-version      = "1.0.0"
+version      = "1.5.0"
 edition      = "2024"
 rust-version = "1.85"
 license      = "MIT OR Apache-2.0"
@@ -13,19 +13,19 @@ authors      = ["Vaibhav Gupta <vaibhavgupta9877@gmail.com>"]
 
 [workspace.dependencies]
 # --- internal ---
-ruprizzle-core    = { path = "crates/core",    version = "1.0.0" }
-ruprizzle-dialect = { path = "crates/dialect", version = "1.0.0" }
-ruprizzle-parser  = { path = "crates/parser",  version = "1.0.0" }
-ruprizzle-codegen = { path = "crates/codegen", version = "1.0.0" }
-ruprizzle-migrate = { path = "crates/migrate", version = "1.0.0" }
-ruprizzle-macros  = { path = "crates/macros",  version = "1.0.0" }
-ruprizzle         = { path = "crates/runtime", version = "1.0.0" }
-ruprizzle-testkit = { path = "crates/testkit", version = "1.0.0" }
-ruprizzle-lsp     = { path = "crates/lsp",     version = "1.0.0" }
-ruprizzle-check   = { path = "crates/check",   version = "1.0.0" }
-ruprizzle-turso   = { path = "crates/turso",   version = "1.0.0" }
-ruprizzle-d1      = { path = "crates/d1",      version = "1.0.0" }
-ruprizzle-neon    = { path = "crates/neon",    version = "1.0.0" }
+ruprizzle-core    = { path = "crates/core",    version = "1.5.0" }
+ruprizzle-dialect = { path = "crates/dialect", version = "1.5.0" }
+ruprizzle-parser  = { path = "crates/parser",  version = "1.5.0" }
+ruprizzle-codegen = { path = "crates/codegen", version = "1.5.0" }
+ruprizzle-migrate = { path = "crates/migrate", version = "1.5.0" }
+ruprizzle-macros  = { path = "crates/macros",  version = "1.5.0" }
+ruprizzle         = { path = "crates/runtime", version = "1.5.0" }
+ruprizzle-testkit = { path = "crates/testkit", version = "1.5.0" }
+ruprizzle-lsp     = { path = "crates/lsp",     version = "1.5.0" }
+ruprizzle-check   = { path = "crates/check",   version = "1.5.0" }
+ruprizzle-turso   = { path = "crates/turso",   version = "1.5.0" }
+ruprizzle-d1      = { path = "crates/d1",      version = "1.5.0" }
+ruprizzle-neon    = { path = "crates/neon",    version = "1.5.0" }
 
 # --- external ---
 pest         = "2.8"

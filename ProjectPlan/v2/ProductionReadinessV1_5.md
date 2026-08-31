@@ -19,6 +19,12 @@ sits alongside `ProjectPlan/ProductionReadiness.md` §17 (89/100 for `1.0.0`).
 >
 > v1.5.0 must not be published to crates.io in its current state.
 
+> **Status as of 2026-08-31: remediated.** All eight items of §6 are closed. Sections
+> §1–§7 below are preserved as written — they are the record of what the tree looked
+> like at `f2d898a` and the argument for the block, and rewriting them would erase the
+> finding. **§8 records what each item became, and §9 the gate results afterwards.**
+> Read those two before acting on anything above them.
+
 | Axis | Score | Grade | `1.0.0` (§17) |
 |---|---|---|---|
 | **Production readiness** | **56 / 100** | **D — Do not publish** | 89 / 100 |
@@ -326,9 +332,9 @@ names the commit that closed it.
 | 3 | Wire the remaining Studio handlers to the pool | §4.2 | **DONE** — every route queries |
 | 4 | Add the new crates to all four release lists | §4.4 | **DONE** — plus an audit |
 | 5 | Add a `--features studio` CI job | §4.5 | **DONE** — CI and release gate |
-| 6 | Bump the workspace version and write the changelog | §4.6 | TODO |
+| 6 | Bump the workspace version and write the changelog | §4.6 | **DONE** — `1.5.0` |
 | 7 | Fix `@@tenant` in the LSP | §4.7 | **DONE** — removed, plus `@@policy` |
-| 8 | Studio guardrail copy and version drift | §5.1, §5.2 | §5.1 **DONE**; §5.2 with the bump |
+| 8 | Studio guardrail copy and version drift | §5.1, §5.2 | **DONE** |
 
 ### 8.1 — Adapters: stub route taken (§4.1)
 
@@ -563,3 +569,78 @@ The second half of §5.1 — no authentication on the mutation routes, with
 
 This does not make Studio safe to expose — authentication is the real fix and is not
 built. It makes the dangerous combination require an explicit statement of intent.
+
+### 8.8 — Version, changelog and the drift that caused it (§4.6, §5.2)
+
+The workspace moved from `1.0.0` to **`1.5.0`**. Five milestones landed without the
+number moving, so the intermediate versions were never cut and one minor version
+carries the whole line.
+
+- **Root `Cargo.toml`**: `[workspace.package] version` and all thirteen internal
+  `[workspace.dependencies]` pins.
+- **`CHANGELOG.md`**: `[Unreleased]` is empty again and `## [1.5.0] - 2026-08-31`
+  records v1.1–v1.5 by milestone. It has a **Fixed** section naming each thing this
+  remediation repaired — the unconditional `SAFE` diff, the unread pool, the swallowed
+  connection error, the unauthenticated non-loopback bind, `@@tenant`/`@@policy` — and
+  a **Not published** section stating plainly what the three adapter crates are. The
+  release notes describe what shipped, including what was wrong with it before.
+- **`RELEASES.md`**, which had never recorded `1.0.0` either, gains a `1.5.0` entry.
+- **`README.md`**: status paragraph, crate-table version note and roadmap section.
+- **`docs/WhatsNewV1_1ToV1_5.md`**: the v1.5 section was a table of what does not work.
+  It is now a table of what each screen queries, plus Studio's two real limits (no
+  authentication; the production check is a name check) and, for the adapters, the
+  route that does work for each provider today.
+
+**§5.2 — version drift, and a gate for it.** [`docs/Versioning.md`](../../docs/Versioning.md)
+is new and states the policy: the workspace crates and the VS Code extension move in
+lockstep on one number, because they are not independently useful and a compatibility
+table nobody maintains is worse than a version bump nobody needed.
+`editor/vscode/package.json` goes `1.2.0` → `1.5.0`.
+
+The policy is enforced, not just written down. `cargo xtask release-check` now also
+fails when `editor/vscode/package.json` disagrees with the workspace version, and when
+an internal `[workspace.dependencies]` pin does not equal it — a published crate with a
+stale pin would resolve a sibling from the previous release. Verified by setting the
+extension back to `1.2.0` and confirming
+`editor/vscode/package.json is version 1.2.0 but the workspace is 1.5.0`.
+
+Fifteen codegen snapshots and the blog example carried `RUPRIZZLE_VERSION = "1.0.0"`
+and were updated with the bump.
+
+---
+
+## 9. Post-remediation gate results
+
+Run against the tree at the end of §8, on 2026-08-31.
+
+| Gate | Command | Result |
+|---|---|---|
+| Build | `cargo build --workspace --all-features` | **PASS** |
+| Format | `cargo fmt --all --check` | **PASS** |
+| Lint | `cargo clippy --workspace --all-features --all-targets -- -D warnings` | **PASS** |
+| Docs | `RUSTDOCFLAGS=-D warnings cargo doc --workspace --no-deps --all-features` | **PASS** |
+| Tests | `cargo test --workspace --all-features` | **PASS** |
+| Dependencies | `cargo deny check` | **PASS** — advisories, bans, licences, sources |
+| Hardening | `cargo xtask harden` | **PASS** — including the new publish-coverage audit; no budget was raised |
+| Release check | `cargo xtask release-check --tag v1.5.0` | **PASS** — tag, workspace version, internal pins, CHANGELOG and the extension all agree |
+
+Studio is now covered by `cargo clippy -p ruprizzle-cli --features studio --all-targets
+-- -D warnings` and `cargo test -p ruprizzle-cli --features studio`, in CI and in the
+release gate. Its suite went from 5 tests to 18.
+
+**Still unverified, unchanged from §3:** the MySQL/MariaDB paths (no MySQL on this
+machine; CI's `integration` job covers them), and `cargo semver-checks` against the
+published `1.0.0`. The three adapter crates are no longer listed as unverified for
+packaging: they are `publish = false` and outside the pipeline by design.
+
+**Still open, deliberately:**
+
+- Studio has no authentication. The non-loopback write refusal narrows the exposure;
+  it does not close it.
+- The parser accepts unknown block attributes and lowering discards them silently
+  (§8.6). Rejecting them is the right end state and changes behaviour for existing
+  schemas.
+- `askama` 0.12 (§5.3), folded into the v2 dependency work as the assessment suggested.
+- The three adapters are stubs, not drivers. Real `libsql`, D1 HTTP and Neon
+  WebSocket implementations remain unwritten; the crates now say so instead of
+  implying otherwise.

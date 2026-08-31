@@ -15,7 +15,7 @@ It combines the best parts of Prisma and Drizzle:
 
 Postgres, SQLite, and MySQL/MariaDB are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver. A native `rusqlite` backend is also available for SQLite via the `sqlite-rusqlite` Cargo feature.
 
-> **Status:** `1.0.0` is the **latest published release** on crates.io (2026-08-21, tag `v1.0.0`). The `dev-v2-x` branch carries the unreleased v1.1–v1.5 feature line — array filters, full-text search, soft deletes, offline query checking, nested writes, tree hierarchies, OpenTelemetry, read-replica routing, query caching and PostGIS — described in [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md). That line has **not** been tagged: Ruprizzle Studio's data plane and the three edge adapters (`turso`, `d1`, `neon`) are non-functional shells, and the release is blocked until they are implemented or withdrawn. The assessment is [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md) (56/100, BLOCK).
+> **Status:** `1.5.0` is the **latest release** (tag `v1.5.0`), carrying the whole v1.1–v1.5 feature line — array filters, full-text search, soft deletes, offline query checking, nested writes, tree hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and Ruprizzle Studio — described in [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md). The line was assessed and initially blocked; the findings and the remediation are recorded in [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md). The three edge adapter crates (`turso`, `d1`, `neon`) are **not published**: they are in-memory test doubles that perform no network I/O.
 >
 > P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is covered by semantic versioning from `1.0.0` onward. Two gates were waived on the way, both in writing: the 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors (`docs/SoakReport.md`), and the two-week RC feedback window, for want of any external consumer to collect feedback from ([Stability](docs/Stability.md#waiver-the-100-rc1-feedback-window-2026-08-21)). Note that the 1.0 line is pinned to `sqlx 0.8`, which ruprizzle re-exports as part of its own public API. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
 
@@ -458,7 +458,7 @@ The table below focuses on the features that differentiate ruprizzle from the to
 
 ## Architecture and repository layout
 
-The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.0.0` at the time of writing; the unreleased v1.1–v1.5 work on `dev-v2-x` has not moved it).
+The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.5.0`). The workspace crates and the VS Code extension move in lockstep on one number; see [Versioning](docs/Versioning.md).
 
 | Directory | Crate | Role | Ships to users? | Status |
 |---|---|---|---|---|
@@ -521,7 +521,7 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 
 ## Status and roadmap
 
-`1.0.0` is **published on crates.io** (2026-08-21, tag `v1.0.0`); all ten publishable crates are live at that version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
+`1.5.0` is the current release (tag `v1.5.0`); the ten publishable crates move together at that version, and `1.0.0` (2026-08-21) preceded it. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
 
 ### The unreleased v1.1–v1.5 line
 
@@ -535,7 +535,7 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 | v1.4 | OpenTelemetry, replica routing, query cache, PostGIS | ✅ implemented, gates green |
 | v1.5 | Ruprizzle Studio, Turso/D1/Neon adapters | ⚠️ **blocked** — shells, not implementations |
 
-**No tag has been cut and the workspace version is still `1.0.0`.** The v1.5 release is blocked: the three adapter crates and most of Studio's data plane return fabricated results rather than querying a database, and Studio's "migration safety diff" reports `SAFE` unconditionally. The full assessment, with the shortest path to green, is [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md) — **56/100, VERDICT: BLOCK**.
+The v1.1–v1.5 line shipped as `1.5.0`. It was assessed at 56/100 and **blocked** before release: the three adapter crates and most of Studio's data plane returned fabricated results rather than querying a database, and Studio's "migration safety diff" reported `SAFE` unconditionally. §8 of [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md) records what each of those became.
 
 The plan behind the `1.0.0` release, including the two decisions it turned on, is `ProjectPlan/v1/V1StableRelease.md`. What remains open:
 

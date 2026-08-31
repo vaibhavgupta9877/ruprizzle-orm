@@ -950,13 +950,84 @@ fn run_release_check(args: &[String]) -> ExitCode {
         }
     }
 
+    // The VS Code extension moves in lockstep with the crates; see docs/Versioning.md.
+    // It drifted to 1.2.0 while every crate was on 1.0.0 because nothing checked.
+    match std::fs::read_to_string("editor/vscode/package.json") {
+        Ok(package_json) => match json_string_field(&package_json, "version") {
+            Some(v) if v == workspace_version => {}
+            Some(v) => {
+                eprintln!(
+                    "xtask: editor/vscode/package.json is version `{v}` but the workspace is `{workspace_version}` (see docs/Versioning.md)"
+                );
+                failed = true;
+            }
+            None => {
+                eprintln!("xtask: editor/vscode/package.json has no `version` field");
+                failed = true;
+            }
+        },
+        Err(e) => {
+            eprintln!("xtask: cannot read editor/vscode/package.json: {e}");
+            failed = true;
+        }
+    }
+
+    // Every internal `[workspace.dependencies]` pin must equal the workspace
+    // version, or a published crate resolves a sibling from the previous release.
+    for line in manifest.lines().map(str::trim) {
+        let Some(rest) = line.strip_prefix("ruprizzle") else {
+            continue;
+        };
+        if !rest.contains("path = \"crates/") {
+            continue;
+        }
+        let pin = rest
+            .rsplit_once("version = \"")
+            .and_then(|(_, v)| v.split('"').next());
+        match pin {
+            Some(pin) if pin == workspace_version => {}
+            Some(pin) => {
+                eprintln!(
+                    "xtask: internal dependency pin `{pin}` in Cargo.toml does not match the workspace version `{workspace_version}`: {line}"
+                );
+                failed = true;
+            }
+            None => {
+                eprintln!(
+                    "xtask: internal dependency has no version pin, which `cargo publish` requires: {line}"
+                );
+                failed = true;
+            }
+        }
+    }
+
     if failed {
         return ExitCode::FAILURE;
     }
     eprintln!(
-        "xtask: release-check ok - tag, workspace version, and CHANGELOG all agree on {workspace_version}"
+        "xtask: release-check ok - tag, workspace version, internal pins, CHANGELOG and the VS Code extension all agree on {workspace_version}"
     );
     ExitCode::SUCCESS
+}
+
+/// The string value of a top-level `"key": "value"` in a small JSON document.
+///
+/// `package.json` is read for one field, which does not justify a JSON dependency
+/// in xtask.
+fn json_string_field(json: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{key}\"");
+    json.lines()
+        .map(str::trim)
+        .find(|l| l.starts_with(&needle))?
+        .split(':')
+        .nth(1)?
+        .trim()
+        .trim_end_matches(',')
+        .trim()
+        .strip_prefix('"')?
+        .split('"')
+        .next()
+        .map(str::to_owned)
 }
 
 fn has_command(name: &str) -> bool {

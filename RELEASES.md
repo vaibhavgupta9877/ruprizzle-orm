@@ -3,24 +3,39 @@
 For a sectioned, versioned changelog, see [CHANGELOG.md](CHANGELOG.md).
 
 
-## Unreleased — the v1.1–v1.5 line
+## 1.5.0
 
-Developed on `dev-v2-x`; **not tagged and not on crates.io.** The workspace version
-is still `1.0.0`.
+The v1.1–v1.5 feature line, developed on `dev-v2-x` and released as one minor version:
+the workspace never moved off `1.0.0` while five milestones landed, so the intermediate
+numbers were never cut.
 
-v1.1–v1.4 are complete and pass every gate: Postgres array filters, full-text search,
-soft deletes (`@deletedAt`), offline query checking (`ruprizzle check`), LSP 2.0,
-declarative seeding, implicit many-to-many, nested relational writes, recursive-CTE
-tree hierarchies, OpenTelemetry spans and Metrics 2.0, primary/read-replica routing,
-a TTL and tag-invalidated query cache, and PostGIS geospatial types. See
+v1.1–v1.4 brought Postgres array filters, full-text search, soft deletes
+(`@deletedAt`), offline query checking (`ruprizzle check`), LSP 2.0, declarative
+seeding, implicit many-to-many, nested relational writes, recursive-CTE tree
+hierarchies, OpenTelemetry spans and Metrics 2.0, primary/read-replica routing, a TTL
+and tag-invalidated query cache, and PostGIS geospatial types. See
 [docs/WhatsNewV1_1ToV1_5.md](docs/WhatsNewV1_1ToV1_5.md).
 
-v1.5 is **blocked**. Ruprizzle Studio's table browser, cell editor, SQL sandbox,
-EXPLAIN tree and migration safety diff return fabricated results without querying the
-database, and `ruprizzle-turso` / `ruprizzle-d1` / `ruprizzle-neon` are in-memory
-stubs with no driver dependency. See
+v1.5 brings **Ruprizzle Studio** (`ruprizzle-cli`, behind the non-default `studio`
+feature): an embedded Axum + HTMX workbench with a schema dashboard, interactive ERD,
+table browser, inline cell editor, foreign-key drawer, SQL sandbox, `EXPLAIN` viewer
+and a migration safety diff.
+
+**This release was assessed and blocked before it shipped**, at 56/100, and the block
+is the reason it looks the way it does. Studio's data plane returned fabricated values
+without querying the database, its migration safety diff reported `SAFE` for every
+model without opening a connection, and the three edge adapters were in-memory
+`HashMap`s with a database's name on them. §8 of
 [ProjectPlan/v2/ProductionReadinessV1_5.md](ProjectPlan/v2/ProductionReadinessV1_5.md)
-— 56/100, VERDICT: BLOCK.
+records what each of those became. In short: Studio queries the database on every
+screen and says so plainly when it cannot, and the three adapters are renamed to
+`InMemory*Stub` and marked `publish = false` — they are **not on crates.io** and are
+not database adapters.
+
+For Neon, pass the connection string to `ruprizzle::connect`; it is ordinary Postgres
+over TLS and needs no adapter crate.
+
+Full detail in [CHANGELOG.md](CHANGELOG.md#150---2026-08-31).
 
 
 ## 1.0.0

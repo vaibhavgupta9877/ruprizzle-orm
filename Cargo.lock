@@ -2647,7 +2647,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "bytes",
  "chrono",
@@ -2683,7 +2683,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-check"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "ruprizzle-core",
  "ruprizzle-parser",
@@ -2694,7 +2694,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-cli"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "askama",
  "axum",
@@ -2725,7 +2725,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-codegen"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "criterion",
  "insta",
@@ -2740,7 +2740,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-core"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "indexmap",
  "miette",
@@ -2752,7 +2752,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-d1"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -2767,7 +2767,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-deep-tests"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "futures-util",
  "proptest",
@@ -2783,7 +2783,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-dialect"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "ruprizzle-core",
  "ruprizzle-parser",
@@ -2792,7 +2792,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-integration-tests"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "futures-core",
  "insta",
@@ -2810,7 +2810,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-lsp"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "miette",
  "ruprizzle-core",
@@ -2822,7 +2822,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-macros"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -2834,7 +2834,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-migrate"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "chrono",
  "proptest",
@@ -2855,7 +2855,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-neon"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -2870,7 +2870,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-parser"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "indexmap",
  "insta",
@@ -2882,7 +2882,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-testkit"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "ruprizzle",
  "sqlx",
@@ -2894,7 +2894,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-turso"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -4581,7 +4581,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "1.0.0"
+version = "1.5.0"
 dependencies = [
  "proc-macro2",
  "syn 2.0.119",

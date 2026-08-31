@@ -2,14 +2,17 @@
 
 This page covers the feature line developed on `dev-v2-x` after `1.0.0`.
 
-> **Release status.** None of this is on crates.io yet. The workspace version is still
-> `1.0.0` and no tag has been cut. Everything in **v1.1 – v1.4** below is implemented and
-> passes the full gate (`build`, `clippy -D warnings`, `doc -D warnings`, `fmt`, `deny`,
-> `test --workspace`). **v1.5 is blocked** — see [v1.5](#v15--ruprizzle-studio-and-edge-adapters-blocked)
-> at the bottom of this page and the assessment in
+> **Release status.** All of it shipped as **`1.5.0`** (tag `v1.5.0`). The workspace
+> never moved off `1.0.0` while these five milestones landed, so the intermediate
+> numbers were never cut and one minor version carries the whole line. The three edge
+> adapter crates are the exception: they are `publish = false` in-memory stubs and are
+> **not** on crates.io — see [v1.5](#v15--ruprizzle-studio) below.
+>
+> This line was assessed and initially **blocked**; the findings and what each of them
+> became are in
 > [`ProjectPlan/v2/ProductionReadinessV1_5.md`](../ProjectPlan/v2/ProductionReadinessV1_5.md).
 
-Every v1.1–v1.4 addition is **backwards compatible**. Nothing in `1.0.0`'s public API
+Every v1.1–v1.5 addition is **backwards compatible**. Nothing in `1.0.0`'s public API
 changed shape, and no existing query needs rewriting.
 
 ---
@@ -229,46 +232,57 @@ Also available: `intersects`, `within_polygon`, `contains`, `contains_point` and
 
 ---
 
-## v1.5 — Ruprizzle Studio and edge adapters (BLOCKED)
-
-**This milestone is not usable and is not being released.** It is described here so the
-state is not a surprise.
-
-### Ruprizzle Studio
+## v1.5 — Ruprizzle Studio
 
 `ruprizzle studio` (behind the non-default `studio` Cargo feature) starts an embedded
 Axum + HTMX workbench on `127.0.0.1:5555` with no Node or npm dependency.
 
-**What works:** the dashboard, the model navigation and the interactive ERD. All three
-read the parsed schema, which is real data.
+```
+ruprizzle studio --allow-writes
+```
 
-**What does not work — do not rely on any of it:**
-
-| Screen | Actual behaviour |
+| Screen | What it does |
 |---|---|
-| Table browser | Five hardcoded rows; every cell is the literal string `Sample <field>` |
-| Cell editor | Echoes your input back into the page. **No `UPDATE` is issued.** |
-| Row delete | Returns `200 OK`. **Nothing is deleted.** |
-| SQL sandbox | Never executes your SQL. Always renders "✓ Query Executed Successfully" and a fake one-row result. |
-| EXPLAIN tree | A hardcoded three-node Postgres plan with invented costs. Your query is not read. |
-| Migration safety diff | Reports **`SAFE` for every model, unconditionally**, without opening a database connection. |
+| Dashboard and ERD | Render the parsed schema: models, fields and the relation graph |
+| Table browser | `SELECT`s the model's columns, ordered by primary key, 50 rows a page; the filter box compiles to a parameterised `LIKE` across the scalar columns |
+| Cell editor | `UPDATE … WHERE pk = ?`, then re-reads the stored value — what you see afterwards is what the database kept, not what you typed |
+| Row insert / delete | Parameterised `INSERT` and `DELETE`. A delete that matched nothing returns `404`, not `200` |
+| Relation drawer | `SELECT`s the record the foreign key points at; a dangling key says so |
+| SQL sandbox | Runs your statement and shows the real columns, rows and affected count, or the database's own error message |
+| `EXPLAIN` viewer | The plan the database returns for your statement. `EXPLAIN` only, never `ANALYZE`, so the statement is not executed. Costs and row estimates appear only where the plan carries them |
+| Migration safety diff | Reads the live catalog and classifies each difference against the data: a dropped column counts its non-`NULL` rows and is `DESTRUCTIVE` when data would be lost; a `NOT NULL` addition to a populated table is `CAUTION` with the row count that will fail the migration |
 
-Studio holds a connection pool and never reads it. The migration diff is the dangerous
-one: it is consulted before running a destructive migration and it cannot report
-anything but safe.
+When Studio cannot reach the database, every screen says so and renders nothing else.
+That matters most on the diff: it shows a failure banner rather than a green badge, so
+an unreachable database can never be mistaken for a safe migration.
 
-### `ruprizzle-turso`, `ruprizzle-d1`, `ruprizzle-neon`
+Two limits worth knowing:
 
-**These are not functional database adapters.** None of the three declares a driver
-dependency — there is no `libsql`, no Cloudflare `worker`, no HTTP client. All three
-store rows in a process-local `HashMap` under invented column names and discard them
-when the process exits. `TursoPool::sync()` returns hardcoded zeros without contacting a
-primary, and the `auth_token` you pass is stored and never sent anywhere.
+- **Studio has no authentication.** It binds `127.0.0.1` by default. `--allow-writes`
+  on a non-loopback host is refused unless you pass `--yes-i-know`, because that
+  combination publishes `INSERT`, `UPDATE` and `DELETE` to anyone who can reach the
+  port.
+- **The production check is a name check.** It matches `prod`, `aws.neon.tech` and
+  `turso.io` in the URL. It will not catch an RDS endpoint or a bare IP. Treat it as a
+  speed bump.
 
-They are absent from the release pipeline and will not be published in this state. To
-run against Turso, D1 or Neon today, use the standard Postgres or SQLite connection
-paths with those providers' wire-compatible endpoints.
+### `ruprizzle-turso`, `ruprizzle-d1`, `ruprizzle-neon` — in-memory stubs, not published
+
+**These are not database adapters and are not on crates.io** (`publish = false`). None
+declares a driver dependency — no `libsql`, no Cloudflare `worker`, no HTTP client.
+`InMemoryTursoStub`, `InMemoryD1Stub` and `InMemoryNeonStub` implement `Executor`
+against a process-local `HashMap`: writes are lost when the process exits, and any
+credential you pass is stored and never transmitted. `InMemoryTursoStub::sync()` always
+returns `TursoError::Unsupported`.
+
+They exist so code written against the `Executor` trait can be exercised without a
+database. To reach these providers for real today:
+
+- **Neon** speaks ordinary Postgres over TLS — pass its connection string straight to
+  `ruprizzle::connect`. No adapter crate is involved.
+- **Turso** — point `ruprizzle::connect` at the SQLite file of an embedded replica you
+  synchronise yourself.
+- **Cloudflare D1** has no supported path yet; use `wrangler` or the D1 HTTP API.
 
 The genuinely useful piece of this milestone is underneath: the runtime `Executor` trait
-is now decoupled from `sqlx`, so a third-party backend can implement it directly. That
-work is sound; it is the adapters built on top of it that are not.
+is now decoupled from `sqlx`, so a third-party backend can implement it directly.
