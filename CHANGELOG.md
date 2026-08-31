@@ -81,6 +81,13 @@ adapters — is either wired to a real database or renamed and withheld from cra
 - **Versioning policy.** The workspace crates and the VS Code extension move in
   lockstep on one version number; see [`docs/Versioning.md`](docs/Versioning.md).
   `editor/vscode` had drifted to `1.2.0` while every crate was on `1.0.0`.
+- **Unknown attributes are now an error (V19), which is a breaking change for
+  schemas that carry one.** The grammar accepts any name after `@` or `@@` and
+  lowering only looked up the handful it knew, so `@@tenant` and `@uniqe` both
+  validated cleanly and did nothing at all — no column, no index, no diagnostic.
+  Every attribute is now checked against the set the toolchain reads, with a
+  did-you-mean suggestion and the full list when there is no near match. A schema
+  that fails to validate after upgrading was already not doing what it said.
 
 ### Fixed
 
@@ -118,9 +125,6 @@ adapters — is either wired to a real database or renamed and withheld from cra
 ### Known gaps
 
 - Row-level security and multi-tenancy are not implemented.
-- The parser accepts unknown block attributes and lowering discards them silently, so
-  a mistyped `@@` attribute produces no diagnostic. Rejecting them is planned but
-  changes behaviour for existing schemas.
 - Studio has no authentication.
 
 

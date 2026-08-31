@@ -92,6 +92,16 @@ const RULES: &[(&str, &str, bool)] = &[
     ("v15_unknown_provider", "ruprizzle::unknown_provider", false),
     ("v16_name_collision", "ruprizzle::name_collision", false),
     ("v17_reserved_keyword", "ruprizzle::reserved_keyword", true),
+    (
+        "v19_unknown_block_attribute",
+        "ruprizzle::unknown_attribute",
+        false,
+    ),
+    (
+        "v19_unknown_field_attribute",
+        "ruprizzle::unknown_attribute",
+        false,
+    ),
 ];
 
 fn read(fixture: &str) -> String {

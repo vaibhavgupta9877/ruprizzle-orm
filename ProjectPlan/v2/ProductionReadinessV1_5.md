@@ -533,11 +533,11 @@ without a diagnostic: the grammar takes any block attribute and `lower.rs` only 
 worse than the reported behaviour — the developer gets no partitioning, no row-level
 security, and no error telling them so.
 
-**Deliberately not fixed here:** making the parser reject unknown block attributes.
-It is the right end state and would have caught this class of defect at the source,
-but it changes parser behaviour for every existing schema and can turn a currently
-valid file into a failing one, which is a decision for the version bump rather than a
-side effect of an LSP fix. Recorded as follow-up work.
+**Deliberately not fixed here:** making the parser reject unknown attributes. It is
+the right end state and would have caught this class of defect at the source, but it
+changes parser behaviour for every existing schema and can turn a currently valid file
+into a failing one, which is a decision for the version bump rather than a side effect
+of an LSP fix. Recorded as follow-up work, and **done in [§10.1](#101--the-parser-rejects-unknown-attributes-v19)**.
 
 ### 8.7 — Studio's guardrail says what it is, and will not publish writes (§5.1)
 
@@ -637,10 +637,56 @@ packaging: they are `publish = false` and outside the pipeline by design.
 
 - Studio has no authentication. The non-loopback write refusal narrows the exposure;
   it does not close it.
-- The parser accepts unknown block attributes and lowering discards them silently
-  (§8.6). Rejecting them is the right end state and changes behaviour for existing
-  schemas.
+- ~~The parser accepts unknown block attributes and lowering discards them silently
+  (§8.6).~~ **Closed in [§10.1](#101--the-parser-rejects-unknown-attributes-v19).**
 - `askama` 0.12 (§5.3), folded into the v2 dependency work as the assessment suggested.
 - The three adapters are stubs, not drivers. Real `libsql`, D1 HTTP and Neon
   WebSocket implementations remain unwritten; the crates now say so instead of
   implying otherwise.
+
+---
+
+## 10. Follow-up work
+
+The two items §9 left open by choice, taken up afterwards on 2026-09-01. Each was
+open because the fix was a behaviour change or a new dependency rather than a repair,
+which made it a decision rather than an omission.
+
+### 10.1 — The parser rejects unknown attributes (V19)
+
+§8.6 established that the defect is not the one §4.7 described. `@@tenant` never
+failed to parse; the grammar accepts any name after `@@`, lowering looks up only the
+four it reads, and everything else is discarded without a word. Removing the two
+names from the LSP stopped the editor recommending the trap. It did not close it: any
+`@@`-attribute a developer invented, and every misspelling of a real one, still
+validated cleanly and did nothing.
+
+The check is wider than the recorded item, because the recorded item was too narrow.
+Field attributes have exactly the same hole — `@uniqe` lowered to no unique
+constraint and no diagnostic — and there is no defensible version of this fix that
+leaves that standing.
+
+**V19**, in `crates/parser/src/lower.rs`:
+
+- Block attributes are checked against `id`, `index`, `map`, `unique`.
+- Field attributes are checked against `createdAt`, `default`, `deletedAt`,
+  `generated`, `id`, `ignore`, `map`, `relation`, `renamedFrom`, `unique`,
+  `updatedAt`, plus the open `db.*` native-type namespace, which stays open because
+  each dialect names its own types.
+- A near match becomes a suggestion (`@uniqe` → ``did you mean `@unique`?``). With no
+  near match the diagnostic lists the whole vocabulary, on the grounds that the
+  author has just learned it is smaller than they assumed and the next question is
+  what is in it.
+
+Both lists were checked against what `crates/lsp/src/completion.rs` offers, so the
+editor cannot suggest something the parser now refuses.
+
+**This is a breaking change and is meant to be.** A schema carrying an unknown
+attribute stops validating. It was already not doing what its author wrote; the
+difference is that now they are told. Every `.ruprizzle` file in this repository was
+audited first — all of them use only known attributes, so nothing here needed
+changing.
+
+Fixtures `v19_unknown_block_attribute` and `v19_unknown_field_attribute` join the
+executable rule table in `crates/parser/tests/invalid.rs`, which also asserts that
+every diagnostic points somewhere and offers a fix.

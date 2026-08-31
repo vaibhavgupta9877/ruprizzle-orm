@@ -357,6 +357,8 @@ fn lower_model(
         }
     }
 
+    check_unknown_attributes(decl, diags);
+
     let primary_key = lower_primary_key(decl, diags);
     let indexes = lower_indexes(decl, &table, &fields);
     let uniques = lower_uniques(decl, &table, &fields);
@@ -375,6 +377,77 @@ fn lower_model(
 
 fn block_attr<'a>(decl: &'a ModelDecl, path: &str) -> Option<&'a Attr> {
     decl.block_attrs.iter().find(|a| a.path == path)
+}
+
+/// Block attributes the toolchain acts on. Anything else is V19.
+const KNOWN_BLOCK_ATTRS: &[&str] = &["id", "index", "map", "unique"];
+
+/// Field attributes the toolchain acts on, besides the `db.*` native-type
+/// namespace, which is open because each dialect names its own types.
+const KNOWN_FIELD_ATTRS: &[&str] = &[
+    "createdAt",
+    "default",
+    "deletedAt",
+    "generated",
+    "id",
+    "ignore",
+    "map",
+    "relation",
+    "renamedFrom",
+    "unique",
+    "updatedAt",
+];
+
+/// V19 — every attribute on a model and on its fields is one the toolchain reads.
+///
+/// The grammar accepts any name after `@` or `@@`, and lowering only looks up the
+/// ones it knows, so an unrecognised attribute used to vanish: no column, no index,
+/// no error. `@@tenant` and `@uniqe` both validated cleanly and did nothing. This is
+/// the check that makes the silence impossible.
+fn check_unknown_attributes(decl: &ModelDecl, diags: &mut Diagnostics) {
+    for attr in &decl.block_attrs {
+        if KNOWN_BLOCK_ATTRS.contains(&attr.path.as_str()) {
+            continue;
+        }
+        diags.push(SchemaError::UnknownAttribute {
+            attribute: format!("@@{}", attr.path),
+            location: format!("model `{}`", decl.name),
+            advice: Some(attribute_advice("@@", &attr.path, KNOWN_BLOCK_ATTRS)),
+            span: attr.span.into(),
+        });
+    }
+
+    for field in &decl.fields {
+        for attr in &field.attrs {
+            if KNOWN_FIELD_ATTRS.contains(&attr.path.as_str())
+                || attr.path.starts_with("db.") && attr.path.len() > 3
+            {
+                continue;
+            }
+            diags.push(SchemaError::UnknownAttribute {
+                attribute: format!("@{}", attr.path),
+                location: format!("`{}.{}`", decl.name, field.name),
+                advice: Some(attribute_advice("@", &attr.path, KNOWN_FIELD_ATTRS)),
+                span: attr.span.into(),
+            });
+        }
+    }
+}
+
+/// The closest known attribute if there is one, and the full list otherwise.
+///
+/// Listing them is worth the width: the author has just discovered that the
+/// vocabulary is smaller than they assumed, and the next question is what it is.
+fn attribute_advice(sigil: &str, written: &str, known: &[&str]) -> String {
+    if let Some(near) = ruprizzle_core::suggest::closest(written, known) {
+        return format!("did you mean `{sigil}{near}`?");
+    }
+    let list = known
+        .iter()
+        .map(|a| format!("`{sigil}{a}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("remove it; the {sigil} attributes ruprizzle reads are {list}")
 }
 
 fn lower_field(
