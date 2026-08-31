@@ -6,7 +6,76 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-_Nothing yet._
+The v1.1–v1.5 feature line, developed on `dev-v2-x`. **None of it has been released
+yet**: the workspace version is still `1.0.0` and no tag has been cut. The v1.1–v1.4
+work below is complete and passes every gate; the v1.5 work is not shippable in its
+current state. See
+[`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md)
+for the assessment that records why, and what has to happen before a version bump.
+
+### Added — v1.1 (query expressiveness, rich types, search)
+
+- **Postgres array filters.** `has`, `hasEvery`, `hasSome` and `isEmpty` on array
+  columns, compiled to native Postgres array operators.
+- **Full-text search.** `Col::search()` compiles to
+  `to_tsvector('english', …) @@ plainto_tsquery('english', …)` on Postgres,
+  `MATCH … AGAINST` on MySQL, and `MATCH` (with a `LIKE` fallback) on SQLite.
+- **Soft deletes.** A `@deletedAt` field marks a model soft-deletable; generated
+  queries filter deleted rows by default, with an explicit opt-out to include them.
+
+### Added — v1.2 (developer tooling, zero-database CI)
+
+- **`ruprizzle check`** (`ruprizzle-check`) validates SQL against the schema with no
+  live database: unknown tables, unknown columns and bind-type mismatches, each with a
+  did-you-mean suggestion and a source location.
+- **LSP 2.0** (`ruprizzle-lsp`) — richer completion and hover across schema attributes.
+- **Declarative seeding.** `ruprizzle seed` applies an idempotent JSON document in one
+  transaction, upserting on the primary key so re-running is safe.
+
+### Added — v1.3 (relations, trees, nested writes)
+
+- **Implicit many-to-many join tables**, inferred from the schema rather than declared.
+- **Nested relational writes** — `create`, `connect`, `connectOrCreate`, `set`,
+  `disconnect` on related records within a single mutation.
+- **Tree hierarchy helpers** built on recursive CTEs (ancestors, descendants, subtree).
+
+### Added — v1.4 (observability, caching, routing)
+
+- **OpenTelemetry semantic spans and Metrics 2.0** following the database client
+  semantic conventions.
+- **Primary / read-replica routing pool.** `SELECT` traffic is distributed across
+  healthy replicas with round-robin, least-connections or random strategies, and falls
+  back to the primary when no replica is healthy.
+- **Query result cache.** A `QueryCache` trait plus an `InMemoryCache` implementation
+  with TTL expiry, a capacity ceiling and tag-based invalidation.
+- **PostGIS geospatial types** (`crates/runtime/src/spatial.rs`).
+
+### Added — v1.5 (not shippable; see the assessment)
+
+- **Ruprizzle Studio** (`ruprizzle-cli`, behind the non-default `studio` feature) — an
+  embedded Axum + HTMX workbench with a schema dashboard and an interactive ERD.
+  **The dashboard and ERD read the real schema and work. The table browser, cell
+  editor, row delete, SQL sandbox, EXPLAIN tree and migration safety diff do not: they
+  return fabricated values and never query the database Studio connected to.** The
+  migration diff in particular reports `SAFE` for every model unconditionally. Do not
+  rely on any of them.
+- **`ruprizzle-turso`, `ruprizzle-d1`, `ruprizzle-neon`.** **These are not functional
+  database adapters.** None declares a driver dependency; all three store rows in a
+  process-local `HashMap` and discard them on exit, and `TursoPool::sync()` returns
+  hardcoded zeros without contacting a primary. They are not in the release pipeline
+  and must not be published in this state.
+
+### Changed
+
+- **The runtime executor is decoupled from `sqlx`** (`73831ed`), so third-party
+  backends can implement `Executor` directly. This is the load-bearing piece of the
+  v1.5 line and it is sound; it is the adapters built on it that are not.
+
+### Known gaps
+
+- The LSP offers a `@@tenant` completion and hover, but no parser, codegen or migration
+  support for it exists — the attribute fails to parse. Row-level security and
+  multi-tenancy are unimplemented.
 
 
 ## [1.0.0] - 2026-08-21

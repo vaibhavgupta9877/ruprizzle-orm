@@ -20,10 +20,18 @@ the wire protocol and pooling; we do not write a driver.
 
 ## Status
 
-`1.0.0` is **published on crates.io** (2026-08-21, tag `v1.0.0`), preceded by
-`1.0.0-rc.1` the same day. The core P0–P8 implementation is complete,
-MySQL/MariaDB support is shipped, and the public API is covered by semantic
-versioning from this release onward.
+`1.0.0` is the **latest published release** on crates.io (2026-08-21, tag
+`v1.0.0`), preceded by `1.0.0-rc.1` the same day. The core P0–P8 implementation
+is complete, MySQL/MariaDB support is shipped, and the public API is covered by
+semantic versioning from this release onward.
+
+The `dev-v2-x` branch carries an unreleased v1.1–v1.5 feature line — array
+filters, full-text search, soft deletes, offline query checking, nested writes,
+tree hierarchies, OpenTelemetry, read-replica routing, query caching and PostGIS.
+See [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md). **It has not been tagged.**
+Ruprizzle Studio's data plane and the three edge adapters (`turso`, `d1`, `neon`)
+are non-functional shells, so the release is blocked; the assessment is
+[`ProjectPlan/v2/ProductionReadinessV1_5.md`](../ProjectPlan/v2/ProductionReadinessV1_5.md).
 
 Two things were waived on the way here, both in writing rather than by omission:
 the W4-02 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors

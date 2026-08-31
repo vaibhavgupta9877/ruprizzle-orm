@@ -3,6 +3,42 @@
 For a sectioned, versioned changelog, see [CHANGELOG.md](CHANGELOG.md).
 
 
+## Unreleased — the v1.1–v1.5 line
+
+Developed on `dev-v2-x`; **not tagged and not on crates.io.** The workspace version
+is still `1.0.0`.
+
+v1.1–v1.4 are complete and pass every gate: Postgres array filters, full-text search,
+soft deletes (`@deletedAt`), offline query checking (`ruprizzle check`), LSP 2.0,
+declarative seeding, implicit many-to-many, nested relational writes, recursive-CTE
+tree hierarchies, OpenTelemetry spans and Metrics 2.0, primary/read-replica routing,
+a TTL and tag-invalidated query cache, and PostGIS geospatial types. See
+[docs/WhatsNewV1_1ToV1_5.md](docs/WhatsNewV1_1ToV1_5.md).
+
+v1.5 is **blocked**. Ruprizzle Studio's table browser, cell editor, SQL sandbox,
+EXPLAIN tree and migration safety diff return fabricated results without querying the
+database, and `ruprizzle-turso` / `ruprizzle-d1` / `ruprizzle-neon` are in-memory
+stubs with no driver dependency. See
+[ProjectPlan/v2/ProductionReadinessV1_5.md](ProjectPlan/v2/ProductionReadinessV1_5.md)
+— 56/100, VERDICT: BLOCK.
+
+
+## 1.0.0
+
+The first stable release, published 2026-08-21 from tag `v1.0.0`; all ten publishable
+crates are live at that version. No API changes from `1.0.0-rc.1`, which was published
+the same day — the surface frozen for the RC is the surface that shipped. From here on
+the public API is covered by semantic versioning, as defined in
+[docs/Stability.md](docs/Stability.md).
+
+Two gates were waived in writing rather than by omission: the 48-hour `rusqlite` soak,
+accepted on 15.56 h / 1.46 B ops / 0 errors, and the two-week RC feedback window, for
+want of an external consumer to collect feedback from. The 1.0 line is pinned to
+`sqlx 0.8`, which ruprizzle re-exports as part of its own public API.
+
+Full detail in [CHANGELOG.md](CHANGELOG.md#100---2026-08-21).
+
+
 ## 0.1.0-alpha.2
 
 A quick follow-up to `0.1.0-alpha.1` that adds README files and SEO metadata to
