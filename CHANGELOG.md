@@ -138,6 +138,28 @@ is now wired to a real database, or, where the crate had no reason to exist, del
   which needs the native libSQL library.
 
 
+## [1.0.1] - 2026-08-31
+
+### Docs
+
+- Refreshed `README.md`, `docs/README.md`, per-crate READMEs, `docs/QueryGuide.md`,
+  `docs/RelationsGuide.md`, `docs/MigrationsGuide.md`, `docs/Operations.md`,
+  `docs/Examples.md`, `docs/quickstart.md`, `docs/faq.md`, `RELEASES.md`, and
+  `AGENTS.md` to reflect the 1.0.0 feature set: MySQL/MariaDB, native `rusqlite`
+  and `tokio-postgres` drivers, `metrics`, `ruprizzle-lsp`, `ruprizzle check`,
+  aggregates, CTEs, explicit joins, set operations, prepared statements,
+  streaming, and nested writes.
+- Updated `docs/BenchmarkResults.md` with the latest 2026-08-18 cross-ORM run and
+  refreshed the summary tables and analysis from `local/cross-orm-bench/results.json`.
+- Fixed `examples/blog` to compile against the generated client by adding `sqlx`
+  and `serde` dependencies and updating the `main.rs` snippet.
+
+### Changed
+
+- `workspace.package.version` and internal workspace dependency versions bumped
+  to `1.0.1`. No public API changes.
+
+
 ## [1.0.0] - 2026-08-21
 
 The first stable release. From this version onward the public API is covered by semantic
@@ -465,7 +487,9 @@ Initial alpha release of **ruprizzle-orm**: a schema-first ORM for Rust. Write a
 
 See `docs/KnownLimitations.md` for the full list.
 
-[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.1...v1.5.0
+[1.0.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.0-rc.1...v1.0.0
 [1.0.0-rc.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.4.0-beta.2...v1.0.0-rc.1
 [0.4.0-beta.2]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.4.0-beta.1...v0.4.0-beta.2

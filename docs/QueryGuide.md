@@ -68,13 +68,13 @@ user::CREATED_AT.lt(end) | user::CREATED_AT.lte(end)
 user::CREATED_AT.between(start, end)                      // BETWEEN
 user::ROLE.in_set(vec![Role::User, Role::Admin])          // IN
 user::ROLE.not_in_set(vec![Role::User])                   // NOT IN
-user::NAME.is_null()                                      // IS NULL
-user::NAME.is_not_null()                                  // IS NOT NULL
 user::EMAIL.starts_with("alice@")                         // string matchers
 user::EMAIL.ends_with("@example.com")
 user::EMAIL.contains("acme")
 user::EMAIL.ilike("alice")                                // ILIKE on Postgres, LIKE on SQLite
 ```
+
+`is_null()` and `is_not_null()` are available on `Column<M, Option<T>>`. Generated tokens for nullable fields currently use the underlying `T` type, so for generated columns use `Filter::raw("name IS NULL")` or the column's `set_null`/`eq_optional` helpers in inserts/updates.
 
 Combine filters with `and`, `or`, `all`, and `any`:
 
@@ -253,6 +253,7 @@ if first.has_next {
         .find_many()
         .order_by(user::ID.asc())
         .after(user::ID, last_id, 20)
+        .fetch_all()
         .await?;
 }
 ```

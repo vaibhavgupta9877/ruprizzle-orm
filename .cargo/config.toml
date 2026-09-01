@@ -1,4 +1,5 @@
-[alias]
-# Makes `cargo xtask ci` work from anywhere in the workspace, so the README's
-# instructions and the repository's automation are the same command.
-xtask = "run --quiet --package xtask --"
+# This workspace defaults to a shared target directory on the G: drive to keep
+# the project checkout light.  The path is Windows-specific; on CI or other
+# platforms set CARGO_TARGET_DIR to override it.
+[build]
+target-dir = "G:/cargo-target"

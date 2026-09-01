@@ -21,6 +21,9 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
   CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+  # Override the Windows-only shared target path from .cargo/config.toml
+  # so the Linux release runner uses a workspace-local target.
+  CARGO_TARGET_DIR: target
 
 jobs:
   release:

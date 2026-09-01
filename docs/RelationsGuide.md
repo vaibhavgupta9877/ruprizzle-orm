@@ -103,22 +103,23 @@ let maybe = db.user()
 
 ```prisma
 model Post {
-  id    Int    @id @default(autoincrement())
-  tags  Tag[]  @relation("PostTag")
+  id   Int   @id
+  tags Tag[] @relation(through: PostTag)
 }
 
 model Tag {
-  id    Int    @id @default(autoincrement())
-  posts Post[] @relation("PostTag")
+  id    Int     @id
+  posts Post[]  @relation(through: PostTag)
 }
 
 model PostTag {
-  postId Int @map("post_id")
-  tagId  Int @map("tag_id")
-  post   Post @relation(fields: [postId], references: [id])
-  tag    Tag  @relation(fields: [tagId], references: [id])
+  post_id Int
+  tag_id  Int
+  post    Post @relation(fields: [post_id], references: [id])
+  tag     Tag  @relation(fields: [tag_id], references: [id])
 
-  @@id([postId, tagId])
+  @@id([post_id, tag_id])
+  @@map("post_tags")
 }
 ```
 
@@ -264,7 +265,7 @@ let deleted = db.user()
     .await?;
 ```
 
-`DeleteAction` has the variants `Cascade`, `Restrict`, `SetNull`, `SetDefault`, and `NoAction`.
+`DeleteAction` has the variants `Cascade`, `Restrict`, `SetNull`, `SetDefault`, and `NoAction`. `SetDefault` is accepted by the schema parser, but `DeleteQuery::cascade` will return an error at runtime if you use it; default-value handling is not yet wired to the cascade runner.
 
 ## Self-referential relations
 

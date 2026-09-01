@@ -6,6 +6,11 @@ on:
     - cron: '0 0 * * 0'
   workflow_dispatch:
 
+env:
+  # Override the Windows-only shared target path from .cargo/config.toml
+  # so the Linux fuzz runner uses a workspace-local target.
+  CARGO_TARGET_DIR: target
+
 jobs:
   fuzz:
     name: fuzz ${{ matrix.target }}

@@ -54,18 +54,18 @@ All times are microseconds per operation (lower is better).
 
 | Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
 |---|---|---|---|---|---|---|---|
-| `select_by_pk` | 27.9 | 18.3 | 22.5 | 76.8 | 10.0 | 182.9 | 38.3 |
-| `find_many_1000` | 1,741.1 | 406.7 | 771.0 | 1,616.5 | 297.4 | 2,935.7 | 414.2 |
-| `find_filtered_ordered` | 1,918.1 | 598.2 | 966.1 | 1,669.8 | 433.8 | 3,358.3 | 506.7 |
-| `include_posts` | 22,881.2 | 7,474.1 | 11,712.9 | 20,333.5 | 3,647.4 | 44,300.7 | 186,014.4 |
-| `bulk_insert_1000` | 2,099.7 | 1,533.0 | 1,174.6 | 5,031.3 | 6,619.3 | 13,236.6 | 8,536.1 |
+| `select_by_pk` | 25.1 | 3.1 | 17.9 | 66.8 | 9.9 | 173.1 | 39.0 |
+| `find_many_1000` | 1,634.4 | 386.3 | 741.9 | 1,559.1 | 305.4 | 2,820.7 | 409.9 |
+| `find_filtered_ordered` | 1,797.4 | 565.4 | 925.6 | 1,603.9 | 425.3 | 3,225.3 | 504.7 |
+| `include_posts` | 21,139.9 | 7,553.3 | 10,741.2 | 20,856.5 | 3,627.0 | 40,867.0 | 188,946.9 |
+| `bulk_insert_1000` | 1,912.4 | 1,383.1 | 1,059.0 | 6,027.3 | 6,689.7 | 14,142.5 | 9,069.6 |
 
 ## Query construction (no I/O)
 
 | Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
 |---|---|---|---|---|---|---|---|
-| `to_sql_select_by_pk` | 0.5 | 0.7 | 0.4 | 7.8 | 0.7 | — | 11.4 |
-| `to_sql_select_filter_order` | 1.5 | 1.8 | 1.1 | 12.4 | 1.0 | — | 16.4 |
+| `to_sql_select_by_pk` | 0.7 | 0.7 | 0.4 | 7.6 | 0.7 | — | 11.6 |
+| `to_sql_select_filter_order` | 1.7 | 1.7 | 1.1 | 12.3 | 1.0 | — | 17.1 |
 
 ## Codegen / build-step comparison
 
@@ -78,21 +78,21 @@ All times are microseconds per operation (lower is better).
 ### Simple reads
 The synchronous, native-driver ORMs lead here:
 
-- **Diesel: 10.0 µs**
-- **ruprizzle (rusqlite): 18.3 µs**
-- **prax: 22.5 µs**
-- **ruprizzle (sqlx): 27.9 µs**
-- **Drizzle: 38.3 µs**
-- **Sea-ORM: 76.8 µs**
-- **Prisma: 182.9 µs**
+- **Diesel: 9.9 µs**
+- **ruprizzle (rusqlite): 3.1 µs**
+- **prax: 17.9 µs**
+- **ruprizzle (sqlx): 25.1 µs**
+- **Drizzle: 39.0 µs**
+- **Sea-ORM: 66.8 µs**
+- **Prisma: 173.1 µs**
 
-The `rusqlite` query is offloaded to `tokio::task::spawn_blocking`, which adds a small dispatch overhead per call while keeping async worker threads unblocked. ruprizzle (rusqlite) is competitive with Diesel on single-row PK lookups, but no longer the absolute fastest. Direct `ToSql` impls on `Value` avoid the extra string clone that used to happen per bind. Diesel and ruprizzle (sqlx) are the next tier.
+The `rusqlite` query is offloaded to `tokio::task::spawn_blocking`, which adds a small dispatch overhead per call while keeping async worker threads unblocked. ruprizzle (rusqlite) is now the fastest on single-row PK lookups for this run. Direct `ToSql` impls on `Value` avoid the extra string clone that used to happen per bind. Diesel and ruprizzle (sqlx) are the next tier.
 
 ### Multi-row and filtered reads
 Diesel is still fastest, but ruprizzle (rusqlite) is now within striking distance:
 
-- `find_many_1000`: **297.4 µs** (Diesel) vs **406.7 µs** (ruprizzle rusqlite) vs **414.2 µs** (Drizzle) vs **771.0 µs** (prax) vs **1,616.5 µs** (Sea-ORM) vs **2,935.7 µs** (Prisma)
-- `find_filtered_ordered`: **433.8 µs** (Diesel) vs **506.7 µs** (Drizzle) vs **598.2 µs** (ruprizzle rusqlite) vs **966.1 µs** (prax) vs **1,669.8 µs** (Sea-ORM) vs **3,358.3 µs** (Prisma)
+- `find_many_1000`: **305.4 µs** (Diesel) vs **386.3 µs** (ruprizzle rusqlite) vs **409.9 µs** (Drizzle) vs **741.9 µs** (prax) vs **1,559.1 µs** (Sea-ORM) vs **2,820.7 µs** (Prisma)
+- `find_filtered_ordered`: **425.3 µs** (Diesel) vs **504.7 µs** (Drizzle) vs **565.4 µs** (ruprizzle rusqlite) vs **925.6 µs** (prax) vs **1,603.9 µs** (Sea-ORM) vs **3,225.3 µs** (Prisma)
 
 The remaining gap on multi-row reads is mostly per-row decoding overhead in ruprizzle's intermediate `Row`/`FromValue` path. The native drivers avoid the per-row async worker-thread hop used by `sqlx-sqlite`, which still shows up clearly in Sea-ORM and ruprizzle (sqlx).
 
@@ -100,46 +100,46 @@ The remaining gap on multi-row reads is mostly per-row decoding overhead in rupr
 Diesel's manually-written join query is fastest, while ruprizzle's auto-batched loader remains the strongest *automatic* option:
 
 - **Diesel: 3.6 ms** (manual join)
-- **ruprizzle (rusqlite): 7.5 ms** (auto-batched)
-- **prax: 11.7 ms**
-- **ruprizzle (sqlx): 22.9 ms**
-- **Sea-ORM: 20.3 ms**
-- **Prisma: 44.3 ms**
-- **Drizzle: 186.0 ms** (correlated subquery per parent row)
+- **ruprizzle (rusqlite): 7.6 ms** (auto-batched)
+- **prax: 10.7 ms**
+- **ruprizzle (sqlx): 21.1 ms**
+- **Sea-ORM: 20.9 ms**
+- **Prisma: 40.9 ms**
+- **Drizzle: 188.9 ms** (correlated subquery per parent row)
 
 Offloading the synchronous `rusqlite` call to `spawn_blocking` adds a small per-call and per-row overhead compared to running it synchronously on the caller, but it prevents long-running workloads from pinning tokio worker threads. The remaining gap vs Diesel is the in-memory grouping of 10,000 child rows into 1,000 parent `Vec`s. Diesel does not group in this benchmark. Drizzle's SQLite relational query still emits a correlated subquery with `json_group_array` per parent row.
 
 ### Bulk insert
 The `rusqlite` and `sqlx` backends are fastest:
 
-- **prax: 1.2 ms**
-- **ruprizzle (rusqlite): 1.5 ms**
-- **ruprizzle (sqlx): 2.1 ms**
-- **Drizzle: 8.5 ms**
-- **Diesel: 6.6 ms**
-- **Sea-ORM: 5.0 ms**
-- **Prisma: 13.2 ms**
+- **prax: 1.1 ms**
+- **ruprizzle (rusqlite): 1.4 ms**
+- **ruprizzle (sqlx): 1.9 ms**
+- **Sea-ORM: 6.0 ms**
+- **Diesel: 6.7 ms**
+- **Drizzle: 9.1 ms**
+- **Prisma: 14.1 ms**
 
 Diesel's bulk insert is slower here despite using a single `INSERT` statement. ruprizzle and prax both use a multi-value statement with `RETURNING *` and still come out ahead.
 
 ### Query construction
 Turning a builder into SQL+binds is cheap for all the Rust ORMs, while the TypeScript/JavaScript ORMs are an order of magnitude slower:
 
-- **prax: 0.4 µs**, **Diesel: 0.7 µs**, **ruprizzle (rusqlite): 0.7 µs**, **ruprizzle (sqlx): 0.5 µs**
-- **Sea-ORM: 7.8–14.6 µs**
-- **Drizzle: 11.4–38.3 µs**
+- **prax: 0.4 µs**, **Diesel: 0.7 µs**, **ruprizzle (rusqlite): 0.7 µs**, **ruprizzle (sqlx): 0.7 µs**
+- **Sea-ORM: 7.6–12.3 µs**
+- **Drizzle: 11.6–17.1 µs**
 - **Prisma: not exposed**
 
-Query construction remains a sub-microsecond win for ruprizzle (rusqlite); the bigger wins in this round came from removing per-query SQL string clones and moving the soak harness onto the native rusqlite pool.
+Query construction remains a sub-microsecond win for the Rust ORMs; the bigger wins in this round came from removing per-query SQL string clones and moving the soak harness onto the native rusqlite pool.
 
 ## Usage criteria
 
 | Criterion | Best choice | Why |
 |---|---|---|
 | Compile-time type safety, generated typed client | **Diesel** or **ruprizzle** | Both are schema-first and fully typed; Diesel has the larger ecosystem, ruprizzle the more ergonomically generated client. |
-| Maximum simple-query throughput on SQLite | **ruprizzle (rusqlite)** | 18.3 µs on `select_by_pk` — competitive with Diesel's 10.0 µs — with `spawn_blocking` dispatch overhead. |
+| Maximum simple-query throughput on SQLite | **ruprizzle (rusqlite)** | 3.1 µs on `select_by_pk` — ahead of Diesel's 9.9 µs — with `spawn_blocking` dispatch overhead. |
 | Multi-row reads and filtered queries on SQLite | **Diesel**, then **ruprizzle (rusqlite)** | Diesel is fastest; ruprizzle (rusqlite) is within 20–40% and beats Drizzle/prax. |
-| Bulk inserts on SQLite | **prax**, then **ruprizzle (rusqlite)** | 1.2–1.5 ms, faster than Diesel/Sea-ORM. |
+| Bulk inserts on SQLite | **prax**, then **ruprizzle (rusqlite)** | 1.1–1.4 ms, faster than Diesel/Sea-ORM/Drizzle. |
 | Nested relation loading, automatic batching | **Diesel** (manual), then **ruprizzle (rusqlite)**, then **prax** | Diesel's manual join is fastest; ruprizzle's auto-batched loader beats Sea-ORM/Prisma. |
 | TypeScript ecosystem, migrations, team familiarity | **Prisma** | Largest community, mature migrations, schema-first. |
 | Zero build-step / runtime schema | **Drizzle** | Schema is plain TypeScript, no code generation. |
@@ -149,8 +149,8 @@ Query construction remains a sub-microsecond win for ruprizzle (rusqlite); the b
 ## Caveats
 
 1. **SQLite is not Postgres.** These numbers are from a single SQLite file. The relative ordering can change with network latency, a different driver, or a different database. **Do not cite these numbers for a Postgres comparison until they are re-run on Postgres.**
-2. **Driver and dispatch differences dominate simple reads.** ruprizzle (rusqlite) offloads `rusqlite` queries to `tokio::task::spawn_blocking`, trading a small per-call dispatch cost for the ability to keep the async runtime responsive. Diesel still wins on single-row PK lookups because it runs the native SQLite call synchronously on the caller. Diesel uses `libsqlite3-sys` directly, and Drizzle uses the synchronous `better-sqlite3` binding. All of these avoid the per-row async worker-thread hop used by `sqlx-sqlite` (which powers ruprizzle (sqlx), prax, and Sea-ORM). The measured row-hop cost is roughly 0.9 µs/row for `sqlx-sqlite` versus ~0.3 µs/row for the synchronous bindings, which is why Diesel, ruprizzle (rusqlite), and Drizzle cluster near the top for simple reads.
-3. **Drizzle relational query is SQLite/driver-specific.** On Postgres Drizzle can use joins/CTEs and would likely be far faster for `include_posts`; do not take the 186.0 ms as a universal Drizzle number.
+2. **Driver and dispatch differences dominate simple reads.** ruprizzle (rusqlite) offloads `rusqlite` queries to `tokio::task::spawn_blocking`, trading a small per-call dispatch cost for the ability to keep the async runtime responsive. ruprizzle (rusqlite) wins on single-row PK lookups for this run, with Diesel close behind running the native SQLite call synchronously on the caller. Diesel uses `libsqlite3-sys` directly, and Drizzle uses the synchronous `better-sqlite3` binding. All of these avoid the per-row async worker-thread hop used by `sqlx-sqlite` (which powers ruprizzle (sqlx), prax, and Sea-ORM). The measured row-hop cost is roughly 0.9 µs/row for `sqlx-sqlite` versus ~0.3 µs/row for the synchronous bindings, which is why Diesel, ruprizzle (rusqlite), and Drizzle cluster near the top for simple reads.
+3. **Drizzle relational query is SQLite/driver-specific.** On Postgres Drizzle can use joins/CTEs and would likely be far faster for `include_posts`; do not take the 188.9 ms as a universal Drizzle number.
 4. **No network.** All ORMs talked to a local file, so result-set decoding and ORM overhead are the main differentiators.
 5. **This run used 1 warm-up + 10 measured trials per driver.** Medians are reported. See `local/cross-orm-bench/BENCHMARKS.log` and `local/cross-orm-bench/raw_results.json` for full per-trial data. Run-to-run variance can be 5–10% on Windows. The main take-away is the relative shape between backends, not single-digit absolute values.
 
@@ -598,3 +598,102 @@ All times are microseconds per operation (lower is better).
 
 | Backend | Concurrency | select_by_pk | find_many_1000 | bulk_insert_1000 |
 |---|---|---|---|---|
+
+## Benchmark run: 2026-08-31 13:17 UTC
+
+### Environment
+
+- **Warm-up trials:** 1
+- **Measured trials:** 10
+- **Concurrency levels:** [1, 10, 100]
+- **Duration per throughput run:** 5.0s
+- **Dataset:**
+  - 1,000 users
+  - 20 categories
+  - 10,000 posts
+  - 50,000 comments
+  - 100 tags
+  - 30,000 post_tags
+  - 5,000 followers
+  - 20,000 likes
+
+### End-to-end results
+
+All times are microseconds per operation (lower is better).
+
+| Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
+|---|---|---|---|---|---|---|---|
+| `select_by_pk` | 25.1 | 3.1 | 17.9 | 66.8 | 9.9 | 173.1 | 39.0 |
+| `find_many_1000` | 1,634.4 | 386.3 | 741.9 | 1,559.1 | 305.4 | 2,820.7 | 409.9 |
+| `find_filtered_ordered` | 1,797.4 | 565.4 | 925.6 | 1,603.9 | 425.3 | 3,225.3 | 504.7 |
+| `find_filtered_paginated` | 386.1 | 300.0 | 361.7 | 455.4 | 307.9 | 629.8 | 357.0 |
+| `find_in_list` | 107.7 | 30.0 | 98.8 | 130.7 | 39.6 | 404.2 | 99.0 |
+| `find_complex_filter` | 314.2 | 162.1 | 251.8 | 340.4 | 164.2 | 774.0 | 228.6 |
+| `count_filtered` | 40.1 | 20.3 | 44.4 | 91.3 | 25.7 | 170.1 | 45.8 |
+| `exists_filtered` | 20.7 | 2.7 | 22.1 | 70.0 | 9.6 | 151.4 | 41.6 |
+| `include_posts` | 21,139.9 | 7,553.3 | 10,741.2 | 20,856.5 | 3,627.0 | 40,867.0 | 188,946.9 |
+| `include_author` | 20,764.9 | 7,122.6 | 8,779.8 | 20,716.5 | 3,285.4 | 78,985.7 | 16,595.5 |
+| `include_posts_and_comments` | 131,693.4 | 59,759.2 | 41,534.5 | 114,364.3 | 20,605.2 | 251,942.4 | 9,214,149.0 |
+| `include_posts_with_tags` | 54,108.5 | 28,362.6 | 24,896.2 | 54,784.9 | 8,156.6 | 280,121.6 | 37,234.5 |
+| `find_popular_posts` | 1,458.4 | 1,266.3 | 2,058.7 | 1,671.5 | 1,275.6 | 2,805.2 | 5,655.4 |
+| `prepared_select_by_pk` | 24.6 | 2.3 | 4.9 | 84.7 | 10.0 | 194.2 | 14.9 |
+| `stream_find_many_1000` | 2,296.3 | 705.6 | 57.1 | 1,807.1 | 225.6 | 3,290.1 | 327.0 |
+| `bulk_insert_1000` | 1,912.4 | 1,383.1 | 1,059.0 | 6,027.3 | 6,689.7 | 14,142.5 | 9,069.6 |
+
+### Query construction (no I/O)
+
+| Operation | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
+|---|---|---|---|---|---|---|---|
+| `to_sql_select_by_pk` | 0.7 | 0.7 | 0.4 | 7.6 | 0.7 | 0.1 | 11.6 |
+| `to_sql_select_filter_order` | 1.7 | 1.7 | 1.1 | 12.3 | 1.0 | 0.1 | 17.1 |
+| `to_sql_select_in_list` | 2.5 | 2.5 | 4.3 | 25.8 | 2.7 | 0.7 | 39.4 |
+| `to_sql_select_complex_filter` | 2.0 | 2.0 | 1.5 | 14.3 | 1.1 | 0.1 | 19.8 |
+| `to_sql_select_paginated` | 1.7 | 1.7 | 1.1 | 11.8 | 1.0 | 0.1 | 18.2 |
+| `to_sql_prepared_select_by_pk` | 0.7 | 0.7 | 0.4 | 2.7 | 0.8 | 0.1 | 11.9 |
+| `prepared_rebind_select_by_pk` | 0.0 | 0.0 | 0.1 | 0.1 | 0.2 | 0.1 | 0.1 |
+| `to_sql_conditional_filter` | 1.0 | 1.0 | 0.4 | 9.1 | 0.8 | 0.3 | 15.3 |
+| `to_sql_select_with_cte` | 1.9 | 1.9 | 0.8 | 19.1 | 0.2 | 0.1 | 36.5 |
+| `to_sql_select_with_recursive_cte` | 2.8 | 2.8 | 0.5 | 25.6 | 0.2 | 0.1 | 0.1 |
+| `to_sql_set_union` | 1.8 | 1.6 | 0.9 | 17.1 | 1.1 | 0.1 | 27.3 |
+| `to_sql_select_with_join` | 1.0 | 1.0 | 0.1 | 11.4 | 1.1 | 0.1 | 30.1 |
+| `to_sql_select_exists_subquery` | 1.3 | 1.3 | 0.1 | 18.0 | 1.1 | 0.1 | 24.3 |
+| `to_sql_select_in_subquery` | 1.7 | 1.7 | 0.1 | 13.1 | 0.8 | 0.1 | 19.1 |
+| `to_sql_nested_insert` | 1.3 | 1.4 | 0.4 | 0.0 | 0.6 | 0.1 | 20.3 |
+| `to_sql_nested_update` | 0.9 | 1.0 | 0.3 | 0.0 | 0.3 | 0.1 | 17.6 |
+
+### Latency percentiles (ruprizzle sqlx)
+
+| Operation | p50 | p95 | p99 |
+|---|---|---|---|
+| `select_by_pk` | 25.1 | 32.5 | 33.5 |
+| `find_many_1000` | 1,634.4 | 1,701.2 | 1,725.8 |
+| `find_filtered_ordered` | 1,797.4 | 1,863.1 | 1,863.7 |
+| `find_filtered_paginated` | 386.1 | 407.9 | 408.7 |
+| `find_in_list` | 107.7 | 122.2 | 125.4 |
+| `find_complex_filter` | 314.2 | 338.3 | 342.2 |
+| `count_filtered` | 40.1 | 48.2 | 49.8 |
+| `exists_filtered` | 20.7 | 30.8 | 33.0 |
+| `include_posts` | 21,139.9 | 23,082.5 | 23,460.9 |
+| `include_author` | 20,764.9 | 21,973.5 | 22,057.2 |
+| `include_posts_and_comments` | 131,693.4 | 138,897.9 | 139,415.8 |
+| `include_posts_with_tags` | 54,108.5 | 57,747.5 | 57,792.9 |
+| `find_popular_posts` | 1,458.4 | 1,482.6 | 1,484.6 |
+| `prepared_select_by_pk` | 24.6 | 32.3 | 32.7 |
+| `stream_find_many_1000` | 2,296.3 | 2,385.9 | 2,397.2 |
+| `bulk_insert_1000` | 1,912.4 | 2,980.8 | 3,497.2 |
+| `to_sql_select_by_pk` | 0.7 | 0.7 | 0.7 |
+| `to_sql_select_filter_order` | 1.7 | 1.7 | 1.8 |
+| `to_sql_select_in_list` | 2.5 | 2.5 | 2.6 |
+| `to_sql_select_complex_filter` | 2.0 | 2.1 | 2.2 |
+| `to_sql_select_paginated` | 1.7 | 1.8 | 1.9 |
+| `to_sql_prepared_select_by_pk` | 0.7 | 0.7 | 0.7 |
+| `prepared_rebind_select_by_pk` | 0.0 | 0.0 | 0.0 |
+| `to_sql_conditional_filter` | 1.0 | 1.0 | 1.0 |
+| `to_sql_select_with_cte` | 1.9 | 1.9 | 1.9 |
+| `to_sql_select_with_recursive_cte` | 2.8 | 2.9 | 2.9 |
+| `to_sql_set_union` | 1.8 | 1.8 | 1.8 |
+| `to_sql_select_with_join` | 1.0 | 1.0 | 1.0 |
+| `to_sql_select_exists_subquery` | 1.3 | 1.4 | 1.4 |
+| `to_sql_select_in_subquery` | 1.7 | 1.7 | 1.7 |
+| `to_sql_nested_insert` | 1.3 | 1.4 | 1.4 |
+| `to_sql_nested_update` | 0.9 | 1.0 | 1.0 |

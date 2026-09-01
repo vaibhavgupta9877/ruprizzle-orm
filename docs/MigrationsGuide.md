@@ -63,6 +63,9 @@ Resolve drift by either:
 
 ```bash
 ruprizzle db push
+
+# If the change would lose data:
+ruprizzle db push --accept-data-loss
 ```
 
 This diffs and applies directly with no migration file. It is intended for
@@ -83,7 +86,7 @@ The command will:
 - read the live database from `DATABASE_URL`,
 - generate a `schema.ruprizzle` that describes the current tables, columns,
   indexes, and foreign keys,
-- back up the previous `schema.ruprizzle` before overwriting.
+- overwrite `schema.ruprizzle` in place (review the diff before committing).
 
 Review the generated schema before committing it. Names and types may need
 manual cleanup, especially for columns that do not map cleanly to ruprizzle
@@ -110,8 +113,10 @@ scalar types.
 ruprizzle db seed
 ```
 
-Seed rows are upserted by primary key in a single transaction and the client is
-regenerated so you can query them immediately.
+Seed rows are upserted by primary key in a single transaction. The legacy
+`seeds/main.sql` file is also supported if no `seeds/main.json` exists. The
+client is not regenerated; run `ruprizzle generate` afterwards if you added new
+models.
 
 ## `migrate squash`
 
@@ -119,7 +124,11 @@ Squashing collapses the existing migration history into a baseline and archives
 the old `up.sql` / `down.sql` files.
 
 ```bash
+# Use an auto-generated baseline name:
 ruprizzle migrate squash --force
+
+# Or name the baseline explicitly:
+ruprizzle migrate squash --name baseline --force
 ```
 
 Requirements:
@@ -137,7 +146,7 @@ If a migration was partially applied or failed outside ruprizzle, you can mark
 it as applied without re-running it.
 
 ```bash
-ruprizzle migrate resolve --applied 20260101000000_broken
+ruprizzle migrate resolve 20260101000000_broken
 ```
 
 Use this only after manually inspecting the database and confirming it is in the
@@ -165,7 +174,7 @@ ruprizzle migrate deploy
 This command:
 
 - reads `migrations/` in order,
-- skips migrations that are already recorded in the `_Migration` table,
+- skips migrations that are already recorded in the `_ruprizzle_migrations` table,
 - applies each pending `up.sql` inside a transaction,
 - never diffs or writes new migration files.
 

@@ -6,7 +6,7 @@
 
 Schema diffing, migration planning, and application for `ruprizzle-orm`.
 
-`ruprizzle-migrate` compares the current database schema against the target schema and produces a set of SQL migration steps. It supports both Postgres and SQLite, and handles constraints, index changes, type changes, and table rebuilds for backends with limited `ALTER TABLE` support.
+`ruprizzle-migrate` compares the current database schema against the target schema and produces a set of SQL migration steps. It supports PostgreSQL, MySQL/MariaDB, and SQLite, and handles constraints, index changes, type changes, and table rebuilds for backends with limited `ALTER TABLE` support.
 
 ## Responsibilities
 

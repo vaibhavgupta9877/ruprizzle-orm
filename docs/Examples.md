@@ -73,8 +73,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ruprizzle = "1.0.0"
+ruprizzle = "1"
+dotenvy = "0.15"
 tokio = { version = "1", features = ["full"] }
+
+# ruprizzle re-exports sqlx and serde, but the generated client uses sqlx
+# derives directly, so list them in your own Cargo.toml.
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio-rustls", "postgres"] }
+serde = "1.0.229"
 ```
 
 If you are working from a local clone of the ruprizzle-orm repository, use
@@ -89,20 +95,22 @@ mod db;
 #[tokio::main]
 async fn main() -> Result<(), ruprizzle::Error> {
     dotenvy::dotenv().ok();
-    let db = db::Db::connect(&std::env::var("DATABASE_URL")?).await?;
+    let db_url =
+        std::env::var("DATABASE_URL").map_err(|e| ruprizzle::Error::Message(e.to_string()))?;
+    let db = db::Db::connect(&db_url).await?;
 
-    // Create an author and a post in one transaction.
-    let mut tx = db.raw_pool().begin().await?;
-
+    // Create an author and a post.
     let author = db
         .user()
         .create(db::UserInsert {
             id: None,
             email: "alice@example.com".into(),
             name: Some("Alice".into()),
-            role: Some(db::Role::ADMIN),
+            role: Some(db::enums::Role::Admin),
+            created_at: None,
+            updated_at: None,
         })
-        .exec(&mut tx)
+        .exec()
         .await?;
 
     let _post = db
@@ -112,12 +120,11 @@ async fn main() -> Result<(), ruprizzle::Error> {
             title: "Hello, ruprizzle".into(),
             body: Some("This is the first post.".into()),
             published: Some(true),
-            author_id: Some(author.id),
+            author_id: author.id,
+            created_at: None,
         })
-        .exec(&mut tx)
+        .exec()
         .await?;
-
-    tx.commit().await?;
 
     // List published posts with their authors (one query per level).
     let posts = db
@@ -134,6 +141,7 @@ async fn main() -> Result<(), ruprizzle::Error> {
         let author_name = post
             .author
             .get()
+            .as_ref()
             .and_then(|a| a.name.as_ref())
             .map(|s| s.as_str())
             .unwrap_or("unknown");
@@ -141,12 +149,12 @@ async fn main() -> Result<(), ruprizzle::Error> {
     }
 
     // Show the SQL for a query.
-    let sql = db
+    let compiled = db
         .post()
         .find_many()
         .filter(db::post::PUBLISHED.eq(true))
-        .to_sql();
-    println!("{sql}");
+        .to_sql()?;
+    println!("{}", compiled.sql);
 
     Ok(())
 }
@@ -163,7 +171,6 @@ DATABASE_URL="postgres://user:password@localhost:5432/my_blog?sslmode=disable"
 ```bash
 cd examples/blog
 ruprizzle migrate dev --name init
-ruprizzle generate
 cargo run
 ```
 

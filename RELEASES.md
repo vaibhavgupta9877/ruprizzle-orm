@@ -40,6 +40,19 @@ Neon is ordinary Postgres over TLS, so its connection string goes straight to
 Full detail in [CHANGELOG.md](CHANGELOG.md#150---2026-08-31).
 
 
+## 1.0.1
+
+Documentation-only patch (2026-08-31, tag `v1.0.1`). No public API changes; released
+from `main` in parallel with the v1.1-v1.5 line on `dev-v2-x`.
+
+- Refreshed `README.md`, `docs/README.md`, per-crate READMEs, query/relations/
+  migrations/operations/examples/quickstart/FAQ, `RELEASES.md`, and `AGENTS.md`
+  for the 1.0.0 feature set.
+- Updated `docs/BenchmarkResults.md` with the 2026-08-18 cross-ORM run.
+- Fixed `examples/blog` dependencies and `main.rs` so it compiles against the
+  generated client.
+
+
 ## 1.0.0
 
 The first stable release, published 2026-08-21 from tag `v1.0.0`; all ten publishable
