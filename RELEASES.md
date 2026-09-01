@@ -3,6 +3,47 @@
 For a sectioned, versioned changelog, see [CHANGELOG.md](CHANGELOG.md).
 
 
+## Publishing
+
+Releases are cut from `main`. `dev-main` is the integration branch; it merges into
+`main` once per release, carrying the version bump, the `CHANGELOG.md` entry and the
+tag. See [CONTRIBUTING.md](CONTRIBUTING.md#branches).
+
+1. On `dev-main`: bump `workspace.package.version` and every internal pin in
+   `Cargo.toml`, write the `CHANGELOG.md` entry, and add the section here.
+2. `cargo xtask release-check --tag vX.Y.Z` — asserts that the tag, the workspace
+   version, the internal pins, the changelog and the VS Code extension all agree.
+3. `cargo xtask ci` and `cargo xtask harden` — the full gate, including the publish
+   coverage audit that checks the crate list below against `PUBLISH_ORDER` in `xtask`
+   and against `.github/workflows/release.yml`.
+4. `cargo xtask release` — dry-runs `cargo package` for every crate, in order.
+5. Merge `dev-main` into `main`, then tag `vX.Y.Z` on `main`. Pushing the tag runs
+   `.github/workflows/release.yml`, which publishes.
+
+To publish from a workstation instead: `cargo xtask release --live --wait 60`, from an
+interactive shell. The crates go out in dependency order:
+
+1. `ruprizzle-core`
+2. `ruprizzle-parser`
+3. `ruprizzle-dialect`
+4. `ruprizzle-macros`
+5. `ruprizzle-check`
+6. `ruprizzle-lsp`
+7. `ruprizzle`
+8. `ruprizzle-migrate`
+9. `ruprizzle-codegen`
+10. `ruprizzle-cli`
+11. `ruprizzle-turso`
+12. `ruprizzle-d1`
+
+`ruprizzle-parser` is a dev-dependency of `ruprizzle-dialect`, so it must be indexed
+first. `cargo xtask release` passes `--no-verify` internally because `cargo publish`
+verification resolves `workspace = true` dependencies against the version on
+crates.io, which is stale until the previous crate has been indexed; `--wait 60`
+pauses between uploads to let that indexing propagate. Live publishes are refused
+when `CI` or `GITHUB_ACTIONS` is set, so the workflow is the only automated path.
+
+
 ## 1.5.0 (prepared, not yet published)
 
 The v1.1–v1.5 feature line, developed on `dev-v2-x` and cut as one minor version:
@@ -141,25 +182,3 @@ Measured on the local machine used for development:
 I/O benchmarks against Postgres and generated-crate compile-time benchmarks are
 not yet part of the automated suite because they require a running database and
 a dedicated compile-time machine.
-
-### Publishing
-
-The workspace is ordered for staged publication:
-
-1. `ruprizzle-core`
-2. `ruprizzle-parser`
-3. `ruprizzle-dialect`
-4. `ruprizzle-macros`
-5. `ruprizzle`
-6. `ruprizzle-migrate`
-7. `ruprizzle-codegen`
-8. `ruprizzle-cli`
-
-Use `cargo xtask release` to dry-run every crate, then
-`cargo xtask release --live --wait 60` to publish for real from an
-interactive shell. `cargo xtask release` already passes `--no-verify`
-internally because `cargo publish` verification resolves `workspace = true`
-dependencies against the version on crates.io, which is stale until the
-previous crate has actually been indexed. `--wait 60` pauses between uploads
-to give that indexing time to propagate. Live publishes are also refused if
-`CI` or `GITHUB_ACTIONS` is set.
