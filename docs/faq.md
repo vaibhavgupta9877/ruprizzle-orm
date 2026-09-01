@@ -16,7 +16,7 @@ had no external consumers to collect feedback from. See
 public dependencies (the 1.0 line is pinned to `sqlx 0.8`), and
 [Known limitations](KnownLimitations.md) for the honest boundaries.
 
-The v1.1–v1.5 line ([what's new](WhatsNewV1_1ToV1_5.md)) shipped as `1.5.0`,
+The v1.1–v1.5 line ([what's new](WhatsNewV1_1ToV1_5.md)) is prepared as `1.5.0`,
 adding Ruprizzle Studio and the Turso and D1 adapters. There is no Neon adapter:
 Neon is Postgres over TLS, so its connection string goes straight to
 `ruprizzle::connect`.

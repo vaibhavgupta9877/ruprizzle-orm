@@ -3,9 +3,9 @@
 For a sectioned, versioned changelog, see [CHANGELOG.md](CHANGELOG.md).
 
 
-## 1.5.0
+## 1.5.0 (prepared, not yet published)
 
-The v1.1–v1.5 feature line, developed on `dev-v2-x` and released as one minor version:
+The v1.1–v1.5 feature line, developed on `dev-v2-x` and cut as one minor version:
 the workspace never moved off `1.0.0` while five milestones landed, so the intermediate
 numbers were never cut.
 

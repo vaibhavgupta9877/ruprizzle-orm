@@ -15,7 +15,7 @@ It combines the best parts of Prisma and Drizzle:
 
 PostgreSQL, MySQL/MariaDB, and SQLite 3+ are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver. Native driver features are also available: `sqlite-rusqlite` for synchronous SQLite, and an experimental `postgres-tokio-postgres` for PostgreSQL. See [Dialects](#dialects) below for details.
 
-> **Status:** `1.5.0` is the **latest release** (tag `v1.5.0`), carrying the whole v1.1–v1.5 feature line — array filters, full-text search, soft deletes, offline query checking, nested writes, tree hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and Ruprizzle Studio — described in [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md). The line was assessed and initially blocked; the findings and the remediation are recorded in [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md). The `turso` and `d1` adapters are real drivers over their providers’ HTTP APIs; there is no Neon adapter, because Neon is ordinary Postgres.
+> **Status:** `1.0.1` is the latest release **published on crates.io**. `1.5.0` is prepared and tagged-ready on `dev-main` but not yet published; it carries the whole v1.1–v1.5 feature line — array filters, full-text search, soft deletes, offline query checking, nested writes, tree hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and Ruprizzle Studio — described in [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md). The line was assessed and initially blocked; the findings and the remediation are recorded in [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md). The `turso` and `d1` adapters are real drivers over their providers’ HTTP APIs; there is no Neon adapter, because Neon is ordinary Postgres.
 >
 > P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is covered by semantic versioning from `1.0.0` onward. Two gates were waived on the way, both in writing: the 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors (`docs/SoakReport.md`), and the two-week RC feedback window, for want of any external consumer to collect feedback from ([Stability](docs/Stability.md#waiver-the-100-rc1-feedback-window-2026-08-21)). Note that the 1.0 line is pinned to `sqlx 0.8`, which ruprizzle re-exports as part of its own public API. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
 
@@ -551,7 +551,7 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 
 ## Status and roadmap
 
-`1.5.0` is the current release (tag `v1.5.0`); the twelve publishable crates move together at that version, and `1.0.0` (2026-08-21) preceded it. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
+`1.5.0` is the version the workspace is pinned to, prepared on `dev-main` and not yet published; `1.0.1` (2026-08-31) is the latest release on crates.io. The twelve publishable crates move together on one version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
 
 ### The unreleased v1.1–v1.5 line
 
@@ -565,7 +565,7 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 | v1.4 | OpenTelemetry, replica routing, query cache, PostGIS | ✅ implemented, gates green |
 | v1.5 | Ruprizzle Studio, Turso and D1 adapters | ✅ implemented, gates green |
 
-The v1.1–v1.5 line shipped as `1.5.0`. It was assessed at 56/100 and **blocked** before release: the edge adapter crates and most of Studio's data plane returned fabricated results rather than querying a database, and Studio's "migration safety diff" reported `SAFE` unconditionally. §8 and §10 of [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md) records what each of those became.
+The v1.1–v1.5 line is cut as `1.5.0`, pending publication. It was assessed at 56/100 and **blocked** before release: the edge adapter crates and most of Studio's data plane returned fabricated results rather than querying a database, and Studio's "migration safety diff" reported `SAFE` unconditionally. §8 and §10 of [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md) records what each of those became.
 
 The plan behind the `1.0.0` release, including the two decisions it turned on, is `ProjectPlan/v1/V1StableRelease.md`. What remains open:
 

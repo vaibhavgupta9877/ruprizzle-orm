@@ -11,6 +11,10 @@ _Nothing yet._
 
 ## [1.5.0] - 2026-08-31
 
+**Prepared, not yet published.** This entry is complete and the workspace is pinned
+to `1.5.0`, but the crates have not been pushed to crates.io and `v1.5.0` is not yet
+tagged; `1.0.1` remains the latest published version.
+
 The v1.1–v1.5 feature line, developed on `dev-v2-x`, released as a single minor
 version. The workspace never moved off `1.0.0` while five milestones landed, so the
 intermediate numbers were never cut and this release carries all of them.
