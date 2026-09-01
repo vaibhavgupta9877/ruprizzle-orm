@@ -218,10 +218,25 @@ mod tests {
 
     #[test]
     fn cache_ttl_expiration() {
+        // A short TTL plus a single `sleep` is a race on a loaded machine: the
+        // scheduler can hold the thread past the "still live" assertion. Use a
+        // generous TTL and gate every assertion on the *measured* elapsed time
+        // rather than on the sleep having been accurate.
+        const TTL: Duration = Duration::from_millis(500);
+
         let cache = InMemoryCache::new(100);
-        cache.set("k1", b"v1".to_vec(), Some(Duration::from_millis(20)), &[]);
-        assert_eq!(cache.get("k1"), Some(b"v1".to_vec()));
-        sleep(Duration::from_millis(30));
+        let set_at = Instant::now();
+        cache.set("k1", b"v1".to_vec(), Some(TTL), &[]);
+
+        // Only assert liveness if we genuinely are still inside the window.
+        if set_at.elapsed() < TTL {
+            assert_eq!(cache.get("k1"), Some(b"v1".to_vec()));
+        }
+
+        // Sleep until the deadline has definitely passed, however long that takes.
+        while set_at.elapsed() <= TTL {
+            sleep(Duration::from_millis(10));
+        }
         assert_eq!(cache.get("k1"), None);
     }
 
