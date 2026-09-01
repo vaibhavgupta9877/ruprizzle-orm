@@ -23,9 +23,9 @@ is now wired to a real database, or, where the crate had no reason to exist, del
 
 ### Added — v1.1 (query expressiveness, rich types, search)
 
-- **Postgres array filters.** `has`, `hasEvery`, `hasSome` and `isEmpty` on array
-  columns, compiled to native Postgres array operators.
-- **Full-text search.** `Col::search()` compiles to
+- **Postgres array filters.** `has`, `has_every`, `has_some`, `is_empty` and
+  `is_not_empty` on array columns, compiled to native Postgres array operators.
+- **Full-text search.** `Column::matches()` compiles to
   `to_tsvector('english', …) @@ plainto_tsquery('english', …)` on Postgres,
   `MATCH … AGAINST` on MySQL, and `MATCH` (with a `LIKE` fallback) on SQLite.
 - **Soft deletes.** A `@deletedAt` field marks a model soft-deletable; generated
@@ -43,7 +43,7 @@ is now wired to a real database, or, where the crate had no reason to exist, del
 ### Added — v1.3 (relations, trees, nested writes)
 
 - **Implicit many-to-many join tables**, inferred from the schema rather than declared.
-- **Nested relational writes** — `create`, `connect`, `connectOrCreate`, `set`,
+- **Nested relational writes** — `create`, `connect`, `connect_or_create`, `set`,
   `disconnect` on related records within a single mutation.
 - **Tree hierarchy helpers** built on recursive CTEs (ancestors, descendants, subtree).
 

@@ -123,6 +123,53 @@ Interpretation:
 4. If using `sqlite-rusqlite`, ensure the database file is on a local volume
    with write access.
 
+## Read-replica routing
+
+`RoutedPool` sends reads to replicas and keeps writes and transactions on the primary.
+
+```rust,ignore
+use ruprizzle::{connect, LoadBalancing, RoutedPool};
+
+let routed = RoutedPool::builder(connect(&primary_url).await?)
+    .add_replica(connect(&replica_a_url).await?)
+    .add_replica(connect(&replica_b_url).await?)
+    .load_balancing(LoadBalancing::LeastConnections)
+    .fallback_to_primary(true)
+    .build();
+
+let read_pool = routed.select_replica();   // a healthy replica, or the primary
+let tx = routed.begin().await?;            // always the primary
+```
+
+`LoadBalancing` is `RoundRobin` (the default), `LeastConnections`, or `Random`. A
+replica is only ever chosen while it is marked healthy, and `check_health()` pings
+every replica and updates those flags — call it on a timer from your own supervisor;
+nothing pings in the background on your behalf. With `fallback_to_primary(true)`, a
+read is served by the primary when no replica is healthy rather than failing; set it
+to `false` when serving stale-free reads from the primary is worse than an error.
+
+## Query result cache
+
+`QueryCache` is the trait; `InMemoryCache` is the bundled implementation, bounded by a
+maximum entry count and invalidated either by TTL or by tag.
+
+```rust,ignore
+use ruprizzle::{InMemoryCache, QueryCache};
+use std::time::Duration;
+
+let cache = InMemoryCache::new(10_000);
+cache.set("users:active", encoded, Some(Duration::from_secs(30)), &["users"]);
+
+let hit = cache.get("users:active");       // None once the TTL has passed
+cache.invalidate_tag("users");             // drop everything tagged `users`
+```
+
+Tags are the invalidation unit: tag each cached result with the tables it was read
+from, and invalidate that tag on every write to those tables. Entries expire lazily on
+read; `prune_expired()` reclaims memory eagerly if you would rather not wait for the
+next lookup. Implement `QueryCache` yourself to put the same interface in front of
+Redis or any other shared store — nothing in the trait assumes a single process.
+
 ## Alerts
 
 Suggested thresholds for a health dashboard:
