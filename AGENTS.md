@@ -65,8 +65,17 @@
   $env:PROPTEST_CASES='100'; cargo test -p ruprizzle-deep-tests --test migrate_sqlite_roundtrip
   ```
 
-## Default branch
+## Branching model
 
-- The repository default branch is `dev-v1-0-0-rc` for the 1.0.0 release line.
-  Unless the user says otherwise or manually changes branches, use
-  `dev-v1-0-0-rc` as the base for all future work.
+- `dev-main` is the integration branch and the base for **all** development work.
+  Unless the user says otherwise, branch from `dev-main` and merge back into it.
+- Version lines (`dev-v1-x`, `dev-v2-x`, ...) and feature branches merge **into**
+  `dev-main`. They never merge into `main` directly.
+- `main` is the release line. It only ever receives a merge from `dev-main`, at
+  publish time, together with the version bump, the changelog entry and the tag.
+- Publishing to crates.io happens from `main` after that merge, never from
+  `dev-main` and never from a feature branch.
+
+```
+feature/*  ->  dev-vN-x  ->  dev-main  --(release)-->  main  --> crates.io
+```

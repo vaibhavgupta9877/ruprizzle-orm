@@ -84,6 +84,23 @@ scope, architecture, or an explicit deferral to 0.2, check
 `ImplPlan10AppendixDecisions.md` and the relevant phase document first. For
 production-readiness work, see `ProjectPlan/ProductionReadinessPlan.md`.
 
+## Branches
+
+`dev-main` is the integration branch. Branch from it, and open your pull request
+against it — not against `main`.
+
+```
+feature/*  ->  dev-vN-x  ->  dev-main  --(release)-->  main  --> crates.io
+```
+
+- **`dev-main`** — where all development lands. Always green: `cargo xtask ci`
+  must pass on it.
+- **`dev-vN-x`** — a version line (`dev-v2-x` and friends) for a multi-milestone
+  feature run. Merges into `dev-main` when the line is done.
+- **`main`** — the release line. It receives one merge from `dev-main` per
+  release, carrying the version bump, the `CHANGELOG.md` entry and the `vX.Y.Z`
+  tag. Crates are published from `main` only.
+
 ## Proposing changes
 
 1. Open an issue before large changes so the direction can be agreed.
