@@ -1,6 +1,5 @@
 ---
 source: crates/parser/tests/invalid.rs
-assertion_line: 144
 expression: rendered
 ---
 1 problem(s) found in v08_through_on_non_list

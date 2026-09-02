@@ -2,9 +2,89 @@
 
 For a sectioned, versioned changelog, see [CHANGELOG.md](CHANGELOG.md).
 
+
+## Publishing
+
+Releases are cut from `main`. `dev-main` is the integration branch; it merges into
+`main` once per release, carrying the version bump, the `CHANGELOG.md` entry and the
+tag. See [CONTRIBUTING.md](CONTRIBUTING.md#branches).
+
+1. On `dev-main`: bump `workspace.package.version` and every internal pin in
+   `Cargo.toml`, write the `CHANGELOG.md` entry, and add the section here.
+2. `cargo xtask release-check --tag vX.Y.Z` — asserts that the tag, the workspace
+   version, the internal pins, the changelog and the VS Code extension all agree.
+3. `cargo xtask ci` and `cargo xtask harden` — the full gate, including the publish
+   coverage audit that checks the crate list below against `PUBLISH_ORDER` in `xtask`
+   and against `.github/workflows/release.yml`.
+4. `cargo xtask release` — dry-runs `cargo package` for every crate, in order.
+5. Merge `dev-main` into `main`, then tag `vX.Y.Z` on `main`. Pushing the tag runs
+   `.github/workflows/release.yml`, which publishes.
+
+To publish from a workstation instead: `cargo xtask release --live --wait 60`, from an
+interactive shell. The crates go out in dependency order:
+
+1. `ruprizzle-core`
+2. `ruprizzle-parser`
+3. `ruprizzle-dialect`
+4. `ruprizzle-macros`
+5. `ruprizzle-check`
+6. `ruprizzle-lsp`
+7. `ruprizzle`
+8. `ruprizzle-migrate`
+9. `ruprizzle-codegen`
+10. `ruprizzle-cli`
+11. `ruprizzle-turso`
+12. `ruprizzle-d1`
+
+`ruprizzle-parser` is a dev-dependency of `ruprizzle-dialect`, so it must be indexed
+first. `cargo xtask release` passes `--no-verify` internally because `cargo publish`
+verification resolves `workspace = true` dependencies against the version on
+crates.io, which is stale until the previous crate has been indexed; `--wait 60`
+pauses between uploads to let that indexing propagate. Live publishes are refused
+when `CI` or `GITHUB_ACTIONS` is set, so the workflow is the only automated path.
+
+
+## 1.5.0 (prepared, not yet published)
+
+The v1.1–v1.5 feature line, developed on `dev-v2-x` and cut as one minor version:
+the workspace never moved off `1.0.0` while five milestones landed, so the intermediate
+numbers were never cut.
+
+v1.1–v1.4 brought Postgres array filters, full-text search, soft deletes
+(`@deletedAt`), offline query checking (`ruprizzle check`), LSP 2.0, declarative
+seeding, implicit many-to-many, nested relational writes, recursive-CTE tree
+hierarchies, OpenTelemetry spans and Metrics 2.0, primary/read-replica routing, a TTL
+and tag-invalidated query cache, and PostGIS geospatial types. See
+[docs/WhatsNewV1_1ToV1_5.md](docs/WhatsNewV1_1ToV1_5.md).
+
+v1.5 brings **Ruprizzle Studio** (`ruprizzle-cli`, behind the non-default `studio`
+feature): an embedded Axum + HTMX workbench with a schema dashboard, interactive ERD,
+table browser, inline cell editor, foreign-key drawer, SQL sandbox, `EXPLAIN` viewer
+and a migration safety diff.
+
+**This release was assessed and blocked before it shipped**, at 56/100, and the block
+is the reason it looks the way it does. Studio's data plane returned fabricated values
+without querying the database, its migration safety diff reported `SAFE` for every
+model without opening a connection, and the three edge adapters were in-memory
+`HashMap`s with a database's name on them. §8 and §10 of
+[ProjectPlan/v2/ProductionReadinessV1_5.md](ProjectPlan/v2/ProductionReadinessV1_5.md)
+record what each of those became. In short: Studio queries the database on every
+screen and says so plainly when it cannot.
+
+The adapters were rewritten rather than renamed. `ruprizzle-turso` speaks Hrana 2 over
+HTTP to Turso or any `sqld`; `ruprizzle-d1` speaks the Cloudflare REST API. Both are
+published, and both are tested end to end against a local HTTP server, so neither the
+test suite nor a contributor needs a provider account. `ruprizzle-neon` was deleted:
+Neon is ordinary Postgres over TLS, so its connection string goes straight to
+`ruprizzle::connect` and an adapter crate would wrap nothing.
+
+Full detail in [CHANGELOG.md](CHANGELOG.md#150---2026-08-31).
+
+
 ## 1.0.1
 
-Documentation-only patch (2026-08-31, tag `v1.0.1`). No public API changes.
+Documentation-only patch (2026-08-31, tag `v1.0.1`). No public API changes; released
+from `main` in parallel with the v1.1-v1.5 line on `dev-v2-x`.
 
 - Refreshed `README.md`, `docs/README.md`, per-crate READMEs, query/relations/
   migrations/operations/examples/quickstart/FAQ, `RELEASES.md`, and `AGENTS.md`
@@ -13,34 +93,22 @@ Documentation-only patch (2026-08-31, tag `v1.0.1`). No public API changes.
 - Fixed `examples/blog` dependencies and `main.rs` so it compiles against the
   generated client.
 
+
 ## 1.0.0
 
-The first stable release (2026-08-21, tag `v1.0.0`). The public API is covered by
-semantic versioning from this version onward. There are no API changes from
-`1.0.0-rc.1`; the release is documentation, packaging, and dependency polish.
+The first stable release, published 2026-08-21 from tag `v1.0.0`; all ten publishable
+crates are live at that version. No API changes from `1.0.0-rc.1`, which was published
+the same day — the surface frozen for the RC is the surface that shipped. From here on
+the public API is covered by semantic versioning, as defined in
+[docs/Stability.md](docs/Stability.md).
 
-- Added `package.metadata.docs.rs` `all-features = true` so docs.rs covers
-  `sqlite-rusqlite`, `postgres-tokio-postgres`, and `metrics`.
-- Pinned the 1.0 line to `sqlx 0.8` and documented public dependencies.
-- Added a documentation-only `src/lib.rs` to `ruprizzle-cli` so docs.rs builds it.
-- Fixed two broken intra-doc links behind optional features.
-- Refreshed README, guides, FAQ, and crate READMEs for the 1.0.0 feature set.
+Two gates were waived in writing rather than by omission: the 48-hour `rusqlite` soak,
+accepted on 15.56 h / 1.46 B ops / 0 errors, and the two-week RC feedback window, for
+want of an external consumer to collect feedback from. The 1.0 line is pinned to
+`sqlx 0.8`, which ruprizzle re-exports as part of its own public API.
 
-## 1.0.0-rc.1
+Full detail in [CHANGELOG.md](CHANGELOG.md#100---2026-08-21).
 
-Release candidate (2026-08-21, tag `v1.0.0-rc.1`). Added MySQL/MariaDB support,
-LSP, offline query checking, aggregates, advanced SQL, and native drivers.
-
-- MySQL/MariaDB dialect and driver path.
-- `ruprizzle-lsp` language server and VS Code extension.
-- `ruprizzle check` for offline query validation.
-- Query builder: aggregates, `GROUP BY`/`HAVING`, explicit `JOIN`s, CTEs, set
-  operations, `EXISTS`/`IN` subqueries, JSON and array operators, prepared
-  statements, streaming, and nested writes.
-- Many-to-many relations through explicit join models.
-- CLI: `db pull`, `db seed`, `migrate squash`, `migrate resolve`, `migrate reset`.
-- Native `tokio-postgres` and `rusqlite` driver feature flags.
-- `metrics` feature for query, pool, and migration telemetry.
 
 ## 0.1.0-alpha.2
 
@@ -114,25 +182,3 @@ Measured on the local machine used for development:
 I/O benchmarks against Postgres and generated-crate compile-time benchmarks are
 not yet part of the automated suite because they require a running database and
 a dedicated compile-time machine.
-
-### Publishing
-
-The workspace is ordered for staged publication:
-
-1. `ruprizzle-core`
-2. `ruprizzle-parser`
-3. `ruprizzle-dialect`
-4. `ruprizzle-macros`
-5. `ruprizzle`
-6. `ruprizzle-migrate`
-7. `ruprizzle-codegen`
-8. `ruprizzle-cli`
-
-Use `cargo xtask release` to dry-run every crate, then
-`cargo xtask release --live --wait 60` to publish for real from an
-interactive shell. `cargo xtask release` already passes `--no-verify`
-internally because `cargo publish` verification resolves `workspace = true`
-dependencies against the version on crates.io, which is stale until the
-previous crate has actually been indexed. `--wait 60` pauses between uploads
-to give that indexing time to propagate. Live publishes are also refused if
-`CI` or `GITHUB_ACTIONS` is set.

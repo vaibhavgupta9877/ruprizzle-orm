@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}{{ current_model }} — Ruprizzle Studio{% endblock %}
+{% block page_title %}{{ current_model }}{% endblock %}
+
+{% block top_actions %}
+<button class="btn btn-secondary btn-sm" hx-get="/studio/models/{{ current_model }}/table" hx-target="#grid-container">
+  <span>🔄 Refresh</span>
+</button>
+{% if allow_writes %}
+<button class="btn btn-primary btn-sm" onclick="document.getElementById('insert-modal').style.display='block'">
+  <span>+ New Record</span>
+</button>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="table-container">
+  <div class="table-toolbar">
+    <div class="filter-bar">
+      <input type="text" class="input-search" placeholder="Filter records..." name="search"
+             hx-get="/studio/models/{{ current_model }}/table" hx-target="#grid-container" hx-trigger="keyup changed delay:300ms">
+    </div>
+    <span class="card-description">Double-click cell to inline edit • Click foreign key badge to inspect relation</span>
+  </div>
+
+  <div id="grid-container">
+    {% include "table/grid.html" %}
+  </div>
+</div>
+
+{% if allow_writes %}
+<!-- Insert Record Modal -->
+<div id="insert-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:1000;">
+  <div style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:480px; background:#18181b; border:1px solid #27272a; border-radius:12px; padding:24px; box-shadow:0 20px 40px rgba(0,0,0,0.6);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 style="color:#fff; font-size:16px; font-weight:600;">Insert New {{ current_model }}</h3>
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('insert-modal').style.display='none'">✕</button>
+    </div>
+
+    <form hx-post="/studio/models/{{ current_model }}/rows" hx-target="#table-body" hx-swap="beforeend"
+          onsubmit="document.getElementById('insert-modal').style.display='none'">
+      <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:20px; max-height:360px; overflow-y:auto;">
+        {% for field in fields %}
+        {% if !field.is_id %}
+        <div>
+          <label style="display:block; font-size:12px; color:#a1a1aa; margin-bottom:4px;">{{ field.name }} ({{ field.type_name }})</label>
+          <input type="text" name="{{ field.name }}" class="input-text" style="width:100%;" placeholder="Enter {{ field.name }}...">
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('insert-modal').style.display='none'">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Record</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

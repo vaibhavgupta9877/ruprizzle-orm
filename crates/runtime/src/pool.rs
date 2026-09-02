@@ -1,6 +1,8 @@
-//! Connection pool construction and configuration.
+//! Connection pool construction, replica routing, and configuration.
 
 use std::str::FromStr;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use futures_core::future::BoxFuture;
@@ -589,4 +591,201 @@ pub async fn ping(pool: &Pool) -> Result<(), crate::Error> {
     crate::executor::Executor::execute_raw(pool, std::borrow::Cow::from("SELECT 1"), Vec::new())
         .await
         .map(|_| ())
+}
+
+/// Load balancing strategy across read replica pools.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LoadBalancing {
+    /// Cycles requests across replicas sequentially.
+    #[default]
+    RoundRobin,
+    /// Directs requests to the replica with the fewest active connections.
+    LeastConnections,
+    /// Selects a random healthy replica.
+    Random,
+}
+
+/// A monitored read replica connection pool with health and active connection tracking.
+#[derive(Debug, Clone)]
+pub struct ReplicaPool {
+    /// The underlying database connection pool.
+    pub pool: Pool,
+    /// Liveness / health status indicator.
+    pub healthy: Arc<AtomicBool>,
+    /// Active query / connection count currently in flight on this replica.
+    pub active_conns: Arc<AtomicUsize>,
+}
+
+impl ReplicaPool {
+    /// Wraps a pool as a healthy replica.
+    #[must_use]
+    pub fn new(pool: Pool) -> Self {
+        Self {
+            pool,
+            healthy: Arc::new(AtomicBool::new(true)),
+            active_conns: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    /// Returns `true` if this replica is marked healthy.
+    #[must_use]
+    pub fn is_healthy(&self) -> bool {
+        self.healthy.load(Ordering::Relaxed)
+    }
+
+    /// Marks this replica healthy or unhealthy.
+    pub fn set_healthy(&self, healthy: bool) {
+        self.healthy.store(healthy, Ordering::Relaxed);
+    }
+
+    /// Number of active in-flight operations on this replica.
+    #[must_use]
+    pub fn active_connections(&self) -> usize {
+        self.active_conns.load(Ordering::Relaxed)
+    }
+}
+
+/// Primary / Read-Replica connection router.
+///
+/// Automatically distributes read queries (`SELECT`) across healthy replicas
+/// using configurable load balancing algorithms, while routing writes
+/// (`INSERT`, `UPDATE`, `DELETE`) and transactions exclusively to the primary.
+#[derive(Debug, Clone)]
+pub struct RoutedPool {
+    pub(crate) primary: Pool,
+    pub(crate) replicas: Vec<ReplicaPool>,
+    pub(crate) load_balancing: LoadBalancing,
+    pub(crate) rr_index: Arc<AtomicUsize>,
+    pub(crate) fallback_to_primary: bool,
+}
+
+impl RoutedPool {
+    /// Returns a builder for configuring a `RoutedPool`.
+    #[must_use]
+    pub fn builder(primary: Pool) -> RoutedPoolBuilder {
+        RoutedPoolBuilder::new(primary)
+    }
+
+    /// Reference to the primary database connection pool.
+    #[must_use]
+    pub fn primary(&self) -> &Pool {
+        &self.primary
+    }
+
+    /// List of configured read replica pools.
+    #[must_use]
+    pub fn replicas(&self) -> &[ReplicaPool] {
+        &self.replicas
+    }
+
+    /// Load balancing strategy in use.
+    #[must_use]
+    pub fn load_balancing(&self) -> LoadBalancing {
+        self.load_balancing
+    }
+
+    /// Begins a new transaction on the primary database pool.
+    pub async fn begin(&self) -> Result<crate::tx::Tx, crate::Error> {
+        self.primary.begin().await
+    }
+
+    /// Selects an appropriate replica (or primary fallback) for a read query.
+    #[must_use]
+    pub fn select_replica(&self) -> &Pool {
+        let healthy: Vec<&ReplicaPool> = self.replicas.iter().filter(|r| r.is_healthy()).collect();
+
+        let count = healthy.len();
+        if count == 0 {
+            return &self.primary;
+        }
+
+        match self.load_balancing {
+            LoadBalancing::RoundRobin => {
+                let idx = self.rr_index.fetch_add(1, Ordering::Relaxed);
+                let target = idx.checked_rem(count).unwrap_or(0);
+                healthy.get(target).map_or(&self.primary, |r| &r.pool)
+            }
+            LoadBalancing::LeastConnections => {
+                let best = healthy.iter().min_by_key(|r| r.active_connections());
+                best.map_or(&self.primary, |r| &r.pool)
+            }
+            LoadBalancing::Random => {
+                let seed = self
+                    .rr_index
+                    .fetch_add(1, Ordering::Relaxed)
+                    .wrapping_mul(2654435761);
+                let target = seed.checked_rem(count).unwrap_or(0);
+                healthy.get(target).map_or(&self.primary, |r| &r.pool)
+            }
+        }
+    }
+
+    /// Runs health check pings across all replicas and updates their healthy flags.
+    pub async fn check_health(&self) {
+        for replica in &self.replicas {
+            let ok = ping(&replica.pool).await.is_ok();
+            replica.set_healthy(ok);
+        }
+    }
+
+    /// Whether this router falls back to the primary pool when all replicas are unavailable.
+    #[must_use]
+    pub fn falls_back_to_primary(&self) -> bool {
+        self.fallback_to_primary
+    }
+}
+
+/// Builder for constructing a [`RoutedPool`].
+#[derive(Debug)]
+pub struct RoutedPoolBuilder {
+    primary: Pool,
+    replicas: Vec<ReplicaPool>,
+    load_balancing: LoadBalancing,
+    fallback_to_primary: bool,
+}
+
+impl RoutedPoolBuilder {
+    /// Creates a new builder with the designated primary pool.
+    #[must_use]
+    pub fn new(primary: Pool) -> Self {
+        Self {
+            primary,
+            replicas: Vec::new(),
+            load_balancing: LoadBalancing::RoundRobin,
+            fallback_to_primary: true,
+        }
+    }
+
+    /// Adds a read replica pool.
+    #[must_use]
+    pub fn add_replica(mut self, replica: Pool) -> Self {
+        self.replicas.push(ReplicaPool::new(replica));
+        self
+    }
+
+    /// Sets the replica load balancing strategy.
+    #[must_use]
+    pub fn load_balancing(mut self, lb: LoadBalancing) -> Self {
+        self.load_balancing = lb;
+        self
+    }
+
+    /// Whether to fall back to the primary pool when all replicas are unhealthy or none configured.
+    #[must_use]
+    pub fn fallback_to_primary(mut self, fallback: bool) -> Self {
+        self.fallback_to_primary = fallback;
+        self
+    }
+
+    /// Builds the `RoutedPool`.
+    #[must_use]
+    pub fn build(self) -> RoutedPool {
+        RoutedPool {
+            primary: self.primary,
+            replicas: self.replicas,
+            load_balancing: self.load_balancing,
+            rr_index: Arc::new(AtomicUsize::new(0)),
+            fallback_to_primary: self.fallback_to_primary,
+        }
+    }
 }

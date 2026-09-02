@@ -15,7 +15,9 @@ It combines the best parts of Prisma and Drizzle:
 
 PostgreSQL, MySQL/MariaDB, and SQLite 3+ are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver. Native driver features are also available: `sqlite-rusqlite` for synchronous SQLite, and an experimental `postgres-tokio-postgres` for PostgreSQL. See [Dialects](#dialects) below for details.
 
-> **Status:** `1.0.0` is **published on crates.io** (2026-08-21, tag `v1.0.0`). P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is covered by semantic versioning from this release onward. Two gates were waived on the way, both in writing: the 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors (`docs/SoakReport.md`), and the two-week RC feedback window, for want of any external consumer to collect feedback from ([Stability](docs/Stability.md#waiver-the-100-rc1-feedback-window-2026-08-21)). Note that the 1.0 line is pinned to `sqlx 0.8`, which ruprizzle re-exports as part of its own public API. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
+> **Status:** `1.0.1` is the latest release **published on crates.io**. `1.5.0` is prepared and tagged-ready on `dev-main` but not yet published; it carries the whole v1.1–v1.5 feature line — array filters, full-text search, soft deletes, offline query checking, nested writes, tree hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and Ruprizzle Studio — described in [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md). The line was assessed and initially blocked; the findings and the remediation are recorded in [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md). The `turso` and `d1` adapters are real drivers over their providers’ HTTP APIs; there is no Neon adapter, because Neon is ordinary Postgres.
+>
+> P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is covered by semantic versioning from `1.0.0` onward. Two gates were waived on the way, both in writing: the 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors (`docs/SoakReport.md`), and the two-week RC feedback window, for want of any external consumer to collect feedback from ([Stability](docs/Stability.md#waiver-the-100-rc1-feedback-window-2026-08-21)). Note that the 1.0 line is pinned to `sqlx 0.8`, which ruprizzle re-exports as part of its own public API. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
 
 ---
 
@@ -485,7 +487,7 @@ The table below focuses on the features that differentiate ruprizzle from the to
 
 ## Architecture and repository layout
 
-The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.0.0` at the time of writing).
+The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.5.0`). The workspace crates and the VS Code extension move in lockstep on one number; see [Versioning](docs/Versioning.md).
 
 | Directory | Crate | Role | Ships to users? | Status |
 |---|---|---|---|---|
@@ -500,8 +502,14 @@ The workspace is split so that parser and codegen never enter the user's runtime
 | `crates/lsp` | `ruprizzle-lsp` | Language server for `schema.ruprizzle` | **yes (published)** | ✅ complete |
 | `crates/check` | `ruprizzle-check` | Offline / compile-time query checking | **yes (published)** | ✅ complete |
 | `crates/testkit` | `ruprizzle-testkit` | Dual-database test harness | no | ✅ complete |
+| `crates/check` | `ruprizzle-check` | Offline SQL validation against the schema | **yes (published)** | ✅ complete |
+| `crates/lsp` | `ruprizzle-lsp` | Language server for `schema.ruprizzle` | **yes (published)** | ✅ complete |
+| `crates/turso` | `ruprizzle-turso` | Turso / libSQL adapter over Hrana HTTP | **yes (published)** | ✅ complete |
+| `crates/d1` | `ruprizzle-d1` | Cloudflare D1 adapter over the REST API | **yes (published)** | ✅ complete |
 
-Published crates are available on [crates.io](https://crates.io/crates/ruprizzle). `crates/testkit` is the only crate in the workspace marked `publish = false`; it is used by the integration suite and is not published.
+Published crates are available on [crates.io](https://crates.io/crates/ruprizzle). `crates/testkit` and `xtask` are the only workspace crates marked `publish = false`; the first is used by the integration suite, the second is build automation.
+
+> **There is no Neon adapter, and there should not be one.** Neon is Postgres over TLS: pass its connection string to `ruprizzle::connect`. `ruprizzle-neon` was an in-memory stub with no route to becoming anything else, and has been deleted. See [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md) §10.2.
 
 The pipeline is:
 
@@ -543,9 +551,23 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 
 ## Status and roadmap
 
-`1.0.0` is **published on crates.io** (2026-08-21, tag `v1.0.0`); all ten publishable crates are live at that version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
+`1.5.0` is the version the workspace is pinned to, prepared on `dev-main` and not yet published; `1.0.1` (2026-08-31) is the latest release on crates.io. The twelve publishable crates move together on one version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
 
-The plan behind this release, including the two decisions it turned on, is `ProjectPlan/v1/V1StableRelease.md`. What remains open:
+### The unreleased v1.1–v1.5 line
+
+`dev-v2-x` carries five milestones of additive work, tracked in [`ProjectPlan/v2/00_MasterV2RoadmapPlan.md`](ProjectPlan/v2/00_MasterV2RoadmapPlan.md) and documented for users in [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md).
+
+| Milestone | Theme | State |
+|---|---|---|
+| v1.1 | Array filters, full-text search, soft deletes | ✅ implemented, gates green |
+| v1.2 | `ruprizzle check`, LSP 2.0, declarative seeding | ✅ implemented, gates green |
+| v1.3 | Implicit m2m, nested writes, tree hierarchies | ✅ implemented, gates green |
+| v1.4 | OpenTelemetry, replica routing, query cache, PostGIS | ✅ implemented, gates green |
+| v1.5 | Ruprizzle Studio, Turso and D1 adapters | ✅ implemented, gates green |
+
+The v1.1–v1.5 line is cut as `1.5.0`, pending publication. It was assessed at 56/100 and **blocked** before release: the edge adapter crates and most of Studio's data plane returned fabricated results rather than querying a database, and Studio's "migration safety diff" reported `SAFE` unconditionally. §8 and §10 of [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md) records what each of those became.
+
+The plan behind the `1.0.0` release, including the two decisions it turned on, is `ProjectPlan/v1/V1StableRelease.md`. What remains open:
 
 - Re-run the production-readiness assessment against the published `1.0.0` and reach ≥ 92/100 (`PathToStableV1.md` W6-05). The current score is 89/100 (`ProjectPlan/ProductionReadiness.md` §17).
 - Exercise the automated release workflow end-to-end.
@@ -554,7 +576,7 @@ The plan behind this release, including the two decisions it turned on, is `Proj
 - ~~Two-week RC feedback window~~ **waived 2026-08-21**, with reasons recorded in `docs/Stability.md`.
 - ~~Complete the clean 48-hour soak test (W4-02) after resolving the SQLite `rusqlite` lock-contention issue documented in `docs/SoakReport.md`.~~ **Waived** after 15.56 h / 1.46 B ops / 0 errors.
 
-Long-term deferrals (v1.2+) such as implicit many-to-many join tables, full-text search, PostGIS, soft deletes, and polymorphic relations are documented in `docs/KnownLimitations.md`.
+Implicit many-to-many join tables, full-text search, PostGIS and soft deletes were all deferrals at `1.0.0` and are now **implemented** on `dev-v2-x` (v1.1–v1.4) — see [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md). Polymorphic relations, row-level security and multi-tenancy remain deferred; `docs/KnownLimitations.md` has the current list.
 
 See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md), the [production-readiness plan](ProjectPlan/ProductionReadinessPlan.md), and the [decisions log](ProjectPlan/ImplementationPlan/ImplPlan10AppendixDecisions.md) for the full phase-by-phase state, production assessment, and ADRs.
 

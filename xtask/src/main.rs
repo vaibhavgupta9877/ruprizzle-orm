@@ -38,6 +38,30 @@ const TASKS: &[(&str, &str)] = &[
     ),
 ];
 
+/// Every crate published to crates.io, in dependency order for a first-time
+/// publish. `parser` is a dev-dependency of `dialect`, so it must be indexed
+/// before `dialect` can package.
+///
+/// This is the single source of truth for the publish sequence: `release`, the
+/// `cargo package --list` pre-flight, and the `publish coverage` audit all read
+/// it, and the audit fails if any workspace crate that is not `publish = false`
+/// is missing from it. The publish steps in `.github/workflows/release.yml` must
+/// list the same crates in the same order; the audit checks that too.
+const PUBLISH_ORDER: &[&str] = &[
+    "ruprizzle-core",
+    "ruprizzle-parser",
+    "ruprizzle-dialect",
+    "ruprizzle-macros",
+    "ruprizzle-check",
+    "ruprizzle-lsp",
+    "ruprizzle",
+    "ruprizzle-migrate",
+    "ruprizzle-codegen",
+    "ruprizzle-cli",
+    "ruprizzle-turso",
+    "ruprizzle-d1",
+];
+
 /// Per-crate ceiling for `unwrap()` / `expect()` / `panic!` in `src/`.
 ///
 /// These are the counts at the time the audit became a gate. The numbers may
@@ -55,6 +79,10 @@ const PANIC_BUDGET: &[(&str, usize)] = &[
     ("crates/codegen", 1),
     ("crates/migrate", 2),
     ("crates/cli", 2),
+    // The edge adapters hold at zero: both were rewritten as real drivers after the
+    // audit became a gate, so there is no legacy count to grandfather.
+    ("crates/turso", 0),
+    ("crates/d1", 0),
 ];
 
 /// Per-crate ceilings for arithmetic (`/`, `%`) and direct indexing (`x[i]`)
@@ -77,6 +105,8 @@ const BUDGETS: &[(&str, usize, usize)] = &[
     ("crates/codegen", 0, 0),
     ("crates/migrate", 0, 25),
     ("crates/cli", 0, 4),
+    ("crates/turso", 0, 0),
+    ("crates/d1", 0, 0),
 ];
 
 fn main() -> ExitCode {
@@ -323,18 +353,7 @@ fn run_harden_build_stages() -> Result<(), String> {
     // been published. Listing the package files is sufficient to catch packaging
     // and inclusion mistakes; compile correctness is already covered by the lint
     // and test steps.
-    for package in [
-        "ruprizzle-core",
-        "ruprizzle-parser",
-        "ruprizzle-dialect",
-        "ruprizzle-macros",
-        "ruprizzle-check",
-        "ruprizzle-lsp",
-        "ruprizzle",
-        "ruprizzle-migrate",
-        "ruprizzle-codegen",
-        "ruprizzle-cli",
-    ] {
+    for package in PUBLISH_ORDER.iter().copied() {
         eprintln!("--- xtask: package check {package} ---");
         if !run_command(
             "cargo",
@@ -396,6 +415,14 @@ fn run_harden_audits() -> Result<(), Vec<String>> {
                 failures.push(format!("code audit ({crate_dir})"));
             }
         }
+    }
+
+    // Publish coverage: every publishable workspace crate must be in the
+    // release pipeline, and the workflow must agree with it.
+    eprintln!("--- xtask: publish coverage audit ---");
+    if let Err(e) = publish_coverage_audit() {
+        eprintln!("xtask: publish coverage audit failed: {e}");
+        failures.push("publish coverage".to_owned());
     }
 
     // SQL-injection audit: look for Value interpolation into SQL strings.
@@ -636,6 +663,111 @@ fn cfg_contains_test(tokens: &proc_macro2::TokenStream) -> bool {
     false
 }
 
+/// Checks that no publishable workspace crate has fallen out of the release
+/// pipeline, and that the workflow publishes the same crates in the same order.
+///
+/// This exists because `ruprizzle-turso`, `ruprizzle-d1` and the since-deleted
+/// `ruprizzle-neon` were
+/// added to the workspace and appeared in no publish list, no package check and no
+/// panic budget for a whole release line, without any gate noticing. Keeping the
+/// list by hand is what failed; this audit is what stops it failing again.
+fn publish_coverage_audit() -> Result<(), String> {
+    let mut missing = Vec::new();
+    let mut unpublished_in_list = Vec::new();
+
+    for entry in std::fs::read_dir("crates").map_err(|e| format!("read crates/: {e}"))? {
+        let entry = entry.map_err(|e| format!("read crates/: {e}"))?;
+        let manifest = entry.path().join("Cargo.toml");
+        if !manifest.is_file() {
+            continue;
+        }
+        let text =
+            std::fs::read_to_string(&manifest).map_err(|e| format!("read {manifest:?}: {e}"))?;
+        let Some(name) = manifest_name(&text) else {
+            continue;
+        };
+        let publishable = !manifest_is_unpublished(&text);
+        let listed = PUBLISH_ORDER.contains(&name.as_str());
+
+        if publishable && !listed {
+            missing.push(name);
+        } else if !publishable && listed {
+            unpublished_in_list.push(name);
+        }
+    }
+
+    for name in PUBLISH_ORDER {
+        if !Path::new("crates").read_dir().is_ok_and(|mut dirs| {
+            dirs.any(|d| {
+                d.ok()
+                    .map(|d| d.path().join("Cargo.toml"))
+                    .filter(|m| m.is_file())
+                    .and_then(|m| std::fs::read_to_string(m).ok())
+                    .and_then(|t| manifest_name(&t))
+                    .is_some_and(|n| n == *name)
+            })
+        }) {
+            missing.push(format!("{name} (listed but not a workspace crate)"));
+        }
+    }
+
+    let workflow = std::fs::read_to_string(".github/workflows/release.yml")
+        .map_err(|e| format!("read release.yml: {e}"))?;
+    let workflow_order: Vec<&str> = workflow
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("run: cargo publish -p "))
+        .filter_map(|rest| rest.split_whitespace().next())
+        .collect();
+
+    let mut problems = Vec::new();
+    if !missing.is_empty() {
+        problems.push(format!(
+            "not in PUBLISH_ORDER: {} (add it, or set `publish = false` in its manifest)",
+            missing.join(", ")
+        ));
+    }
+    if !unpublished_in_list.is_empty() {
+        problems.push(format!(
+            "in PUBLISH_ORDER but `publish = false`: {}",
+            unpublished_in_list.join(", ")
+        ));
+    }
+    if workflow_order != PUBLISH_ORDER {
+        problems.push(format!(
+            "release.yml publishes {workflow_order:?}, PUBLISH_ORDER is {PUBLISH_ORDER:?}"
+        ));
+    }
+
+    if problems.is_empty() {
+        eprintln!(
+            "  {} crate(s) in the publish pipeline, workflow in step",
+            PUBLISH_ORDER.len()
+        );
+        Ok(())
+    } else {
+        Err(problems.join("; "))
+    }
+}
+
+/// The `name = "..."` of a `[package]` manifest.
+fn manifest_name(manifest: &str) -> Option<String> {
+    manifest.lines().find_map(|line| {
+        let rest = line.trim().strip_prefix("name")?.trim_start();
+        let value = rest.strip_prefix('=')?.trim();
+        Some(value.trim_matches('"').to_owned())
+    })
+}
+
+/// Whether the manifest opts out of publishing.
+fn manifest_is_unpublished(manifest: &str) -> bool {
+    manifest.lines().any(|line| {
+        line.trim()
+            .strip_prefix("publish")
+            .and_then(|rest| rest.trim_start().strip_prefix('='))
+            .is_some_and(|value| value.trim() == "false")
+    })
+}
+
 fn injection_audit() -> Result<(), std::io::Error> {
     // We look for any `format!` that builds SQL by interpolating a `Value` or
     // a user-supplied identifier. The architecture binds values as parameters,
@@ -712,23 +844,7 @@ fn run_release(args: &[String]) -> ExitCode {
         vec!["package", "--list"]
     };
 
-    // Dependency order for first-time publish. `parser` is a dev-dependency
-    // of `dialect`, so it must be indexed before `dialect` can package.
-    // This list must stay in sync with the publish steps in
-    // `.github/workflows/release.yml`; `ruprizzle-testkit` is intentionally
-    // absent because it is `publish = false`.
-    let packages = [
-        "ruprizzle-core",
-        "ruprizzle-parser",
-        "ruprizzle-dialect",
-        "ruprizzle-macros",
-        "ruprizzle-check",
-        "ruprizzle-lsp",
-        "ruprizzle",
-        "ruprizzle-migrate",
-        "ruprizzle-codegen",
-        "ruprizzle-cli",
-    ];
+    let packages = PUBLISH_ORDER;
     let start = packages
         .iter()
         .position(|p| from.is_none_or(|f| *p == f))
@@ -834,13 +950,84 @@ fn run_release_check(args: &[String]) -> ExitCode {
         }
     }
 
+    // The VS Code extension moves in lockstep with the crates; see docs/Versioning.md.
+    // It drifted to 1.2.0 while every crate was on 1.0.0 because nothing checked.
+    match std::fs::read_to_string("editor/vscode/package.json") {
+        Ok(package_json) => match json_string_field(&package_json, "version") {
+            Some(v) if v == workspace_version => {}
+            Some(v) => {
+                eprintln!(
+                    "xtask: editor/vscode/package.json is version `{v}` but the workspace is `{workspace_version}` (see docs/Versioning.md)"
+                );
+                failed = true;
+            }
+            None => {
+                eprintln!("xtask: editor/vscode/package.json has no `version` field");
+                failed = true;
+            }
+        },
+        Err(e) => {
+            eprintln!("xtask: cannot read editor/vscode/package.json: {e}");
+            failed = true;
+        }
+    }
+
+    // Every internal `[workspace.dependencies]` pin must equal the workspace
+    // version, or a published crate resolves a sibling from the previous release.
+    for line in manifest.lines().map(str::trim) {
+        let Some(rest) = line.strip_prefix("ruprizzle") else {
+            continue;
+        };
+        if !rest.contains("path = \"crates/") {
+            continue;
+        }
+        let pin = rest
+            .rsplit_once("version = \"")
+            .and_then(|(_, v)| v.split('"').next());
+        match pin {
+            Some(pin) if pin == workspace_version => {}
+            Some(pin) => {
+                eprintln!(
+                    "xtask: internal dependency pin `{pin}` in Cargo.toml does not match the workspace version `{workspace_version}`: {line}"
+                );
+                failed = true;
+            }
+            None => {
+                eprintln!(
+                    "xtask: internal dependency has no version pin, which `cargo publish` requires: {line}"
+                );
+                failed = true;
+            }
+        }
+    }
+
     if failed {
         return ExitCode::FAILURE;
     }
     eprintln!(
-        "xtask: release-check ok - tag, workspace version, and CHANGELOG all agree on {workspace_version}"
+        "xtask: release-check ok - tag, workspace version, internal pins, CHANGELOG and the VS Code extension all agree on {workspace_version}"
     );
     ExitCode::SUCCESS
+}
+
+/// The string value of a top-level `"key": "value"` in a small JSON document.
+///
+/// `package.json` is read for one field, which does not justify a JSON dependency
+/// in xtask.
+fn json_string_field(json: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{key}\"");
+    json.lines()
+        .map(str::trim)
+        .find(|l| l.starts_with(&needle))?
+        .split(':')
+        .nth(1)?
+        .trim()
+        .trim_end_matches(',')
+        .trim()
+        .strip_prefix('"')?
+        .split('"')
+        .next()
+        .map(str::to_owned)
 }
 
 fn has_command(name: &str) -> bool {

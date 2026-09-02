@@ -9,6 +9,139 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 _Nothing yet._
 
 
+## [1.5.0] - 2026-08-31
+
+**Prepared, not yet published.** This entry is complete and the workspace is pinned
+to `1.5.0`, but the crates have not been pushed to crates.io and `v1.5.0` is not yet
+tagged; `1.0.1` remains the latest published version.
+
+The v1.1–v1.5 feature line, developed on `dev-v2-x`, released as a single minor
+version. The workspace never moved off `1.0.0` while five milestones landed, so the
+intermediate numbers were never cut and this release carries all of them.
+
+`1.5.0` was assessed and **blocked** at
+[`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md);
+that document's §8 records the remediation this release contains. The v1.5 surface it
+found fabricated — Studio's data plane, the migration safety diff, the edge adapters —
+is now wired to a real database, or, where the crate had no reason to exist, deleted.
+
+### Added — v1.1 (query expressiveness, rich types, search)
+
+- **Postgres array filters.** `has`, `has_every`, `has_some`, `is_empty` and
+  `is_not_empty` on array columns, compiled to native Postgres array operators.
+- **Full-text search.** `Column::matches()` compiles to
+  `to_tsvector('english', …) @@ plainto_tsquery('english', …)` on Postgres,
+  `MATCH … AGAINST` on MySQL, and `MATCH` (with a `LIKE` fallback) on SQLite.
+- **Soft deletes.** A `@deletedAt` field marks a model soft-deletable; generated
+  queries filter deleted rows by default, with an explicit opt-out to include them.
+
+### Added — v1.2 (developer tooling, zero-database CI)
+
+- **`ruprizzle check`** (`ruprizzle-check`) validates SQL against the schema with no
+  live database: unknown tables, unknown columns and bind-type mismatches, each with a
+  did-you-mean suggestion and a source location.
+- **LSP 2.0** (`ruprizzle-lsp`) — richer completion and hover across schema attributes.
+- **Declarative seeding.** `ruprizzle seed` applies an idempotent JSON document in one
+  transaction, upserting on the primary key so re-running is safe.
+
+### Added — v1.3 (relations, trees, nested writes)
+
+- **Implicit many-to-many join tables**, inferred from the schema rather than declared.
+- **Nested relational writes** — `create`, `connect`, `connect_or_create`, `set`,
+  `disconnect` on related records within a single mutation.
+- **Tree hierarchy helpers** built on recursive CTEs (ancestors, descendants, subtree).
+
+### Added — v1.4 (observability, caching, routing)
+
+- **OpenTelemetry semantic spans and Metrics 2.0** following the database client
+  semantic conventions.
+- **Primary / read-replica routing pool.** `SELECT` traffic is distributed across
+  healthy replicas with round-robin, least-connections or random strategies, and falls
+  back to the primary when no replica is healthy.
+- **Query result cache.** A `QueryCache` trait plus an `InMemoryCache` implementation
+  with TTL expiry, a capacity ceiling and tag-based invalidation.
+- **PostGIS geospatial types** (`crates/runtime/src/spatial.rs`).
+
+### Added — v1.5 (Ruprizzle Studio)
+
+- **Ruprizzle Studio** (`ruprizzle-cli`, behind the non-default `studio` feature) — an
+  embedded Axum + HTMX workbench, no Node toolchain. Schema dashboard, interactive ERD,
+  table browser with paging and search, inline cell editing, row insert and delete,
+  foreign-key drawer, SQL sandbox, `EXPLAIN` plan viewer and a migration safety diff.
+  Every data screen queries the connected database; where it cannot, it says so instead
+  of rendering something that looks like data.
+- **`ruprizzle-turso`** — a Turso / libSQL adapter over the Hrana 2 HTTP protocol
+  (`POST {url}/v2/pipeline`), working against Turso's hosted databases and any `sqld`.
+- **`ruprizzle-d1`** — a Cloudflare D1 adapter over the Cloudflare REST API, for code
+  that talks to D1 from outside a Worker.
+- **`cargo xtask harden` gained a `publish coverage` audit**, which fails when a
+  publishable workspace crate is missing from the release pipeline or when
+  `release.yml` disagrees with it.
+
+### Changed
+
+- **The runtime executor is decoupled from `sqlx`** (`73831ed`), so third-party
+  backends can implement `Executor` directly.
+- **Studio's production check is named for what it is.** `is_production_url` is now
+  `looks_like_production_url`; it is a substring match on the URL, it misses any
+  production database not named for the fact, and it is no longer described as a
+  guardrail.
+- **Versioning policy.** The workspace crates and the VS Code extension move in
+  lockstep on one version number; see [`docs/Versioning.md`](docs/Versioning.md).
+  `editor/vscode` had drifted to `1.2.0` while every crate was on `1.0.0`.
+- **Unknown attributes are now an error (V19), which is a breaking change for
+  schemas that carry one.** The grammar accepts any name after `@` or `@@` and
+  lowering only looked up the handful it knew, so `@@tenant` and `@uniqe` both
+  validated cleanly and did nothing at all — no column, no index, no diagnostic.
+  Every attribute is now checked against the set the toolchain reads, with a
+  did-you-mean suggestion and the full list when there is no near match. A schema
+  that fails to validate after upgrading was already not doing what it said.
+
+### Fixed
+
+- **The migration safety diff reported `SAFE` for every model without opening a
+  connection.** It now reads the live catalog through
+  `ruprizzle_migrate::introspect::pull` and classifies each difference from the
+  database: a dropped column counts its non-`NULL` rows and is `DESTRUCTIVE` when data
+  would be lost, a `NOT NULL` addition to a populated table is `CAUTION` with the row
+  count that will fail the migration, and a tightened column counts the `NULL`s first.
+  With no connection it renders an explicit failure banner and no verdicts.
+- **Studio never read the pool it connected to.** The table browser returned five rows
+  of `"Sample <field>"`, the cell editor echoed the typed value, `DELETE` returned
+  `200` without deleting, the sandbox never ran the SQL and always reported success,
+  `EXPLAIN` returned a hardcoded plan without reading the query, and the relation
+  drawer said `"Linked <field>"`. All of them now issue real parameterised SQL.
+- **A failed database connection was swallowed by `.ok()`**, leaving Studio running
+  with no pool. It is now a startup error.
+- **Studio would bind its unauthenticated mutation routes to any interface.**
+  `--allow-writes` on a non-loopback host is now refused without `--yes-i-know`, and a
+  non-loopback bind warns at startup.
+- **The edge adapter crates declared no driver and stored rows in a process-local
+  `HashMap`.** `ruprizzle-turso` and `ruprizzle-d1` are now real drivers over their
+  providers' HTTP APIs, with end-to-end tests against a local server so neither the
+  test suite nor a contributor needs an account. `ruprizzle-neon` was deleted instead:
+  see **Removed**.
+- **The LSP offered `@@tenant` and `@@policy`**, neither of which the parser, codegen
+  or migration engine act on. Both are removed from completion and hover. Row-level
+  security and multi-tenancy remain unimplemented.
+
+### Removed
+
+- **`ruprizzle-neon` is gone.** Neon speaks ordinary Postgres over TLS, so its
+  connection string goes straight to `ruprizzle::connect` and an adapter crate is a
+  wrapper around nothing. The crate was an in-memory stub with no route to becoming
+  anything else. It was never published, so nothing on crates.io breaks.
+
+### Known gaps
+
+- Row-level security and multi-tenancy are not implemented.
+- Studio has no authentication.
+- The `turso` and `d1` adapters send one HTTP request per statement, so neither
+  supports interactive transactions, and `stream_raw` on both is a streaming
+  interface over a fully buffered response. Turso has no embedded-replica support,
+  which needs the native libSQL library.
+
+
 ## [1.0.1] - 2026-08-31
 
 ### Docs
@@ -358,7 +491,9 @@ Initial alpha release of **ruprizzle-orm**: a schema-first ORM for Rust. Write a
 
 See `docs/KnownLimitations.md` for the full list.
 
-[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.1...v1.5.0
+[1.0.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.0-rc.1...v1.0.0
 [1.0.0-rc.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.4.0-beta.2...v1.0.0-rc.1
 [0.4.0-beta.2]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v0.4.0-beta.1...v0.4.0-beta.2

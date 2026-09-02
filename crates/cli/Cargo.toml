@@ -21,6 +21,16 @@ doc = false
 [features]
 default = []
 sqlite-rusqlite = ["ruprizzle-migrate/sqlite-rusqlite"]
+studio = [
+    "dep:axum",
+    "dep:askama",
+    "dep:rust-embed",
+    "dep:mime_guess",
+    "dep:opener",
+    "dep:tower",
+    "dep:tower-http",
+    "dep:serde",
+]
 
 [dependencies]
 ruprizzle         = { workspace = true }
@@ -39,6 +49,19 @@ notify            = { workspace = true }
 tokio             = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 serde_json        = { workspace = true }
 indexmap          = { workspace = true }
+serde             = { workspace = true, optional = true }
+axum              = { version = "0.8", default-features = false, features = ["tokio", "http1", "json", "matched-path", "original-uri", "query", "form"], optional = true }
+askama            = { version = "0.12", optional = true }
+rust-embed        = { version = "8.5", features = ["mime-guess"], optional = true }
+mime_guess        = { version = "2.0", optional = true }
+opener            = { version = "0.7", optional = true }
+tower             = { version = "0.5", optional = true }
+tower-http        = { version = "0.6", features = ["cors", "trace"], optional = true }
+
+[dev-dependencies]
+http-body-util    = "0.1"
+tower             = { version = "0.5", features = ["util"] }
+tempfile          = { workspace = true }
 
 # Build the published API reference with every optional feature enabled, so
 # feature-gated items appear on docs.rs instead of being silently omitted.

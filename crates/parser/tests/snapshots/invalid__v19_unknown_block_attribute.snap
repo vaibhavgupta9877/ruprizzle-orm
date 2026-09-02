@@ -1,0 +1,19 @@
+---
+source: crates/parser/tests/invalid.rs
+expression: rendered
+---
+1 problem(s) found in v19_unknown_block_attribute
+    Diagnostic severity: error
+diagnostic code: ruprizzle::schema_invalid
+
+Error: unknown attribute `@@tenant` on model `User`
+    Diagnostic severity: error
+
+Begin snippet for v19_unknown_block_attribute starting at line 9, column 1
+
+snippet line 9: 
+snippet line 10:   @@tenant(field: org)
+    label at line 10, columns 3 to 22: no part of ruprizzle reads this attribute
+snippet line 11: }
+diagnostic help: remove it; the @@ attributes ruprizzle reads are `@@id`, `@@index`, `@@map`, `@@unique`
+diagnostic code: ruprizzle::unknown_attribute

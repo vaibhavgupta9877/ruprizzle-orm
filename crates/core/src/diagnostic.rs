@@ -306,6 +306,24 @@ pub enum SchemaError {
         span: SourceSpan,
     },
 
+    /// V19 — an attribute no part of the toolchain reads.
+    ///
+    /// The grammar accepts any `@name` and `@@name`, so an unrecognised one used to
+    /// lower into nothing at all: no column, no index, no diagnostic. A schema
+    /// author who wrote `@@tenant` got no partitioning and no way to find out.
+    #[error("unknown attribute `{attribute}` on {location}")]
+    #[diagnostic(code(ruprizzle::unknown_attribute))]
+    UnknownAttribute {
+        /// The attribute as written, including its `@` or `@@` sigil.
+        attribute: String,
+        /// Where it was written, e.g. `model User` or `User.email`.
+        location: String,
+        #[help]
+        advice: Option<String>,
+        #[label("no part of ruprizzle reads this attribute")]
+        span: SourceSpan,
+    },
+
     /// V13 — an optional relation backed by a non-nullable foreign key.
     #[error("optional relation `{model}.{field}` has a required foreign key")]
     #[diagnostic(

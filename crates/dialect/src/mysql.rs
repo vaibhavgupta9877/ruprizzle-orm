@@ -54,6 +54,10 @@ impl DbDialect for MySqlDialect {
             FieldKind::Scalar(ScalarType::Float) => "DOUBLE".to_owned(),
             FieldKind::Scalar(ScalarType::Boolean) => "TINYINT(1)".to_owned(),
             FieldKind::Scalar(ScalarType::Bytes) => "BLOB".to_owned(),
+            FieldKind::Scalar(ScalarType::Point) => "POINT".to_owned(),
+            FieldKind::Scalar(ScalarType::Polygon) => "POLYGON".to_owned(),
+            FieldKind::Scalar(ScalarType::MultiPolygon) => "MULTIPOLYGON".to_owned(),
+            FieldKind::Scalar(ScalarType::LineString) => "LINESTRING".to_owned(),
         })
     }
 
@@ -277,5 +281,9 @@ fn mysql_type_name(ty: ScalarType) -> &'static str {
         ScalarType::Uuid => "CHAR(36)",
         ScalarType::Json => "JSON",
         ScalarType::Bytes => "BINARY",
+        ScalarType::Point => "POINT",
+        ScalarType::Polygon => "POLYGON",
+        ScalarType::MultiPolygon => "MULTIPOLYGON",
+        ScalarType::LineString => "LINESTRING",
     }
 }

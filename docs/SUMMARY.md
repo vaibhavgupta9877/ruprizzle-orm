@@ -14,6 +14,7 @@
 [Benchmark results](BenchmarkResults.md)
 [Migrating from other ORMs](MigratingFrom.md)
 [Migration guide to v1](MigrationGuideToV1.md)
+[What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md)
 [FAQ](faq.md)
 [Architecture decision records](adr/index.md)
 [1.0.0 announcement](announcement.md)

@@ -1,6 +1,5 @@
 ---
 source: crates/codegen/tests/snapshots.rs
-assertion_line: 55
 expression: content
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
@@ -356,6 +355,25 @@ impl ::ruprizzle::Model for Post {
     const TABLE: &'static str = "posts";
     const PRIMARY_KEY: &'static str = "id";
     const COLUMNS: &'static [&'static str] = &["id"];
+    const DELETED_AT_COLUMN: Option<&'static str> = None;
+    const UPDATED_AT_COLUMN: Option<&'static str> = None;
+}
+impl Post {
+    /// Starts building a nested creation object for this model.
+    pub fn nested_create() -> ::ruprizzle::NestedCreate<Post> {
+        ::ruprizzle::NestedCreate::new()
+    }
+    /// Creates a nested connect specification by primary key.
+    pub fn nested_connect(id: impl ::ruprizzle::Encodable) -> ::ruprizzle::Value {
+        id.to_value()
+    }
+    /// Creates a nested connect-or-create specification.
+    pub fn nested_connect_or_create(
+        filter: ::ruprizzle::Filter<Post>,
+        create: ::ruprizzle::NestedCreate<Post>,
+    ) -> ::ruprizzle::NestedConnectOrCreate<Post> {
+        ::ruprizzle::NestedConnectOrCreate::new(filter, create)
+    }
 }
 /// Table name for this model.
 pub const TABLE: &str = "posts";

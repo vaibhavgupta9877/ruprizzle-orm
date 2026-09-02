@@ -97,6 +97,33 @@ let maybe = db.user()
     .await?;
 ```
 
+## Many-to-many without a join model
+
+When two models declare list fields pointing at each other and neither names a
+`through` model, the join table is inferred rather than declared:
+
+```prisma
+model Post {
+  id   Int    @id
+  tags Tag[]
+}
+
+model Tag {
+  id    Int    @id
+  posts Post[]
+}
+```
+
+The parser synthesises a join model named `_<A>To<B>` — the two model names sorted
+alphabetically, so `_PostToTag` — with columns `A` and `B` holding the two primary
+keys. A `@relation(name: "...")` on the pair produces `_<A>To<B>_<name>` instead, which
+is how two independent many-to-many links between the same pair stay apart.
+
+The generated `*_attach`, `*_set` and `*_detach` helpers work the same way as for an
+explicit join model; the difference is only in what you write in the schema. Declare
+the join model explicitly (below) when it needs columns of its own — an ordering
+index, a timestamp, a role.
+
 ## Many-to-many with an explicit join model
 
 `ruprizzle` does not hide join tables. A `Post` with many `Tag`s through an explicit `PostTag` model looks like this:
@@ -286,6 +313,33 @@ let managers = db.select::<Employee>()
 ```
 
 The generated module provides `manager()` and `reports()` relation loaders for self-referential schemas. Include depth is limited by the schema's `max_include_depth` generator setting.
+
+## Tree hierarchies
+
+A self-referential model — one whose parent foreign key points at its own primary key
+— also gets recursive-CTE traversal helpers, so an arbitrarily deep tree is one query
+rather than one query per level.
+
+```rust,ignore
+// Every ancestor of a node, walking up to the root.
+let chain = db.category().ancestors(node_id).all().await?;
+
+// The whole subtree below a node, bounded to three levels.
+let subtree = db.category()
+    .descendants(node_id)
+    .max_depth(3)
+    .all()
+    .await?;
+
+// The subtree reassembled in memory as a `HierarchyNode<Category>`.
+let tree = db.category().tree_from_root(root_id).await?;
+```
+
+`ancestors` and `descendants` return a `HierarchyQuery`, which has `max_depth`,
+`order_by_depth_asc` / `order_by_depth_desc`, `cycle_protection`, and — like every other builder — `to_sql()`, so the generated
+`WITH RECURSIVE` statement is inspectable. Cycle protection is on by default: a row
+already visited is not expanded again, so a corrupted parent chain cannot spin.
+Pass `cycle_protection(false)` only when the data is known to be acyclic.
 
 ## `some`, `every`, and `none` relation filters
 

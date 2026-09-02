@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}EXPLAIN Query Plan — Ruprizzle Studio{% endblock %}
+{% block page_title %}Query Execution Plan Tree{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Visual EXPLAIN Plan Visualizer</h3>
+      <p class="card-description">Hierarchical execution tree highlighting sequential scans and index hits.</p>
+    </div>
+  </div>
+
+  {% match error %}{% when Some with (message) %}
+  <div style="background:#1c1416; border:1px solid #f43f5e; border-radius:8px; padding:16px; color:#fda4af;">
+    <div style="font-weight:600; margin-bottom:4px;">⛔ No plan was obtained</div>
+    <div style="font-size:12px;">{{ message }}</div>
+  </div>
+  {% when None %}
+  <div style="font-family:monospace; background:#09090b; padding:16px; border-radius:8px; border:1px solid #27272a; color:#f4f4f5; line-height:1.8;">
+    {% for node in nodes %}
+    <div style="padding-left: {{ node.depth * 24 }}px; border-left: 2px solid {% if node.is_scan %}#f43f5e{% else %}#6366f1{% endif %}; margin-bottom: 4px;">
+      <span style="font-weight:bold; color:{% if node.is_scan %}#f43f5e{% else %}#10b981{% endif %};">▸ {{ node.operation }}</span>
+      {% if !node.target.is_empty() %}<span style="color:#a1a1aa;">on {{ node.target }}</span>{% endif %}
+      {% if !node.cost.is_empty() %}<span style="color:#71717a; font-size:11px;">cost={{ node.cost }}</span>{% endif %}
+      {% if !node.rows.is_empty() %}<span style="color:#71717a; font-size:11px;">rows={{ node.rows }}</span>{% endif %}
+    </div>
+    {% endfor %}
+    {% if nodes.is_empty() %}
+    <div style="color:#71717a;">The database returned an empty plan.</div>
+    {% endif %}
+  </div>
+  {% endmatch %}
+</div>
+{% endblock %}

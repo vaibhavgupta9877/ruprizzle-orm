@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Schema ERD — Ruprizzle Studio{% endblock %}
+{% block nav_erd %}active{% endblock %}
+{% block page_title %}Schema ERD Visualizer{% endblock %}
+
+{% block content %}
+<div class="card" style="padding:0; overflow:hidden; display:flex; flex-direction:column; flex:1;">
+  <div class="table-toolbar">
+    <div>
+      <h3 class="card-title">Interactive Entity-Relationship Graph</h3>
+      <p class="card-description">Displays models, scalar types, primary keys, and foreign-key relation edges.</p>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-secondary btn-sm" onclick="window.renderERD('erd-canvas', '/studio/erd/data')">Reset View</button>
+    </div>
+  </div>
+
+  <div id="erd-canvas" style="flex:1; min-height:600px; position:relative; background:#09090b;"></div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.renderERD) {
+      window.renderERD('erd-canvas', '/studio/erd/data');
+    }
+  });
+</script>
+{% endblock %}

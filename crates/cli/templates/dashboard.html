@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Ruprizzle Studio{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Database Provider</div>
+    <div class="stat-value" style="text-transform: capitalize;">{{ provider }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Schema Models</div>
+    <div class="stat-value">{{ model_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Enum Types</div>
+    <div class="stat-value">{{ enum_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Access Mode</div>
+    <div class="stat-value" style="font-size: 18px; color: {% if allow_writes %}var(--success){% else %}var(--warning){% endif %};">
+      {% if allow_writes %}Read-Write Active{% else %}Read-Only Safe{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Schema Models &amp; Entities</h2>
+      <p class="card-description">Click any model below to open the live table data browser and editor.</p>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Model Name</th>
+        <th>Fields</th>
+        <th>Primary Key</th>
+        <th>Foreign Keys</th>
+        <th style="text-align: right;">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in model_summaries %}
+      <tr>
+        <td style="font-weight: 600; color: #fff;">{{ m.name }}</td>
+        <td>{{ m.field_count }} columns</td>
+        <td><span class="cell-pk">{{ m.primary_key }}</span></td>
+        <td>{{ m.fk_count }} relations</td>
+        <td style="text-align: right;">
+          <a href="/studio/models/{{ m.name }}" class="btn btn-secondary btn-sm">Explore Data →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

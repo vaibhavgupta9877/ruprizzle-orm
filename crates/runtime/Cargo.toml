@@ -55,6 +55,8 @@ criterion         = { workspace = true }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 simple-process-stats = "2"
 ruprizzle-testkit = { path = "../testkit" }
+ruprizzle-parser  = { path = "../parser" }
+ruprizzle-migrate = { path = "../migrate" }
 
 [[example]]
 name = "perrow"

@@ -241,6 +241,10 @@ fn json_to_value(
         ScalarType::Uuid => Ok(Value::Uuid(json_string(value)?.parse()?)),
         ScalarType::Json => Ok(Value::Json(value.clone())),
         ScalarType::Bytes => Ok(Value::Bytes(Arc::from(json_string(value)?.into_bytes()))),
+        ScalarType::Point
+        | ScalarType::Polygon
+        | ScalarType::MultiPolygon
+        | ScalarType::LineString => Ok(Value::Str(Arc::from(json_string(value)?))),
     }
 }
 

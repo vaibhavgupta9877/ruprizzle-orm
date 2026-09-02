@@ -1,9 +1,8 @@
 //! Language server for `schema.ruprizzle`.
 //!
-//! Implements the minimal LSP surface needed by the editor extension:
-//! diagnostics, completion, go-to-definition and hover. The server stays small
-//! by re-using the existing parser and core IR; it does not generate code or
-//! touch the database.
+//! Implements the full LSP 2.0 surface for the editor extension:
+//! diagnostics, completion, go-to-definition, hover, canonical formatting,
+//! and code action quick-fixes.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs, clippy::pedantic)]
@@ -17,8 +16,10 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
+pub mod code_actions;
 pub mod completion;
 pub mod diagnostics;
+pub mod format;
 pub mod goto;
 pub mod hover;
 
@@ -73,11 +74,18 @@ impl LanguageServer for Backend {
                     TextDocumentSyncKind::INCREMENTAL,
                 )),
                 completion_provider: Some(CompletionOptions {
-                    trigger_characters: Some(vec!["@".to_string(), ".".to_string()]),
+                    trigger_characters: Some(vec![
+                        "@".to_string(),
+                        ".".to_string(),
+                        ":".to_string(),
+                        "[".to_string(),
+                    ]),
                     ..CompletionOptions::default()
                 }),
                 definition_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                document_formatting_provider: Some(OneOf::Left(true)),
+                code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
                 ..ServerCapabilities::default()
             },
             server_info: Some(ServerInfo {
@@ -190,6 +198,36 @@ impl LanguageServer for Backend {
         let position = params.text_document_position_params.position;
 
         Ok(hover::hover(&text, schema.as_ref(), position))
+    }
+
+    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+        let docs = self.documents.lock().await;
+        let Some(text) = docs.get(&params.text_document.uri) else {
+            return Ok(None);
+        };
+        let text = text.clone();
+        drop(docs);
+
+        Ok(Some(format::format_document(&text)))
+    }
+
+    async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+        let docs = self.documents.lock().await;
+        let Some(text) = docs.get(&params.text_document.uri) else {
+            return Ok(None);
+        };
+        let text = text.clone();
+        drop(docs);
+
+        let file_name = params.text_document.uri.path();
+        let schema = ruprizzle_parser::parse(file_name, &text).ok();
+
+        Ok(Some(code_actions::code_actions(
+            &params.text_document.uri,
+            &text,
+            schema.as_ref(),
+            params.range,
+        )))
     }
 }
 

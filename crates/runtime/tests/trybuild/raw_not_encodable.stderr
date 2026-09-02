@@ -13,10 +13,10 @@ help: the trait `Encodable` is not implemented for `NotEncodable`
             &T
             Arc<T>
             JsonValue
+            LineString
+            MultiPolygon
             NaiveDate
             NaiveTime
-            Vec<T>
-            Vec<u8>
-            bool
+            Polygon
           and $N others
   = note: this error originates in the macro `raw` (in Nightly builds, run with -Z macro-backtrace for more info)

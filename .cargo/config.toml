@@ -3,3 +3,6 @@
 # platforms set CARGO_TARGET_DIR to override it.
 [build]
 target-dir = "G:/cargo-target"
+
+[alias]
+xtask = "run -p xtask --"

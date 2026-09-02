@@ -44,6 +44,10 @@ pub mod names {
     pub const QUERY_ERRORS_TOTAL: &str = "ruprizzle_query_errors_total";
     /// Query duration histogram, in seconds.
     pub const QUERY_DURATION_SECONDS: &str = "ruprizzle_query_duration_seconds";
+    /// Total number of slow queries exceeding the configured threshold.
+    pub const SLOW_QUERIES_TOTAL: &str = "ruprizzle_slow_queries_total";
+    /// Total number of rows affected by write operations.
+    pub const ROWS_AFFECTED_TOTAL: &str = "ruprizzle_rows_affected_total";
     /// Current pool size gauge.
     pub const POOL_SIZE: &str = "ruprizzle_pool_size";
     /// Current idle connection gauge.
@@ -52,10 +56,22 @@ pub mod names {
     pub const POOL_IN_USE: &str = "ruprizzle_pool_in_use";
     /// Current waiter count gauge.
     pub const POOL_WAITERS: &str = "ruprizzle_pool_waiters";
+    /// Active pool connections gauge.
+    pub const POOL_CONNECTIONS_ACTIVE: &str = "ruprizzle_pool_connections_active";
+    /// Idle pool connections gauge.
+    pub const POOL_CONNECTIONS_IDLE: &str = "ruprizzle_pool_connections_idle";
+    /// Pool connection wait / checkout duration histogram, in seconds.
+    pub const POOL_WAIT_DURATION_SECONDS: &str = "ruprizzle_pool_wait_duration_seconds";
     /// Total number of applied migrations.
     pub const MIGRATION_APPLIED_TOTAL: &str = "ruprizzle_migration_applied_total";
     /// Per-migration duration histogram, in seconds.
     pub const MIGRATION_DURATION_SECONDS: &str = "ruprizzle_migration_duration_seconds";
+    /// Total number of query cache hits.
+    pub const CACHE_HITS_TOTAL: &str = "ruprizzle_cache_hits_total";
+    /// Total number of query cache misses.
+    pub const CACHE_MISSES_TOTAL: &str = "ruprizzle_cache_misses_total";
+    /// Total number of replica queries routed.
+    pub const REPLICA_ROUTING_TOTAL: &str = "ruprizzle_replica_routing_total";
 }
 
 pub use names::*;

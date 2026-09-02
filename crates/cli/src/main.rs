@@ -31,6 +31,8 @@ use ruprizzle_migrate::{Change, MigrationMeta, Migrator, diff, down_sql, up_sql}
 
 mod introspect;
 mod seed;
+#[cfg(feature = "studio")]
+mod studio;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -100,6 +102,37 @@ enum Command {
         /// Path to the query manifest JSON.
         #[arg(long)]
         manifest: String,
+
+        /// Diagnostic output format (`pretty`, `json`, `github`).
+        #[arg(long, default_value = "pretty")]
+        format: String,
+    },
+
+    /// Launch the embedded pure-Rust visual workbench (Ruprizzle Studio).
+    #[cfg(feature = "studio")]
+    Studio {
+        /// Port to listen on (default 5555).
+        #[arg(long, default_value_t = 5555)]
+        port: u16,
+
+        /// Host address to bind to (default 127.0.0.1).
+        ///
+        /// Studio has no authentication. Binding off loopback exposes it to
+        /// everyone who can reach the port.
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+
+        /// Permit mutating write operations (inserts, updates, deletes).
+        #[arg(long)]
+        allow_writes: bool,
+
+        /// Proceed past the production-name check and the non-loopback write refusal.
+        #[arg(long)]
+        yes_i_know: bool,
+
+        /// Disable auto-opening the web browser on launch.
+        #[arg(long)]
+        no_browser: bool,
     },
 }
 
@@ -230,7 +263,27 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Command::Db(DbCommand::Pull) => db_pull(&cli.schema, cli.verbose).await,
         Command::Db(DbCommand::Seed) => db_seed(&cli.schema, cli.verbose).await,
         Command::Lsp { stdio } => run_lsp(*stdio).await,
-        Command::Check { manifest } => run_check(&cli.schema, manifest),
+        Command::Check { manifest, format } => run_check(&cli.schema, manifest, format),
+        #[cfg(feature = "studio")]
+        Command::Studio {
+            port,
+            host,
+            allow_writes,
+            yes_i_know,
+            no_browser,
+        } => {
+            let db_url = resolve_database_url(&cli.schema, cli.verbose).ok();
+            let config = studio::StudioConfig {
+                port: *port,
+                host: host.clone(),
+                schema_path: PathBuf::from(&cli.schema),
+                database_url: db_url,
+                allow_writes: *allow_writes,
+                yes_i_know: *yes_i_know,
+                no_browser: *no_browser,
+            };
+            studio::run_studio(config).await
+        }
     }
 }
 
@@ -262,21 +315,26 @@ async fn run_lsp(stdio: bool) -> Result<(), Box<dyn std::error::Error + Send + S
 fn run_check(
     schema_path: &str,
     manifest_path: &str,
+    format_str: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let source = std::fs::read_to_string(manifest_path)?;
     let manifest: ruprizzle_check::QueryManifest = serde_json::from_str(&source)?;
+    let report_format: ruprizzle_check::ReportFormat = format_str
+        .parse()
+        .map_err(std::convert::Into::<Box<dyn std::error::Error + Send + Sync>>::into)?;
 
     let (schema, _, _) = parse_schema(schema_path)?;
     let errors = ruprizzle_check::validate_manifest(&schema, &manifest);
 
+    let output = ruprizzle_check::format_report(&errors, report_format, manifest_path);
     if errors.is_empty() {
-        println!("{manifest_path} is valid against {schema_path}");
+        if !output.is_empty() {
+            println!("{output}");
+        }
         return Ok(());
     }
 
-    for error in &errors {
-        eprintln!("{manifest_path}: {error}");
-    }
+    eprintln!("{output}");
     Err(format!("{} query(s) failed validation", errors.len()).into())
 }
 

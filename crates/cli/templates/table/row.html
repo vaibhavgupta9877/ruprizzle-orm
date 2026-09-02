@@ -1,0 +1,41 @@
+<tr id="row-{{ row.id }}">
+  {% for cell in row.cells %}
+  <td x-data="{ editing: false, value: '{{ cell.value }}' }">
+    <div x-show="!editing" @dblclick="{% if allow_writes %}editing = true{% endif %}">
+      {% if cell.is_relation %}
+      <span class="cell-relation" hx-get="/studio/relations/{{ cell.relation_target }}/{{ cell.value }}" hx-target="#relation-drawer">
+        ↗ {{ cell.value }}
+      </span>
+      {% else if cell.is_id %}
+      <span class="cell-pk">{{ cell.value }}</span>
+      {% else if cell.is_null %}
+      <span class="cell-null">null</span>
+      {% else %}
+      <span>{{ cell.value }}</span>
+      {% endif %}
+    </div>
+    {% if allow_writes %}
+    <div x-show="editing" style="display:none;">
+      <input type="text" class="input-text" style="padding:2px 6px; font-size:12px; width:100%;"
+             x-model="value"
+             hx-patch="/studio/models/{{ current_model }}/rows/{{ row.id }}/cell?column={{ cell.column_name }}"
+             hx-vals="js:{ value: value }"
+             hx-target="#row-{{ row.id }}"
+             hx-swap="outerHTML"
+             @keydown.enter="editing = false"
+             @keydown.escape="editing = false"
+             @blur="editing = false">
+    </div>
+    {% endif %}
+  </td>
+  {% endfor %}
+  {% if allow_writes %}
+  <td style="text-align:center;">
+    <button class="btn btn-danger btn-sm" hx-delete="/studio/models/{{ current_model }}/rows/{{ row.id }}"
+            hx-target="#row-{{ row.id }}" hx-swap="outerHTML"
+            onclick="return confirm('Delete this record?')">
+      🗑
+    </button>
+  </td>
+  {% endif %}
+</tr>

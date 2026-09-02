@@ -82,6 +82,8 @@ pub enum RowBatch {
     /// Rows from the native `tokio-postgres` backend.
     #[cfg(feature = "postgres-tokio-postgres")]
     PostgresNative(Vec<tokio_postgres::Row>),
+    /// Rows from edge and serverless adapters (Turso, Cloudflare D1, Neon).
+    Edge(Vec<std::collections::HashMap<String, Value>>),
 }
 
 impl RowBatch {
@@ -97,6 +99,7 @@ impl RowBatch {
             Self::Rusqlite(rows) => rows.is_empty(),
             #[cfg(feature = "postgres-tokio-postgres")]
             Self::PostgresNative(rows) => rows.is_empty(),
+            Self::Edge(rows) => rows.is_empty(),
         }
     }
 
@@ -112,6 +115,7 @@ impl RowBatch {
             Self::Rusqlite(rows) => rows.len(),
             #[cfg(feature = "postgres-tokio-postgres")]
             Self::PostgresNative(rows) => rows.len(),
+            Self::Edge(rows) => rows.len(),
         }
     }
 
@@ -129,6 +133,7 @@ impl RowBatch {
             (Self::Rusqlite(a), Self::Rusqlite(b)) => a.extend(b),
             #[cfg(feature = "postgres-tokio-postgres")]
             (Self::PostgresNative(a), Self::PostgresNative(b)) => a.extend(b),
+            (Self::Edge(a), Self::Edge(b)) => a.extend(b),
             _ => {
                 return Err(Error::Message(
                     "cannot merge row batches from different backends".into(),
@@ -136,6 +141,15 @@ impl RowBatch {
             }
         }
         Ok(())
+    }
+
+    /// Returns the edge rows if this batch was produced by an edge driver.
+    #[must_use]
+    pub fn as_edge_rows(&self) -> Option<&[std::collections::HashMap<String, Value>]> {
+        match self {
+            Self::Edge(rows) => Some(rows),
+            _ => None,
+        }
     }
 }
 
@@ -152,6 +166,7 @@ impl std::fmt::Debug for RowBatch {
             Self::PostgresNative(rows) => {
                 f.debug_tuple("PostgresNative").field(&rows.len()).finish()
             }
+            Self::Edge(rows) => f.debug_tuple("Edge").field(&rows.len()).finish(),
         }
     }
 }
@@ -246,11 +261,75 @@ pub enum RawRow {
     /// A row from the native `tokio-postgres` backend.
     #[cfg(feature = "postgres-tokio-postgres")]
     PostgresNative(tokio_postgres::Row),
+    /// A row from edge and serverless adapters (Turso, Cloudflare D1, Neon).
+    Edge(std::collections::HashMap<String, Value>),
 }
 
 /// A boxed stream of raw rows.
 pub type BoxRowStream<'a> =
     std::pin::Pin<Box<dyn futures_core::Stream<Item = Result<RawRow, Error>> + Send + 'a>>;
+
+/// Observes a completed `fut` for metrics, debug tracing, and slow-query warnings.
+///
+/// This is the single place where query execution is observed so that pools and
+/// transactions cannot drift. `sql` is logged by shape only; `binds` is the
+/// placeholder count, never the values.
+fn infer_operation_and_table(sql: &str) -> (&'static str, String) {
+    let trimmed = sql.trim();
+    let upper = trimmed.to_ascii_uppercase();
+    if upper.starts_with("SELECT") {
+        let op = "SELECT";
+        let table = if let Some(from_idx) = upper.find(" FROM ") {
+            let rest = trimmed.get(from_idx + 6..).unwrap_or("").trim();
+            rest.split(|c: char| c.is_whitespace() || c == '(' || c == ',' || c == ';')
+                .next()
+                .unwrap_or("")
+                .trim_matches(|c| c == '"' || c == '`' || c == '\'')
+                .to_string()
+        } else {
+            String::new()
+        };
+        (op, table)
+    } else if upper.starts_with("INSERT") {
+        let op = "INSERT";
+        let table = if let Some(into_idx) = upper.find(" INTO ") {
+            let rest = trimmed.get(into_idx + 6..).unwrap_or("").trim();
+            rest.split(|c: char| c.is_whitespace() || c == '(' || c == ';')
+                .next()
+                .unwrap_or("")
+                .trim_matches(|c| c == '"' || c == '`' || c == '\'')
+                .to_string()
+        } else {
+            String::new()
+        };
+        (op, table)
+    } else if upper.starts_with("UPDATE") {
+        let op = "UPDATE";
+        let rest = trimmed.get(6..).unwrap_or("").trim();
+        let table = rest
+            .split(|c: char| c.is_whitespace() || c == ';')
+            .next()
+            .unwrap_or("")
+            .trim_matches(|c| c == '"' || c == '`' || c == '\'')
+            .to_string();
+        (op, table)
+    } else if upper.starts_with("DELETE") {
+        let op = "DELETE";
+        let table = if let Some(from_idx) = upper.find(" FROM ") {
+            let rest = trimmed.get(from_idx + 6..).unwrap_or("").trim();
+            rest.split(|c: char| c.is_whitespace() || c == ';')
+                .next()
+                .unwrap_or("")
+                .trim_matches(|c| c == '"' || c == '`' || c == '\'')
+                .to_string()
+        } else {
+            String::new()
+        };
+        (op, table)
+    } else {
+        ("QUERY", String::new())
+    }
+}
 
 /// Observes a completed `fut` for metrics, debug tracing, and slow-query warnings.
 ///
@@ -265,6 +344,17 @@ pub(crate) async fn trace_and_record_query<F>(
 where
     F: std::future::Future<Output = Result<RowBatch, Error>>,
 {
+    let (op, table) = infer_operation_and_table(&sql);
+    let sanitized_sql = crate::compile::sanitize_sql(&sql);
+    let span = tracing::info_span!(
+        "db.query",
+        "db.system" = "rdbms",
+        "db.statement" = %sanitized_sql,
+        "db.operation" = %op,
+        "db.table" = %table,
+    );
+    let _guard = span.enter();
+
     crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
     let started = std::time::Instant::now();
     let result = fut.await;
@@ -306,6 +396,7 @@ where
 
     if let Some(threshold) = slow_query_threshold() {
         if elapsed > threshold {
+            crate::metrics::counter(crate::metrics::SLOW_QUERIES_TOTAL, 1);
             tracing::warn!(
                 target: "ruprizzle::slow_query",
                 sql = %sql,
@@ -328,6 +419,17 @@ pub(crate) async fn trace_and_record_execute<F>(
 where
     F: std::future::Future<Output = Result<u64, Error>>,
 {
+    let (op, table) = infer_operation_and_table(&sql);
+    let sanitized_sql = crate::compile::sanitize_sql(&sql);
+    let span = tracing::info_span!(
+        "db.execute",
+        "db.system" = "rdbms",
+        "db.statement" = %sanitized_sql,
+        "db.operation" = %op,
+        "db.table" = %table,
+    );
+    let _guard = span.enter();
+
     crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
     let started = std::time::Instant::now();
     let result = fut.await;
@@ -336,6 +438,9 @@ where
         crate::metrics::QUERY_DURATION_SECONDS,
         elapsed.as_secs_f64(),
     );
+    if let Ok(rows) = &result {
+        crate::metrics::counter(crate::metrics::ROWS_AFFECTED_TOTAL, *rows);
+    }
     if let Err(error) = &result {
         crate::metrics::counter_with(
             crate::metrics::QUERY_ERRORS_TOTAL,
@@ -369,6 +474,7 @@ where
 
     if let Some(threshold) = slow_query_threshold() {
         if elapsed > threshold {
+            crate::metrics::counter(crate::metrics::SLOW_QUERIES_TOTAL, 1);
             tracing::warn!(
                 target: "ruprizzle::slow_query",
                 sql = %sql,
@@ -478,6 +584,9 @@ impl futures_core::Stream for DeferredRowStream<'_> {
                             .into_iter()
                             .map(RawRow::PostgresNative)
                             .collect::<Vec<_>>(),
+                        RowBatch::Edge(rows) => {
+                            rows.into_iter().map(RawRow::Edge).collect::<Vec<_>>()
+                        }
                     }
                     .into_iter();
                 }
@@ -678,5 +787,38 @@ where
         RowBatch::PostgresNative(rows) => {
             rows.iter().map(|r| T::from_tokio_postgres_row(r)).collect()
         }
+        RowBatch::Edge(_) => Err(Error::Message(
+            "RowBatch::Edge cannot be decoded via sqlx FromRow; use custom edge decoder or typed edge adapter".into(),
+        )),
+    }
+}
+
+impl Executor for crate::pool::RoutedPool {
+    fn dialect(&self) -> &dyn DbDialect {
+        self.primary().dialect()
+    }
+
+    fn fetch_all_raw(
+        &self,
+        sql: Cow<'static, str>,
+        binds: Vec<Value>,
+    ) -> BoxFuture<'_, Result<RowBatch, Error>> {
+        let pool = self.select_replica().clone();
+        crate::metrics::counter(crate::metrics::REPLICA_ROUTING_TOTAL, 1);
+        Box::pin(async move { pool.fetch_all_raw(sql, binds).await })
+    }
+
+    fn stream_raw<'a>(&'a self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'a> {
+        let pool = self.select_replica();
+        crate::metrics::counter(crate::metrics::REPLICA_ROUTING_TOTAL, 1);
+        pool.stream_raw(sql, binds)
+    }
+
+    fn execute_raw(
+        &self,
+        sql: Cow<'static, str>,
+        binds: Vec<Value>,
+    ) -> BoxFuture<'_, Result<u64, Error>> {
+        self.primary().execute_raw(sql, binds)
     }
 }

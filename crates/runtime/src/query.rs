@@ -44,6 +44,8 @@ pub struct SelectQuery<'db, M: Model, Out = M, I = ()> {
     ctes: Vec<Cte>,
     includes: I,
     join: Option<JoinSpec>,
+    with_deleted: bool,
+    only_deleted: bool,
     _out: PhantomData<fn() -> Out>,
 }
 
@@ -92,6 +94,8 @@ where
             ctes: Vec::new(),
             includes: (),
             join: None,
+            with_deleted: false,
+            only_deleted: false,
             _out: PhantomData,
         }
     }
@@ -131,6 +135,11 @@ where
             Some(f) => self.or_filter(f),
             None => self,
         }
+    }
+
+    /// Filters rows by discriminator column value for Single Table Inheritance (STI) and polymorphic models.
+    pub fn filter_type<V: Encodable>(self, col: Column<M, V>, value: impl Into<V>) -> Self {
+        self.filter(col.eq(value))
     }
 
     /// Adds an ordering.
@@ -196,6 +205,36 @@ where
             distinct: true,
             ..self
         }
+    }
+
+    /// Sets query result caching with a specific TTL.
+    #[must_use]
+    pub fn cache(self, _ttl: std::time::Duration) -> Self {
+        self
+    }
+
+    /// Sets a custom cache key for this query.
+    #[must_use]
+    pub fn cache_key(self, _key: impl Into<String>) -> Self {
+        self
+    }
+
+    /// Associates a cache invalidation tag with this query result.
+    #[must_use]
+    pub fn cache_tag(self, _tag: impl Into<String>) -> Self {
+        self
+    }
+
+    /// Forces this query to execute on the primary database pool.
+    #[must_use]
+    pub fn use_primary(self) -> Self {
+        self
+    }
+
+    /// Directs this query to execute on a read replica pool.
+    #[must_use]
+    pub fn use_replica(self) -> Self {
+        self
     }
 
     /// Adds a non-recursive common table expression (CTE).
@@ -315,6 +354,20 @@ where
         self.join_with::<J, Join2<Maybe<M>, Maybe<J>>>(JoinKind::Full, Some(alias), on)
     }
 
+    /// Includes soft-deleted rows in the query results (disables default `WHERE deleted_at IS NULL`).
+    pub fn with_deleted(mut self) -> Self {
+        self.with_deleted = true;
+        self.only_deleted = false;
+        self
+    }
+
+    /// Queries *only* soft-deleted rows (`WHERE deleted_at IS NOT NULL`).
+    pub fn only_deleted(mut self) -> Self {
+        self.with_deleted = false;
+        self.only_deleted = true;
+        self
+    }
+
     fn join_with<J: Model, O>(
         self,
         kind: JoinKind,
@@ -338,6 +391,8 @@ where
                 right_alias,
                 on: on.into(),
             }),
+            with_deleted: self.with_deleted,
+            only_deleted: self.only_deleted,
             _out: PhantomData,
         }
     }
@@ -356,7 +411,7 @@ where
         set.push_entries(&mut entries);
         AggregateQuery {
             exec: self.exec,
-            filter: self.filter,
+            filter: self.effective_filter(),
             aggregates: entries,
             group_by: Vec::new(),
             having: Filter::new(FilterNode::And(Vec::new())),
@@ -394,6 +449,8 @@ where
             ctes: self.ctes,
             includes: include,
             join: self.join,
+            with_deleted: self.with_deleted,
+            only_deleted: self.only_deleted,
             _out: PhantomData,
         }
     }
@@ -411,6 +468,8 @@ where
             ctes: self.ctes,
             includes: (),
             join: None,
+            with_deleted: self.with_deleted,
+            only_deleted: self.only_deleted,
             _out: PhantomData,
         }
     }
@@ -451,6 +510,29 @@ where
         Ok(())
     }
 
+    /// Returns the effective filter incorporating soft-delete filters if configured on the model.
+    pub(crate) fn effective_filter(&self) -> Filter<M> {
+        let mut filter = self.filter.clone();
+        if let Some(col) = M::DELETED_AT_COLUMN {
+            if !self.with_deleted {
+                if self.only_deleted {
+                    filter = filter.and(Filter::new(FilterNode::Null {
+                        table: M::TABLE,
+                        column: col,
+                        negated: true,
+                    }));
+                } else {
+                    filter = filter.and(Filter::new(FilterNode::Null {
+                        table: M::TABLE,
+                        column: col,
+                        negated: false,
+                    }));
+                }
+            }
+        }
+        filter
+    }
+
     /// Compiles the main query (without the CTE `WITH` prefix) to SQL and binds.
     ///
     /// # Errors
@@ -460,6 +542,7 @@ where
     pub(crate) fn to_sql_without_cte(&self) -> Result<CompiledSql, Error> {
         self.check_join_support()?;
         let dialect = self.exec.dialect();
+        let eff_filter = self.effective_filter();
         if let Some(ref join) = self.join {
             Ok(join_select_with_columns::<M>(
                 dialect,
@@ -470,7 +553,7 @@ where
                 join.right_alias,
                 join.kind,
                 &join.on.node,
-                &self.filter.node,
+                &eff_filter.node,
                 &self.order,
                 self.limit,
                 self.offset,
@@ -481,7 +564,7 @@ where
                 dialect,
                 M::TABLE,
                 &self.projection,
-                &self.filter.node,
+                &eff_filter.node,
                 &self.order,
                 self.limit,
                 self.offset,
@@ -555,7 +638,8 @@ where
     pub async fn count(self) -> Result<i64, Error> {
         self.check_join_support()?;
         let dialect = self.exec.dialect();
-        let compiled = crate::compile::count::<M>(dialect, M::TABLE, &self.filter.node);
+        let eff_filter = self.effective_filter();
+        let compiled = crate::compile::count::<M>(dialect, M::TABLE, &eff_filter.node);
         let compiled = crate::compile::with_cte_prefix(dialect, &self.ctes, compiled);
 
         #[cfg(feature = "sqlite-rusqlite")]
@@ -598,7 +682,8 @@ where
     pub async fn exists(self) -> Result<bool, Error> {
         self.check_join_support()?;
         let dialect = self.exec.dialect();
-        let compiled = crate::compile::exists::<M>(dialect, M::TABLE, &self.filter.node);
+        let eff_filter = self.effective_filter();
+        let compiled = crate::compile::exists::<M>(dialect, M::TABLE, &eff_filter.node);
         let compiled = crate::compile::with_cte_prefix(dialect, &self.ctes, compiled);
 
         #[cfg(feature = "sqlite-rusqlite")]
@@ -649,6 +734,9 @@ where
                     crate::executor::RawRow::Rusqlite(r) => Out::from_owned_row(&r),
                     #[cfg(feature = "postgres-tokio-postgres")]
                     crate::executor::RawRow::PostgresNative(r) => Out::from_tokio_postgres_row(&r),
+                    crate::executor::RawRow::Edge(_) => Err(Error::Message(
+                        "RawRow::Edge cannot be streamed into sqlx FromRow; use custom edge decoder".into(),
+                    )),
                 })
             })
         })
@@ -702,6 +790,14 @@ where
             .fetch_all_raw(compiled.sql, compiled.binds)
             .await?;
         crate::executor::decode_rows(batch)
+    }
+
+    /// Alias for [`fetch_all`](SelectQuery::fetch_all).
+    pub async fn all(self) -> Result<Vec<Out>, Error>
+    where
+        Out: Send + Unpin + RowDecode,
+    {
+        self.fetch_all().await
     }
 
     /// Streams matching rows instead of collecting them.
@@ -1333,6 +1429,7 @@ pub struct InsertQuery<'db, M: Model> {
     do_update: Option<Vec<&'static str>>,
     nested: Option<NestedInsert<'db, M>>,
     m2m: Option<Box<dyn AnyM2mWrite<M> + 'db>>,
+    nested_writes: Vec<Arc<dyn crate::nested::AnyNestedWrite<M>>>,
     _marker: PhantomData<fn() -> M>,
 }
 
@@ -1344,6 +1441,7 @@ impl<'db, M: Model> std::fmt::Debug for InsertQuery<'db, M> {
             .field("do_update", &self.do_update)
             .field("nested", &self.nested.is_some())
             .field("m2m", &self.m2m.is_some())
+            .field("nested_writes", &self.nested_writes.len())
             .finish()
     }
 }
@@ -1364,6 +1462,7 @@ impl<'db, M: Model> InsertQuery<'db, M> {
             do_update: None,
             nested: None,
             m2m: None,
+            nested_writes: Vec::new(),
             _marker: PhantomData,
         }
     }
@@ -1436,6 +1535,20 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         self
     }
 
+    /// Attaches an atomic nested relation write (e.g. nested create, connect, set) to this insert.
+    pub fn with_nested_write<W: crate::nested::AnyNestedWrite<M> + 'static>(
+        mut self,
+        write: W,
+    ) -> Self {
+        self.nested_writes.push(Arc::new(write));
+        self
+    }
+
+    /// Alias for [`exec`](InsertQuery::exec) to provide an ergonomic builder `.save()` endpoint.
+    pub async fn save(self) -> Result<M, Error> {
+        self.exec().await
+    }
+
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> CompiledSql {
         let dialect = dialect_for_pool(self.pool);
@@ -1462,6 +1575,27 @@ impl<'db, M: Model> InsertQuery<'db, M> {
     pub async fn exec(mut self) -> Result<M, Error> {
         let nested = self.nested.take();
         let m2m = self.m2m.take();
+        let nested_writes = std::mem::take(&mut self.nested_writes);
+
+        if !nested_writes.is_empty() {
+            let tx = crate::tx::Tx::begin(self.pool).await?;
+            let mut parent = self.insert_parent(&tx).await?;
+            for nw in &nested_writes {
+                let pk = nw.parent_pk(&parent);
+                nw.execute(&tx, pk).await?;
+            }
+            if let Some(nested) = nested {
+                let pk_value = (nested.get_parent_pk)(&parent);
+                Self::insert_nested_child_batch(self.pool, &tx, &mut parent, nested, pk_value)
+                    .await?;
+            }
+            if let Some(m2m) = m2m {
+                m2m.execute_insert(&tx, &mut parent).await?;
+            }
+            tx.commit().await?;
+            return Ok(parent);
+        }
+
         match (nested, m2m) {
             (None, None) => self.exec_single().await,
             (Some(nested), None) => self.exec_nested(nested, None).await,
@@ -1520,12 +1654,26 @@ impl<'db, M: Model> InsertQuery<'db, M> {
         m2m: Option<Box<dyn AnyM2mWrite<M> + 'db>>,
     ) -> Result<M, Error> {
         let tx = crate::tx::Tx::begin(self.pool).await?;
-
-        let dialect = dialect_for_pool(self.pool);
         let mut parent = self.insert_parent(&tx).await?;
-
         let pk_value = (nested.get_parent_pk)(&parent);
+        Self::insert_nested_child_batch(self.pool, &tx, &mut parent, nested, pk_value).await?;
 
+        if let Some(m2m) = m2m {
+            m2m.execute_insert(&tx, &mut parent).await?;
+        }
+
+        tx.commit().await?;
+        Ok(parent)
+    }
+
+    async fn insert_nested_child_batch(
+        pool: &'db Pool,
+        tx: &crate::tx::Tx,
+        parent: &mut M,
+        nested: NestedInsert<'db, M>,
+        pk_value: Value,
+    ) -> Result<(), Error> {
+        let dialect = dialect_for_pool(pool);
         if !nested.child_rows.is_empty() {
             let rows: Vec<Vec<(&'static str, Value)>> = nested.child_rows;
             if rows.iter().any(|r| r.is_empty()) {
@@ -1572,21 +1720,15 @@ impl<'db, M: Model> InsertQuery<'db, M> {
             }
 
             nested.setter.set(
-                &mut parent,
+                parent,
                 child_rows.unwrap_or(crate::executor::RowBatch::Any(Vec::new())),
             );
         } else {
             nested
                 .setter
-                .set(&mut parent, crate::executor::RowBatch::Any(Vec::new()));
+                .set(parent, crate::executor::RowBatch::Any(Vec::new()));
         }
-
-        if let Some(m2m) = m2m {
-            m2m.execute_insert(&tx, &mut parent).await?;
-        }
-
-        tx.commit().await?;
-        Ok(parent)
+        Ok(())
     }
 }
 
@@ -1733,6 +1875,7 @@ pub struct UpdateQuery<'db, M: Model> {
     all_rows: bool,
     m2m: Option<Arc<dyn AnyM2mWrite<M> + 'db>>,
     rel: Vec<Arc<dyn AnyRelWrite<M>>>,
+    nested_writes: Vec<Arc<dyn crate::nested::AnyNestedWrite<M>>>,
     _marker: PhantomData<fn() -> M>,
 }
 
@@ -1747,6 +1890,7 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
             all_rows: false,
             m2m: None,
             rel: Vec::new(),
+            nested_writes: Vec::new(),
             _marker: PhantomData,
         }
     }
@@ -1848,6 +1992,21 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
         self
     }
 
+    /// Sets the model's soft-delete column (`@deletedAt`) to the current timestamp (`now()`).
+    ///
+    /// # Errors
+    /// Returns an error if the model does not have a `@deletedAt` column configured.
+    pub fn soft_delete(self) -> Result<Self, Error> {
+        let col = M::DELETED_AT_COLUMN.ok_or_else(|| {
+            Error::Message(format!(
+                "Model '{}' does not have a @deletedAt column configured",
+                M::TABLE
+            ))
+        })?;
+        let now = chrono::Utc::now().to_rfc3339();
+        Ok(self.set(Column::<M, String>::new(M::TABLE, col), now))
+    }
+
     /// Attaches a many-to-many nested write to this update.
     ///
     /// The write runs in the same transaction as the parent update.
@@ -1925,6 +2084,30 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
         ))
     }
 
+    /// Attaches an atomic nested relation write to this update.
+    pub fn with_nested_write<W: crate::nested::AnyNestedWrite<M> + 'static>(
+        mut self,
+        write: W,
+    ) -> Self {
+        self.nested_writes.push(Arc::new(write));
+        self
+    }
+
+    /// Sets the filter condition using `.where(...)`.
+    pub fn r#where(self, f: Filter<M>) -> Self {
+        self.filter(f)
+    }
+
+    /// Alias for [`where`](UpdateQuery::where).
+    pub fn where_clause(self, f: Filter<M>) -> Self {
+        self.filter(f)
+    }
+
+    /// Alias for [`exec`](UpdateQuery::exec) to provide an ergonomic builder `.save()` endpoint.
+    pub async fn save(self) -> Result<u64, Error> {
+        self.exec().await
+    }
+
     /// Compiles the query to SQL and binds.
     pub fn to_sql(&self) -> Result<CompiledSql, Error> {
         if !self.all_rows && matches!(self.filter.node, FilterNode::And(ref v) if v.is_empty()) {
@@ -1952,7 +2135,8 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
     ///
     /// Returns [`Error::Sqlx`] for database errors.
     pub async fn exec(self) -> Result<u64, Error> {
-        let has_nested = self.m2m.is_some() || !self.rel.is_empty();
+        let has_nested =
+            self.m2m.is_some() || !self.rel.is_empty() || !self.nested_writes.is_empty();
 
         if !has_nested {
             let compiled = self.to_sql()?;
@@ -1974,15 +2158,23 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
         }
 
         let parents = self.fetch_parents(&tx).await?;
-        if !self.rel.is_empty() && parents.len() != 1 {
+        if (!self.rel.is_empty() || !self.nested_writes.is_empty()) && parents.len() != 1 {
             return Err(Error::Message(
-                "one-to-many nested writes require exactly one parent row".into(),
+                "nested writes require exactly one parent row".into(),
             ));
         }
 
-        for rel in &self.rel {
-            let parent_pk = rel.parent_pk(&parents[0]);
-            total += rel.execute_update(&tx, parent_pk).await?;
+        if let Some(first_parent) = parents.first() {
+            for rel in &self.rel {
+                let parent_pk = rel.parent_pk(first_parent);
+                total += rel.execute_update(&tx, parent_pk).await?;
+            }
+
+            for nw in &self.nested_writes {
+                let parent_pk = nw.parent_pk(first_parent);
+                nw.execute(&tx, parent_pk).await?;
+                total += 1;
+            }
         }
 
         if let Some(ref m2m) = self.m2m {

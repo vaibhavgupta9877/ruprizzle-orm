@@ -22,10 +22,19 @@ are also available: `sqlite-rusqlite` for synchronous SQLite and an experimental
 
 ## Status
 
-`1.0.0` is **published on crates.io** (2026-08-21, tag `v1.0.0`), preceded by
-`1.0.0-rc.1` the same day. The core P0–P8 implementation is complete,
-MySQL/MariaDB support is shipped, and the public API is covered by semantic
-versioning from this release onward.
+`1.0.1` is the **latest published release** on crates.io (2026-08-31, tag
+`v1.0.1`), a documentation-only patch over `1.0.0` (2026-08-21). The core P0–P8 implementation
+is complete, MySQL/MariaDB support is shipped, and the public API is covered by
+semantic versioning from this release onward.
+
+The v1.1–v1.5 feature line is prepared as `1.5.0` on `dev-main`, and is **not yet
+published to crates.io** — array filters, full-text search,
+soft deletes, offline query checking, nested writes, tree hierarchies,
+OpenTelemetry, read-replica routing, query caching, PostGIS and Ruprizzle Studio.
+See [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md). It was assessed and
+initially blocked — Studio's data plane and the edge adapters returned fabricated
+results rather than querying a database — and the findings and the remediation are
+in [`ProjectPlan/v2/ProductionReadinessV1_5.md`](../ProjectPlan/v2/ProductionReadinessV1_5.md).
 
 Two things were waived on the way here, both in writing rather than by omission:
 the W4-02 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors

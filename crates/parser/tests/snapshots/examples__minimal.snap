@@ -46,6 +46,8 @@ expression: schema
             "is_id": true,
             "is_unique": false,
             "is_updated_at": false,
+            "is_created_at": false,
+            "is_deleted_at": false,
             "ignore": false,
             "native_type": null,
             "renamed_from": null
@@ -69,6 +71,8 @@ expression: schema
             "is_id": false,
             "is_unique": true,
             "is_updated_at": false,
+            "is_created_at": false,
+            "is_deleted_at": false,
             "ignore": false,
             "native_type": null,
             "renamed_from": null
@@ -92,6 +96,8 @@ expression: schema
             "is_id": false,
             "is_unique": false,
             "is_updated_at": false,
+            "is_created_at": false,
+            "is_deleted_at": false,
             "ignore": false,
             "native_type": null,
             "renamed_from": null

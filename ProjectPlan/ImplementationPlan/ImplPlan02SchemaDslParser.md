@@ -220,7 +220,7 @@ fingerprint stability.
 
 **Owner:** Vaibhav Gupta · **Est:** 6h · **Shipped:** `crates/parser/src/validate.rs`
 (V01, V11, V14-empty, V16, V17) and `crates/parser/src/lower.rs` (V02–V10,
-V12–V15). The split is on "what does this rule need to point at": a rule that must
+V12–V15, V19). The split is on "what does this rule need to point at": a rule that must
 underline `@updatedAt` needs the attribute's span, which the IR deliberately does
 not keep (D-103).
 
@@ -247,6 +247,7 @@ short-circuits.
 | V16 | No table/column name collides after `@map` resolution | `NameCollision` |
 | V17 | Reserved Rust keywords in field names get `r#` escaping, warn if unclear | `ReservedKeyword` (warning) |
 | V18 | Dialect capability check (see P2) | `UnsupportedByDialect` — deferred to P2 (D-108) |
+| V19 | Every `@` and `@@` attribute is one the toolchain reads | `UnknownAttribute` (+ suggestion) |
 
 **V08 deserves detail** because it is where most schema bugs live. A relation is
 well-formed when:

@@ -661,7 +661,17 @@ UpdateQuery::<Item>::new(db.raw_pool())
 
 ## Array operators
 
-Array columns (or JSON-array columns on MySQL/SQLite) support `contains`, `contained_by`, and `overlaps`.
+Array columns (or JSON-array columns on MySQL/SQLite) support `contains`, `contained_by`, and `overlaps`, plus three aliases and an emptiness test:
+
+| Method | Meaning | Alias of |
+|---|---|---|
+| `has(value)` | the array contains this one element | — |
+| `has_every(values)` | the array contains **all** of these | `contains` |
+| `has_some(values)` | the array contains **any** of these | `overlaps` |
+| `is_empty()` / `is_not_empty()` | length is / is not zero | — |
+
+On Postgres these compile to native array operators (`= ANY`, `@>`, `<@`, `&&`,
+`cardinality`); on MySQL and SQLite to the equivalent JSON functions.
 
 ```rust,ignore
 // Requires a model with a Vec<String> column, e.g. Article::TAGS
@@ -672,6 +682,42 @@ let rows = db.select::<Article>()
     .fetch_all()
     .await?;
 ```
+
+## Full-text search
+
+`matches()` on a `String` or `Option<String>` column compiles to each backend's native
+full-text construct.
+
+| Dialect | Compiles to |
+|---|---|
+| Postgres | `to_tsvector('english', col) @@ plainto_tsquery('english', $1)` |
+| MySQL | `MATCH(col) AGAINST (?)` |
+| SQLite | `col MATCH ?`, with a `LIKE` fallback when no FTS table is in play |
+
+```rust,ignore
+let hits = db.select::<Article>()
+    .filter(article::BODY.matches("database migrations"))
+    .fetch_all()
+    .await?;
+```
+
+The query text is always bound as a parameter, never interpolated.
+
+## Soft deletes
+
+When a model has a `DateTime?` field marked `@deletedAt` (see the
+[schema reference](SchemaReference.md#field-attributes)), every generated query filters
+soft-deleted rows out by default. Two builder methods opt out, and they are mutually
+exclusive — the last one called wins.
+
+```rust,ignore
+db.post().find_many().fetch_all().await?;                 // live rows only
+db.post().find_many().with_deleted().fetch_all().await?;  // live + deleted
+db.post().find_many().only_deleted().fetch_all().await?;  // the recycle bin
+```
+
+`.to_sql()` shows the added `WHERE deleted_at IS NULL` predicate, so you can always see
+which of the three you built.
 
 ## Prepared statements
 

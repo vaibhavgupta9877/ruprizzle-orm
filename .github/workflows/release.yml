@@ -68,6 +68,10 @@ jobs:
           cargo clippy --workspace --all-targets
           --features ruprizzle/postgres-tokio-postgres,ruprizzle-integration-tests/postgres-tokio-postgres,ruprizzle-deep-tests/postgres-tokio-postgres
           -- -D warnings
+      # Studio is behind a non-default feature, so the runs above never compile it.
+      # See ProjectPlan/v2/ProductionReadinessV1_5.md section 4.5.
+      - run: cargo clippy -p ruprizzle-cli --features studio --all-targets -- -D warnings
+      - run: cargo test -p ruprizzle-cli --features studio
       - run: cargo test -p ruprizzle --test soak --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'
         env:
           RUPRIZZLE_TEST_RUSQLITE: 1
@@ -121,3 +125,11 @@ jobs:
         run: sleep 30
       - if: steps.mode.outputs.publish == 'true'
         run: cargo publish -p ruprizzle-cli --no-verify
+      - if: steps.mode.outputs.publish == 'true'
+        run: sleep 30
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle-turso --no-verify
+      - if: steps.mode.outputs.publish == 'true'
+        run: sleep 30
+      - if: steps.mode.outputs.publish == 'true'
+        run: cargo publish -p ruprizzle-d1 --no-verify

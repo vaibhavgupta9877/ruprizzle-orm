@@ -52,9 +52,14 @@ local/mutants-*.err
 # Generated coverage reports (kept in working tree, not committed)
 /local/coverage/
 
+/graphify-out/
+
 # cargo-mutants output
 /mutants.out
 /mutants.out.old
 
 # Isolated dev worktrees
 /.worktrees/
+
+# Lockfile of the standalone blog example, regenerated on demand
+/examples/blog/Cargo.lock

@@ -90,6 +90,10 @@ Use `@db.<native>` to override the default physical type for the active dialect.
 - `@ignore` — omit from the generated client.
 - `@db.<native>` — override the native type.
 - `@updatedAt` — automatically set to `now()` on every update (Postgres/MySQL).
+- `@deletedAt` — marks the model soft-deletable. The field must be `DateTime?`;
+  the parser rejects any other type with a diagnostic. Generated queries then add
+  `WHERE <column> IS NULL` by default — see
+  [soft deletes](QueryGuide.md#soft-deletes) for the opt-outs.
 
 ## Default expressions
 
