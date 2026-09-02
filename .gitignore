@@ -52,6 +52,8 @@ local/mutants-*.err
 # Generated coverage reports (kept in working tree, not committed)
 /local/coverage/
 
+/graphify-out/
+
 # cargo-mutants output
 /mutants.out
 /mutants.out.old
