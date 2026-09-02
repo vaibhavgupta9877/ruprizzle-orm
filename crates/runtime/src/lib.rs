@@ -3,8 +3,9 @@
 //! This crate provides the types that generated code compiles against: typed
 //! [`Column`]s, [`Filter`]s, [`Related`] wrappers, and the query builders that
 //! produce [`CompiledSql`]. It also owns connection pooling ([`Pool`]),
-//! transactions ([`Tx`]), query execution ([`Executor`]), and migration helpers
-//! re-exported from `ruprizzle_migrate` for the CLI.
+//! transactions ([`Tx`]), and query execution ([`Executor`]). Migrations live in
+//! the separate `ruprizzle-migrate` crate, which the CLI depends on directly —
+//! this crate does not re-export it.
 //!
 //! # Backends
 //!
@@ -31,7 +32,9 @@
 pub mod aggregate;
 pub mod cache;
 pub mod col;
+#[doc(hidden)]
 pub mod compile;
+#[doc(hidden)]
 pub mod counting;
 pub mod error;
 pub mod executor;
@@ -43,6 +46,7 @@ pub mod json;
 pub mod m2m;
 pub mod metrics;
 pub mod model;
+#[doc(hidden)]
 pub mod nested;
 #[doc(hidden)]
 pub mod offset_row;
@@ -69,6 +73,7 @@ pub mod types {
 }
 
 /// Decoding helpers for generated `FromRow` implementations.
+#[doc(hidden)]
 pub mod decode;
 
 /// Common imports for application code.

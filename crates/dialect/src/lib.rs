@@ -188,7 +188,12 @@ pub enum RustType {
 }
 
 /// An error produced while turning an IR field into a SQL column.
+///
+/// `#[non_exhaustive]`: this is a diagnostic type, and new dialects and new
+/// unsupported-construct classes add variants without that being a breaking
+/// change. Match with a trailing `_ =>` arm.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum DialectError {
     /// A `@db.*` native type is not supported by this dialect.
     #[error("`@db.{name}` is not supported on {dialect}")]

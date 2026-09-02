@@ -7,7 +7,12 @@ use ruprizzle_core::ir::{Model, ScalarType, Schema};
 use crate::manifest::{QueryEntry, QueryManifest, SourceLocation};
 
 /// An error found while validating a query offline.
+///
+/// `#[non_exhaustive]`: this is a diagnostic type, and new validation rules add
+/// variants without that being a breaking change. Match with a trailing `_ =>`
+/// arm.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum QueryCheckError {
     /// A table referenced by the query does not exist in the schema.
     UnknownTable {

@@ -29,6 +29,7 @@ use crate::span::Span;
 /// adding information, and would drift from the message it restates.
 #[derive(Debug, Error, Diagnostic)]
 #[allow(missing_docs)]
+#[non_exhaustive]
 pub enum SchemaError {
     /// Raw syntax error from the parser, rephrased for humans.
     #[error("{message}")]

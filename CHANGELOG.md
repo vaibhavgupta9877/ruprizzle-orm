@@ -6,7 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed
+
+- `QueryCheckError`, `SchemaError`, and `DialectError` are now `#[non_exhaustive]`.
+  All three are diagnostic types that gain variants as validation rules, dialects,
+  and schema checks are added; marking them now means those additions stay
+  non-breaking. Exhaustive `match`es on them need a trailing `_ =>` arm.
+- The `compile`, `counting`, `nested`, and `decode` modules of `ruprizzle` are
+  `#[doc(hidden)]`. They exist for generated code, not for application code; the
+  types worth naming (`CompiledSql`, `CountingExecutor`, the `Nested*` writers)
+  stay re-exported from the crate root and are unaffected.
+
+### Fixed
+
+- The `ruprizzle` crate docs claimed to re-export migration helpers from
+  `ruprizzle_migrate`. It never did — migrations live in the separate
+  `ruprizzle-migrate` crate, which the CLI depends on directly.
+
+### CI
+
+- `cargo public-api diff 1.5.0 --deny=all` runs for every published,
+  semver-covered crate. 1.5.0 is the baseline: no public item is added or removed
+  from here without the diff appearing in the job log.
+- `cargo hack --feature-powerset --depth 2 check` runs for `ruprizzle` and
+  `ruprizzle-cli`, covering every single feature and every pair rather than only
+  the hand-picked combinations in the feature matrix.
 
 
 ## [1.5.0] - 2026-09-02

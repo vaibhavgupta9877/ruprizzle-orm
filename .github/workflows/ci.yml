@@ -303,6 +303,64 @@ jobs:
         with:
           package: ruprizzle-core, ruprizzle-dialect, ruprizzle-parser, ruprizzle-codegen, ruprizzle-migrate, ruprizzle-macros, ruprizzle-check, ruprizzle-lsp, ruprizzle
 
+  public-api:
+    name: public API diff vs 1.5.0
+    runs-on: ubuntu-latest
+    # `cargo semver-checks` above catches the changes it has lints for.
+    # `cargo public-api` is the complementary check: it prints *every* item
+    # added or removed from the public surface and, with `--deny=all`, fails on
+    # any of them. 1.5.0 is the baseline release, so from here on no public item
+    # moves without the diff being read by a human in the job log first.
+    #
+    # Deliberately not run against `ruprizzle-testkit` or `xtask`: both are
+    # `publish = false` and out of scope for semver, per docs/Stability.md.
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - ruprizzle-core
+          - ruprizzle-dialect
+          - ruprizzle-parser
+          - ruprizzle-codegen
+          - ruprizzle-migrate
+          - ruprizzle-macros
+          - ruprizzle-check
+          - ruprizzle-lsp
+          - ruprizzle
+    steps:
+      - uses: actions/checkout@v4
+      # cargo-public-api builds rustdoc JSON, which is nightly-only. The crate
+      # itself is built by the stable toolchain; only the doc pass needs this.
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-public-api
+      - name: Diff public API against the 1.5.0 baseline
+        run: cargo public-api -p ${{ matrix.package }} diff 1.5.0 --deny=all
+
+  feature-powerset:
+    name: feature powerset (depth 2)
+    runs-on: ubuntu-latest
+    # The hand-written `feature-combination` matrix above covers the
+    # combinations we expect people to use. This covers the ones we don't: every
+    # feature on its own, and every pair, for the two crates users actually add
+    # to a `Cargo.toml`. Depth 2 rather than the full powerset keeps the job
+    # inside a sane runtime while still catching the usual failure -- a `cfg`
+    # block that only compiles when some *other* feature happens to be on.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      - name: Feature powerset for ruprizzle
+        run: cargo hack --feature-powerset --depth 2 check -p ruprizzle
+      - name: Feature powerset for ruprizzle-cli
+        run: cargo hack --feature-powerset --depth 2 check -p ruprizzle-cli
+
   harden:
     name: pre-release hardening
     runs-on: ubuntu-latest
