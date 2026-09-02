@@ -5,6 +5,9 @@ use ruprizzle::{
     UpdateQuery, connect,
 };
 
+mod common;
+use common::PoolWithDir;
+
 #[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct User {
     id: i64,
@@ -83,7 +86,7 @@ impl Model for Post {
 const POST_TITLE: Column<Post, String> = Column::new("nw_posts", "title");
 const POST_AUTHOR_ID: Column<Post, Option<i64>> = Column::new("nw_posts", "author_id");
 
-async fn fresh_pool() -> Pool {
+async fn fresh_pool() -> PoolWithDir {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
@@ -113,7 +116,7 @@ async fn fresh_pool() -> Pool {
     .await
     .unwrap();
 
-    pool
+    (pool, dir)
 }
 
 async fn seed(pool: &Pool) -> (User, Vec<Post>) {
@@ -141,7 +144,7 @@ async fn seed(pool: &Pool) -> (User, Vec<Post>) {
 
 #[tokio::test]
 async fn connect_existing_children() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
     let (alice, posts) = seed(&pool).await;
 
     let affected = UpdateQuery::<User>::new(&pool)
@@ -167,7 +170,7 @@ async fn connect_existing_children() {
 
 #[tokio::test]
 async fn set_replaces_existing_children() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
     let (alice, posts) = seed(&pool).await;
 
     UpdateQuery::<User>::new(&pool)
@@ -208,7 +211,7 @@ async fn set_replaces_existing_children() {
 
 #[tokio::test]
 async fn disconnect_specific_children() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
     let (alice, posts) = seed(&pool).await;
 
     UpdateQuery::<User>::new(&pool)
@@ -242,7 +245,7 @@ async fn disconnect_specific_children() {
 
 #[tokio::test]
 async fn delete_cascade_removes_children() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
     let (alice, posts) = seed(&pool).await;
 
     UpdateQuery::<User>::new(&pool)
@@ -271,7 +274,7 @@ async fn delete_cascade_removes_children() {
 
 #[tokio::test]
 async fn delete_set_null_clears_fk() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
     let (alice, posts) = seed(&pool).await;
 
     UpdateQuery::<User>::new(&pool)
@@ -304,7 +307,7 @@ async fn delete_set_null_clears_fk() {
 
 #[tokio::test]
 async fn delete_restrict_blocks_when_children_exist() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
     let (alice, posts) = seed(&pool).await;
 
     UpdateQuery::<User>::new(&pool)

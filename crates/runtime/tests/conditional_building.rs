@@ -5,8 +5,11 @@
 //! builder's type state.
 
 use ruprizzle::{
-    Column, DeleteQuery, Executor, InsertQuery, Model, Pool, SelectQuery, UpdateQuery, connect,
+    Column, DeleteQuery, Executor, InsertQuery, Model, SelectQuery, UpdateQuery, connect,
 };
+
+mod common;
+use common::PoolWithDir;
 
 #[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct Task {
@@ -48,7 +51,7 @@ const ID: Column<Task, i64> = Column::new("cond_tasks", "id");
 const NAME: Column<Task, String> = Column::new("cond_tasks", "name");
 const PRIORITY: Column<Task, i64> = Column::new("cond_tasks", "priority");
 
-async fn fresh_pool() -> Pool {
+async fn fresh_pool() -> PoolWithDir {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
@@ -69,12 +72,12 @@ async fn fresh_pool() -> Pool {
     .await
     .unwrap();
 
-    pool
+    (pool, dir)
 }
 
 #[tokio::test]
 async fn select_filter_if_applies_and_skips() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     InsertQuery::<Task>::new(&pool)
         .set(NAME, "alpha")
@@ -109,7 +112,7 @@ async fn select_filter_if_applies_and_skips() {
 
 #[tokio::test]
 async fn select_order_by_if_and_limit_if() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     InsertQuery::<Task>::new(&pool)
         .set(NAME, "a")
@@ -144,7 +147,7 @@ async fn select_order_by_if_and_limit_if() {
 
 #[tokio::test]
 async fn update_set_if_and_filter_if() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     InsertQuery::<Task>::new(&pool)
         .set(NAME, "old")
@@ -174,7 +177,7 @@ async fn update_set_if_and_filter_if() {
 
 #[tokio::test]
 async fn delete_filter_if_with_none_deletes_all_rows() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     InsertQuery::<Task>::new(&pool)
         .set(NAME, "keep")
@@ -212,7 +215,7 @@ async fn delete_filter_if_with_none_deletes_all_rows() {
 
 #[tokio::test]
 async fn insert_set_if_skips_none() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     let row = InsertQuery::<Task>::new(&pool)
         .set(NAME, "always")

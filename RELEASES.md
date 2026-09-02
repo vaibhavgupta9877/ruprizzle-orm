@@ -44,7 +44,7 @@ pauses between uploads to let that indexing propagate. Live publishes are refuse
 when `CI` or `GITHUB_ACTIONS` is set, so the workflow is the only automated path.
 
 
-## 1.5.0 (prepared, not yet published)
+## 1.5.0 (2026-09-02)
 
 The v1.1–v1.5 feature line, developed on `dev-v2-x` and cut as one minor version:
 the workspace never moved off `1.0.0` while five milestones landed, so the intermediate
@@ -62,11 +62,16 @@ feature): an embedded Axum + HTMX workbench with a schema dashboard, interactive
 table browser, inline cell editor, foreign-key drawer, SQL sandbox, `EXPLAIN` viewer
 and a migration safety diff.
 
-**This release was assessed and blocked before it shipped**, at 56/100, and the block
-is the reason it looks the way it does. Studio's data plane returned fabricated values
-without querying the database, its migration safety diff reported `SAFE` for every
-model without opening a connection, and the three edge adapters were in-memory
-`HashMap`s with a database's name on them. §8 and §10 of
+This release was initially tagged and the publish workflow was triggered, but it failed
+during `cargo test --workspace` because SQLite temporary directories were dropped before
+their pools. The `v1.5.0` tag has been re-pointed to the fixed commit and the workflow
+re-triggered.
+
+The pre-release assessment and block is the reason the release looks the way it does.
+Studio's data plane returned fabricated values without querying the database, its
+migration safety diff reported `SAFE` for every model without opening a connection, and
+the three edge adapters were in-memory `HashMap`s with a database's name on them. §8
+and §10 of
 [ProjectPlan/v2/ProductionReadinessV1_5.md](ProjectPlan/v2/ProductionReadinessV1_5.md)
 record what each of those became. In short: Studio queries the database on every
 screen and says so plainly when it cannot.
@@ -82,7 +87,7 @@ A live round-trip against a real Turso database and a real D1 database is still
 unperformed; the wire format is pinned by the providers' published specifications and
 by the local HTTP tests.
 
-Full detail in [CHANGELOG.md](CHANGELOG.md#150---2026-08-31).
+Full detail in [CHANGELOG.md](CHANGELOG.md#150---2026-09-02).
 
 
 ## 1.0.1

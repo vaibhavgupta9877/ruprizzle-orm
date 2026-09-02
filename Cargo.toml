@@ -64,3 +64,10 @@ debug = 1
 
 [profile.test]
 debug = 1
+
+[profile.release]
+# Tuned for the cross-ORM benchmark and for production builds: thin LTO and a
+# single codegen unit give the compiler enough freedom to inline across the
+# workspace without the multi-minute cost of full LTO.
+lto = "thin"
+codegen-units = 1

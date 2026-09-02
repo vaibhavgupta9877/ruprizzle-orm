@@ -9,11 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 _Nothing yet._
 
 
-## [1.5.0] - 2026-08-31
+## [1.5.0] - 2026-09-02
 
-**Prepared, not yet published.** This entry is complete and the workspace is pinned
-to `1.5.0`, but the crates have not been pushed to crates.io and `v1.5.0` is not yet
-tagged; `1.0.1` remains the latest published version.
+**Released.** The first `v1.5.0` tag triggered the publish workflow, but it failed
+because SQLite temporary directories were dropped before their pools. The tag has
+been re-pointed to the fixed commit and the workflow re-triggered.
+
+`1.5.0` is now the latest published version.
 
 The v1.1–v1.5 feature line, developed on `dev-v2-x`, released as a single minor
 version. The workspace never moved off `1.0.0` while five milestones landed, so the
@@ -24,6 +26,20 @@ intermediate numbers were never cut and this release carries all of them.
 that document's §8 records the remediation this release contains. The v1.5 surface it
 found fabricated — Studio's data plane, the migration safety diff, the edge adapters —
 is now wired to a real database, or, where the crate had no reason to exist, deleted.
+
+### Fixed — release pipeline
+
+- **SQLite tests no longer drop their `TempDir` before the pool.** Runtime integration
+  tests now keep the temporary directory alive through a `PoolWithDir` helper.
+- **MySQL integration tests get an isolated database per test.** `ruprizzle-testkit`
+  creates a `rz_<uuid>` database and drops it when the test finishes, preventing table
+  collisions in concurrent CI runs.
+- **`both_dbs!` skips network backends whose URL is empty.** CI matrices that test
+  one backend at a time no longer fail the other backends when `RUPRIZZLE_REQUIRE_DB=1`.
+- **MySQL aggregate SQL snapshots added.** Missing `insta` snapshots for the
+  `aggregate.rs` tests are now in place.
+- **Flaky `cache_ttl_expiration` unit test hardened.** The assertion now waits for the
+  cache's own recorded deadline plus a small grace period.
 
 ### Added — v1.1 (query expressiveness, rich types, search)
 

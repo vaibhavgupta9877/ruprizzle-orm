@@ -1,6 +1,9 @@
 //! Prepared statement tests (W2-07 Step 1).
 
-use ruprizzle::{Column, Encodable, Executor, InsertQuery, Model, Pool, SelectQuery, connect};
+use ruprizzle::{Column, Encodable, Executor, InsertQuery, Model, SelectQuery, connect};
+
+mod common;
+use common::PoolWithDir;
 
 #[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct Task {
@@ -37,7 +40,7 @@ impl Model for Task {
 
 const NAME: Column<Task, String> = Column::new("prep_tasks", "name");
 
-async fn fresh_pool() -> Pool {
+async fn fresh_pool() -> PoolWithDir {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
@@ -58,12 +61,12 @@ async fn fresh_pool() -> Pool {
     .await
     .unwrap();
 
-    pool
+    (pool, dir)
 }
 
 #[tokio::test]
 async fn prepared_select_can_rebind_and_reexecute() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     InsertQuery::<Task>::new(&pool)
         .set(NAME, "one")
@@ -94,7 +97,7 @@ async fn prepared_select_can_rebind_and_reexecute() {
 
 #[tokio::test]
 async fn prepared_select_bind_many() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     InsertQuery::<Task>::new(&pool)
         .set(NAME, "x")

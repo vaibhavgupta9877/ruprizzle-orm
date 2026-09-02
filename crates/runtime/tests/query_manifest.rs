@@ -1,6 +1,9 @@
 //! Query manifest recording for offline validation.
 
-use ruprizzle::{Column, Executor, Model, Pool, SelectQuery, connect};
+use ruprizzle::{Column, Executor, Model, SelectQuery, connect};
+
+mod common;
+use common::PoolWithDir;
 
 #[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct Task {
@@ -54,7 +57,7 @@ mod rusqlite_impls {
     }
 }
 
-async fn fresh_pool() -> Pool {
+async fn fresh_pool() -> PoolWithDir {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
@@ -70,7 +73,7 @@ async fn fresh_pool() -> Pool {
     .await
     .unwrap();
 
-    pool
+    (pool, dir)
 }
 
 #[tokio::test]
@@ -80,7 +83,7 @@ async fn records_to_sql_output_when_enabled() {
     }
     ruprizzle::query_manifest::clear();
 
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
     let _ = SelectQuery::<Task>::new(&pool)
         .filter(NAME.eq("x"))
         .to_sql()

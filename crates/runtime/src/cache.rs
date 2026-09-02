@@ -234,7 +234,10 @@ mod tests {
         }
 
         // Sleep until the deadline has definitely passed, however long that takes.
-        while set_at.elapsed() <= TTL {
+        // Use a small grace period to account for the `Instant::now()` sampled
+        // inside `cache.set` being slightly after `set_at`.
+        const GRACE: Duration = Duration::from_millis(100);
+        while set_at.elapsed() <= TTL + GRACE {
             sleep(Duration::from_millis(10));
         }
         assert_eq!(cache.get("k1"), None);

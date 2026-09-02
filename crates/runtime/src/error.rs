@@ -46,11 +46,11 @@ pub enum Error {
     AcquireTimeout { reason: String },
 
     #[error("sqlx error: {0}")]
-    Sqlx(sqlx::Error),
+    Sqlx(#[source] sqlx::Error),
 
     #[cfg(feature = "postgres-tokio-postgres")]
     #[error("tokio-postgres error: {0}")]
-    TokioPostgres(tokio_postgres::Error),
+    TokioPostgres(#[source] tokio_postgres::Error),
 
     #[error("operation not yet implemented")]
     NotImplemented,

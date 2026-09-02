@@ -4,7 +4,10 @@
 //! `Any` backend, which uses the default `sqlx` unbuffered path.
 
 use futures_util::StreamExt;
-use ruprizzle::{Column, Executor, InsertQuery, Model, Pool, SelectQuery, connect};
+use ruprizzle::{Column, Executor, InsertQuery, Model, SelectQuery, connect};
+
+mod common;
+use common::PoolWithDir;
 
 #[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct Task {
@@ -42,7 +45,7 @@ impl Model for Task {
 const ID: Column<Task, i64> = Column::new("stream_tasks", "id");
 const NAME: Column<Task, String> = Column::new("stream_tasks", "name");
 
-async fn fresh_pool() -> Pool {
+async fn fresh_pool() -> PoolWithDir {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
@@ -63,12 +66,12 @@ async fn fresh_pool() -> Pool {
     .await
     .unwrap();
 
-    pool
+    (pool, dir)
 }
 
 #[tokio::test]
 async fn stream_unbuffered_returns_all_rows() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     let names = ["a", "b", "c", "d", "e"];
     for name in names {
@@ -96,7 +99,7 @@ async fn stream_unbuffered_returns_all_rows() {
 
 #[tokio::test]
 async fn stream_unbuffered_with_filter() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     InsertQuery::<Task>::new(&pool)
         .set(NAME, "keep")
@@ -121,7 +124,7 @@ async fn stream_unbuffered_with_filter() {
 
 #[tokio::test]
 async fn stream_unbuffered_large_result() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     let n = 1_000;
     for i in 0..n {

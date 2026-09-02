@@ -1,8 +1,11 @@
 use ruprizzle::{
     Column, Encodable, Executor, IncludeList, IncludeOne, InsertManyQuery, InsertQuery, Model,
-    NestedSetter, Pool, Related, SelectQuery, Value,
+    NestedSetter, Related, SelectQuery, Value,
 };
 use sqlx::FromRow;
+
+mod common;
+use common::PoolWithDir;
 
 #[derive(Debug, Clone, Default, FromRow)]
 struct User {
@@ -120,7 +123,7 @@ fn posts_by_author() -> IncludeList<'static, Post, Post, i64, ()> {
     )
 }
 
-async fn fresh_pool() -> Pool {
+async fn fresh_pool() -> PoolWithDir {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
@@ -130,12 +133,13 @@ async fn fresh_pool() -> Pool {
         ""
     };
     let url = format!("sqlite:///{}?mode=rwc{}", file, driver);
-    ruprizzle::connect(&url).await.unwrap()
+    let pool = ruprizzle::connect(&url).await.unwrap();
+    (pool, dir)
 }
 
 #[tokio::test]
 async fn include_one_to_many_round_trip() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     pool.execute_raw(
         "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
@@ -197,7 +201,7 @@ async fn include_one_to_many_round_trip() {
 
 #[tokio::test]
 async fn include_with_filter_and_take_round_trip() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     pool.execute_raw(
         "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
@@ -245,7 +249,7 @@ async fn include_with_filter_and_take_round_trip() {
 
 #[tokio::test]
 async fn exec_one_and_optional_with_include_round_trip() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     pool.execute_raw(
         "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
@@ -312,7 +316,7 @@ async fn exec_one_and_optional_with_include_round_trip() {
 
 #[tokio::test]
 async fn nested_create_round_trip() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     pool.execute_raw(
         "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
@@ -362,7 +366,7 @@ async fn nested_create_round_trip() {
 
 #[tokio::test]
 async fn include_list_duplicate_parent_key_round_trip() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     pool.execute_raw(
         "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"

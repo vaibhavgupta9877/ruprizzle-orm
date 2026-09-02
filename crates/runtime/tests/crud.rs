@@ -1,8 +1,11 @@
 //! End-to-end CRUD round-trip using a live SQLite `Any` pool.
 
 use ruprizzle::{
-    Column, DeleteQuery, Executor, InsertQuery, Model, Pool, SelectQuery, UpdateQuery, connect,
+    Column, DeleteQuery, Executor, InsertQuery, Model, SelectQuery, UpdateQuery, connect,
 };
+
+mod common;
+use common::PoolWithDir;
 
 #[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
 struct Task {
@@ -40,7 +43,7 @@ impl Model for Task {
 const ID: Column<Task, i64> = Column::new("tasks", "id");
 const NAME: Column<Task, String> = Column::new("tasks", "name");
 
-async fn fresh_pool() -> Pool {
+async fn fresh_pool() -> PoolWithDir {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
@@ -61,12 +64,12 @@ async fn fresh_pool() -> Pool {
     .await
     .unwrap();
 
-    pool
+    (pool, dir)
 }
 
 #[tokio::test]
 async fn insert_and_select_round_trip() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     let inserted: Task = InsertQuery::<Task>::new(&pool)
         .set(NAME, "first")
@@ -87,7 +90,7 @@ async fn insert_and_select_round_trip() {
 
 #[tokio::test]
 async fn update_and_delete_round_trip() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     InsertQuery::<Task>::new(&pool)
         .set(NAME, "old")
@@ -123,7 +126,7 @@ async fn update_and_delete_round_trip() {
 
 #[tokio::test]
 async fn projection_round_trip() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     InsertQuery::<Task>::new(&pool)
         .set(NAME, "ada")
@@ -143,7 +146,7 @@ async fn projection_round_trip() {
 
 #[tokio::test]
 async fn transaction_raw_round_trip() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
 
     let tx = ruprizzle::Tx::begin(&pool).await.unwrap();
 

@@ -63,3 +63,7 @@ local/mutants-*.err
 
 # Lockfile of the standalone blog example, regenerated on demand
 /examples/blog/Cargo.lock
+
+# CI / release log downloads
+/ci_*.log
+/release_*.log

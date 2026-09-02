@@ -139,6 +139,8 @@ enum Inner {
     MySql {
         _mysql_pool: MySqlPool,
         any_pool: AnyPool,
+        database: String,
+        admin_url: String,
     },
     Sqlite {
         sqlite_pool: SqlitePool,
@@ -183,8 +185,17 @@ impl TestDb {
 
     async fn connect_postgres() -> std::result::Result<Self, TestDbError> {
         let url = std::env::var(PG_URL_ENV)
-            .or_else(|_| std::env::var("DATABASE_URL"))
-            .unwrap_or_else(|_| DEFAULT_PG_URL.to_owned());
+            .ok()
+            .filter(|v| !v.is_empty())
+            .or_else(|| {
+                std::env::var("DATABASE_URL")
+                    .ok()
+                    .filter(|v| {
+                        !v.is_empty()
+                            && (v.starts_with("postgres://") || v.starts_with("postgresql://"))
+                    })
+            })
+            .unwrap_or_else(|| DEFAULT_PG_URL.to_owned());
 
         let admin = PgPoolOptions::new()
             .max_connections(1)
@@ -267,8 +278,69 @@ impl TestDb {
     #[allow(clippy::too_many_lines)]
     async fn connect_mysql() -> std::result::Result<Self, TestDbError> {
         let url = std::env::var(MYSQL_URL_ENV)
-            .or_else(|_| std::env::var("DATABASE_URL"))
-            .unwrap_or_else(|_| DEFAULT_MYSQL_URL.to_owned());
+            .ok()
+            .filter(|v| !v.is_empty())
+            .or_else(|| {
+                std::env::var("DATABASE_URL")
+                    .ok()
+                    .filter(|v| !v.is_empty() && v.starts_with("mysql://"))
+            })
+            .unwrap_or_else(|| DEFAULT_MYSQL_URL.to_owned());
+
+        // Split the URL into the host/credential portion and an existing path
+        // (database) or query string.  The admin connection needs to talk to the
+        // server without a database so it can create and later drop a unique one.
+        let (base_url, query) = if let Some(pos) = url.find('?') {
+            (&url[..pos], Some(&url[pos + 1..]))
+        } else {
+            (&url[..], None)
+        };
+        let prefix = "mysql://";
+        if !base_url.starts_with(prefix) {
+            return Err(TestDbError::Unavailable {
+                backend: Backend::MySql,
+                reason: format!("{url} is not a valid mysql:// URL"),
+            });
+        }
+        let rest = &base_url[prefix.len()..];
+        let (host_part, _existing_db) = if let Some(pos) = rest.find('/') {
+            (&rest[..pos], &rest[pos + 1..])
+        } else {
+            (rest, "")
+        };
+        let admin_url = if let Some(q) = query {
+            format!("{prefix}{host_part}?{q}")
+        } else {
+            format!("{prefix}{host_part}")
+        };
+
+        let admin = MySqlPoolOptions::new()
+            .max_connections(1)
+            .acquire_timeout(Duration::from_secs(5))
+            .connect(&admin_url)
+            .await
+            .map_err(|e| TestDbError::Unavailable {
+                backend: Backend::MySql,
+                reason: format!(
+                    "{e} (url from {MYSQL_URL_ENV}/DATABASE_URL, default {DEFAULT_MYSQL_URL})"
+                ),
+            })?;
+
+        let database = format!("rz_{}", uuid::Uuid::new_v4().simple());
+        sqlx::query(&format!("CREATE DATABASE `{database}`"))
+            .execute(&admin)
+            .await
+            .map_err(|source| TestDbError::Setup {
+                backend: Backend::MySql,
+                source,
+            })?;
+        admin.close().await;
+
+        let test_url = if let Some(q) = query {
+            format!("{prefix}{host_part}/{database}?{q}")
+        } else {
+            format!("{prefix}{host_part}/{database}")
+        };
 
         let mysql_pool = MySqlPoolOptions::new()
             .max_connections(4)
@@ -281,13 +353,11 @@ impl TestDb {
                     Ok(())
                 })
             })
-            .connect(&url)
+            .connect(&test_url)
             .await
             .map_err(|e| TestDbError::Unavailable {
                 backend: Backend::MySql,
-                reason: format!(
-                    "{e} (url from {MYSQL_URL_ENV}/DATABASE_URL, default {DEFAULT_MYSQL_URL})"
-                ),
+                reason: e.to_string(),
             })?;
 
         let any_pool = AnyPoolOptions::new()
@@ -301,7 +371,7 @@ impl TestDb {
                     Ok(())
                 })
             })
-            .connect(&url)
+            .connect(&test_url)
             .await
             .map_err(|e| TestDbError::Unavailable {
                 backend: Backend::MySql,
@@ -314,6 +384,8 @@ impl TestDb {
             inner: Inner::MySql {
                 _mysql_pool: mysql_pool,
                 any_pool,
+                database,
+                admin_url,
             },
             pool,
         })
@@ -546,6 +618,17 @@ impl TestDb {
             _ => None,
         }
     }
+
+    /// The isolated database and the URL that can drop it, on `MySQL` only.
+    #[must_use]
+    fn mysql_schema_info(&self) -> Option<(String, String)> {
+        match &self.inner {
+            Inner::MySql {
+                database, admin_url, ..
+            } => Some((database.clone(), admin_url.clone())),
+            _ => None,
+        }
+    }
 }
 
 /// Drops a Postgres test schema, waiting for the server to confirm it.
@@ -563,6 +646,21 @@ async fn drop_schema(schema: &str, admin_url: &str) {
     }
 }
 
+/// Drops a `MySQL` test database, waiting for the server to confirm it.
+async fn drop_mysql_db(database: &str, admin_url: &str) {
+    if let Ok(pool) = MySqlPoolOptions::new()
+        .max_connections(1)
+        .acquire_timeout(Duration::from_secs(5))
+        .connect(admin_url)
+        .await
+    {
+        let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS `{database}`"))
+            .execute(&pool)
+            .await;
+        pool.close().await;
+    }
+}
+
 impl Drop for TestDb {
     fn drop(&mut self) {
         // Best-effort fallback for the panic path. `#[tokio::test]` builds a
@@ -571,22 +669,46 @@ impl Drop for TestDb {
         // a long-lived test database accumulates tens of thousands of abandoned
         // `rz_*` schemas. `run_case` does the cleanup that actually works, with an
         // awaited drop. SQLite needs nothing here: `TempDir` removes the file.
-        if let Inner::Postgres {
-            schema, admin_url, ..
-        } = &self.inner
-        {
-            let (schema, url) = (schema.clone(), admin_url.clone());
-            if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                handle.spawn(async move {
-                    if let Ok(pool) = PgPoolOptions::new().max_connections(1).connect(&url).await {
-                        let _ =
-                            sqlx::query(&format!(r#"DROP SCHEMA IF EXISTS "{schema}" CASCADE"#))
-                                .execute(&pool)
-                                .await;
-                        pool.close().await;
-                    }
-                });
+        match &self.inner {
+            Inner::Postgres {
+                schema, admin_url, ..
+            } => {
+                let (schema, url) = (schema.clone(), admin_url.clone());
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    handle.spawn(async move {
+                        if let Ok(pool) =
+                            PgPoolOptions::new().max_connections(1).connect(&url).await
+                        {
+                            let _ = sqlx::query(&format!(
+                                r#"DROP SCHEMA IF EXISTS "{schema}" CASCADE"#
+                            ))
+                            .execute(&pool)
+                            .await;
+                            pool.close().await;
+                        }
+                    });
+                }
             }
+            Inner::MySql {
+                database, admin_url, ..
+            } => {
+                let (database, url) = (database.clone(), admin_url.clone());
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    handle.spawn(async move {
+                        if let Ok(pool) =
+                            MySqlPoolOptions::new().max_connections(1).connect(&url).await
+                        {
+                            let _ = sqlx::query(&format!(
+                                "DROP DATABASE IF EXISTS `{database}`"
+                            ))
+                            .execute(&pool)
+                            .await;
+                            pool.close().await;
+                        }
+                    });
+                }
+            }
+            Inner::Sqlite { .. } => {}
         }
     }
 }
@@ -711,6 +833,29 @@ impl Drop for IsolatedSchema {
     }
 }
 
+/// Returns whether a backend URL is configured for the current process.
+///
+/// `SQLite` is always considered configured.  For network backends, an explicit
+/// `RUPRIZZLE_TEST_*_URL` or a `DATABASE_URL` whose scheme matches the backend
+/// counts as configured.  This lets CI matrices test one backend at a time by
+/// leaving the other URL empty, without `RUPRIZZLE_REQUIRE_DB=1` causing a
+/// panic for the intentionally missing one.
+fn backend_configured(backend: Backend) -> bool {
+    match backend {
+        Backend::Sqlite => true,
+        Backend::Postgres => {
+            std::env::var(PG_URL_ENV).is_ok_and(|v| !v.is_empty())
+                || std::env::var("DATABASE_URL").is_ok_and(|v| {
+                    !v.is_empty() && (v.starts_with("postgres://") || v.starts_with("postgresql://"))
+                })
+        }
+        Backend::MySql => {
+            std::env::var(MYSQL_URL_ENV).is_ok_and(|v| !v.is_empty())
+                || std::env::var("DATABASE_URL").is_ok_and(|v| !v.is_empty() && v.starts_with("mysql://"))
+        }
+    }
+}
+
 /// Runs one case of a [`both_dbs!`] test, applying the skip policy.
 ///
 /// Not intended to be called directly; the macro generates the calls.
@@ -724,6 +869,12 @@ where
     F: FnOnce(TestDb) -> Fut,
     Fut: std::future::Future<Output = Result>,
 {
+    if !backend_configured(backend) {
+        eprintln!("skipping {backend}: no URL configured ({PG_URL_ENV}/{MYSQL_URL_ENV}/DATABASE_URL)");
+        eprintln!("  (set {REQUIRE_DB_ENV}=1 to make an unconfigured backend a failure)");
+        return;
+    }
+
     let db = match TestDb::connect(backend, setup_sql).await {
         Ok(db) => db,
         Err(TestDbError::Unavailable { reason, .. }) => {
@@ -741,11 +892,15 @@ where
 
     // Captured before `db` moves into the body, so the schema can be dropped
     // with an awaited query rather than a spawn that never runs.
-    let schema_info = db.pg_schema_info();
+    let pg_info = db.pg_schema_info();
+    let mysql_info = db.mysql_schema_info();
     let result = body(db).await;
 
-    if let Some((schema, admin_url)) = schema_info {
+    if let Some((schema, admin_url)) = pg_info {
         drop_schema(&schema, &admin_url).await;
+    }
+    if let Some((database, admin_url)) = mysql_info {
+        drop_mysql_db(&database, &admin_url).await;
     }
 
     if let Err(e) = result {

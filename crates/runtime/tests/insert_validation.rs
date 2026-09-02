@@ -1,10 +1,13 @@
 //! Regression tests for BUG-05: empty insert rows must error, not panic.
 
 use ruprizzle::{
-    Column, Encodable, Executor, InsertManyQuery, InsertQuery, Model, NestedSetter, Pool, Related,
+    Column, Encodable, Executor, InsertManyQuery, InsertQuery, Model, NestedSetter, Related,
     Value, connect,
 };
 use sqlx::FromRow;
+
+mod common;
+use common::PoolWithDir;
 
 #[derive(Debug, Clone, Default, FromRow)]
 #[allow(dead_code)]
@@ -46,7 +49,7 @@ impl NestedSetter<Task> for SetChildren {
     }
 }
 
-async fn fresh_pool() -> Pool {
+async fn fresh_pool() -> PoolWithDir {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
@@ -66,12 +69,12 @@ async fn fresh_pool() -> Pool {
     .await
     .unwrap();
 
-    pool
+    (pool, dir)
 }
 
 #[tokio::test]
 async fn insert_many_empty_row_errors() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
     let err = InsertManyQuery::<Task>::new(&pool)
         .row([])
         .exec()
@@ -87,7 +90,7 @@ async fn insert_many_empty_row_errors() {
 
 #[tokio::test]
 async fn insert_query_with_related_empty_child_row_errors() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
     let err = InsertQuery::<Task>::new(&pool)
         .set(NAME, "parent")
         .with_related(
@@ -109,7 +112,7 @@ async fn insert_query_with_related_empty_child_row_errors() {
 
 #[tokio::test]
 async fn insert_many_heterogeneous_rows_errors() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
     let err = InsertManyQuery::<Task>::new(&pool)
         .row([("name", Value::Str("first".into()))])
         .row([
@@ -129,7 +132,7 @@ async fn insert_many_heterogeneous_rows_errors() {
 
 #[tokio::test]
 async fn insert_many_wrong_column_order_errors() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
     let err = InsertManyQuery::<Task>::new(&pool)
         .row([
             ("name", Value::Str("first".into())),
@@ -152,7 +155,7 @@ async fn insert_many_wrong_column_order_errors() {
 
 #[tokio::test]
 async fn insert_query_with_related_heterogeneous_child_rows_errors() {
-    let pool = fresh_pool().await;
+    let (pool, _dir) = fresh_pool().await;
     let err = InsertQuery::<Task>::new(&pool)
         .set(NAME, "parent")
         .with_related(
