@@ -140,6 +140,8 @@ is now wired to a real database, or, where the crate had no reason to exist, del
   supports interactive transactions, and `stream_raw` on both is a streaming
   interface over a fully buffered response. Turso has no embedded-replica support,
   which needs the native libSQL library.
+- The `turso` and `d1` adapters have not been run against the providers' live
+  hosted services; verification is against local HTTP fakes.
 
 
 ## [1.0.1] - 2026-08-31

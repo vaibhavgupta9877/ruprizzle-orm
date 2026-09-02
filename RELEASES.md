@@ -78,6 +78,10 @@ test suite nor a contributor needs a provider account. `ruprizzle-neon` was dele
 Neon is ordinary Postgres over TLS, so its connection string goes straight to
 `ruprizzle::connect` and an adapter crate would wrap nothing.
 
+A live round-trip against a real Turso database and a real D1 database is still
+unperformed; the wire format is pinned by the providers' published specifications and
+by the local HTTP tests.
+
 Full detail in [CHANGELOG.md](CHANGELOG.md#150---2026-08-31).
 
 
