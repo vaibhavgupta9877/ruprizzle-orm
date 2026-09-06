@@ -1,8 +1,10 @@
-# This workspace defaults to a shared target directory on the G: drive to keep
-# the project checkout light.  The path is Windows-specific; on CI or other
-# platforms set CARGO_TARGET_DIR to override it.
-[build]
-target-dir = "G:/cargo-target"
+# Repo-wide cargo settings.  Keep this file portable: anything specific to one
+# machine (target directory, linker, job count) belongs in the developer's own
+# ~/.cargo/config.toml or in CARGO_TARGET_DIR, not here.
+#
+# Contributors who build several checkouts of this workspace should point
+# `build.target-dir` in their ~/.cargo/config.toml at a single directory on a
+# fast local filesystem; see the build-environment section of CONTRIBUTING.md.
 
 [alias]
 xtask = "run -p xtask --"
