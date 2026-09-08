@@ -1,342 +1,230 @@
 # Production Readiness and ORM Solution Assessment
 
-> **Note (2026-08-21):** This assessment is a snapshot from 2026-08-19. The
-> 48-hour W4-02 `rusqlite` soak has since been **waived** after 15.56 h /
-> 1.46 B ops / 0 errors (see `ProjectPlan/ProductionReadiness.md` §14/§15 and
-> `docs/SoakReport.md`).
->
-> As of the same date, the red `fmt`/`clippy`/`test`/`xtask` gates
-> (`ProjectPlan/ProductionReadinessSolPlan.md` V1-01) and the `sqlite-rusqlite`
-> feature suite compile failures are **closed**; the `stream_unbuffered` `Box::leak`
-> issue (V1-04) is also **closed** because the current source no longer contains
-> `Box::leak` in the streaming path and all streaming tests pass. The SQLite
-> multi-change migration planner (V1-03) is also **fixed**. The remaining current
-> blockers are the RC/publish/feedback window (V1-05) and coverage/mutation
-> evidence (V1-06).
-
 **Project:** `ruprizzle-orm`
-**Workspace version:** `1.0.0-rc.1`
-**Assessed branch:** `dev-v0-2`
-**Assessed commit:** `7dd3b6a`
-**Assessment date:** 2026-08-19
-**Scope:** Rust workspace, published package set, runtime and native drivers, migrations, CLI/DX, tests, release automation, documentation, and available ecosystem evidence.
+
+**Workspace version:** `1.5.0`
+
+**Assessed branch:** local `main` (`main` is one commit ahead of `origin/main`)
+
+**Assessed commit:** `0584934`
+
+**Release tag inspected:** `v1.5.0` at `0e4d96b`
+
+**Assessment date:** 2026-09-08
+
+**Scope:** Rust workspace, generated API, migrations, SQLx/native/HTTP drivers, Studio, CLI/LSP, tests, security, CI, release automation, documentation, registry state, and public GitHub Actions evidence.
 
 ## 1. Executive verdict
 
 | Rating | Result | Verdict |
 |---|---:|---|
-| **Stable-v1 production readiness** | **67 / 100** | **C — strong beta, not RC/GA ready** |
-| **ORM design and capability** | **8.6 / 10** | Strong and differentiated |
-| **Engineering execution** | **7.7 / 10** | Good foundations, inconsistent final-gate discipline |
-| **Ecosystem/release maturity** | **3.5 / 10** | Very early; RC process not executed |
-| **Overall adoption rating today** | **7.2 / 10** | Attractive for evaluation and bounded use; not yet a default mission-critical choice |
-| **Assessment confidence** | **High for local code; medium for remote history** | Local gates and source were inspected live; remote GitHub Actions history was unavailable without `gh` authentication |
+| **Production readiness** | **62 / 100** | **C- — strong beta, release blocked** |
+| **ORM design and capability** | **9.0 / 10** | Broad, coherent, and differentiated |
+| **Engineering execution** | **7.0 / 10** | Strong implementation work undermined by red final gates |
+| **Release/ecosystem maturity** | **2.5 / 10** | No stable artifact is currently available from crates.io |
+| **Adoption rating today** | **6.7 / 10** | Suitable for evaluation and controlled use; not a default mission-critical choice |
+| **Assessment confidence** | **High** | Current source, local gates, registry output, tags, and public Actions logs were inspected |
 
-The central conclusion is:
+> `ruprizzle` has a production-shaped architecture and a substantial ORM surface, but the current `1.5.0` tree is not releasable. The release pipeline, standard tests, semver gate, fuzzing, mutation evidence, streaming contract, and release documentation are not simultaneously truthful and green.
 
-> `ruprizzle` is already a credible ORM solution, but the current repository is not a releasable `1.0.0-rc.1` candidate and should not be promoted to stable `1.0.0` yet.
+This is not the 2026-08-19 `1.0.0-rc.1` assessment carried forward. The historical v1 blockers around SQLite migration sequencing, the resumable soak accumulator, native feature compilation, and leaked streaming allocations were repaired. The present blockers are newer release-control and assurance regressions introduced or exposed by the v1.1–v1.5 line.
 
-The low production score is not a judgment that the architecture is weak. It reflects fresh release-gate failures, an acknowledged SQLite migration planner defect, an unbounded memory leak in true streaming, an invalid resumable-soak accounting path, incomplete long-duration assurance, and an RC/release state that conflicts with the version and user documentation.
+## 2. Release decision
 
-The crate is best described as **feature-complete but assurance-incomplete**.
+### Decision: **BLOCK `1.5.0`/stable publication from the current tree**
 
-## 2. Hard-gate result
+Publication should resume only after all P0 items in `ProductionReadinessSolPlan.md` are closed:
 
-Stable v1 is currently blocked by all of the following:
+1. restore formatting, snapshot, trybuild, all-feature, and hardening gates;
+2. resolve or formally review every semver break reported against the published prerelease baseline;
+3. make the `stream_unbuffered` implementation match its public contract, or rename/document the buffered fallback;
+4. establish one authoritative registry/release state and remove false published-version claims;
+5. verify the crates.io credential and release path without moving the existing tag;
+6. obtain a green CI run on the exact commit intended for release.
 
-1. `cargo xtask harden` fails because `soak_rusqlite_resumable_48h` runs during the normal workspace suite and panics when `RUPRIZZLE_SOAK_DB_PATH` is absent.
-2. The documented `sqlite-rusqlite` feature test command does not compile because `crates/runtime/tests/query_manifest.rs::Task` lacks the native row-decoding traits required by `Model` under that feature.
-3. The 48-hour W4-02 `rusqlite` soak has been **waived** after the resumable
-   segmented run reached **15.56 h / 1.46 B ops / 0 errors**. The original
-   continuous run stopped at ~11 h with two I/O errors; the resumable harness
-   has since fixed the accounting and logging issues.
-4. The resumable segmented soak now accumulates cumulative elapsed, operations,
-   and errors across restarts; the accepted 15.56 h / 0-errors result is
-   recorded in `docs/SoakReport.md`.
-5. SQLite migration planning is known to fail for multi-change diffs such as adding multiple required columns; the property test excludes those cases with `prop_assume!(changes.len() <= 1)`.
-6. `stream_unbuffered` permanently leaks owned SQL and bind values with `Box::leak` on the SQLx and `tokio-postgres` paths.
-7. The RC is not published on crates.io. A local `1.0.0-rc.1` tag exists, but it resolves 20 commits behind HEAD, is not present on `origin`, and does not match the release workflow's `v*` trigger.
-8. The required two-week RC feedback window and external upgrade report have not happened.
+The existing `v1.5.0` tag must not be moved. It points to a commit whose release run failed at `cargo fmt --all --check` before any crate was uploaded.
 
-These are release blockers, not optional post-v1 polish.
+## 3. Weighted scorecard
 
-## 3. Weighted production-readiness scorecard
-
-| Dimension | Weight | Score | Evidence and deduction |
+| Dimension | Weight | Score | Current evidence |
 |---|---:|---:|---|
-| Correctness and runtime reliability | 20 | **13.5** | Broad default-path tests and compile-fail tests exist, but the normal workspace gate is red, the native-rusqlite matrix does not compile, and true streaming leaks memory per call. |
-| Data safety and migrations | 15 | **10.5** | Transactional application, checksums, locking, drift detection, destructive gating, and dev/deploy separation are strong. The known SQLite multi-change planner defect is a stable-v1 blocker. |
-| Test and assurance evidence | 15 | **7.0** | Good test breadth, property tests, fuzz/mutant workflows, and short soaks. The 48-hour W4-02 run has been waived on 15.56 h / 1.46 B ops / 0-errors evidence, the resumable segmented accounting has been fixed, migration mutation score is about 28.6%, runtime mutation baseline is incomplete, and measured line coverage is about 68%. |
-| Security and supply chain | 10 | **8.5** | Parameter binding, injection tests, `forbid(unsafe_code)`, `cargo-deny`, hardening audits, and private reporting are good. `RUSTSEC-2023-0071` remains excepted through the MySQL dependency path and `SECURITY.md` is stale for the current release line. |
-| API and semver stability | 10 | **8.0** | Public API review, stability policy, MSRV policy, and semver CI are strong. The actual RC artifact/window is absent, the local tag is stale, and final API review must be rerun against the artifact that will be published. |
-| Operability and observability | 10 | **6.5** | Tracing, slow-query warnings, metrics hooks, pool configuration, and operations documentation exist. Native `rusqlite` pool stats report zeros, segmented soak progress writes can fail silently, and the true-streaming API leaks. |
-| Performance and scalability | 10 | **7.0** | Reproducible cross-ORM SQLite data and low query-construction cost are valuable. The headline native-rusqlite results predate the current `spawn_blocking` implementation, so current docs describe a different execution path; cross-ORM Postgres evidence is absent. |
-| Documentation and DX | 5 | **4.0** | The schema DSL, guides, ADRs, examples, LSP, CLI, offline checking, and limitations documentation are unusually complete. Several release/install/status claims are currently false or stale. |
-| Release and ecosystem maturity | 5 | **2.0** | Beta packages exist and automation is designed, but crates.io still serves `0.4.0-beta.2`, no remote RC tag exists, the release workflow has not published the RC, and there is no RC feedback evidence. *(Superseded 2026-08-21: the RC is published and the tag is on `origin`; only RC feedback evidence remains outstanding. Rescore under W6-05.)* |
-| **Total** | **100** | **67.0** | **Strong beta; stable-v1 gates not met.** |
+| Correctness and runtime reliability | 20 | **13.0** | Broad unit/integration coverage and real Studio SQLite tests are strengths. The workspace test gate is red, generated-code snapshots drift, and `stream_unbuffered` buffers on every backend except native `tokio-postgres`. |
+| Data safety and migrations | 15 | **13.0** | Transactional migration execution, checksums, drift checks, destructive classification, SQLite multi-change repair, and real Studio diffing are strong. Live provider adapter validation and mutation strength remain insufficient. |
+| Test and assurance evidence | 15 | **6.0** | The suite is large, but current all-feature tests fail; fuzzing never starts; runtime mutation jobs abort on the baseline trybuild failure; migration mutation score is about 30%; the only coverage report is the old ~68% pre-v1.5 baseline. |
+| Security and supply chain | 10 | **7.5** | Bound values, identifier quoting, redacted adapter tokens, `forbid(unsafe_code)`, `cargo-deny`, and private reporting are good. Studio has no authentication, MySQL retains `RUSTSEC-2023-0071`, and Actions use floating major tags rather than immutable SHAs. |
+| API and semver stability | 10 | **5.0** | CI found major-version-level changes in exhaustive public enums and constructible structs across `core`, `dialect`, and `check`. A prerelease-to-stable waiver may be legitimate, but it has not been reviewed or encoded and the gate remains red. |
+| Operability and observability | 10 | **7.0** | Tracing, slow-query events, metrics, pool statistics, cache/routing observability, and operations docs are substantial. Studio exposure and misleading stream memory behavior reduce operational confidence. |
+| Performance and scalability | 10 | **6.5** | Benchmark harnesses and native-driver work exist, but the published benchmark narrative predates much of v1.1–v1.5 and no current evidence covers Turso/D1, Studio, replica routing, caching, or networked Postgres/MySQL at release scale. |
+| Documentation and DX | 5 | **2.5** | Guides, schema docs, examples, LSP, CLI, and migration documentation are unusually broad. Release status and known-limitations documents materially contradict source and registry reality. |
+| Release and ecosystem maturity | 5 | **1.5** | `v1.5.0` exists, but its release run failed. `cargo search` still reports `1.0.0-rc.1`; no stable `1.0.0`, `1.0.1`, or `1.5.0` package was observed. Live hosted adapter round trips are absent. |
+| **Total** | **100** | **62.0** | **Strong beta; stable release blocked.** |
 
-### Score interpretation
+### Interpretation
 
-- **90–100:** stable production release with completed assurance and real-world validation.
-- **80–89:** production-capable RC with limited remaining process risk.
-- **70–79:** strong beta; suitable for bounded production use with explicit risk ownership.
-- **60–69:** technically promising but blocked by confirmed release/correctness/assurance gaps.
-- **Below 60:** not suitable for production evaluation without substantial remediation.
+- **90–100:** defensible stable production release;
+- **80–89:** production-capable release candidate with bounded process risk;
+- **70–79:** strong beta suitable for controlled production use;
+- **60–69:** technically credible, but blocked by confirmed release or assurance defects;
+- **below 60:** substantial correctness or product-integrity remediation required.
 
-`ruprizzle` lands at the top of the 60–69 band because the architecture and default paths are strong, but multiple red gates are current and reproducible.
+## 4. Fresh verification
 
-## 4. Live verification performed
+### 4.1 Local checks at `0584934`
 
-All commands were run on Windows at `7dd3b6a` with Rust `1.95.0`. This does not replace the CI job on the declared MSRV, Rust `1.85`.
-
-| Check | Command | Fresh result |
+| Check | Result | Evidence |
 |---|---|---|
-| Format | `cargo fmt --all --check` | **Pass** |
-| Default clippy | `cargo clippy --workspace --all-targets -- -D warnings` | **Pass** |
-| Standard workspace tests | `cargo test --workspace` through `cargo xtask harden` | **Fail**: `soak_rusqlite_resumable_48h` panics because `RUPRIZZLE_SOAK_DB_PATH` is missing |
-| Remainder of workspace tests | `cargo test --workspace -- --skip soak_rusqlite_resumable_48h` | **Pass** |
-| Docs | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | **Pass** |
-| Dependency policy | `cargo deny check` | **Pass**, with configured warnings/exception policy |
-| Workspace check | `cargo check --workspace` | **Pass** |
-| Full hardening | `cargo xtask harden` | **Fail** at the standard workspace test stage; later audits are therefore not reached by this command |
-| Native rusqlite feature | `RUPRIZZLE_TEST_RUSQLITE=1 cargo test -p ruprizzle --features 'sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite'` | **Compile failure** in `query_manifest.rs`: missing `FromOwnedRow` and `FromRusqliteRow` for `Task` |
-| Registry state | `cargo search ruprizzle --limit 10` | Latest public runtime/CLI/internal crates are `0.4.0-beta.2`; `1.0.0-rc.1` is not published *(re-run 2026-08-21: all ten publishable crates now return `1.0.0-rc.1`)* |
-| Tag state | `git show-ref --tags`, `git ls-remote --tags origin`, `git rev-list --count 1.0.0-rc.1..HEAD` | Local RC tag only; no remote tags returned; local tag is 20 commits behind HEAD *(re-run 2026-08-21: the stale tag is deleted and `v1.0.0-rc.1` is on `origin` at the release commit)* |
+| `cargo fmt --all --check` | **FAIL** | Formatting drift in `crates/runtime/tests/insert_validation.rs` and `crates/testkit/src/lib.rs`. |
+| `cargo clippy --workspace --all-features --all-targets -- -D warnings` | **PASS** | Completed locally with Rust 1.95. |
+| `cargo test --workspace --all-features` | **FAIL** | `crates/codegen` generated snapshot hash drift; a `.snap.new` was produced. Public CI also fails `runtime` trybuild output for `col_gt_on_string.stderr`. |
+| `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --all-features` | **PASS** | All workspace documentation generated successfully. |
+| `cargo xtask harden` | **FAIL** | Reaches the workspace test stage and inherits the current test/snapshot failures. |
+| `cargo search ruprizzle --limit 20` | **FAIL release claim** | Registry output reports `ruprizzle` and the publishable v1 crates at `1.0.0-rc.1`; no `1.5.0` result appears. |
 
-### Verification limitations
+Local PostgreSQL, MySQL, Turso-hosted, and D1-hosted services were not supplied. Tests named for Postgres/MySQL may skip when URLs are absent, so they are not counted as live-database evidence.
 
-- PostgreSQL/MySQL were not made mandatory locally with `RUPRIZZLE_REQUIRE_DB=1`; local green database-named tests are not treated as proof of live cross-database execution.
-- Remote Actions history could not be queried because `gh` is unauthenticated. Workflow configuration was inspected, but successful historical execution is not assumed.
-- The full 48-hour soak and multi-hour fuzz/mutation jobs were not rerun as part of this assessment.
-- No claim is made that repository benchmark results generalize from local SQLite to networked production databases.
+### 4.2 Public CI and release evidence
 
-## 5. Graphify and Rust-aware architecture analysis
+The latest public runs on `origin/main`/`v1.5.0` are red:
 
-### 5.1 Graph corpus
+- **Release run 33633504583:** `release-check` passed, then formatting failed; every publish step was skipped. Its environment showed an empty `CARGO_REGISTRY_TOKEN`, which must be verified as repository configuration before the next release attempt.
+- **CI run 33631928247:** format failed; workspace, native-driver, integration, MSRV, feature-matrix, semver, and hardening jobs failed. The dominant deterministic test failure was a trybuild stderr mismatch under the pinned Rust 1.95 compiler.
+- **Semver job:** reported major-version-level breaks, including new fields on publicly constructible structs, variants added to exhaustive enums, and shifted enum discriminants in `ruprizzle-core`, `ruprizzle-dialect`, and `ruprizzle-check`.
+- **Fuzz run 34008573174:** both targets failed before execution. `rust-toolchain.toml` selected stable 1.95 despite the workflow installing nightly, so sanitizer `-Z` flags were rejected.
+- **Mutation run 34082283290:** all runtime shards aborted because the baseline trybuild suite was already red. The migration job completed 626 mutants: 169 caught, 391 missed, 53 unviable, and 13 timed out.
 
-The current Graphify report covers the 79 production source/document files under `crates/`:
+A green historical run cannot substitute for a green run on the release commit.
 
-- **1,739 nodes**
-- **3,077 edges**
-- **141 communities**
-- **93% extracted edges**
-- **7% inferred edges**
-- **0% ambiguous edges in the summary count**
+## 5. Architecture and solution quality
 
-A fresh detector sees 161 supported crate files when tests and benches are included: 152 code files and 9 documents, about 143,257 words. Production architecture was taken from the committed graph; test evidence was reviewed separately so test fixtures did not distort centrality.
+### 5.1 Architecture assessment
 
-### 5.2 Central abstractions and blast radius
+The architecture remains one of the project's strongest attributes:
 
-Graphify identifies the query builder and database abstraction layer as the highest-connectivity production core. Rust Analyzer confirms the important definitions and reference spread.
+1. parser and diagnostics lower into a shared core schema IR;
+2. dialect capabilities isolate backend-specific SQL/DDL behavior;
+3. code generation builds a typed model/column/client surface;
+4. runtime builders compile visible SQL plus bind values through an `Executor` abstraction;
+5. migrations separate planning, rendering, introspection, drift, and application;
+6. CLI/LSP/check consume the same schema semantics;
+7. SQLx, native drivers, HTTP adapters, routing, caching, and instrumentation sit behind explicit boundaries.
 
-| Abstraction | Role | Risk if changed |
-|---|---|---|
-| `SelectQuery<'db, M, Out, I>` | Main typed read/query surface | High: used across runtime, deep tests, integration tests, examples, and benchmarks |
-| `DbDialect` | SQL/DDL capability and rendering contract | Very high: referenced by all dialects, compiler, executor, transactions, counting, and conformance tests |
-| `Compiler<'d>` | Converts typed query structures into dialect SQL | Very high: a defect affects many query builders and all backends |
-| `Planner<'a>` | Orders and renders migration changes | Very high for data safety, but internally contained within `migrate` |
-| `Tx` / `Executor` | Pool/transaction substitution and lifecycle | High: shared by CRUD, nested writes, migration execution, and native drivers |
-| `Column<M, T>` | Model/type-scoped compile-time safety token | High API importance; changes affect generated clients and filters |
-| `Pool` | Driver dispatch and operational statistics | High: covers SQLx Any/native plus optional `rusqlite` and `tokio-postgres` paths |
-| Core `Schema` IR | Contract between parser, dialect, codegen, migrations, and tooling | Highest cross-crate semver blast radius |
+The highest-blast-radius contracts remain the core IR, `DbDialect`, compiler/query builders, `Executor`, migration planner/runner, generated API shape, and public diagnostic enums. The semver failures confirm that these central types need stronger evolution rules than they currently have.
 
-The architecture is modular, but these hubs deserve disproportionately strong property, mutation, feature-matrix, and compatibility testing. The graph's isolated/thin nodes are treated as extraction/documentation gaps, not automatically as code defects.
-
-### 5.3 Healthy architecture decisions
-
-1. **Build-time/runtime separation.** Parser and code generation do not need to enter the normal application runtime dependency graph.
-2. **Stable central IR.** Parser, dialect, migration, codegen, CLI, and LSP share one schema model instead of translating among unrelated representations.
-3. **Typed column tokens.** `Column<M, T>` prevents wrong scalar types and cross-model filters at compile time without representing the entire SQL AST in Rust's type system.
-4. **SQL transparency.** Builders expose SQL and binds through `to_sql`; raw fragments preserve parameter binding.
-5. **Explicit capabilities.** Backend differences are represented by `DbDialect` and `Capabilities` rather than scattered backend-name checks alone.
-6. **Executor substitution.** The same builders operate against pools and transactions.
-7. **Production-safe migration command split.** `migrate deploy` applies existing files and does not generate new migration plans.
-8. **No proprietary sidecar.** Runtime execution stays in-process and builds on established database drivers.
-
-### 5.4 Architecture risks
-
-1. **Feature cross-product.** Query types × dialects × driver implementations × pool/transaction modes create a larger behavioral matrix than the default build demonstrates.
-2. **Wide semver surface.** Runtime builders, lower-level crates, generated client shape, CLI behavior, and core IR are all promised as stable. This is an ambitious commitment for a new single-maintainer project.
-3. **Object-safe trait constraints.** `DbDialect` and `Executor` improve substitution but make ownership-heavy APIs such as streaming harder to evolve safely.
-4. **Migration planner sequencing.** Planning changes independently is insufficient when one operation rebuilds a table using final-schema state while sibling changes have not yet executed.
-5. **Native-path parity.** Optional drivers add meaningful performance and deployment choices, but every test model and operational API must satisfy additional traits and lifecycle rules.
-6. **Documentation drift.** The large planning/document corpus contains conflicting state claims. Generated or centrally checked release facts are preferable to repeated manual status prose.
-
-## 6. ORM solution-quality rating
-
-### 6.1 Capability scorecard
+### 5.2 Capability scorecard
 
 | Capability | Score | Assessment |
 |---|---:|---|
-| Architecture | **9.2 / 10** | Excellent separation and clear core contracts; wide surface increases maintenance cost |
-| Type safety | **9.0 / 10** | Strong generated model/column safety and compile-fail coverage; not identical to database-validated handwritten SQL |
-| SQL transparency and escape hatches | **9.5 / 10** | One of the strongest parts of the design |
-| Query and mutation surface | **8.8 / 10** | CRUD, aggregates, joins, CTEs, subqueries, set ops, pagination, prepared queries, conditional building, nested writes |
-| Relations | **8.5 / 10** | Batched includes, explicit joins, nested writes, self relations, and explicit M:N are substantial; some ergonomic helpers are deliberately deferred |
-| Migration design | **8.5 / 10** | Strong model and safety posture; current SQLite sequencing bug reduces implementation confidence |
-| Dialect/driver portability | **8.8 / 10** | Postgres, SQLite, MySQL plus optional native drivers; parity evidence is currently red for `sqlite-rusqlite` |
-| Developer experience | **8.7 / 10** | Schema DSL, generator, CLI, formatter, LSP, diagnostics, introspection, seeding, offline checking, guides |
-| Performance evidence | **7.5 / 10** | Useful and reproducible SQLite harness; current native implementation has drifted from the benchmark narrative |
-| Maintainability | **7.5 / 10** | Good crate boundaries and tests; high surface area, a large central runtime, and state-document duplication raise cost |
-| **Design/capability result** | **8.6 / 10** | A serious ORM proposition, not a toy or thin query-builder wrapper |
+| Architecture | **9.2 / 10** | Strong layering and extensibility; central public IR increases semver blast radius. |
+| Type safety | **9.1 / 10** | Typed columns, model-scoped filters, generated clients, and compile-fail tests are excellent. |
+| SQL transparency | **9.5 / 10** | Visible SQL, bind preservation, raw-fragment binding, and explicit dialect behavior remain standout features. |
+| Query and mutation surface | **9.2 / 10** | CRUD, aggregates, joins, CTEs, set operations, arrays, search, soft deletes, nested writes, trees, caching, and routing form a serious ORM surface. |
+| Relations | **8.9 / 10** | Batched includes, explicit joins, nested writes, M:N support, and hierarchy helpers are broad. |
+| Migrations and data safety | **8.8 / 10** | Mature safety model and repaired SQLite sequencing; mutation evidence remains weak. |
+| Backend portability | **8.5 / 10** | Three SQL dialects, two native paths, and Turso/D1 HTTP adapters; hosted-service compatibility remains unverified. |
+| Developer experience | **9.0 / 10** | Schema DSL, generator, CLI, formatter, LSP, Studio, introspection, seeding, and offline checking are unusually complete. |
+| Performance evidence | **7.0 / 10** | Harnesses exist, but evidence has not kept pace with the current product surface. |
+| Maintainability | **7.2 / 10** | Crate boundaries are sound; duplicated status prose, exhaustive public enums, snapshots, and a wide feature matrix impose high maintenance cost. |
+| **Overall ORM design/capability** | **9.0 / 10** | A differentiated full ORM, not a thin SQL wrapper. |
 
-### 6.2 Competitive position
+### 5.3 Competitive position
 
-Based on the repository's reproducible evidence and public API, not unverified market claims:
+- **Diesel:** safer ecosystem maturity and long production history; ruprizzle offers a more approachable schema-first generated workflow.
+- **SeaORM:** broader market validation; ruprizzle offers stronger SQL visibility and centralized schema/codegen semantics.
+- **SQLx:** preferable for handwritten database-checked SQL; ruprizzle adds ORM relations, migrations, generated clients, and higher-level workflows.
+- **Prisma/Drizzle:** ruprizzle combines schema ownership and transparent in-process Rust execution, but lacks their ecosystem size and production evidence.
 
-- **Versus Diesel:** `ruprizzle` is more approachable for schema-first/codegen users and has automatic schema diffing; Diesel remains the safer maturity choice and can outperform automatic relation loading with hand-tuned joins.
-- **Versus SeaORM:** `ruprizzle` offers a stronger single-source schema/codegen story and more SQL transparency; SeaORM has broader production history and ecosystem confidence.
-- **Versus SQLx:** `ruprizzle` adds a full ORM, migrations, relations, and generated client; SQLx remains preferable when handwritten, database-checked SQL is the primary requirement.
-- **Versus Prisma/Drizzle:** `ruprizzle` combines a Prisma-like schema workflow with Drizzle-like visibility without a sidecar, but lacks their ecosystem scale and production exposure.
+The defensible differentiator remains: **a Prisma-style schema and generated Rust client with visible bound SQL and no sidecar engine**.
 
-The strongest differentiator is not a universal speed claim. It is:
+## 6. Confirmed strengths
 
-> Prisma-style schema ownership plus a generated Rust client, visible SQL, bound parameters, and no hidden query engine.
+1. Real and broad ORM functionality across query, relation, mutation, migration, tooling, and observability layers.
+2. Strong parameter-binding posture and explicit identifier quoting on dynamic Studio paths.
+3. Compile-time model/type scoping and negative compile tests.
+4. Transaction/savepoint support and migration checksums, locks, drift detection, and destructive classification.
+5. Real Studio data access and migration comparison rather than the earlier fabricated implementation.
+6. Honest Turso/D1 limitations in current adapter source, plus redacted credentials and local protocol tests.
+7. MSRV declaration, cross-platform CI design, native-feature matrices, docs checks, hardening audits, and semver automation exist even though several are currently red.
+8. No `TODO`, `FIXME`, `todo!`, or `unimplemented!` markers were found in production crate Rust sources.
+9. Library crates retain a no-unsafe policy and dependency licensing/advisory checks.
+10. Documentation breadth and architectural decisions remain substantially above average for a project at this ecosystem maturity.
 
-## 7. Confirmed current strengths
+## 7. Confirmed issues and risks
 
-1. Broad typed query surface, including advanced SQL features.
-2. Compile-time wrong-type and cross-model rejection tests.
-3. Batched relation loading that avoids uncontrolled N+1 behavior.
-4. Explicit transaction, savepoint, and nested-write support.
-5. Migration checksums, locking, drift detection, destructive gating, and deploy/dev separation.
-6. Postgres/SQLite/MySQL dialect model with optional native paths.
-7. Tracing, slow-query signals, metrics hooks, and pool configuration.
-8. LSP, formatter, watch mode, diagnostics, introspection, seeding, and offline query manifests.
-9. No unsafe library code and strong parameter-binding posture.
-10. High-quality guides, ADRs, limitations, benchmark harnesses, and project history.
+### 7.1 P0: the release commit fails its first mechanical gate
 
-## 8. Confirmed blockers and material risks
+The tag-triggered release stopped at formatting. Current HEAD still fails the same check. A release process that cannot pass its deterministic first gate is correctly blocked.
 
-### 8.1 Standard release gate is red
+### 7.2 P0: standard and all-feature tests are not green
 
-`crates/runtime/tests/soak_resumable.rs` defines an unconditional `#[tokio::test]`. A normal `cargo test --workspace` invokes it, but the test immediately requires `RUPRIZZLE_SOAK_DB_PATH`. This makes both the documented full suite and `cargo xtask harden` fail outside the dedicated runner.
+The Rust 1.95 trybuild output no longer matches the committed stderr fixture, which breaks default, MSRV, native-feature, integration, mutation, and hardening jobs that transitively execute it. Independently, all-feature execution finds a stale generated-code snapshot hash. These are test-maintenance defects, but their breadth means there is no trusted green baseline.
 
-**Root cause:** a manually invoked, environment-dependent, 48-hour gate was added as a normal test instead of an ignored/explicit test target.
+### 7.3 P0: semver enforcement reports unreviewed breaking changes
 
-### 8.2 Native rusqlite feature matrix is red
+Public exhaustive enums gained variants, public constructible structs gained fields, and implicit enum discriminants shifted. These are real source-compatibility breaks for downstream exhaustive matches, struct literals, and numeric casts. Because crates.io currently exposes only the prerelease, a one-time prerelease-to-stable decision may be defensible; silently ignoring the gate is not.
 
-`query_manifest.rs::Task` derives only `sqlx::FromRow`. Under `sqlite-rusqlite`, `Model: RowDecode` also requires `FromRusqliteRow` and `FromOwnedRow`. Comparable runtime test models use the project-provided native row macros; this test does not.
+### 7.4 P0: `stream_unbuffered` does not honor its documented contract
 
-**Root cause:** a new hand-written test model was added without compiling every supported feature combination.
+`Executor::stream_unbuffered_raw` defaults to buffered `stream_raw`; `Pool` delegates true unbuffered behavior only to native `tokio-postgres`. SQLx PostgreSQL, SQLx MySQL, SQLx SQLite, native `rusqlite`, Turso, and D1 therefore materialize a complete result before yielding despite API docs promising incremental SQLx rows. The former `Box::leak` defect is gone, but the current fallback can cause unexpected peak memory and invalidates the method name and documentation.
 
-### 8.3 Segmented soak result is not yet trustworthy
+### 7.5 P0: release and registry truth is contradictory
 
-The resumable harness loads cumulative state, but reporter/final updates assign:
+`CHANGELOG.md` says `1.5.0` is released and latest. The README says `1.0.1` is latest and `1.5.0` is unpublished. `SECURITY.md` says `1.0.0` is current. `docs/KnownLimitations.md` calls the project a beta and defers features already implemented. Registry search reports only `1.0.0-rc.1`. Users cannot determine what artifact exists or what is supported.
 
-- `state.total_ops = current_ops`
-- `state.total_errors = current_errors`
+### 7.6 P1: fuzz assurance is nonfunctional
 
-Those counters start at zero per process. On resume, prior totals are overwritten rather than incremented. Earlier errors can therefore disappear from the persisted result. In addition, state-write errors are discarded, and the harness does not implement the forced failover named by the project exit gate.
+The workflow installs nightly but the repository toolchain file selects stable 1.95 for the actual `cargo fuzz` invocation. Both targets fail before consuming one input, so the four-hour comments describe a gate that currently provides zero fuzz time.
 
-The harness must be corrected and tested before accumulating the official 48 hours.
+### 7.7 P1: mutation evidence is both weak and operationally misleading
 
-### 8.4 SQLite multi-change migrations can fail
+Migration mutation testing catches roughly 30% of tested viable outcomes and leaves core splitter behavior mutable. Runtime shards currently measure nothing because baseline tests fail first. The workflow marks expected survivors as a generic failed run without a checked threshold or durable summarized trend.
 
-The local round-trip property excludes any diff with more than one change. The source comment records that multiple required-column adds can make the first SQLite rebuild select a sibling column that does not yet exist.
+### 7.8 P1: coverage evidence is stale and incomplete
 
-This is a planner sequencing problem: table rebuilds are generated from the final model while add/backfill/alter operations are interleaved per field.
+The documented 68.08% line coverage predates Studio and most v1.1–v1.5 functionality, and no coverage workflow exists. Current coverage is unknown; release-critical low-coverage areas cannot be tracked for regression.
 
-### 8.5 True streaming leaks memory
+### 7.9 P1: hosted adapter compatibility is unverified
 
-Both the SQLx pool implementation and `tokio-postgres` implementation use `Box::leak` for owned SQL and bind collections. Every dynamic unbuffered stream permanently consumes memory, even after completion or cancellation.
+Turso and D1 are implemented and tested against local HTTP fixtures, but neither has completed a real hosted round trip. Their lack of interactive transactions and fully buffered streaming are documented limitations, not defects, but production compatibility remains an evidence gap.
 
-Documenting this does not make it production-safe. Before freezing v1, the implementation must own and release query state or the API must be removed/held behind an unstable feature.
+### 7.10 P1: Studio is intentionally unauthenticated
 
-### 8.6 Native pool metrics are inaccurate
+Loopback defaults and the non-loopback write confirmation reduce accidental exposure, but `--yes-i-know` can expose mutation routes with no authentication. Studio should remain a local development tool until authenticated remote operation exists.
 
-`Pool::size()` and `Pool::num_idle()` return zero for `Pool::SqliteNative`, and `num_waiters()` reports zero for every backend except native Postgres. The 60-second soak report explicitly shows zero pool statistics for `rusqlite`.
+### 7.11 P1: accepted MySQL dependency risk remains
 
-This does not break queries, but it weakens overload diagnosis on the backend currently receiving the most performance emphasis.
+`sqlx-mysql` still reaches `rsa 0.9.x` and `RUSTSEC-2023-0071`. TLS or Unix sockets avoid the affected key-exchange path. MySQL should not be marketed as production-grade without that mitigation until the dependency path is patched.
 
-### 8.7 Benchmark narrative is stale
+### 7.12 P2: CI action references are mutable
 
-`docs/BenchmarkResults.md` says native `rusqlite` runs on the calling Tokio task with no `spawn_blocking`. Current `RusqlitePool::fetch_all_raw` and `execute_raw` dispatch through `tokio::task::spawn_blocking`.
+Actions use major/version tags such as `actions/checkout@v4` and `Swatinem/rust-cache@v2`, not immutable commit SHAs. This is common but weaker than the repository's otherwise strong supply-chain posture.
 
-The previous result files remain useful historical measurements, but they are not evidence for current-HEAD native performance until rerun.
+## 8. Use-case recommendation
 
-### 8.8 Release state is internally inconsistent
-
-- Workspace and docs use `1.0.0-rc.1`.
-- crates.io search returns `0.4.0-beta.2` as latest.
-- A local RC tag exists but is 20 commits behind HEAD.
-- No tag is visible on `origin` through `git ls-remote --tags origin`.
-- The local tag is `1.0.0-rc.1`; `release.yml` triggers only tags matching `v*`.
-- User docs contain `ruprizzle = "1.0.0-rc.1"`, which cannot currently resolve from crates.io.
-- Some docs say the RC is tagged/staged while others say no RC has been tagged or published.
-
-This must be corrected before inviting external users into an RC feedback window.
-
-> **Resolution (2026-08-21, V1-05).** The tooling and documentation halves are fixed:
-> `release.yml` now matches both `v1.2.3*` and `1.2.3*` tags and has a
-> non-publishing `workflow_dispatch` mode; `cargo xtask release-check --tag`
-> refuses any publish whose tag, workspace version, and `CHANGELOG.md` heading
-> disagree; `cargo xtask release` no longer omits `ruprizzle-check` and
-> `ruprizzle-lsp`; and `README.md`, `docs/README.md`, `docs/Stability.md`, and
-> `docs/announcement.md` now agree that the RC is tagged but not on crates.io.
-> The release tag is `v1.0.0-rc.1` at HEAD. The stale `1.0.0-rc.1` tag is left in
-> place pending maintainer confirmation.
->
-> **Registry half closed 2026-08-21.** `1.0.0-rc.1` is published for all ten
-> publishable crates; `cargo search ruprizzle` returns `1.0.0-rc.1` for each, and
-> an out-of-tree consumer resolves and compiles the full graph from the registry.
-> `ruprizzle-testkit` stays at `0.1.0-alpha.3` because it is `publish = false`.
-> Every item in 8.8 is now resolved.
-
-### 8.9 Security posture requires release-specific clarification
-
-The dependency exception for `RUSTSEC-2023-0071` is documented and bounded to the MySQL authentication path, but it remains an accepted risk. `SECURITY.md` still says only `0.1.x` is supported, while the registry's latest package is `0.4.0-beta.2` and the workspace claims an RC.
-
-> **Resolution (2026-08-21, V1-05 Step 4).** `SECURITY.md`'s supported-versions
-> table now names the actual published line (`0.4.x`) and defines RC support, and
-> carries a "Known accepted dependency risk" section naming `RUSTSEC-2023-0071`
-> and the TLS/unix-socket mitigation. `docs/KnownLimitations.md` and the README
-> dialect list say the same thing at the point of use. The advisory itself remains
-> an accepted risk with no patched `rsa` release available: MySQL/MariaDB is
-> supported and tested but is **not** marketed as production-grade until a patched
-> `rsa`/`sqlx` ships. Postgres and SQLite are unaffected.
-
-## 9. Use-case recommendation
-
-| Use case | Recommendation today |
+| Use case | Recommendation now |
 |---|---|
 | Learning, evaluation, prototype | **Yes** |
-| Internal tool with SQLite/Postgres and controlled migrations | **Conditional yes**: pin the exact beta/commit, test generated migrations, avoid `stream_unbuffered`, and own upgrade risk |
-| New non-critical service | **Conditional** after the two mechanical gates are repaired and application tests cover the chosen driver |
+| Controlled internal SQLite/Postgres tool | **Conditional**: pin a commit, run application-specific migrations/tests, and avoid relying on `stream_unbuffered` memory bounds |
+| New non-critical service | **Conditional after P0 closure** |
 | Mission-critical production database | **No stable endorsement yet** |
-| Native `rusqlite` under sustained concurrent load | **Conditional yes** for the workloads covered by the accepted 15.56 h / 0-errors evidence; the full 48-hour target is waived |
-| Workload requiring true unbuffered streaming | **Do not use the current API** because each dynamic stream leaks memory |
-| MySQL deployment using non-TLS RSA key exchange | **Avoid until the advisory path is resolved or explicitly mitigated** |
-| Team prioritizing mature ecosystem over schema-first DX | Prefer Diesel, SeaORM, or SQLx according to query style |
+| MySQL production | **Only with TLS/Unix socket and explicit advisory acceptance** |
+| Large-result true streaming | **Use only verified native `tokio-postgres`; other current paths buffer** |
+| Turso/D1 production | **Pilot only after a real hosted-service qualification run** |
+| Studio on a reachable network | **Do not expose without an external authenticated tunnel/proxy; prefer loopback** |
 
-## 10. What should and should not enter v1
+## 9. Path to a defensible release
 
-### Must enter v1
+1. Close PR-01 through PR-05 in the implementation plan and obtain a completely green local release gate.
+2. Push through `dev-main` according to repository policy and require green CI on the exact candidate commit.
+3. Repair fuzz and mutation workflows, record current coverage, and qualify hosted adapters.
+4. Resolve documentation from one machine-readable release-state source.
+5. Verify the crates.io secret through a non-publishing rehearsal; do not move `v1.5.0`.
+6. Publish under a new, traceable version/tag if the existing failed tag cannot identify the final source.
+7. Verify every published package and an out-of-tree consumer before announcing availability.
 
-- Green standard and native-feature release gates.
-- Correct segmented-soak accounting and accepted 15.56 h / 0-errors evidence (the full 48-hour target is waived).
-- Correct SQLite multi-change migration planning.
-- Leak-free true streaming, or removal from the stable API.
-- Accurate RC artifact/tag/workflow/docs state.
-- Final API/generated-client/CLI compatibility review against the actual RC.
-- Risk-based test improvements for migration/runtime critical paths.
-- Accurate native pool telemetry and current benchmark claims.
+## 10. Final assessment
 
-### Should not expand v1
+`ruprizzle` is technically ambitious and much of that ambition is implemented well. Its architecture, typed API, SQL transparency, migration model, Studio remediation, observability, caching, routing, and edge adapters justify a high ORM capability score.
 
-Do not add full-text search, PostGIS, soft deletes, polymorphic relations, implicit many-to-many tables, recursive tree APIs, MSSQL, vector search, multi-tenancy/RLS abstractions, or a hosted Studio before the current blockers close. These features increase the semver and test matrix while doing nothing to repair the release evidence.
+Production readiness is lower because release truth is binary: the tagged artifact was not published, the current gates are red, the semver policy rejects the surface, scheduled assurance jobs do not provide the evidence they claim, and one public streaming contract is false for most backends. These are fixable without redesigning the ORM.
 
-## 11. Final assessment
-
-`ruprizzle` has a stronger design than its current readiness score suggests. Its schema-first workflow, typed columns, SQL visibility, migration model, multi-dialect architecture, and tooling make it one of the more interesting Rust ORM designs in the repository's comparison set.
-
-The correct next move is not more feature breadth. It is to make the existing promise true:
-
-1. restore every release gate,
-2. remove known correctness and lifetime defects,
-3. produce trustworthy long-duration and mutation evidence,
-4. publish an internally consistent RC,
-5. collect real external feedback,
-6. then freeze and ship `1.0.0`.
-
-Until those steps are complete, the honest label is **strong beta**, not production-stable v1.
+The honest current label is **strong beta, release blocked**. Closing the focused plan can raise readiness quickly; adding more features before then would lower confidence rather than increase product value.
