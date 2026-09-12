@@ -1,8 +1,9 @@
-# This workspace defaults to a shared target directory on the G: drive to keep
-# the project checkout light.  The path is Windows-specific; on CI or other
-# platforms set CARGO_TARGET_DIR to override it.
-[build]
-target-dir = "G:/cargo-target"
+# Build artifacts go to the machine-wide shared target directory configured in
+# %CARGO_HOME%\config.toml (D:/temp/rustdev/target).  This file deliberately
+# does NOT set `build.target-dir`: a project-local value overrides the global
+# one, which is how this workspace previously ended up pinned to a stale G:
+# drive path after the shared directory moved.  Set CARGO_TARGET_DIR to
+# override per-invocation, e.g. on CI or other platforms.
 
 [alias]
 xtask = "run -p xtask --"
