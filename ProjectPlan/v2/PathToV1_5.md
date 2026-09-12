@@ -53,10 +53,31 @@ The rest of this plan assumes `1.5.1`.
       locally that the diff resolves for the crates; `--deny=removed` is not viable
       because `ruprizzle` lists 283 removed items from the intentional
       `#[doc(hidden)]` modules. Follow-up after R9: baseline `1.5.1` + `--deny=all`.*
-- [ ] **R4 — Semver check.** `cargo-semver-checks` compares against the latest
+- [ ] **R4 — Semver check.** ⚠ *Run 2026-09-13 — FAILS; decision needed.* `cargo-semver-checks` compares against the latest
       published version (`1.0.0-rc.1`). The `#[non_exhaustive]` changes in
       `[Unreleased]` are acceptable under a minor bump from an RC; run it locally
       before tagging.
+
+      *Result (`cargo semver-checks`, 1.0.0-rc.1 → 1.5.1, exit 100):* the tool reports
+      "semver requires new major version" for 4 of 8 checked crates. `ruprizzle-macros`
+      (proc-macro) is not checked.
+
+      | Crate | Result | Breaking items |
+      |---|---|---|
+      | `ruprizzle-parser`, `-codegen`, `-migrate`, `-lsp` | pass | none |
+      | `ruprizzle-core` | 4 major | `ScalarType` +Point/Polygon/MultiPolygon/LineString; `SchemaError` `#[non_exhaustive]` and discriminant shifts; `FieldAttrs` +`is_created_at`/`is_deleted_at`; `IndexDef` +`index_type` |
+      | `ruprizzle-dialect` | 2 major | `RustType` +4 PostGIS variants; `DialectError` `#[non_exhaustive]` |
+      | `ruprizzle-check` | 3 major | `QueryManifest.version`, `QueryEntry` +`id`/`params`/`result_columns`/`location`; `QueryCheckError` `#[non_exhaustive]` and `UnknownTable` +`suggestion`/`location` |
+      | `ruprizzle` | 5 major | `ArrayFilterOp` +Has/IsEmpty/IsNotEmpty (discriminants shift); `FilterNode` +FullTextMatch/Spatial; 43 fns, `CompiledSql`, `CountingExecutor`, `ROW_NUMBER_ALIAS` now `#[doc(hidden)]` |
+
+      The assumption above does not hold: the tool treats rc.1 → 1.5.1 as a minor bump
+      and flags these as major. They cannot be made compatible, because adding the
+      fields and variants is the feature work, so CI's `semver` job will fail the same
+      way. Pick one before R9:
+      (a) accept them as RC → stable breakage: document it in the 1.5.1 notes and
+      skip or re-baseline the CI job for this release only (e.g. `baseline-rev: v1.5.0`,
+      which still flags the `[Unreleased]` `#[non_exhaustive]`/`doc(hidden)` items);
+      (b) publish as `2.0.0`. Full log: run the command above.
 - [ ] **R5 — Full local gate.** `cargo xtask ci`, `cargo xtask harden`,
       `cargo deny check`, `cargo clippy -p ruprizzle-cli --features studio --all-targets -- -D warnings`,
       `cargo test -p ruprizzle-cli --features studio`, and `cargo xtask release`
