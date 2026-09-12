@@ -2,9 +2,9 @@
 
 [![Crates.io](https://img.shields.io/crates/v/ruprizzle.svg)](https://crates.io/crates/ruprizzle)
 [![docs.rs](https://docs.rs/ruprizzle/badge.svg)](https://docs.rs/ruprizzle)
-[![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](../Cargo.toml)
-[![License](https://img.shields.io/crates/l/ruprizzle.svg)](../LICENSE-MIT)
-[![CI](https://img.shields.io/badge/CI-cargo%20xtask%20ci-success)](../xtask/src/main.rs)
+[![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](https://github.com/vaibhavgupta9877/ruprizzle-orm/blob/main/Cargo.toml)
+[![License](https://img.shields.io/crates/l/ruprizzle.svg)](https://github.com/vaibhavgupta9877/ruprizzle-orm/blob/main/LICENSE-MIT)
+[![CI](https://img.shields.io/badge/CI-cargo%20xtask%20ci-success)](https://github.com/vaibhavgupta9877/ruprizzle-orm/actions/workflows/ci.yml)
 
 A schema-first ORM for Rust that combines the best parts of Prisma and Drizzle:
 
@@ -137,7 +137,7 @@ mod db;
 ## Workflow
 
 | Step | Command |
-|---|---|---|
+|---|---|
 | Scaffold a project | `ruprizzle init --provider postgres\|postgresql\|sqlite\|mysql\|mariadb` |
 | Generate the client | `ruprizzle generate` |
 | Auto-watch in dev | `ruprizzle generate --watch` |
@@ -162,7 +162,7 @@ prototyping invocation into CI.
 ## Why another Rust ORM?
 
 | Feature | ruprizzle | Diesel | SeaORM | sqlx | prax | Prisma | Drizzle |
-|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|
 | Schema-first code generation | ✅ | partial | ❌ | ❌ | ✅ | ✅ | ❌ |
 | Type-safe nested `include` | ✅ | ❌ | partial | ❌ | ✅ | ✅ | ✅ |
 | SQL-first query API | ✅ | ❌ | ❌ | ✅ | partial | partial | ✅ |

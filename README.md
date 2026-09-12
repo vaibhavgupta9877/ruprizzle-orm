@@ -6,6 +6,8 @@
 [![License](https://img.shields.io/crates/l/ruprizzle.svg)](./LICENSE-MIT)
 [![CI](https://img.shields.io/badge/CI-cargo%20xtask%20ci-success)](./xtask/src/main.rs)
 
+📖 **Documentation site:** <https://vaibhavgupta9877.github.io/ruprizzle-orm/> · [Quickstart](https://vaibhavgupta9877.github.io/ruprizzle-orm/quickstart.html) · [ruprizzle vs Diesel, SeaORM, SQLx and Prisma](https://vaibhavgupta9877.github.io/ruprizzle-orm/FeaturesMasterComparison.html)
+
 **ruprizzle is a schema-first ORM for Rust — a Prisma-style schema file that generates a typed client, with Drizzle-style SQL transparency and no sidecar binary.**
 
 It combines the best parts of Prisma and Drizzle:

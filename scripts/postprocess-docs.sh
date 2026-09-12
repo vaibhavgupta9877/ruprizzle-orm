@@ -30,6 +30,13 @@ fi
 
 # Pages that must never be advertised to a crawler: mdBook's 404 stub and the
 # print view. Both are excluded from the sitemap; print.html also gets noindex.
+# mdBook redirect stubs ([output.html.redirect]) are meta-refresh pages that
+# already carry their own canonical. Injecting a second one, or listing them in
+# the sitemap, would advertise a URL whose only content is a redirect.
+is_redirect() {
+  grep -qi 'http-equiv="refresh"' "$1"
+}
+
 is_excluded() {
   case "$1" in
     404.html | print.html) return 0 ;;
@@ -96,6 +103,7 @@ echo "postprocess-docs: found ${#pages[@]} HTML pages in $BOOK_DIR"
 
 for file in "${pages[@]}"; do
   rel="${file#"$BOOK_DIR"/}"
+  if is_redirect "$file"; then continue; fi
   url="${BASE_URL}$(url_path_for "$rel")"
 
   payload="<!-- data-ruprizzle-seo -->
@@ -187,7 +195,7 @@ lastmod=$(date -u +%Y-%m-%d)
   echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
   for file in "${pages[@]}"; do
     rel="${file#"$BOOK_DIR"/}"
-    if is_excluded "$rel"; then
+    if is_excluded "$rel" || is_redirect "$BOOK_DIR/$rel"; then
       continue
     fi
     echo '  <url>'

@@ -59,6 +59,8 @@ jobs:
           fail=0
           while IFS= read -r page; do
             case "${page#book/}" in 404.html) continue ;; esac
+            # mdBook redirect stubs carry their own canonical and are left alone.
+            grep -qi 'http-equiv="refresh"' "$page" && continue
             n=$(grep -c '<link rel="canonical"' "$page" || true)
             if [ "$n" != "1" ]; then
               echo "::error file=$page::expected 1 canonical tag, found $n"
