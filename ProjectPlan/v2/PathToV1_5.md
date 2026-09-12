@@ -16,7 +16,7 @@ needs a cleanup before or alongside the release.
 | Tags | `v1.0.0`, `v1.0.1`, `v1.5.0` exist; none uploaded anything | `CHANGELOG.md` `[1.5.0]`, `RELEASES.md` |
 | Workspace version | `1.5.0` | `cargo xtask release-check --tag v1.5.0` passes |
 | Readiness blockers | All §6 items closed; full gate passed 2026-08-31 | `ProductionReadinessV1_5.md` §8–§10 |
-| `cargo fmt --all --check` | **Fails** | `crates/testkit/src/lib.rs` (7 hunks), `crates/runtime/tests/insert_validation.rs` |
+| `cargo fmt --all --check` | Fixed (R1) — previously failed in | `crates/testkit/src/lib.rs` (7 hunks), `crates/runtime/tests/insert_validation.rs` |
 
 The fmt gate is the one that failed the previous release run. It may be line endings on
 Windows, but CI will fail the same way until it is fixed.
@@ -35,7 +35,8 @@ The rest of this plan assumes `1.5.1`.
 
 ## 4. Release requirements
 
-- [ ] **R1 — Fix formatting.** `cargo fmt --all`, commit, confirm CI's fmt job is green.
+- [x] **R1 — Fix formatting.** `cargo fmt --all`, commit, confirm CI's fmt job is green.
+      *Done 2026-09-13: real rustfmt diffs (not line endings) in the two files; `cargo fmt --all --check` passes locally. CI fmt job to be confirmed on push.*
 - [ ] **R2 — Bump the version to `1.5.1`** in `workspace.package.version`, all 12
       internal pins in `Cargo.toml`, and the `editor/` VS Code extension. Add a
       `[1.5.1]` CHANGELOG section (fold `[Unreleased]` into it) and a `RELEASES.md`

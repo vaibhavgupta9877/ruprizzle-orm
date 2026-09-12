@@ -188,12 +188,10 @@ impl TestDb {
             .ok()
             .filter(|v| !v.is_empty())
             .or_else(|| {
-                std::env::var("DATABASE_URL")
-                    .ok()
-                    .filter(|v| {
-                        !v.is_empty()
-                            && (v.starts_with("postgres://") || v.starts_with("postgresql://"))
-                    })
+                std::env::var("DATABASE_URL").ok().filter(|v| {
+                    !v.is_empty()
+                        && (v.starts_with("postgres://") || v.starts_with("postgresql://"))
+                })
             })
             .unwrap_or_else(|| DEFAULT_PG_URL.to_owned());
 
@@ -624,7 +622,9 @@ impl TestDb {
     fn mysql_schema_info(&self) -> Option<(String, String)> {
         match &self.inner {
             Inner::MySql {
-                database, admin_url, ..
+                database,
+                admin_url,
+                ..
             } => Some((database.clone(), admin_url.clone())),
             _ => None,
         }
@@ -690,19 +690,21 @@ impl Drop for TestDb {
                 }
             }
             Inner::MySql {
-                database, admin_url, ..
+                database,
+                admin_url,
+                ..
             } => {
                 let (database, url) = (database.clone(), admin_url.clone());
                 if let Ok(handle) = tokio::runtime::Handle::try_current() {
                     handle.spawn(async move {
-                        if let Ok(pool) =
-                            MySqlPoolOptions::new().max_connections(1).connect(&url).await
+                        if let Ok(pool) = MySqlPoolOptions::new()
+                            .max_connections(1)
+                            .connect(&url)
+                            .await
                         {
-                            let _ = sqlx::query(&format!(
-                                "DROP DATABASE IF EXISTS `{database}`"
-                            ))
-                            .execute(&pool)
-                            .await;
+                            let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS `{database}`"))
+                                .execute(&pool)
+                                .await;
                             pool.close().await;
                         }
                     });
@@ -846,12 +848,14 @@ fn backend_configured(backend: Backend) -> bool {
         Backend::Postgres => {
             std::env::var(PG_URL_ENV).is_ok_and(|v| !v.is_empty())
                 || std::env::var("DATABASE_URL").is_ok_and(|v| {
-                    !v.is_empty() && (v.starts_with("postgres://") || v.starts_with("postgresql://"))
+                    !v.is_empty()
+                        && (v.starts_with("postgres://") || v.starts_with("postgresql://"))
                 })
         }
         Backend::MySql => {
             std::env::var(MYSQL_URL_ENV).is_ok_and(|v| !v.is_empty())
-                || std::env::var("DATABASE_URL").is_ok_and(|v| !v.is_empty() && v.starts_with("mysql://"))
+                || std::env::var("DATABASE_URL")
+                    .is_ok_and(|v| !v.is_empty() && v.starts_with("mysql://"))
         }
     }
 }
@@ -870,7 +874,9 @@ where
     Fut: std::future::Future<Output = Result>,
 {
     if !backend_configured(backend) {
-        eprintln!("skipping {backend}: no URL configured ({PG_URL_ENV}/{MYSQL_URL_ENV}/DATABASE_URL)");
+        eprintln!(
+            "skipping {backend}: no URL configured ({PG_URL_ENV}/{MYSQL_URL_ENV}/DATABASE_URL)"
+        );
         eprintln!("  (set {REQUIRE_DB_ENV}=1 to make an unconfigured backend a failure)");
         return;
     }
