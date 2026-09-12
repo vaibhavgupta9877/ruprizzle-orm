@@ -37,10 +37,13 @@ The rest of this plan assumes `1.5.1`.
 
 - [x] **R1 — Fix formatting.** `cargo fmt --all`, commit, confirm CI's fmt job is green.
       *Done 2026-09-13: real rustfmt diffs (not line endings) in the two files; `cargo fmt --all --check` passes locally. CI fmt job to be confirmed on push.*
-- [ ] **R2 — Bump the version to `1.5.1`** in `workspace.package.version`, all 12
+- [x] **R2 — Bump the version to `1.5.1`** in `workspace.package.version`, all 12
       internal pins in `Cargo.toml`, and the `editor/` VS Code extension. Add a
       `[1.5.1]` CHANGELOG section (fold `[Unreleased]` into it) and a `RELEASES.md`
       entry. Verify with `cargo xtask release-check --tag v1.5.1`.
+      *Done 2026-09-13: workspace + 12 pins, `examples/blog` pin and generated
+      version constant, VS Code extension, `Cargo.lock`; `[1.5.1] - pending publication`
+      CHANGELOG section and RELEASES entry. `release-check --tag v1.5.1` passes.*
 - [ ] **R3 — Fix the `public-api` CI job.** `.github/workflows/ci.yml` runs
       `cargo public-api diff 1.5.0 --deny=all`, which fetches `1.5.0` from crates.io.
       That version does not exist, so the job fails. Point the baseline at

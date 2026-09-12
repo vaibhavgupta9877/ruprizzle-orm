@@ -60,6 +60,23 @@ pauses between uploads to let that indexing propagate. Live publishes are refuse
 when `CI` or `GITHUB_ACTIONS` is set, so the workflow is the only automated path.
 
 
+## 1.5.1 (pending publication)
+
+The publish attempt for the v1.1–v1.5 feature line, under a new version because the
+`v1.5.0` tag records a failed release and is not moved. Feature content is identical to
+`1.5.0` below, plus:
+
+- `QueryCheckError`, `SchemaError` and `DialectError` are `#[non_exhaustive]`.
+- The `compile`, `counting`, `nested` and `decode` modules of `ruprizzle` are
+  `#[doc(hidden)]`; their useful types stay re-exported from the crate root.
+- `cargo fmt` fixes that failed the previous release gate.
+
+**Not yet published.** Until `scripts/check-release-state.sh --expect 1.5.1` passes,
+`1.0.0-rc.1` remains the only version on crates.io.
+
+Full detail in [CHANGELOG.md](CHANGELOG.md#151---pending-publication).
+
+
 ## 1.5.0 (2026-09-02)
 
 The v1.1–v1.5 feature line, developed on `dev-v2-x` and cut as one minor version:

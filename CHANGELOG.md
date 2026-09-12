@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+
+## [1.5.1] - pending publication
+
+**Not yet on crates.io.** This is the version the next publish attempt uses, in place
+of the failed `1.5.0` (whose tag is left untouched). It carries every `1.5.0` feature
+plus the changes below. Do not describe it as released until
+`scripts/check-release-state.sh --expect 1.5.1` passes.
+
 ### Changed
 
 - `QueryCheckError`, `SchemaError`, and `DialectError` are now `#[non_exhaustive]`.
@@ -547,7 +555,8 @@ Initial alpha release of **ruprizzle-orm**: a schema-first ORM for Rust. Write a
 
 See `docs/KnownLimitations.md` for the full list.
 
-[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.1...v1.5.0
 [1.0.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.0-rc.1...v1.0.0

@@ -516,7 +516,7 @@ The table below focuses on the features that differentiate ruprizzle from the to
 
 ## Architecture and repository layout
 
-The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.5.0`). The workspace crates and the VS Code extension move in lockstep on one number; see [Versioning](docs/Versioning.md).
+The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.5.1`). The workspace crates and the VS Code extension move in lockstep on one number; see [Versioning](docs/Versioning.md).
 
 | Directory | Crate | Role | Ships to users? | Status |
 |---|---|---|---|---|
@@ -580,7 +580,7 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 
 ## Status and roadmap
 
-`1.5.0` is the version the workspace is pinned to; `1.0.0-rc.1` is the only version on crates.io, and no stable release has been published. The twelve publishable crates move together on one version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
+`1.5.1` is the version the workspace is pinned to; `1.0.0-rc.1` is the only version on crates.io, and no stable release has been published. The twelve publishable crates move together on one version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
 
 ### The unreleased v1.1–v1.5 line
 
