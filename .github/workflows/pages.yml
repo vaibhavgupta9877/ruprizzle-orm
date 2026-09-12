@@ -26,9 +26,29 @@ jobs:
           mdbook-version: "latest"
       - name: Build docs
         run: mdbook build
-      - name: Copy SEO files to site root
+      # Adds per-page canonical/og:url tags, marks the duplicate print view
+      # noindex, attaches FAQPage structured data, generates sitemap.xml from
+      # the pages that actually exist, and copies robots.txt and llms.txt to the
+      # site root. See scripts/postprocess-docs.sh.
+      - name: Post-process for search and AI answer engines
+        run: bash scripts/postprocess-docs.sh book
+      - name: Verify SEO post-processing
         run: |
-          cp robots.txt sitemap.xml book/
+          set -euo pipefail
+          test -s book/sitemap.xml
+          test -s book/robots.txt
+          test -s book/llms.txt
+          # Every indexable page must carry exactly one canonical tag.
+          fail=0
+          while IFS= read -r page; do
+            case "${page#book/}" in 404.html) continue ;; esac
+            n=$(grep -c '<link rel="canonical"' "$page" || true)
+            if [ "$n" != "1" ]; then
+              echo "::error file=$page::expected 1 canonical tag, found $n"
+              fail=1
+            fi
+          done < <(find book -name '*.html')
+          exit "$fail"
       - name: Upload artifact
         if: github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3

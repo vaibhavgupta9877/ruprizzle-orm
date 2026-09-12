@@ -1,4 +1,60 @@
+# ruprizzle-orm documentation — https://vaibhavgupta9877.github.io/ruprizzle-orm/
+#
+# Everything here is open-source documentation; we want it crawled, indexed and
+# cited. The AI crawlers below are listed explicitly rather than left to the
+# wildcard so that a future tightening of the wildcard rule cannot quietly cut
+# the project out of AI answer engines.
+
 User-agent: *
 Allow: /
+
+# Search engines
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# AI answer engines. Blocking any of these means that engine cannot cite the
+# documentation, which is the opposite of what this project needs.
+User-agent: Google-Extended
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
+# mdBook emits /print.html, a single-page concatenation of the entire book and
+# therefore a pure duplicate of every chapter. It is deliberately NOT disallowed
+# here: it carries a `noindex` meta tag instead, and a crawler that is blocked
+# from fetching the page can never see that tag. Keep it crawlable so the
+# noindex is honoured, and keep it out of the sitemap (see
+# scripts/postprocess-docs.sh).
 
 Sitemap: https://vaibhavgupta9877.github.io/ruprizzle-orm/sitemap.xml
