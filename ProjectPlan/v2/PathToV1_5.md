@@ -44,11 +44,15 @@ The rest of this plan assumes `1.5.1`.
       *Done 2026-09-13: workspace + 12 pins, `examples/blog` pin and generated
       version constant, VS Code extension, `Cargo.lock`; `[1.5.1] - pending publication`
       CHANGELOG section and RELEASES entry. `release-check --tag v1.5.1` passes.*
-- [ ] **R3 — Fix the `public-api` CI job.** `.github/workflows/ci.yml` runs
+- [x] **R3 — Fix the `public-api` CI job.** `.github/workflows/ci.yml` runs
       `cargo public-api diff 1.5.0 --deny=all`, which fetches `1.5.0` from crates.io.
       That version does not exist, so the job fails. Point the baseline at
       `1.0.0-rc.1` for now, or enable the job only after `1.5.1` is published and
       move the baseline to it.
+      *Done 2026-09-13: baseline is `1.0.0-rc.1`, report-only (no `--deny`). Verified
+      locally that the diff resolves for the crates; `--deny=removed` is not viable
+      because `ruprizzle` lists 283 removed items from the intentional
+      `#[doc(hidden)]` modules. Follow-up after R9: baseline `1.5.1` + `--deny=all`.*
 - [ ] **R4 — Semver check.** `cargo-semver-checks` compares against the latest
       published version (`1.0.0-rc.1`). The `#[non_exhaustive]` changes in
       `[Unreleased]` are acceptable under a minor bump from an RC; run it locally

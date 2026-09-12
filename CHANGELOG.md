@@ -33,9 +33,11 @@ plus the changes below. Do not describe it as released until
 
 ### CI
 
-- `cargo public-api diff 1.5.0 --deny=all` runs for every published,
-  semver-covered crate. 1.5.0 is the baseline: no public item is added or removed
-  from here without the diff appearing in the job log.
+- `cargo public-api diff 1.0.0-rc.1` runs for every published, semver-covered
+  crate and prints the full public API diff in the job log. It is report-only:
+  the baseline was `1.5.0`, which crates.io never served, so the job failed on
+  the fetch. After `1.5.1` is published the baseline moves to it and
+  `--deny=all` returns.
 - `cargo hack --feature-powerset --depth 2 check` runs for `ruprizzle` and
   `ruprizzle-cli`, covering every single feature and every pair rather than only
   the hand-picked combinations in the feature matrix.

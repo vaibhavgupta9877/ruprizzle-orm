@@ -304,13 +304,22 @@ jobs:
           package: ruprizzle-core, ruprizzle-dialect, ruprizzle-parser, ruprizzle-codegen, ruprizzle-migrate, ruprizzle-macros, ruprizzle-check, ruprizzle-lsp, ruprizzle
 
   public-api:
-    name: public API diff vs 1.5.0
+    name: public API diff vs 1.0.0-rc.1
     runs-on: ubuntu-latest
     # `cargo semver-checks` above catches the changes it has lints for.
     # `cargo public-api` is the complementary check: it prints *every* item
-    # added or removed from the public surface and, with `--deny=all`, fails on
-    # any of them. 1.5.0 is the baseline release, so from here on no public item
-    # moves without the diff being read by a human in the job log first.
+    # added, changed or removed from the public surface.
+    #
+    # The baseline must be a version crates.io actually serves. `1.5.0` was
+    # tagged but never uploaded, so diffing against it failed on the fetch.
+    # `1.0.0-rc.1` is the latest published version. The job is report-only for
+    # now: the v1.1-v1.5 line intentionally adds hundreds of items since rc.1,
+    # and `#[doc(hidden)]` on `ruprizzle::{compile,counting,nested,decode}`
+    # shows up as removals, so any `--deny` would fail on accepted changes.
+    #
+    # Once `scripts/check-release-state.sh --expect 1.5.1` passes, move the
+    # baseline to `1.5.1` and restore `--deny=all`, so no public item moves
+    # without a human reading the diff first.
     #
     # Deliberately not run against `ruprizzle-testkit` or `xtask`: both are
     # `publish = false` and out of scope for semver, per docs/Stability.md.
@@ -337,8 +346,8 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-public-api
-      - name: Diff public API against the 1.5.0 baseline
-        run: cargo public-api -p ${{ matrix.package }} diff 1.5.0 --deny=all
+      - name: Diff public API against the 1.0.0-rc.1 baseline (report-only)
+        run: cargo public-api -p ${{ matrix.package }} diff 1.0.0-rc.1
 
   feature-powerset:
     name: feature powerset (depth 2)
