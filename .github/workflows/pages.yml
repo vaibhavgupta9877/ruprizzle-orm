@@ -1,3 +1,12 @@
+# The single workflow that publishes to GitHub Pages.
+#
+# Do not add a second Pages workflow. Two workflows that both deploy to the
+# `github-pages` environment race each other: they share the `pages` concurrency
+# group (concurrency groups are repository-wide, not per-workflow), so one run is
+# queued or cancelled, and whichever deployment lands second silently overwrites
+# the first. A starter "Deploy static content to Pages" workflow was added and
+# removed for exactly this reason -- it also uploaded the repository root, which
+# has no index.html, so it replaced the built book with a 404.
 name: Docs
 
 on:
@@ -5,6 +14,9 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  # Lets the site be republished without an empty commit -- needed after
+  # changing a Pages setting, or to recover from a bad deployment.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -23,7 +35,11 @@ jobs:
       - name: Setup mdBook
         uses: peaceiris/actions-mdbook@v2
         with:
-          mdbook-version: "latest"
+          # Pinned deliberately. "latest" now resolves to the 0.5 line, which is
+          # a major release the theme and book.toml have not been migrated to,
+          # so an unrelated upstream release would break the docs build with no
+          # change on our side. Upgrading to 0.5 is its own piece of work.
+          mdbook-version: "0.4.52"
       - name: Build docs
         run: mdbook build
       # Adds per-page canonical/og:url tags, marks the duplicate print view
@@ -35,6 +51,7 @@ jobs:
       - name: Verify SEO post-processing
         run: |
           set -euo pipefail
+          test -s book/index.html
           test -s book/sitemap.xml
           test -s book/robots.txt
           test -s book/llms.txt
@@ -49,14 +66,18 @@ jobs:
             fi
           done < <(find book -name '*.html')
           exit "$fail"
+      - name: Setup Pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
       - name: Upload artifact
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: book
 
+  # Pull requests build and verify the book but never deploy it.
   deploy:
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:

@@ -221,3 +221,64 @@ that keeps them honest.
 7. Only then pursue off-site presence. A Rust crate's discovery surfaces are
    crates.io, docs.rs, /r/rust and This Week in Rust, and all four are worthless
    while the registry serves a month-old release candidate and the docs 404.
+
+## 4. Addendum, 2026-09-12: why every action failed after Pages was enabled
+
+Pages was switched to "GitHub Actions" as the source. GitHub offers a starter
+workflow on that screen, and it was committed as `ecc13fe`,
+`.github/workflows/static.yml`. That commit is the cause of the failures.
+
+The repository then had **two workflows deploying to Pages on every push to
+`main`**: `Docs` (`pages.yml`), which builds the book, and `Deploy static content
+to Pages` (`static.yml`), which does not. They collide three ways:
+
+1. **Shared concurrency group.** Both declare `concurrency: group: "pages"`.
+   Concurrency groups are repository-wide, not per-workflow, so the two runs are
+   serialised against each other. With `cancel-in-progress: false` the second run
+   waits, and a third push cancels the one waiting in the middle — a cancelled
+   run is reported as a failure.
+2. **Shared environment.** Both deploy to `environment: github-pages`. The Pages
+   API permits one active deployment at a time, so whichever `deploy-pages` step
+   runs while the other is in flight fails the request.
+3. **Contradictory content.** Whichever run finishes last wins the site.
+
+The third point is the reason the documentation would not have appeared even if
+the runs had been green. `static.yml` uploads `path: '.'` — the repository root —
+with no build step. It therefore publishes:
+
+- no `index.html` at the site root, so `/` 404s exactly as before;
+- raw `.md` sources rather than rendered HTML;
+- **no book at all**, because `/book` is listed in `.gitignore`, so the built
+  output is not in the checkout it uploads.
+
+It would also have published `ProjectPlan/`, `logs/`, `customer-research.md` and
+`competitor-profiles/` to the public internet.
+
+### The fix
+
+- **`static.yml` is deleted.** `pages.yml` is now the only workflow that deploys
+  to Pages, and carries a comment saying so, because the starter workflow is easy
+  to re-add from the settings screen.
+- **`pages.yml` gains `workflow_dispatch`**, so the site can be republished from
+  the Actions tab without an empty commit — which is what was needed immediately
+  after the Pages setting changed. The deploy job's condition changed from
+  `github.event_name == 'push'` to `!= 'pull_request'` so a manual run actually
+  deploys rather than building and stopping.
+- **`actions/configure-pages@v5`** now runs before the upload.
+- **mdBook is pinned to `0.4.52`.** `mdbook-version: "latest"` resolved to the
+  0.5 line, a major release the theme and `book.toml` have not been migrated to.
+  That is a second, independent way for the docs build to break with no change on
+  our side. Migrating to 0.5 is separate work.
+- The verification step now also asserts `book/index.html` exists, so an empty or
+  partial build cannot be deployed over a working site.
+
+### What is still red, and is unrelated
+
+`CI` fails on `cargo fmt --all --check` and the stale trybuild/codegen fixtures.
+That is PR-01 in section 1 and needs a Rust toolchain; it does not affect Pages.
+
+### Keeping the docs in sync
+
+`Docs` deploys from `main` only. The documentation corrections on
+`docs/seo-and-release-fixes` are not on the live site until that branch is merged;
+merging is what publishes them.
