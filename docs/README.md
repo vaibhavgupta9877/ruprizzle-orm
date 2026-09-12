@@ -22,19 +22,26 @@ are also available: `sqlite-rusqlite` for synchronous SQLite and an experimental
 
 ## Status
 
-`1.0.1` is the **latest published release** on crates.io (2026-08-31, tag
-`v1.0.1`), a documentation-only patch over `1.0.0` (2026-08-21). The core P0–P8 implementation
-is complete, MySQL/MariaDB support is shipped, and the public API is covered by
-semantic versioning from this release onward.
+**The only version available on crates.io is `1.0.0-rc.1`**, for every crate in the
+workspace. `ruprizzle-turso` and `ruprizzle-d1` have never been published at all.
+Run `scripts/check-release-state.sh` to confirm this against the registry rather
+than taking this page's word for it.
 
-The v1.1–v1.5 feature line is prepared as `1.5.0` on `dev-main`, and is **not yet
-published to crates.io** — array filters, full-text search,
-soft deletes, offline query checking, nested writes, tree hierarchies,
-OpenTelemetry, read-replica routing, query caching, PostGIS and Ruprizzle Studio.
-See [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md). It was assessed and
-initially blocked — Studio's data plane and the edge adapters returned fabricated
-results rather than querying a database — and the findings and the remediation are
-in [`ProjectPlan/v2/ProductionReadinessV1_5.md`](../ProjectPlan/v2/ProductionReadinessV1_5.md).
+`1.0.1` and `1.5.0` are git tags, not releases. The `v1.5.0` publish run failed in
+the pre-publish gate and uploaded nothing; the tag is kept as evidence of the
+attempt rather than moved. Until a publish run succeeds, treat `1.0.0-rc.1` as the
+only installable version and build from source for anything newer.
+
+The core P0–P8 implementation is complete and MySQL/MariaDB support is shipped.
+The public API is covered by semantic versioning from the first stable release
+onward — which has not happened yet.
+
+The v1.1–v1.5 feature line is complete in the repository as `1.5.0` — array
+filters, full-text search, soft deletes, offline query checking, nested writes,
+tree hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and
+Ruprizzle Studio. See [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md). It was
+assessed and blocked; the current blockers and the remediation plan are in
+[`ProjectPlan/ProductionReadinessSolPlan.md`](https://github.com/vaibhavgupta9877/ruprizzle-orm/blob/main/ProjectPlan/ProductionReadinessSolPlan.md).
 
 Two things were waived on the way here, both in writing rather than by omission:
 the W4-02 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors
@@ -109,8 +116,8 @@ db.post().find_many().filter(user::EMAIL.eq(""))  // error: expected Filter<Post
 ## Install
 
 ```bash
-cargo install ruprizzle-cli    # the `ruprizzle` command
-cargo add ruprizzle            # the runtime crate your app uses
+cargo install ruprizzle-cli --version 1.0.0-rc.1  # the `ruprizzle` command
+cargo add ruprizzle@1.0.0-rc.1                   # the runtime crate your app uses
 ```
 
 In a new or existing project:

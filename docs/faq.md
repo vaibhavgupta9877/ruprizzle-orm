@@ -8,18 +8,59 @@ SQL. It targets PostgreSQL, MySQL/MariaDB, and SQLite 3+.
 
 ## Is it production-ready?
 
-`1.0.0` is a stable release: the public API is covered by semantic versioning
-from here on. Be aware of what that did and did not include — the two-week
-release-candidate feedback window was waived, with reasons, because the project
-had no external consumers to collect feedback from. See
-[Stability](Stability.md) for the semver policy, the waiver, and the list of
-public dependencies (the 1.0 line is pinned to `sqlx 0.8`), and
-[Known limitations](KnownLimitations.md) for the honest boundaries.
+Not yet. The only version published on crates.io is `1.0.0-rc.1`, a release
+candidate. No stable release has been published: `v1.0.0`, `v1.0.1` and `v1.5.0`
+are git tags whose publish runs failed before uploading anything. Use ruprizzle
+for evaluation and bounded projects, not as a default mission-critical dependency.
 
-The v1.1–v1.5 line ([what's new](WhatsNewV1_1ToV1_5.md)) is prepared as `1.5.0`,
-adding Ruprizzle Studio and the Turso and D1 adapters. There is no Neon adapter:
-Neon is Postgres over TLS, so its connection string goes straight to
-`ruprizzle::connect`.
+The design is complete and the test suite is broad, but the release controls are
+not green. The current, honest assessment scores the project 62/100 and lists what
+is blocking publication; see
+[the remediation plan](https://github.com/vaibhavgupta9877/ruprizzle-orm/blob/main/ProjectPlan/ProductionReadinessSolPlan.md).
+
+Two gates were waived along the way, both in writing rather than by omission: the
+48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors, and the
+two-week release-candidate feedback window, because the project had no external
+consumers to collect feedback from. See [Stability](Stability.md) for the semver
+policy, the waivers, and the public-dependency list (the 1.0 line is pinned to
+`sqlx 0.8`), and [Known limitations](KnownLimitations.md) for the boundaries.
+
+The v1.1–v1.5 line ([what's new](WhatsNewV1_1ToV1_5.md)) is complete in the
+repository as `1.5.0`, adding Ruprizzle Studio and the Turso and D1 adapters, and
+is buildable from source. There is no Neon adapter: Neon is Postgres over TLS, so
+its connection string goes straight to `ruprizzle::connect`.
+
+## Which version should I install?
+
+`1.0.0-rc.1` — it is the only one on crates.io.
+
+```toml
+[dependencies]
+ruprizzle = "1.0.0-rc.1"
+```
+
+For the v1.1–v1.5 features, depend on the git repository instead:
+
+```toml
+[dependencies]
+ruprizzle = { git = "https://github.com/vaibhavgupta9877/ruprizzle-orm" }
+```
+
+## What databases does ruprizzle support?
+
+PostgreSQL, MySQL/MariaDB and SQLite 3+, behind a `DbDialect` trait. Connections
+go through [`sqlx`](https://github.com/launchbadge/sqlx) by default. Two native
+drivers are available as optional features: `sqlite-rusqlite` for synchronous
+SQLite, and an experimental `postgres-tokio-postgres` for PostgreSQL. Turso/libSQL
+and Cloudflare D1 adapters exist in the repository, over their providers' HTTP
+APIs, but have not been published to crates.io and have not been validated against
+a live hosted database.
+
+## Is ruprizzle free? What licence is it under?
+
+Yes — free and open source, dual-licensed MIT OR Apache-2.0, the standard
+arrangement in the Rust ecosystem. There is no paid tier, no telemetry and no
+commercial licence to buy.
 
 ## How is it different from Diesel or SeaORM?
 

@@ -1,0 +1,65 @@
+# ruprizzle
+
+> ruprizzle is a schema-first ORM for Rust. You write one `schema.ruprizzle` file in a Prisma-style
+> declarative syntax, and the CLI generates a type-safe Rust client, automatic migration diffs, and
+> nested relation loaders. Every query builder exposes `.to_sql()`, so the SQL that will run is always
+> visible. It is pure Rust with no sidecar binary and no hidden query engine, built on `sqlx` for the
+> wire protocol and pooling. PostgreSQL, MySQL/MariaDB and SQLite 3+ are supported behind a
+> `DbDialect` trait.
+
+## What it is
+
+ruprizzle combines Prisma's declarative schema-as-source-of-truth with Drizzle's SQL transparency,
+for the Rust ecosystem. It competes with Diesel, SeaORM, SQLx and Prisma Client Rust.
+
+- **Language:** Rust (MSRV 1.85, edition 2024)
+- **Licence:** MIT OR Apache-2.0
+- **Databases:** PostgreSQL, MySQL/MariaDB, SQLite 3+; experimental Turso and Cloudflare D1 adapters
+- **Drivers:** `sqlx` by default; optional native `rusqlite` (SQLite) and `tokio-postgres` (PostgreSQL)
+- **Cost:** free and open source
+- **Repository:** https://github.com/vaibhavgupta9877/ruprizzle-orm
+- **Registry:** https://crates.io/crates/ruprizzle
+- **API docs:** https://docs.rs/ruprizzle
+
+## Release status
+
+The version published on crates.io is `1.0.0-rc.1`. The `1.5.0` line is complete in the repository
+and tagged, but its publish run failed and it is **not** downloadable from crates.io. Treat
+`1.0.0-rc.1` as the only installable release until this file says otherwise. See
+[RELEASES.md](https://github.com/vaibhavgupta9877/ruprizzle-orm/blob/main/RELEASES.md).
+
+## How it differs
+
+- **vs Diesel:** ruprizzle is schema-first and async; Diesel's DSL is defined in Rust and is
+  synchronous by default.
+- **vs SeaORM:** ruprizzle generates code from a schema file rather than asking you to hand-write
+  entity modules, and exposes the generated SQL on every builder.
+- **vs SQLx:** ruprizzle adds typed models, migrations and relation loading on top of SQLx rather
+  than replacing it; SQLx remains the transport.
+- **vs Prisma Client Rust:** ruprizzle has no Node sidecar and no separate query engine binary.
+
+## Documentation
+
+- [Quickstart](https://vaibhavgupta9877.github.io/ruprizzle-orm/quickstart.html): install the CLI, write a schema, generate a client, run the first migration.
+- [Schema reference](https://vaibhavgupta9877.github.io/ruprizzle-orm/SchemaReference.html): every block, attribute and scalar type in the `.ruprizzle` schema language.
+- [Query guide](https://vaibhavgupta9877.github.io/ruprizzle-orm/QueryGuide.html): select, insert, update, delete, filters, aggregates, raw SQL escape hatches.
+- [Relations guide](https://vaibhavgupta9877.github.io/ruprizzle-orm/RelationsGuide.html): one-to-many, many-to-many, nested `include`, and how N+1 is avoided.
+- [Migrations guide](https://vaibhavgupta9877.github.io/ruprizzle-orm/MigrationsGuide.html): diffing, checksums, drift detection, destructive-change gating, dev vs deploy.
+- [Feature comparison](https://vaibhavgupta9877.github.io/ruprizzle-orm/FeaturesMasterComparison.html): ruprizzle against Diesel, SeaORM, SQLx and Prisma across features, architecture and measured SQLite benchmarks.
+- [FAQ](https://vaibhavgupta9877.github.io/ruprizzle-orm/faq.html)
+
+## Operating it
+
+- [Operations](https://vaibhavgupta9877.github.io/ruprizzle-orm/Operations.html): pooling, tracing, slow-query events, metrics, read-replica routing.
+- [Dialect notes](https://vaibhavgupta9877.github.io/ruprizzle-orm/DialectNotes.html): per-backend behaviour differences.
+- [Known limitations](https://vaibhavgupta9877.github.io/ruprizzle-orm/KnownLimitations.html): deliberate boundaries, stated plainly.
+- [Stability](https://vaibhavgupta9877.github.io/ruprizzle-orm/Stability.html): the semantic-versioning policy, public dependencies, and the waivers taken.
+- [Performance](https://vaibhavgupta9877.github.io/ruprizzle-orm/performance.html) and [benchmark results](https://vaibhavgupta9877.github.io/ruprizzle-orm/BenchmarkResults.html): methodology and measured cross-ORM SQLite numbers.
+
+## Optional
+
+- [Architecture decision records](https://vaibhavgupta9877.github.io/ruprizzle-orm/adr/): why sqlx, why codegen over proc-macros, why batched relation loading instead of JOINs.
+- [What's new in v1.1–v1.5](https://vaibhavgupta9877.github.io/ruprizzle-orm/WhatsNewV1_1ToV1_5.html): array filters, full-text search, soft deletes, offline query checking, nested writes, tree hierarchies, OpenTelemetry, replica routing, query caching, PostGIS, Ruprizzle Studio.
+- [Migrating from other ORMs](https://vaibhavgupta9877.github.io/ruprizzle-orm/MigratingFrom.html)
+- [Changelog](https://github.com/vaibhavgupta9877/ruprizzle-orm/blob/main/CHANGELOG.md)
+- [Security policy](https://github.com/vaibhavgupta9877/ruprizzle-orm/blob/main/SECURITY.md)

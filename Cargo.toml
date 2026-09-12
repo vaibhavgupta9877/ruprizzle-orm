@@ -61,9 +61,24 @@ base64       = "0.22"
 # Codegen output and sqlx make debug builds heavy; this trims link time without
 # hurting debuggability of our own crates.
 debug = 1
+# Emit debuginfo as separate .o/.dwo files instead of copying it into the final
+# binary at link time.  On Linux this is the cheapest link-time win available
+# and it keeps incremental relinks from rewriting hundreds of MB per build.
+split-debuginfo = "unpacked"
+
+# Dependencies are compiled once and then never stepped through; carrying their
+# debuginfo is what makes a `target/` directory reach double-digit gigabytes.
+# Dropping it shrinks the directory several-fold and shortens every link,
+# without touching the debuggability of the workspace crates above.
+[profile.dev.package."*"]
+debug = false
 
 [profile.test]
 debug = 1
+split-debuginfo = "unpacked"
+
+[profile.test.package."*"]
+debug = false
 
 [profile.release]
 # Tuned for the cross-ORM benchmark and for production builds: thin LTO and a

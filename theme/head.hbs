@@ -1,18 +1,25 @@
-<meta name="description" content="A schema-first ORM for Rust: Prisma-style schemas, Drizzle-style SQL-transparent queries, automatic migrations, and type-safe relation loading for Postgres and SQLite.">
-<meta name="keywords" content="Rust, ORM, Prisma, Drizzle, SQL, Postgres, SQLite, database, schema-first, migrations, typed queries, query builder">
+<meta name="description" content="ruprizzle is a schema-first ORM for Rust: Prisma-style schemas, Drizzle-style SQL-transparent queries, automatic migrations, and type-safe relation loading for PostgreSQL, MySQL/MariaDB, and SQLite.">
 <meta name="author" content="Vaibhav Gupta">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="{{ base_url }}">
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+
+<!--
+  `canonical` and `og:url` are intentionally NOT set here. mdBook renders this
+  partial with the same context on every page, so a value built from
+  `{{ base_url }}` would point every page at the site root and ask search
+  engines to drop the whole book bar the index. `scripts/postprocess-docs.sh`
+  injects the correct per-page URL after `mdbook build`; see that script and
+  `.github/workflows/pages.yml`.
+-->
 
 <meta property="og:site_name" content="ruprizzle-orm">
 <meta property="og:title" content="{{ book_title }}">
-<meta property="og:description" content="A schema-first ORM for Rust with typed queries, automatic migrations, and Postgres/SQLite support.">
+<meta property="og:description" content="A schema-first ORM for Rust with typed queries, automatic migrations, and PostgreSQL, MySQL/MariaDB and SQLite support.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="{{ base_url }}">
+<meta property="og:locale" content="en">
 
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="{{ book_title }}">
-<meta name="twitter:description" content="A schema-first ORM for Rust with typed queries, automatic migrations, and Postgres/SQLite support.">
+<meta name="twitter:description" content="A schema-first ORM for Rust with typed queries, automatic migrations, and PostgreSQL, MySQL/MariaDB and SQLite support.">
 
 <script type="application/ld+json">
 {
@@ -24,7 +31,8 @@
       "url": "{{ base_url }}",
       "sameAs": [
         "https://github.com/vaibhavgupta9877/ruprizzle-orm",
-        "https://crates.io/crates/ruprizzle"
+        "https://crates.io/crates/ruprizzle",
+        "https://docs.rs/ruprizzle"
       ]
     },
     {
@@ -38,22 +46,17 @@
       }
     },
     {
-      "@type": "SoftwareApplication",
-      "name": "ruprizzle-orm",
-      "applicationCategory": "DeveloperApplication",
-      "operatingSystem": "Cross-platform",
-      "softwareVersion": "0.1.1-beta.1",
-      "description": "A schema-first ORM for Rust with typed queries, automatic migrations, and Postgres/SQLite support.",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      },
-      "sameAs": [
-        "https://crates.io/crates/ruprizzle",
-        "https://docs.rs/ruprizzle",
-        "https://github.com/vaibhavgupta9877/ruprizzle-orm"
-      ]
+      "@type": "SoftwareSourceCode",
+      "name": "ruprizzle",
+      "description": "A schema-first ORM for Rust. A Prisma-style schema file generates a typed client, with Drizzle-style SQL transparency and no sidecar binary. Supports PostgreSQL, MySQL/MariaDB and SQLite.",
+      "programmingLanguage": "Rust",
+      "runtimePlatform": "Rust",
+      "codeRepository": "https://github.com/vaibhavgupta9877/ruprizzle-orm",
+      "license": "https://spdx.org/licenses/MIT.html",
+      "author": {
+        "@type": "Person",
+        "name": "Vaibhav Gupta"
+      }
     }
   ]
 }

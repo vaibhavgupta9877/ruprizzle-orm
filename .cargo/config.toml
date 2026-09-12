@@ -1,9 +1,10 @@
-# Build artifacts go to the machine-wide shared target directory configured in
-# %CARGO_HOME%\config.toml (D:/temp/rustdev/target).  This file deliberately
-# does NOT set `build.target-dir`: a project-local value overrides the global
-# one, which is how this workspace previously ended up pinned to a stale G:
-# drive path after the shared directory moved.  Set CARGO_TARGET_DIR to
-# override per-invocation, e.g. on CI or other platforms.
+# Repo-wide cargo settings.  Keep this file portable: anything specific to one
+# machine (target directory, linker, job count) belongs in the developer's own
+# ~/.cargo/config.toml or in CARGO_TARGET_DIR, not here.
+#
+# Contributors who build several checkouts of this workspace should point
+# `build.target-dir` in their ~/.cargo/config.toml at a single directory on a
+# fast local filesystem; see the build-environment section of CONTRIBUTING.md.
 
 [alias]
 xtask = "run -p xtask --"

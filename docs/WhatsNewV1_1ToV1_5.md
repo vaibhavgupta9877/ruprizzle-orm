@@ -8,7 +8,7 @@ This page covers the feature line developed on `dev-v2-x` after `1.0.0`.
 >
 > This line was assessed and initially **blocked**; the findings and what each of them
 > became are in
-> [`ProjectPlan/v2/ProductionReadinessV1_5.md`](../ProjectPlan/v2/ProductionReadinessV1_5.md).
+> [`ProjectPlan/v2/ProductionReadinessV1_5.md`](https://github.com/vaibhavgupta9877/ruprizzle-orm/blob/main/ProjectPlan/v2/ProductionReadinessV1_5.md).
 
 Every v1.1–v1.5 addition is **backwards compatible**. Nothing in `1.0.0`'s public API
 changed shape, and no existing query needs rewriting.

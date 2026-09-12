@@ -47,6 +47,21 @@ jobs:
             echo "publish=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # The v1.5.0 run reached the publish steps with CARGO_REGISTRY_TOKEN
+      # rendering as empty, which would have failed every `cargo publish` after
+      # a full gate had already run. Check the secret is present *before*
+      # spending twenty minutes on the gate, and never echo the value itself.
+      - name: Preflight — registry credential
+        if: steps.mode.outputs.publish == 'true'
+        run: |
+          if [ -z "${CARGO_REGISTRY_TOKEN:-}" ]; then
+            echo "::error::CARGO_REGISTRY_TOKEN is empty. This run would publish nothing."
+            echo "Set the secret under Settings → Secrets and variables → Actions," >&2
+            echo "and confirm it is visible to this workflow's environment." >&2
+            exit 1
+          fi
+          echo "CARGO_REGISTRY_TOKEN is present (${#CARGO_REGISTRY_TOKEN} characters)."
+
       # Guards that the git tag, the workspace version, and the CHANGELOG
       # heading all agree before anything is uploaded. Fails the job otherwise.
       - if: github.event_name == 'push'
@@ -133,3 +148,15 @@ jobs:
         run: sleep 30
       - if: steps.mode.outputs.publish == 'true'
         run: cargo publish -p ruprizzle-d1 --no-verify
+
+      # A publish is only real once the registry serves it. Without this, a run
+      # can go green while crates.io still serves the previous version — which
+      # is exactly how the tree came to claim releases that did not exist.
+      # Tag pushes only: on a manual dispatch GITHUB_REF_NAME is a branch name,
+      # not a version.
+      - name: Verify the registry actually serves this version
+        if: steps.mode.outputs.publish == 'true' && github.event_name == 'push'
+        run: |
+          echo "Waiting for the crates.io index to catch up..."
+          sleep 60
+          bash scripts/check-release-state.sh --expect "${GITHUB_REF_NAME#v}"

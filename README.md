@@ -15,9 +15,23 @@ It combines the best parts of Prisma and Drizzle:
 
 PostgreSQL, MySQL/MariaDB, and SQLite 3+ are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver. Native driver features are also available: `sqlite-rusqlite` for synchronous SQLite, and an experimental `postgres-tokio-postgres` for PostgreSQL. See [Dialects](#dialects) below for details.
 
-> **Status:** `1.0.1` is the latest release **published on crates.io**. `1.5.0` is prepared and tagged-ready on `dev-main` but not yet published; it carries the whole v1.1–v1.5 feature line — array filters, full-text search, soft deletes, offline query checking, nested writes, tree hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and Ruprizzle Studio — described in [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md). The line was assessed and initially blocked; the findings and the remediation are recorded in [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md). The `turso` and `d1` adapters are real drivers over their providers’ HTTP APIs; there is no Neon adapter, because Neon is ordinary Postgres.
+> **Status — what you can actually install today.** The only version on crates.io is
+> **`1.0.0-rc.1`**, for every crate in the workspace; `ruprizzle-turso` and `ruprizzle-d1`
+> have never been published. Verify at any time with `scripts/check-release-state.sh`.
 >
-> P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is covered by semantic versioning from `1.0.0` onward. Two gates were waived on the way, both in writing: the 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors (`docs/SoakReport.md`), and the two-week RC feedback window, for want of any external consumer to collect feedback from ([Stability](docs/Stability.md#waiver-the-100-rc1-feedback-window-2026-08-21)). Note that the 1.0 line is pinned to `sqlx 0.8`, which ruprizzle re-exports as part of its own public API. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
+> `1.0.1` and `1.5.0` exist as git tags, not as releases. The `v1.5.0` publish run failed
+> in the pre-publish gate and uploaded nothing, so no crate was ever built from it. The tag
+> is deliberately left in place as evidence of that attempt. `1.5.0` carries the whole
+> v1.1–v1.5 feature line — array filters, full-text search, soft deletes, offline query
+> checking, nested writes, tree hierarchies, OpenTelemetry, read-replica routing, query
+> caching, PostGIS and Ruprizzle Studio — described in
+> [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md). It is buildable from source and
+> is blocked from publication; the open blockers and the remediation plan are in
+> [`ProjectPlan/ProductionReadinessSolPlan.md`](ProjectPlan/ProductionReadinessSolPlan.md).
+> The `turso` and `d1` adapters are real drivers over their providers' HTTP APIs; there is
+> no Neon adapter, because Neon is ordinary Postgres.
+>
+> P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is covered by semantic versioning from the first stable release onward — which, as above, has not been published yet. Two gates were waived on the way, both in writing: the 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors (`docs/SoakReport.md`), and the two-week RC feedback window, for want of any external consumer to collect feedback from ([Stability](docs/Stability.md#waiver-the-100-rc1-feedback-window-2026-08-21)). Note that the 1.0 line is pinned to `sqlx 0.8`, which ruprizzle re-exports as part of its own public API. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
 
 ---
 
@@ -230,12 +244,25 @@ Rows must include their primary key; repeated runs update the existing row inste
 
 ## Installation
 
+The only version on crates.io is the release candidate `1.0.0-rc.1`. Cargo ignores
+prereleases unless you ask for one by name, so the version is required — a bare
+`cargo add ruprizzle` will report that no matching package exists.
+
 ```bash
 # The CLI
-$ cargo install ruprizzle-cli
+$ cargo install ruprizzle-cli --version 1.0.0-rc.1
 
 # The runtime crate your application uses
-$ cargo add ruprizzle
+$ cargo add ruprizzle@1.0.0-rc.1
+```
+
+To use the v1.1–v1.5 feature line — Studio, array filters, full-text search, soft
+deletes, offline query checking, nested writes, tree hierarchies, OpenTelemetry,
+replica routing, query caching, PostGIS — build from git; it is not published:
+
+```toml
+[dependencies]
+ruprizzle = { git = "https://github.com/vaibhavgupta9877/ruprizzle-orm" }
 ```
 
 MSRV: **Rust 1.85**.
@@ -551,7 +578,7 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 
 ## Status and roadmap
 
-`1.5.0` is the version the workspace is pinned to, prepared on `dev-main` and not yet published; `1.0.1` (2026-08-31) is the latest release on crates.io. The twelve publishable crates move together on one version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
+`1.5.0` is the version the workspace is pinned to; `1.0.0-rc.1` is the only version on crates.io, and no stable release has been published. The twelve publishable crates move together on one version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
 
 ### The unreleased v1.1–v1.5 line
 

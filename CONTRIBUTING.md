@@ -16,6 +16,62 @@ cd ruprizzle-orm
 cargo xtask ci
 ```
 
+## Build environment
+
+None of this is required to contribute, but the workspace is large (13 crates,
+~490 transitive dependencies) and the defaults leave a lot on the table.
+
+**Put `target/` on a fast local filesystem.** If your checkout lives on an
+NTFS, exFAT, or network mount, cargo cannot hard-link artifacts and falls back
+to copying every one of them, on top of metadata operations several times
+slower than ext4. Point every project at one shared directory on a local disk,
+in your own `~/.cargo/config.toml` (not in the repo — the path is
+machine-specific):
+
+```toml
+[build]
+target-dir = "/home/you/.cache/cargo-target"
+```
+
+Sharing one directory across projects also means a dependency built with the
+same version, features, profile, flags, and toolchain is compiled and stored
+once rather than once per checkout. `cargo clean` then wipes artifacts for
+every project, so prune with `cargo sweep --time 30` instead.
+
+**Use a parallel linker.** Link time dominates the edit-build-test loop here.
+[mold](https://github.com/rui314/mold) needs no root — extract its release
+tarball over `~/.local` and add:
+
+```toml
+[target.x86_64-unknown-linux-gnu]
+rustflags = [
+    "-C", "link-arg=-B/home/you/.local/bin",   # so gcc finds ld.mold
+    "-C", "link-arg=-fuse-ld=mold",
+]
+```
+
+`-B` rather than relying on `PATH`, so builds launched from an editor or
+desktop session resolve mold too.
+
+**Cap `jobs` if RAM is tight.** Each rustc codegen unit and each link job is a
+separate multi-hundred-megabyte process. On a machine with less free RAM than
+`nproc` gigabytes, `[build] jobs = <cores minus a few>` finishes faster than
+letting all cores swap against each other.
+
+**Run tests with [`cargo nextest`](https://nexte.st).** It runs each test in
+its own process with real per-test timeouts, which matters for the
+dual-database suites below:
+
+```bash
+cargo nextest run --workspace
+```
+
+The dev and test profiles already drop debuginfo for dependencies
+(`[profile.dev.package."*"] debug = false`) and emit our own crates' debuginfo
+unpacked. That is what keeps the shared target directory in the low gigabytes
+instead of the low tens, and it shortens every link. Workspace crates keep
+`debug = 1`, so stepping through ruprizzle code is unaffected.
+
 ## Running tests
 
 Most tests are dual-database: each case runs against SQLite and, when a

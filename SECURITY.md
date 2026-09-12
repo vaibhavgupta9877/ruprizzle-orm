@@ -2,16 +2,23 @@
 
 ## Supported versions
 
-`1.0.0` is the current release. The `1.x` line is the supported line: security
-fixes land on the most recent `1.x` release. The `0.x` prereleases and
-`1.0.0-rc.1` are superseded and receive no further fixes — upgrade to `1.x`, which
-is API-compatible with `1.0.0-rc.1`.
+`1.0.0-rc.1` is the only version published on crates.io. No stable release has
+been published: `v1.0.1` and `v1.5.0` are git tags whose publish runs did not
+upload anything. Confirm the current registry state with
+`scripts/check-release-state.sh`.
+
+Because `1.0.0-rc.1` is the only thing anyone can install, it is the version that
+receives security fixes, delivered as a new published release. Fixes are developed
+against `main`, which is ahead of that package.
 
 | Version | Supported |
 |---|---|
-| `1.x` (current line on crates.io) | ✅ |
-| `1.0.0-rc.1` | ❌ — superseded by `1.0.0`, same API |
+| `1.0.0-rc.1` (the only package on crates.io) | ✅ |
+| `main` / source builds | ✅ — best effort, no published artifact |
 | `0.x` (alpha and beta lines) | ❌ |
+
+If you are running a source build of the `1.5.0` line, say so in your report: it
+contains code that has never been through a completed release gate.
 
 ## Known accepted dependency risk
 
