@@ -92,10 +92,27 @@ The rest of this plan assumes `1.5.1`.
       - CI `semver` job uses `release-type: major` for this release (passes locally, exit
         0). **Follow-up after R9:** remove `release-type`, and move `public-api` to
         `1.5.1 --deny=all` (see R3).
-- [ ] **R5 — Full local gate.** `cargo xtask ci`, `cargo xtask harden`,
+- [x] **R5 — Full local gate.** `cargo xtask ci`, `cargo xtask harden`,
       `cargo deny check`, `cargo clippy -p ruprizzle-cli --features studio --all-targets -- -D warnings`,
       `cargo test -p ruprizzle-cli --features studio`, and `cargo xtask release`
       (dry-run `cargo package` for every crate, in order).
+      *Done 2026-09-13: all six commands exit 0 on Windows, rustc 1.95.0, with
+      PostgreSQL 17 required (`RUPRIZZLE_TEST_PG_URL` + `RUPRIZZLE_REQUIRE_DB=1`, as in
+      CI's `postgres` leg; MySQL left to R6).*
+
+      | Command | Result |
+      |---|---|
+      | `xtask ci` (fmt, clippy, test, doc) | pass — 111 test binaries ok, 3 ignored tests |
+      | `xtask harden` | pass — lint, test, docs, deny, package checks; panic and arithmetic/indexing audits within budget; injection audit clean |
+      | `deny check` | advisories, bans, licenses, sources ok |
+      | clippy `ruprizzle-cli --features studio` | pass, no warnings |
+      | test `ruprizzle-cli --features studio` | pass |
+      | `xtask release` (dry-run) | all 12 crates packaged in publish order |
+
+      *Found and fixed:* R2 left the 15 codegen `*_generated.snap` snapshots asserting
+      `RUPRIZZLE_VERSION = "1.5.0"`, failing `snapshots::all_examples_all_dialects`
+      (`505b4b1`). *Note:* with `RUPRIZZLE_REQUIRE_DB=1` but no `RUPRIZZLE_TEST_PG_URL`,
+      `runtime/tests/arrays.rs` panics by design, so a local gate must set both.
 - [ ] **R6 — MySQL/MariaDB.** Never verified locally; depends on CI's `integration`
       job. Require it green on the release commit.
 - [ ] **R7 — Registry token.** Confirm `CARGO_REGISTRY_TOKEN` is set in Actions
