@@ -506,8 +506,10 @@ pub struct FieldAttrs {
     /// behaviour is identical across dialects.
     pub is_updated_at: bool,
     /// `@createdAt` — set by the insert builder in Rust / default now.
+    #[serde(default)]
     pub is_created_at: bool,
     /// `@deletedAt` — marks soft delete timestamp column.
+    #[serde(default)]
     pub is_deleted_at: bool,
     /// `@ignore` — present in the database, absent from generated code.
     pub ignore: bool,

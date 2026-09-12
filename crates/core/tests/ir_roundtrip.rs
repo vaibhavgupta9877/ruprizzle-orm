@@ -296,3 +296,24 @@ fn column_bearing_fields_are_distinguished_from_navigation_properties() {
     assert!(post.field("authorId").unwrap().has_column());
     assert_eq!(post.field("authorId").unwrap().column, "author_id");
 }
+
+/// A snapshot written by `1.0.0-rc.1` predates `@createdAt` and `@deletedAt`, so its
+/// field attributes carry neither key. Upgrading must not make `migrate dev` refuse
+/// the project's existing `migrations/.ruprizzle/snapshot.ruprizzle`.
+#[test]
+fn snapshot_from_1_0_0_rc_1_without_new_field_attrs_still_loads() {
+    let schema = blog_schema();
+    let mut json = serde_json::to_value(&schema).unwrap();
+    let mut stripped = 0;
+    for model in json["models"].as_object_mut().unwrap().values_mut() {
+        for field in model["fields"].as_object_mut().unwrap().values_mut() {
+            let attrs = field["attrs"].as_object_mut().unwrap();
+            stripped += usize::from(attrs.remove("is_created_at").is_some());
+            stripped += usize::from(attrs.remove("is_deleted_at").is_some());
+        }
+    }
+    assert!(stripped > 0, "the fixture must exercise the rc.1 shape");
+
+    let loaded: Schema = serde_json::from_value(json).expect("rc.1 snapshot must deserialize");
+    assert_eq!(loaded, schema);
+}

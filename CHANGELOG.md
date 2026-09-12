@@ -27,6 +27,10 @@ plus the changes below. Do not describe it as released until
 
 ### Fixed
 
+- Migration snapshots written by `1.0.0-rc.1` failed to load with
+  ``missing field `is_created_at` ``, so `ruprizzle migrate dev` refused an existing
+  project right after upgrading. `FieldAttrs::is_created_at` and `is_deleted_at` now
+  default to `false` when absent, matching every other field added since the RC.
 - The `ruprizzle` crate docs claimed to re-export migration helpers from
   `ruprizzle_migrate`. It never did — migrations live in the separate
   `ruprizzle-migrate` crate, which the CLI depends on directly.
