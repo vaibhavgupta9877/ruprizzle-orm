@@ -1,4 +1,11 @@
-# ruprizzle-orm 1.0.0
+# ruprizzle-orm 1.0.0 (archived announcement)
+
+> **This announcement was never accurate and is kept only as a record.** The
+> `v1.0.0` publish run did not upload anything, so `1.0.0` is not on crates.io.
+> The only published version is `1.0.0-rc.1`. See the
+> [FAQ](faq.html) and
+> [RELEASES.md](https://github.com/vaibhavgupta9877/ruprizzle-orm/blob/main/RELEASES.md)
+> for the current state. The rest of this page is left as originally written.
 
 **ruprizzle-orm 1.0.0** is out on crates.io. It is a schema-first ORM for
 Rust: write a Prisma-style `schema.ruprizzle`, get typed entities, a

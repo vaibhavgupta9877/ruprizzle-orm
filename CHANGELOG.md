@@ -9,17 +9,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 _Nothing yet._
 
 
-## [1.5.0] - 2026-09-02
+## [1.5.0] - 2026-09-02 — tagged, NOT published
 
-**Released.** The first `v1.5.0` tag triggered the publish workflow, but it failed
-because SQLite temporary directories were dropped before their pools. The tag has
-been re-pointed to the fixed commit and the workflow re-triggered.
+**This version is not on crates.io.** The `v1.5.0` tag exists and the workspace
+carries the version, but no publish run has ever uploaded a `1.5.0` package.
 
-`1.5.0` is now the latest published version.
+Two release runs were attempted against this line:
 
-The v1.1–v1.5 feature line, developed on `dev-v2-x`, released as a single minor
-version. The workspace never moved off `1.0.0` while five milestones landed, so the
-intermediate numbers were never cut and this release carries all of them.
+1. The first failed in `cargo test --workspace`: SQLite integration tests dropped
+   their `TempDir` before the pool, so later connections hit
+   `unable to open database file`. Fixed in `0e4d96b`.
+2. The re-triggered run failed in `cargo fmt --all --check`, before any publish
+   step. Every `cargo publish` step was skipped, and the run also rendered
+   `CARGO_REGISTRY_TOKEN` as empty, so it could not have uploaded anything even
+   had the gate passed.
+
+The tag is deliberately **not** moved: it is the immutable record of a source tree
+whose release failed. The next publication attempt will use a new version.
+
+The latest version actually served by crates.io remains `1.0.0-rc.1`. Verify with
+`scripts/check-release-state.sh`; do not re-add a "released" claim here until that
+command reports the version.
+
+The v1.1–v1.5 feature line, developed on `dev-v2-x`, was collected into a single
+minor version. The workspace never moved off `1.0.0` while five milestones landed,
+so the intermediate numbers were never cut and this version carries all of them.
 
 `1.5.0` was assessed and **blocked** at
 [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md);
@@ -160,7 +174,7 @@ is now wired to a real database, or, where the crate had no reason to exist, del
   hosted services; verification is against local HTTP fakes.
 
 
-## [1.0.1] - 2026-08-31
+## [1.0.1] - 2026-08-31 — tagged, NOT published
 
 ### Docs
 
@@ -182,7 +196,7 @@ is now wired to a real database, or, where the crate had no reason to exist, del
   to `1.0.1`. No public API changes.
 
 
-## [1.0.0] - 2026-08-21
+## [1.0.0] - 2026-08-21 — tagged, NOT published
 
 The first stable release. From this version onward the public API is covered by semantic
 versioning as defined in [`docs/Stability.md`](docs/Stability.md).

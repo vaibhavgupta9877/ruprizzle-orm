@@ -14,8 +14,12 @@ This guide uses PostgreSQL. To use SQLite, replace `--provider postgres` with
 
 ## 1. Install the CLI
 
+`1.0.0-rc.1` is the only version published on crates.io. Cargo skips prereleases
+unless you name one, so the `--version` flag is required; without it the install
+fails with "could not find `ruprizzle-cli` in registry".
+
 ```bash
-cargo install ruprizzle-cli
+cargo install ruprizzle-cli --version 1.0.0-rc.1
 ```
 
 ## 2. Scaffold a project
@@ -78,7 +82,8 @@ This diffs the empty database against the schema, writes a migration under
 ## 5. Add dependencies
 
 ```bash
-cargo add ruprizzle tokio --features tokio/full
+cargo add ruprizzle@1.0.0-rc.1
+cargo add tokio --features tokio/full
 cargo add dotenvy
 cargo add sqlx@0.8.6 --no-default-features --features "runtime-tokio-rustls,postgres"
 cargo add serde
@@ -88,7 +93,7 @@ Or edit `Cargo.toml`:
 
 ```toml
 [dependencies]
-ruprizzle = "1"
+ruprizzle = "1.0.0-rc.1"
 tokio = { version = "1", features = ["full"] }
 dotenvy = "0.15"
 sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio-rustls", "postgres"] }
