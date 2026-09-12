@@ -71,6 +71,12 @@ The publish attempt for the v1.1–v1.5 feature line, under a new version becaus
   `#[doc(hidden)]`; their useful types stay re-exported from the crate root.
 - `cargo fmt` fixes that failed the previous release gate.
 
+**Upgrading from `1.0.0-rc.1`.** Most applications need no code changes: generated
+clients from rc.1, migration snapshots and query manifests were verified to keep working.
+Code that matches exhaustively on diagnostic or IR enums, or builds IR/manifest structs by
+hand, needs small mechanical fixes. See
+[docs/UpgradingFromRc1.md](docs/UpgradingFromRc1.md).
+
 **Not yet published.** Until `scripts/check-release-state.sh --expect 1.5.1` passes,
 `1.0.0-rc.1` remains the only version on crates.io.
 

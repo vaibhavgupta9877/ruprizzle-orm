@@ -21,6 +21,10 @@ PostgreSQL, MySQL/MariaDB, and SQLite 3+ are supported from day one behind a `Db
 > **`1.0.0-rc.1`**, for every crate in the workspace; `ruprizzle-turso` and `ruprizzle-d1`
 > have never been published. Verify at any time with `scripts/check-release-state.sh`.
 >
+> **Upgrading from `1.0.0-rc.1`?** Most applications need no code changes. Read
+> [Upgrading from 1.0.0-rc.1](docs/UpgradingFromRc1.md) first, and pin
+> `"=1.0.0-rc.1"` until you are ready, because `"1.0.0-rc.1"` also matches `1.5.1`.
+>
 > `1.0.1` and `1.5.0` exist as git tags, not as releases. The `v1.5.0` publish run failed
 > in the pre-publish gate and uploaded nothing, so no crate was ever built from it. The tag
 > is deliberately left in place as evidence of that attempt. `1.5.0` carries the whole
