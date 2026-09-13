@@ -29,13 +29,15 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
 
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
+        run: cargo +nightly install cargo-fuzz
 
       - name: Run ${{ matrix.target }} fuzz target
         working-directory: ./fuzz
+        # `+nightly` is required: rust-toolchain.toml pins stable, which rejects
+        # the `-Zsanitizer` flags cargo-fuzz passes.
         # 4 wall-clock hours per target satisfies the W4 exit gate of
         # >=4 CPU-hours per target on a single-core runner.
-        run: cargo fuzz run ${{ matrix.target }} -- -max_total_time=14400
+        run: cargo +nightly fuzz run ${{ matrix.target }} -- -max_total_time=14400
 
       - name: Upload fuzz corpus and artifacts on failure
         if: failure()
