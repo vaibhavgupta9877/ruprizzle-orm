@@ -107,7 +107,9 @@ jobs:
           --health-retries 30
     env:
       RUPRIZZLE_TEST_PG_URL: postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test
-      RUPRIZZLE_TEST_MYSQL_URL: mysql://ruprizzle:ruprizzle@localhost:3306/ruprizzle_test
+      # root: the testkit creates a throwaway `rz_<uuid>` database per test,
+      # which the MYSQL_USER account (granted only ruprizzle_test) cannot do.
+      RUPRIZZLE_TEST_MYSQL_URL: mysql://root:root@localhost:3306/ruprizzle_test
       # Turns "database unavailable" from a skip into a failure. Without this the
       # suite would pass green while silently testing nothing on Postgres/MySQL.
       RUPRIZZLE_REQUIRE_DB: "1"
@@ -166,7 +168,7 @@ jobs:
           --health-retries 30
     env:
       RUPRIZZLE_TEST_PG_URL: ${{ (matrix.db == 'postgres' || matrix.db == 'all') && 'postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test' || '' }}
-      RUPRIZZLE_TEST_MYSQL_URL: ${{ (matrix.db == 'mysql' || matrix.db == 'all') && 'mysql://ruprizzle:ruprizzle@localhost:3306/ruprizzle_test' || '' }}
+      RUPRIZZLE_TEST_MYSQL_URL: ${{ (matrix.db == 'mysql' || matrix.db == 'all') && 'mysql://root:root@localhost:3306/ruprizzle_test' || '' }}
       RUPRIZZLE_REQUIRE_DB: ${{ (matrix.db == 'postgres' || matrix.db == 'mysql' || matrix.db == 'all') && '1' || '' }}
     steps:
       - uses: actions/checkout@v4
@@ -260,8 +262,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ steps.msrv.outputs.version }}
-          # Match the trybuild `.stderr` snapshots (see rust-toolchain.toml).
-          components: rust-src
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
 
