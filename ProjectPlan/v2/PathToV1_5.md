@@ -113,8 +113,34 @@ The rest of this plan assumes `1.5.1`.
       `RUPRIZZLE_VERSION = "1.5.0"`, failing `snapshots::all_examples_all_dialects`
       (`505b4b1`). *Note:* with `RUPRIZZLE_REQUIRE_DB=1` but no `RUPRIZZLE_TEST_PG_URL`,
       `runtime/tests/arrays.rs` panics by design, so a local gate must set both.
-- [ ] **R6 — MySQL/MariaDB.** Never verified locally; depends on CI's `integration`
+- [x] **R6 — MySQL/MariaDB.** Never verified locally; depends on CI's `integration`
       job. Require it green on the release commit.
+      *Done locally 2026-09-13; CI `integration` still to be confirmed green on the
+      release commit after push.* CI was red on `main` (`f3faa0f`), and running the
+      suite locally showed why. Setup: portable MySQL 8.4.9 (CI's version) and MariaDB
+      11.4.8, plus PostgreSQL 17, with `RUPRIZZLE_REQUIRE_DB=1`, Windows, rustc 1.95.0.
+
+      | Run (`cargo test --workspace --no-fail-fast`) | Result |
+      |---|---|
+      | Before fixes, MySQL 8.4 + PG | 10 test binaries failing |
+      | After fixes, MySQL 8.4 + PG | 111 binaries, 0 failed, 72 MySQL cases, none skipped |
+      | After fixes, MariaDB 11.4 + PG | 111 binaries, 0 failed, 72 MySQL cases, none skipped |
+      | `cargo clippy --workspace --all-targets -D warnings`, `cargo fmt --check` | pass |
+
+      *Library bugs fixed (each has a CHANGELOG `[1.5.1]` entry):*
+      - `@default(uuid4())` generated `DEFAULT UUID()`, a syntax error; now
+        `DEFAULT (UUID())` (`10acd37`).
+      - Savepoints and nested transactions failed with error 1295: the commands went
+        through the prepared-statement protocol (`448929c`).
+      - `InsertManyQuery::exec` returned no rows (no `RETURNING`) (`df4ebb8`).
+      - JSON path `.eq("str")` never matched: the string was bound as `'"str"'` (`a447e47`).
+      - Rolling back a foreign-key-cycle migration failed with error 3730:
+        `SET FOREIGN_KEY_CHECKS` ran on a different pooled connection (`e47e660`).
+
+      *Test portability (`6fde8a0`):* a join order assertion without `ORDER BY`; `TEXT`
+      used as a key; `$n` placeholders; an inline `REFERENCES` that MySQL ignores;
+      `DECIMAL` and `TEXT` decoding through `sqlx::Any`.
+      *Not covered:* CI tests MySQL only, with no MariaDB leg. Adding one is a follow-up.
 - [ ] **R7 — Registry token.** Confirm `CARGO_REGISTRY_TOKEN` is set in Actions
       secrets and visible to `release.yml`. Run `workflow_dispatch` with
       `publish=false` first; the credential preflight fails fast on an empty token.
@@ -139,7 +165,7 @@ The rest of this plan assumes `1.5.1`.
       `askama` is still on 0.12.
 
 Not verified during this assessment: recent CI results (GitHub CLI was not
-authenticated), clippy, and the full test suite. R5 and R6 cover them.
+authenticated), clippy, and the full test suite. R5 and R6 cover them (both done locally).
 
 ## 5. Docs cleanup plan
 

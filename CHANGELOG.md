@@ -53,6 +53,20 @@ query-manifest JSON.
 - The `ruprizzle` crate docs claimed to re-export migration helpers from
   `ruprizzle_migrate`. It never did — migrations live in the separate
   `ruprizzle-migrate` crate, which the CLI depends on directly.
+- MySQL (found by running the suite against MySQL 8.4; CI's `integration` job had
+  been red):
+  - `@default(uuid())` generated `DEFAULT UUID()`, a syntax error; it is now
+    `DEFAULT (UUID())`.
+  - Savepoints failed with error 1295 because `SAVEPOINT`, `RELEASE SAVEPOINT` and
+    `ROLLBACK TO SAVEPOINT` were sent as prepared statements. They now use the text
+    protocol, so nested transactions work.
+  - `InsertManyQuery::exec` returned no rows (MySQL has no `RETURNING`). It now reads
+    the inserted rows back in the same transaction.
+  - JSON path equality against a string (`META.get("k").eq("v")`) never matched,
+    because the value was bound as the JSON text `'"v"'`. It is now bound as `'v'`.
+  - `Migrator::rollback` of a foreign-key cycle failed with error 3730:
+    `SET FOREIGN_KEY_CHECKS = 0` and the `DROP TABLE`s ran on different pooled
+    connections. A MySQL rollback now runs on one connection.
 
 ### CI
 
