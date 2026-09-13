@@ -141,7 +141,10 @@ The rest of this plan assumes `1.5.1`.
       used as a key; `$n` placeholders; an inline `REFERENCES` that MySQL ignores;
       `DECIMAL` and `TEXT` decoding through `sqlx::Any`.
       *Not covered:* CI tests MySQL only, with no MariaDB leg. Adding one is a follow-up.
-- [ ] **R7 — Registry token.** Confirm `CARGO_REGISTRY_TOKEN` is set in Actions
+- [x] **R7 — Registry token.** *Done 2026-09-13: after the owner ran
+      `gh secret set CARGO_REGISTRY_TOKEN`, the `publish=false` dry run (run
+      `34745364164`, commit `fe472b7`) passed every step and reported
+      "CARGO_REGISTRY_TOKEN is present (35 characters)".* Confirm `CARGO_REGISTRY_TOKEN` is set in Actions
       secrets and visible to `release.yml`. Run `workflow_dispatch` with
       `publish=false` first; the credential preflight fails fast on an empty token.
       *Partly done 2026-09-13 — workflow fixed; confirming the secret needs repo access.*
