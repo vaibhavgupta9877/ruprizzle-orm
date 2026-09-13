@@ -154,9 +154,22 @@ The rest of this plan assumes `1.5.1`.
       - *Remaining (owner, needs GitHub access; `gh` is not authenticated here):*
         after pushing, run **Actions → Release → Run workflow** with `publish=false`
         on the release commit and confirm the summary shows the token as visible.
-        Tick R7 then. *Re-checked 2026-09-13: `gh auth status` still reports no login,
-        so this step stays with the owner (`gh auth login`, then
-        `gh workflow run release.yml -f publish=false`).*
+        Tick R7 then.
+      - *Dry run done 2026-09-13 — **blocked: the secret does not exist.***
+        `gh workflow run release.yml -f publish=false` (run `34742977453`) warned
+        "CARGO_REGISTRY_TOKEN is empty. A publishing run (tag push) would fail here",
+        and `GET /repos/…/actions/secrets` reports `total_count: 0`. **Owner action:**
+        create a crates.io API token (scopes `publish-new` + `publish-update`, both new
+        crate names from R8 included) and add it with
+        `gh secret set CARGO_REGISTRY_TOKEN`, then re-run the dry run and tick R7.
+      - *Also found by the dry run:* its test step failed on
+        `snapshots::all_examples_all_dialects`. `Schema::fingerprint` hashed source
+        byte offsets, so a CRLF (Windows) checkout generated a different `SCHEMA_HASH`
+        than Linux. Fixed in `b2e34a9`.
+      - *Pushing:* the `MainRule1` ruleset applies to every branch except `main` and
+        names matching `dev*`, and requires signed commits and forbids creating
+        branches. None of these commits is signed, so `docs/path-to-v1_5` is pushed
+        as `dev-path-to-v1_5`. Merge it into `main` with a PR, or sign the commits.
 - [x] **R8 — Crate names.** `ruprizzle-turso` and `ruprizzle-d1` have never been
       published. Confirm both names are still free on crates.io.
       *Done 2026-09-13: both free.* `GET crates.io/api/v1/crates/<name>` returns 404 for
