@@ -213,14 +213,17 @@ mod tokio_postgres_backend {
     /// silently skipped test here would report green while testing nothing —
     /// which is exactly how BUG-03 survived to a published release.
     fn pg_url() -> Option<String> {
-        match std::env::var("RUPRIZZLE_TEST_PG_URL") {
-            Ok(url) => {
+        match std::env::var("RUPRIZZLE_TEST_PG_URL")
+            .ok()
+            .filter(|u| !u.is_empty())
+        {
+            Some(url) => {
                 let sep = if url.contains('?') { '&' } else { '?' };
                 Some(format!("{url}{sep}driver=tokio-postgres"))
             }
-            Err(_) => {
+            None => {
                 assert!(
-                    std::env::var("RUPRIZZLE_REQUIRE_DB").is_err(),
+                    !std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok_and(|v| v != "0" && !v.is_empty()),
                     "RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not"
                 );
                 eprintln!("skipping tokio-postgres tx lifecycle tests: no RUPRIZZLE_TEST_PG_URL");
@@ -406,9 +409,12 @@ mod sqlx_backends {
 
     /// `Pool::Postgres` — the native `sqlx` Postgres backend, when configured.
     async fn postgres_pool() -> Option<Pool> {
-        let Ok(url) = std::env::var("RUPRIZZLE_TEST_PG_URL") else {
+        let Some(url) = std::env::var("RUPRIZZLE_TEST_PG_URL")
+            .ok()
+            .filter(|u| !u.is_empty())
+        else {
             assert!(
-                std::env::var("RUPRIZZLE_REQUIRE_DB").is_err(),
+                !std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok_and(|v| v != "0" && !v.is_empty()),
                 "RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not"
             );
             return None;

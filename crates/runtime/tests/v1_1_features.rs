@@ -130,14 +130,17 @@ const TAGS: Column<Post, Vec<String>> = Column::new("posts", "tags");
 
 async fn fresh_pool() -> (Pool, bool, Option<IsolatedSchema>) {
     let mut isolated = None;
-    let (url, is_pg) = if let Ok(base) = std::env::var("RUPRIZZLE_TEST_PG_URL") {
+    let (url, is_pg) = if let Some(base) = std::env::var("RUPRIZZLE_TEST_PG_URL")
+        .ok()
+        .filter(|u| !u.is_empty())
+    {
         let schema = IsolatedSchema::create(&base)
             .await
             .expect("create isolated schema");
         let url = schema.url().to_owned();
         isolated = Some(schema);
         (url, true)
-    } else if std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok() {
+    } else if std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok_and(|v| v != "0" && !v.is_empty()) {
         panic!("RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not");
     } else {
         let dir = std::env::current_dir().unwrap().join("target/runtime-test");
