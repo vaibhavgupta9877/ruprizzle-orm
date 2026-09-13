@@ -1,2 +1,6 @@
 # Shell scripts must keep LF endings; CRLF breaks the shebang under bash.
 *.sh text eol=lf
+
+# Schema spans are byte offsets and are snapshotted; CRLF on Windows shifts
+# every one of them, so schemas must check out identically on all OSes.
+*.ruprizzle text eol=lf
