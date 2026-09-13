@@ -350,7 +350,23 @@ impl Tx {
             .as_mut()
             .ok_or_else(|| Error::Message("transaction already finished".into()))?;
 
+        // MySQL rejects savepoint commands over the prepared-statement protocol
+        // ("1295: This command is not supported in the prepared statement
+        // protocol yet"), so send them as plain text. They never carry binds.
+        let text_protocol =
+            self.provider == Provider::Mysql && binds.is_empty() && is_savepoint_command(sql);
+
         match tx {
+            // A bare `&str` carries no arguments, which sqlx sends as a text
+            // query rather than a prepared statement.
+            TxInner::Any(tx) if text_protocol => sqlx::Executor::execute(&mut **tx, sql)
+                .await
+                .map(|r| r.rows_affected())
+                .map_err(Error::Sqlx),
+            TxInner::Mysql(tx) if text_protocol => sqlx::Executor::execute(&mut **tx, sql)
+                .await
+                .map(|r| r.rows_affected())
+                .map_err(Error::Sqlx),
             TxInner::Any(tx) => {
                 let mut q = sqlx::query::<Any>(sql);
                 for b in binds {
@@ -737,5 +753,35 @@ pub fn is_retryable(err: &Error) -> bool {
             let m = message.unwrap_or_default().to_ascii_lowercase();
             m.contains("database is locked") || m.contains("database table is locked")
         }
+    }
+}
+
+/// Whether `sql` is a savepoint control statement (`SAVEPOINT`,
+/// `RELEASE SAVEPOINT`, `ROLLBACK TO SAVEPOINT`).
+fn is_savepoint_command(sql: &str) -> bool {
+    let upper = sql.trim_start().to_ascii_uppercase();
+    upper.starts_with("SAVEPOINT ")
+        || upper.starts_with("RELEASE SAVEPOINT ")
+        || upper.starts_with("ROLLBACK TO SAVEPOINT ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_savepoint_command;
+
+    #[test]
+    fn savepoint_commands_are_recognised() {
+        assert!(is_savepoint_command("SAVEPOINT sp_1"));
+        assert!(is_savepoint_command("  release savepoint sp_1"));
+        assert!(is_savepoint_command("ROLLBACK TO SAVEPOINT sp_2"));
+    }
+
+    #[test]
+    fn other_statements_keep_the_prepared_path() {
+        assert!(!is_savepoint_command("ROLLBACK"));
+        assert!(!is_savepoint_command(
+            "INSERT INTO savepoints (id) VALUES (1)"
+        ));
+        assert!(!is_savepoint_command("SELECT 'SAVEPOINT x'"));
     }
 }

@@ -1,8 +1,8 @@
 //! Regression tests for BUG-05: empty insert rows must error, not panic.
 
 use ruprizzle::{
-    Column, Encodable, Executor, InsertManyQuery, InsertQuery, Model, NestedSetter, Related,
-    Value, connect,
+    Column, Encodable, Executor, InsertManyQuery, InsertQuery, Model, NestedSetter, Related, Value,
+    connect,
 };
 use sqlx::FromRow;
 

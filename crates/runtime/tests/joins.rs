@@ -229,7 +229,10 @@ both_dbs! {
         let compiled = q.to_sql().unwrap();
         assert_eq!(compiled.sql, expected_inner_join_sql(db.backend().as_str()));
 
-        let rows = q.fetch_all().await?;
+        // The query has no ORDER BY, so row order is unspecified; MySQL 8.4 can
+        // return the posts in either order. Sort before comparing.
+        let mut rows = q.fetch_all().await?;
+        rows.sort_by_key(|Join2(user, post)| (user.id, post.id));
         assert_eq!(rows, vec![
             Join2(
                 User { id: 1, name: "Alice".into() },
@@ -251,7 +254,9 @@ both_dbs! {
         let compiled = q.to_sql().unwrap();
         assert_eq!(compiled.sql, expected_left_join_sql(db.backend().as_str()));
 
-        let rows = q.fetch_all().await?;
+        // Unordered query: sort so the assertion does not depend on the plan.
+        let mut rows = q.fetch_all().await?;
+        rows.sort_by_key(|LeftJoin2(user, post)| (user.id, post.0.as_ref().map(|p| p.id)));
         assert_eq!(rows, vec![
             LeftJoin2(
                 User { id: 1, name: "Alice".into() },

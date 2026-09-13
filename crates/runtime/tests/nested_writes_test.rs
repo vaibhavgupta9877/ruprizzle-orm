@@ -90,11 +90,12 @@ async fn setup_db() -> (Pool, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
-    let driver = if std::env::var("RUPRIZZLE_TEST_RUSQLITE").is_ok() {
-        "&driver=rusqlite"
-    } else {
-        ""
-    };
+    let driver =
+        if cfg!(feature = "sqlite-rusqlite") && std::env::var("RUPRIZZLE_TEST_RUSQLITE").is_ok() {
+            "&driver=rusqlite"
+        } else {
+            ""
+        };
     let url = format!("sqlite:///{}?mode=rwc{}", file, driver);
     let pool = ruprizzle::connect(&url).await.unwrap();
 

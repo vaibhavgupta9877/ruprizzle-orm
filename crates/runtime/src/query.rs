@@ -1819,13 +1819,20 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
         let cols_per_row = self.rows.first().map(|r| r.len()).unwrap_or(0) as u32;
         let chunk_size = (max / cols_per_row.max(1)).max(1) as usize;
 
+        let returning: &[&str] = if M::COLUMNS.is_empty() {
+            &["*"]
+        } else {
+            M::COLUMNS
+        };
+
+        if !dialect.returning_supported() {
+            return self
+                .exec_without_returning(dialect, chunk_size, returning)
+                .await;
+        }
+
         let mut out = Vec::new();
         for chunk in self.rows.chunks(chunk_size) {
-            let returning: &[&str] = if M::COLUMNS.is_empty() {
-                &["*"]
-            } else {
-                M::COLUMNS
-            };
             let compiled = insert_many::<M>(dialect, M::TABLE, chunk, returning);
             let batch = self
                 .pool
@@ -1834,6 +1841,92 @@ impl<'db, M: Model> InsertManyQuery<'db, M> {
             let mut rows = crate::executor::decode_rows::<M>(batch)?;
             out.append(&mut rows);
         }
+        Ok(out)
+    }
+
+    /// `exec` for dialects without `RETURNING` (MySQL): insert, then read the
+    /// rows back in the same transaction.
+    ///
+    /// Rows are selected by the supplied primary keys, or, when the key is
+    /// generated, by the `LAST_INSERT_ID()` block of the statement. InnoDB
+    /// assigns consecutive ids to a single multi-row insert with a known row
+    /// count in every `innodb_autoinc_lock_mode`. Both lookups need the same
+    /// connection as the insert, hence the transaction. Rows are returned in
+    /// primary-key order within each chunk.
+    ///
+    /// A generated key that is not `AUTO_INCREMENT` (e.g. a `UUID()` default)
+    /// leaves `LAST_INSERT_ID()` stale; the row-count check turns that into an
+    /// error instead of returning unrelated rows.
+    async fn exec_without_returning(
+        self,
+        dialect: &dyn ruprizzle_dialect::DbDialect,
+        chunk_size: usize,
+        returning: &[&str],
+    ) -> Result<Vec<M>, Error> {
+        let projection = returning
+            .iter()
+            .map(|col| {
+                if *col == "*" {
+                    "*".to_owned()
+                } else {
+                    dialect.quote_ident(col)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let table = dialect.quote_ident(M::TABLE);
+        let key = dialect.quote_ident(M::PRIMARY_KEY);
+
+        let tx = crate::tx::Tx::begin(self.pool).await?;
+        let mut out = Vec::new();
+        for chunk in self.rows.chunks(chunk_size) {
+            let compiled = insert_many::<M>(dialect, M::TABLE, chunk, returning);
+            tx.execute_raw(compiled.sql, compiled.binds).await?;
+
+            let keys: Option<Vec<Value>> = chunk
+                .iter()
+                .map(|row| {
+                    row.iter()
+                        .find(|(column, _)| *column == M::PRIMARY_KEY)
+                        .map(|(_, value)| value.clone())
+                })
+                .collect();
+            let (sql, binds) = if let Some(keys) = keys {
+                let placeholders = (0..keys.len())
+                    .map(|i| dialect.placeholder(i))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                (
+                    format!(
+                        "SELECT {projection} FROM {table} WHERE {key} IN ({placeholders}) ORDER BY {key}"
+                    ),
+                    keys,
+                )
+            } else if dialect.name() == "mysql" {
+                (
+                    format!(
+                        "SELECT {projection} FROM {table}                          WHERE {key} BETWEEN LAST_INSERT_ID() AND LAST_INSERT_ID() + {}                          ORDER BY {key}",
+                        chunk.len() - 1
+                    ),
+                    Vec::new(),
+                )
+            } else {
+                return Err(Error::Message(
+                    "inserted rows cannot be fetched: primary key was not supplied".into(),
+                ));
+            };
+            let batch = tx.fetch_all_raw(sql.into(), binds).await?;
+            let mut rows = crate::executor::decode_rows::<M>(batch)?;
+            if rows.len() != chunk.len() {
+                return Err(Error::Message(format!(
+                    "inserted {} rows but read back {}; supply primary keys for tables                      whose key is not AUTO_INCREMENT",
+                    chunk.len(),
+                    rows.len()
+                )));
+            }
+            out.append(&mut rows);
+        }
+        tx.commit().await?;
         Ok(out)
     }
 }

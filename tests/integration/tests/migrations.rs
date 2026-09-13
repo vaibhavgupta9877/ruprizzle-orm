@@ -106,7 +106,7 @@ both_dbs! {
         fs::create_dir_all(&init)?;
         fs::write(
             init.join("up.sql"),
-            "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL);",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, email VARCHAR(191) NOT NULL UNIQUE, name TEXT NOT NULL);",
         )?;
         fs::write(init.join("down.sql"), "DROP TABLE users;")?;
 
@@ -146,7 +146,7 @@ both_dbs! {
         fs::create_dir_all(&mig)?;
         fs::write(
             mig.join("up.sql"),
-            "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL);",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, email VARCHAR(191) NOT NULL UNIQUE, name TEXT NOT NULL);",
         )?;
         fs::write(mig.join("down.sql"), "DROP TABLE users;")?;
 

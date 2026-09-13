@@ -188,12 +188,10 @@ impl TestDb {
             .ok()
             .filter(|v| !v.is_empty())
             .or_else(|| {
-                std::env::var("DATABASE_URL")
-                    .ok()
-                    .filter(|v| {
-                        !v.is_empty()
-                            && (v.starts_with("postgres://") || v.starts_with("postgresql://"))
-                    })
+                std::env::var("DATABASE_URL").ok().filter(|v| {
+                    !v.is_empty()
+                        && (v.starts_with("postgres://") || v.starts_with("postgresql://"))
+                })
             })
             .unwrap_or_else(|| DEFAULT_PG_URL.to_owned());
 
@@ -599,7 +597,18 @@ impl TestDb {
     ///
     /// Propagates any driver error, including a row/column shape mismatch.
     pub async fn fetch_string(&self, sql: &str) -> std::result::Result<String, sqlx::Error> {
-        sqlx::query_scalar(sql).fetch_one(self.any_pool()).await
+        use sqlx::Row as _;
+
+        // Through `sqlx::Any`, MySQL reports `TEXT` columns as `BLOB`, which
+        // does not decode as `String`. Fall back to the bytes as UTF-8.
+        let row = sqlx::query(sql).fetch_one(self.any_pool()).await?;
+        match row.try_get::<String, _>(0) {
+            Ok(s) => Ok(s),
+            Err(err) => {
+                let bytes: Vec<u8> = row.try_get(0).map_err(|_| err)?;
+                String::from_utf8(bytes).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+            }
+        }
     }
 }
 
@@ -624,7 +633,9 @@ impl TestDb {
     fn mysql_schema_info(&self) -> Option<(String, String)> {
         match &self.inner {
             Inner::MySql {
-                database, admin_url, ..
+                database,
+                admin_url,
+                ..
             } => Some((database.clone(), admin_url.clone())),
             _ => None,
         }
@@ -690,19 +701,21 @@ impl Drop for TestDb {
                 }
             }
             Inner::MySql {
-                database, admin_url, ..
+                database,
+                admin_url,
+                ..
             } => {
                 let (database, url) = (database.clone(), admin_url.clone());
                 if let Ok(handle) = tokio::runtime::Handle::try_current() {
                     handle.spawn(async move {
-                        if let Ok(pool) =
-                            MySqlPoolOptions::new().max_connections(1).connect(&url).await
+                        if let Ok(pool) = MySqlPoolOptions::new()
+                            .max_connections(1)
+                            .connect(&url)
+                            .await
                         {
-                            let _ = sqlx::query(&format!(
-                                "DROP DATABASE IF EXISTS `{database}`"
-                            ))
-                            .execute(&pool)
-                            .await;
+                            let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS `{database}`"))
+                                .execute(&pool)
+                                .await;
                             pool.close().await;
                         }
                     });
@@ -846,12 +859,14 @@ fn backend_configured(backend: Backend) -> bool {
         Backend::Postgres => {
             std::env::var(PG_URL_ENV).is_ok_and(|v| !v.is_empty())
                 || std::env::var("DATABASE_URL").is_ok_and(|v| {
-                    !v.is_empty() && (v.starts_with("postgres://") || v.starts_with("postgresql://"))
+                    !v.is_empty()
+                        && (v.starts_with("postgres://") || v.starts_with("postgresql://"))
                 })
         }
         Backend::MySql => {
             std::env::var(MYSQL_URL_ENV).is_ok_and(|v| !v.is_empty())
-                || std::env::var("DATABASE_URL").is_ok_and(|v| !v.is_empty() && v.starts_with("mysql://"))
+                || std::env::var("DATABASE_URL")
+                    .is_ok_and(|v| !v.is_empty() && v.starts_with("mysql://"))
         }
     }
 }
@@ -870,7 +885,9 @@ where
     Fut: std::future::Future<Output = Result>,
 {
     if !backend_configured(backend) {
-        eprintln!("skipping {backend}: no URL configured ({PG_URL_ENV}/{MYSQL_URL_ENV}/DATABASE_URL)");
+        eprintln!(
+            "skipping {backend}: no URL configured ({PG_URL_ENV}/{MYSQL_URL_ENV}/DATABASE_URL)"
+        );
         eprintln!("  (set {REQUIRE_DB_ENV}=1 to make an unconfigured backend a failure)");
         return;
     }

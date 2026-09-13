@@ -44,11 +44,12 @@ pub async fn fresh_pool() -> (ruprizzle::Pool, TempDir) {
     let dir = tempfile::tempdir_in(db_dir()).expect("create temp dir under local db dir");
     let path = dir.path().join("test.sqlite");
     let file = path.to_str().unwrap().replace('\\', "/");
-    let driver = if std::env::var("RUPRIZZLE_TEST_RUSQLITE").is_ok() {
-        "&driver=rusqlite"
-    } else {
-        ""
-    };
+    let driver =
+        if cfg!(feature = "sqlite-rusqlite") && std::env::var("RUPRIZZLE_TEST_RUSQLITE").is_ok() {
+            "&driver=rusqlite"
+        } else {
+            ""
+        };
     let url = format!("sqlite:///{file}?mode=rwc{driver}");
     let pool = ruprizzle::connect(&url)
         .await

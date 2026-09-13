@@ -538,6 +538,16 @@ async fn segmented_soak_reconnect_preserves_state() {
     let db = TestDb::connect(Backend::Sqlite, setup)
         .await
         .expect("connect to first soak segment");
+    // The soak drives testkit's native rusqlite pool and closes the sqlx pools
+    // around it. `cargo test -p ruprizzle --features sqlite-rusqlite` builds
+    // testkit without that feature, so `db.pool()` is the Any pool being closed.
+    if !matches!(db.pool(), ruprizzle::Pool::SqliteNative(_)) {
+        eprintln!(
+            "skipping segmented_soak_reconnect_preserves_state: \
+             ruprizzle-testkit was built without `sqlite-rusqlite`"
+        );
+        return;
+    }
     let first = mixed_load(db, false, segment_duration, workers)
         .await
         .expect("first segment must succeed");

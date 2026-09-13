@@ -21,6 +21,10 @@ PostgreSQL, MySQL/MariaDB, and SQLite 3+ are supported from day one behind a `Db
 > **`1.0.0-rc.1`**, for every crate in the workspace; `ruprizzle-turso` and `ruprizzle-d1`
 > have never been published. Verify at any time with `scripts/check-release-state.sh`.
 >
+> **Upgrading from `1.0.0-rc.1`?** Most applications need no code changes. Read
+> [Upgrading from 1.0.0-rc.1](docs/UpgradingFromRc1.md) first, and pin
+> `"=1.0.0-rc.1"` until you are ready, because `"1.0.0-rc.1"` also matches `1.5.1`.
+>
 > `1.0.1` and `1.5.0` exist as git tags, not as releases. The `v1.5.0` publish run failed
 > in the pre-publish gate and uploaded nothing, so no crate was ever built from it. The tag
 > is deliberately left in place as evidence of that attempt. `1.5.0` carries the whole
@@ -516,7 +520,7 @@ The table below focuses on the features that differentiate ruprizzle from the to
 
 ## Architecture and repository layout
 
-The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.5.0`). The workspace crates and the VS Code extension move in lockstep on one number; see [Versioning](docs/Versioning.md).
+The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.5.1`). The workspace crates and the VS Code extension move in lockstep on one number; see [Versioning](docs/Versioning.md).
 
 | Directory | Crate | Role | Ships to users? | Status |
 |---|---|---|---|---|
@@ -580,7 +584,7 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 
 ## Status and roadmap
 
-`1.5.0` is the version the workspace is pinned to; `1.0.0-rc.1` is the only version on crates.io, and no stable release has been published. The twelve publishable crates move together on one version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
+`1.5.1` is the version the workspace is pinned to; `1.0.0-rc.1` is the only version on crates.io, and no stable release has been published. The twelve publishable crates move together on one version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API has been reviewed and is now covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
 
 ### The unreleased v1.1–v1.5 line
 

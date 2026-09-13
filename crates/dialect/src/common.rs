@@ -291,7 +291,9 @@ pub(crate) fn default_sql(dialect: &dyn DbDialect, f: &Field) -> String {
         DefaultValue::Literal(lit) => literal_sql(dialect, lit),
         DefaultValue::Function(func) => match (func, dialect.name()) {
             (DefaultFn::Uuid4, "postgres") => "gen_random_uuid()".to_owned(),
-            (DefaultFn::Uuid4, "mysql") => "UUID()".to_owned(),
+            // MySQL only accepts a function default as a parenthesised expression
+            // (8.0.13+); a bare `DEFAULT UUID()` is a syntax error.
+            (DefaultFn::Uuid4, "mysql") => "(UUID())".to_owned(),
             (DefaultFn::Now, "postgres" | "mysql") => "NOW()".to_owned(),
             (DefaultFn::Now, "sqlite") => "(datetime('now'))".to_owned(),
             (DefaultFn::Now, _) => "datetime('now')".to_owned(),

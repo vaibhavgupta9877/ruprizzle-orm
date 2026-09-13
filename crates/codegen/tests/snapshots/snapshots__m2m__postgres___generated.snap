@@ -4,6 +4,6 @@ expression: content
 ---
 #![allow(clippy::all, clippy::pedantic, unused_imports)]
 /// Schema hash, used to detect stale generated code.
-pub const SCHEMA_HASH: &str = "54f19b476fa83605e07079c9498314062e1a33a33d8157200c1808c15ce9876a";
+pub const SCHEMA_HASH: &str = "e86bff33f1003c2c74adbe20758735df8af22ef5ebdc37bb2f2b0243fd12f150";
 /// ruprizzle version that generated this code.
-pub const RUPRIZZLE_VERSION: &str = "1.5.0";
+pub const RUPRIZZLE_VERSION: &str = "1.5.1";

@@ -188,8 +188,11 @@ proptest! {
         a in prop::collection::vec(field_strategy(), 0..4),
         b in prop::collection::vec(field_strategy(), 0..4),
     ) {
-        let required = std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok();
-        let Ok(url) = std::env::var("RUPRIZZLE_TEST_PG_URL") else {
+        // A MySQL-only CI leg sets REQUIRE_DB with no Postgres URL; only a leg
+        // without any network database is expected to have provided one.
+        let required = std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok_and(|v| v != "0" && !v.is_empty())
+            && !std::env::var("RUPRIZZLE_TEST_MYSQL_URL").is_ok_and(|v| !v.is_empty());
+        let Some(url) = std::env::var("RUPRIZZLE_TEST_PG_URL").ok().filter(|u| !u.is_empty()) else {
             prop_assert!(
                 !required,
                 "RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not"

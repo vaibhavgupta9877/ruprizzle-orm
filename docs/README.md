@@ -32,6 +32,10 @@ the pre-publish gate and uploaded nothing; the tag is kept as evidence of the
 attempt rather than moved. Until a publish run succeeds, treat `1.0.0-rc.1` as the
 only installable version and build from source for anything newer.
 
+**Upgrading from `1.0.0-rc.1`?** Most applications need no code changes. See
+[Upgrading from 1.0.0-rc.1 to 1.5.1](UpgradingFromRc1.md), and pin
+`"=1.0.0-rc.1"` until you are ready, because `"1.0.0-rc.1"` also matches `1.5.1`.
+
 The core P0–P8 implementation is complete and MySQL/MariaDB support is shipped.
 The public API is covered by semantic versioning from the first stable release
 onward — which has not happened yet.

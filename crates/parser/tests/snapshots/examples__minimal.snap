@@ -12,8 +12,8 @@ expression: schema
     },
     "extensions": [],
     "span": {
-      "start": 183,
-      "end": 258
+      "start": 178,
+      "end": 250
     }
   },
   "generator": {
@@ -22,8 +22,8 @@ expression: schema
     "module_name": "db",
     "max_include_depth": 3,
     "span": {
-      "start": 262,
-      "end": 331
+      "start": 252,
+      "end": 318
     }
   },
   "enums": {},
@@ -55,8 +55,8 @@ expression: schema
           "generated": null,
           "docs": null,
           "span": {
-            "start": 383,
-            "end": 417
+            "start": 366,
+            "end": 400
           }
         },
         "email": {
@@ -80,8 +80,8 @@ expression: schema
           "generated": null,
           "docs": null,
           "span": {
-            "start": 421,
-            "end": 445
+            "start": 403,
+            "end": 426
           }
         },
         "name": {
@@ -105,8 +105,8 @@ expression: schema
           "generated": null,
           "docs": null,
           "span": {
-            "start": 445,
-            "end": 464
+            "start": 426,
+            "end": 443
           }
         }
       },
@@ -116,16 +116,16 @@ expression: schema
         ],
         "name": null,
         "span": {
-          "start": 383,
-          "end": 417
+          "start": 366,
+          "end": 400
         }
       },
       "indexes": [],
       "uniques": [],
       "docs": "A user of the application.",
       "span": {
-        "start": 335,
-        "end": 481
+        "start": 320,
+        "end": 459
       }
     }
   },

@@ -41,6 +41,30 @@ fn postgres_dialect_emits_create_table() {
 }
 
 #[test]
+fn mysql_dialect_parenthesises_uuid_default() {
+    // `@default(uuid4())` renders as `UUID()`. MySQL accepts a function default
+    // only as an expression in parentheses;
+    // `DEFAULT UUID()` is a syntax error (1064) on MySQL 8.4.
+    let source = r#"
+datasource db {
+    provider = "mysql"
+    url      = env("DATABASE_URL")
+}
+
+model Token {
+    id String @id @default(uuid4())
+}
+"#;
+    let schema = parse("uuid_default.ruprizzle", source).unwrap();
+    let token = schema.model("Token").unwrap();
+
+    let stmts = full_create_table(&MySqlDialect, &schema, token);
+    let sql = &stmts[0].sql;
+    assert!(sql.contains("DEFAULT (UUID())"), "{sql}");
+    assert!(!sql.contains("DEFAULT UUID()"), "{sql}");
+}
+
+#[test]
 fn sqlite_dialect_emits_create_table_with_inline_fks() {
     let schema = example_schema("saas-tenant");
     let dialect = SqliteDialect;
