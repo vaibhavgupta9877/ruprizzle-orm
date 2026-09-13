@@ -154,9 +154,17 @@ The rest of this plan assumes `1.5.1`.
       - *Remaining (owner, needs GitHub access; `gh` is not authenticated here):*
         after pushing, run **Actions → Release → Run workflow** with `publish=false`
         on the release commit and confirm the summary shows the token as visible.
-        Tick R7 then.
-- [ ] **R8 — Crate names.** `ruprizzle-turso` and `ruprizzle-d1` have never been
+        Tick R7 then. *Re-checked 2026-09-13: `gh auth status` still reports no login,
+        so this step stays with the owner (`gh auth login`, then
+        `gh workflow run release.yml -f publish=false`).*
+- [x] **R8 — Crate names.** `ruprizzle-turso` and `ruprizzle-d1` have never been
       published. Confirm both names are still free on crates.io.
+      *Done 2026-09-13: both free.* `GET crates.io/api/v1/crates/<name>` returns 404 for
+      `ruprizzle-turso`, `ruprizzle_turso`, `ruprizzle-d1` and `ruprizzle_d1` (crates.io
+      treats `-` and `_` as the same name), and the sparse index
+      (`index.crates.io/ru/pr/<name>`) returns 404 for both, against 200 for
+      `ruprizzle-core` as a control. Names cannot be reserved without publishing, so
+      re-run the check right before R9.
 - [ ] **R9 — Tag and publish.** Push `v1.5.1`, let `release.yml` publish, then run
       `scripts/check-release-state.sh --expect 1.5.1`. No file may call the version
       released until that command passes.
