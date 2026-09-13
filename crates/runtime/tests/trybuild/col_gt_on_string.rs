@@ -1,5 +1,10 @@
-//! Ordering comparisons are gated to `Ordered`, which `String` deliberately
-//! does not implement: lexicographic `>` on text is almost always a bug.
+//! Ordering comparisons are gated to `Ordered`. `String` deliberately does not
+//! implement it, because lexicographic `>` on text is almost always a bug.
+//!
+//! The column uses a local type rather than `String`, which has the same gate.
+//! With `String`, rustc's diagnostic quotes `alloc/src/string.rs` only when the
+//! toolchain has `rust-src` installed, so the snapshot would differ from machine
+//! to machine.
 
 use ruprizzle::{Column, Model};
 
@@ -30,7 +35,10 @@ impl ruprizzle::rusqlite::FromOwnedRow for User {
     }
 }
 
-const EMAIL: Column<User, String> = Column::new("users", "email");
+/// Stands in for `String`: a column value type with no `Ordered` impl.
+struct Email;
+
+const EMAIL: Column<User, Email> = Column::new("users", "email");
 
 fn bad() {
     let _ = EMAIL.gt("a");
