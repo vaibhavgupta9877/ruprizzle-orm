@@ -2,23 +2,23 @@
 
 ## Supported versions
 
-`1.0.0-rc.1` is the only version published on crates.io. No stable release has
-been published: `v1.0.1` and `v1.5.0` are git tags whose publish runs did not
-upload anything. Confirm the current registry state with
-`scripts/check-release-state.sh`.
+`1.5.1` is the current stable release on crates.io, published 2026-09-13 for all
+twelve crates. The `v1.0.0`, `v1.0.1` and `v1.5.0` git tags never produced a
+package — their publish runs did not upload anything. Confirm the current
+registry state with `scripts/check-release-state.sh`.
 
-Because `1.0.0-rc.1` is the only thing anyone can install, it is the version that
-receives security fixes, delivered as a new published release. Fixes are developed
-against `main`, which is ahead of that package.
+Security fixes are delivered as new published releases on the `1.x` line.
+Fixes are developed against `main`.
 
 | Version | Supported |
 |---|---|
-| `1.0.0-rc.1` (the only package on crates.io) | ✅ |
+| `1.5.1` (current on crates.io) | ✅ |
+| `1.0.0-rc.1` (previous published version) | ❌ — upgrade to `1.5.1` |
 | `main` / source builds | ✅ — best effort, no published artifact |
 | `0.x` (alpha and beta lines) | ❌ |
 
-If you are running a source build of the `1.5.0` line, say so in your report: it
-contains code that has never been through a completed release gate.
+If you are running a source build of the `1.5.0` tag, say so in your report and
+move to the published `1.5.1`: that tag records a failed release.
 
 ## Known accepted dependency risk
 

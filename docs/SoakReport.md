@@ -1,5 +1,9 @@
 # Soak test report
 
+> **Context:** all evidence on this page was gathered on the pre-release `1.0.x`
+> codebase, ahead of the `1.5.1` publish. The waived W4-02 gate below is the
+> evidence `1.5.1` shipped on; the run was not repeated on `1.5.1`.
+
 ## Harness
 
 `crates/runtime/tests/soak.rs` runs a configurable mixed load:

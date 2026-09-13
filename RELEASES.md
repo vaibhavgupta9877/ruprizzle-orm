@@ -2,9 +2,9 @@
 
 For a sectioned, versioned changelog, see [CHANGELOG.md](CHANGELOG.md).
 
-> **Current registry state: `1.0.0-rc.1`.** That is the only version of any
-> ruprizzle crate available from crates.io. `ruprizzle-turso` and `ruprizzle-d1`
-> have never been published. The `v1.0.0`, `v1.0.1` and `v1.5.0` tags all exist
+> **Current registry state: `1.5.1`.** All twelve crates — including
+> `ruprizzle-turso` and `ruprizzle-d1`, published for the first time — serve
+> `1.5.1` on crates.io. The `v1.0.0`, `v1.0.1` and `v1.5.0` tags all exist
 > without a corresponding package, because their publish runs failed before
 > uploading. Run `scripts/check-release-state.sh` before writing anything in this
 > file that describes a version as released; a tag is not a release.
@@ -60,9 +60,11 @@ pauses between uploads to let that indexing propagate. Live publishes are refuse
 when `CI` or `GITHUB_ACTIONS` is set, so the workflow is the only automated path.
 
 
-## 1.5.1 (pending publication)
+## 1.5.1
 
-The publish attempt for the v1.1–v1.5 feature line, under a new version because the
+Published 2026-09-13 from tag `v1.5.1`; all twelve crates are live on crates.io,
+verified by `scripts/check-release-state.sh --expect 1.5.1`. This is the first
+stable release: the v1.1–v1.5 feature line, under a new version because the
 `v1.5.0` tag records a failed release and is not moved. Feature content is identical to
 `1.5.0` below, plus:
 
@@ -81,10 +83,7 @@ hand, needs small mechanical fixes. See
 untrusted network. The `turso` and `d1` adapters have not been run against the live
 hosted services (only local HTTP fakes). `askama` is still on 0.12.
 
-**Not yet published.** Until `scripts/check-release-state.sh --expect 1.5.1` passes,
-`1.0.0-rc.1` remains the only version on crates.io.
-
-Full detail in [CHANGELOG.md](CHANGELOG.md#151---pending-publication).
+Full detail in [CHANGELOG.md](CHANGELOG.md#151---2026-09-13).
 
 
 ## 1.5.0 (2026-09-02)
@@ -138,10 +137,11 @@ by the local HTTP tests.
 Full detail in [CHANGELOG.md](CHANGELOG.md#150---2026-09-02).
 
 
-## 1.0.1
+## 1.0.1 — tagged, not published
 
-Documentation-only patch (2026-08-31, tag `v1.0.1`). No public API changes; released
-from `main` in parallel with the v1.1-v1.5 line on `dev-v2-x`.
+Documentation-only patch (2026-08-31, tag `v1.0.1`). No public API changes; tagged
+from `main` in parallel with the v1.1-v1.5 line on `dev-v2-x`. **No `1.0.1`
+package exists on crates.io** — the tag never had a completed publish run.
 
 - Refreshed `README.md`, `docs/README.md`, per-crate READMEs, query/relations/
   migrations/operations/examples/quickstart/FAQ, `RELEASES.md`, and `AGENTS.md`
@@ -151,12 +151,13 @@ from `main` in parallel with the v1.1-v1.5 line on `dev-v2-x`.
   generated client.
 
 
-## 1.0.0
+## 1.0.0 — tagged, not published
 
-The first stable release, published 2026-08-21 from tag `v1.0.0`; all ten publishable
-crates are live at that version. No API changes from `1.0.0-rc.1`, which was published
-the same day — the surface frozen for the RC is the surface that shipped. From here on
-the public API is covered by semantic versioning, as defined in
+Tagged 2026-08-21 as `v1.0.0`, but the publish run never uploaded, so **no `1.0.0`
+package exists on crates.io**. The first stable release actually published is
+`1.5.1` above. No API changes from `1.0.0-rc.1`, which was published the same day —
+the surface frozen for the RC is the surface that line carried. From the first
+published stable onward the public API is covered by semantic versioning, as defined in
 [docs/Stability.md](docs/Stability.md).
 
 Two gates were waived in writing rather than by omission: the 48-hour `rusqlite` soak,

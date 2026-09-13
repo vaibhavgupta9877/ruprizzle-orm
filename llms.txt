@@ -23,9 +23,11 @@ for the Rust ecosystem. It competes with Diesel, SeaORM, SQLx and Prisma Client 
 
 ## Release status
 
-The version published on crates.io is `1.0.0-rc.1`. The `1.5.0` line is complete in the repository
-and tagged, but its publish run failed and it is **not** downloadable from crates.io. Treat
-`1.0.0-rc.1` as the only installable release until this file says otherwise. See
+The current published version is `1.5.1` — the first stable release, on crates.io since
+2026-09-13 for all twelve workspace crates, including the `ruprizzle-turso` and
+`ruprizzle-d1` adapters. The `v1.0.0`, `v1.0.1` and `v1.5.0` git tags never produced a
+package: their publish runs failed before uploading. `1.0.0-rc.1` remains on crates.io
+as the previous published version. See
 [RELEASES.md](https://github.com/vaibhavgupta9877/ruprizzle-orm/blob/main/RELEASES.md).
 
 ## How it differs

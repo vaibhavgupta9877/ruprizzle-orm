@@ -1,4 +1,4 @@
-# Migrating from other Rust ORMs
+# Migrating from other ORMs
 
 ## From Diesel
 
@@ -68,3 +68,23 @@ db.user()
     .fetch_one()
     .await?
 ```
+
+## From Prisma / Drizzle (TypeScript)
+
+ruprizzle follows the Prisma shape most closely — a declarative schema file that
+drives both codegen and migration diffs — so most concepts map one-to-one.
+Feature names differ:
+
+| Prisma / Drizzle | ruprizzle (as of `1.5.1`) |
+|---|---|
+| `schema.prisma` / `drizzle-orm` table defs | `schema.ruprizzle` + `ruprizzle generate` |
+| `prisma migrate` / `drizzle-kit` | `ruprizzle migrate dev` |
+| Prisma Client extensions / Drizzle `.$with()` | `include()` on the generated query builders |
+| Prisma full-text search | `@@fulltext` + `search()` filter (Postgres) |
+| Soft-delete middleware | `@softDelete` on the model |
+| `@@schema` multi-tenancy | not supported — see `docs/KnownLimitations.md` |
+| pgvector extensions | not supported |
+| Prisma read replicas / Drizzle `withReplicas` | `PoolConfig` replica routing (typed, v1.4) |
+| Prisma Accelerate / Drizzle cache | in-process query cache (v1.4) |
+| Prisma Studio / Drizzle Studio | `ruprizzle studio` (local, no auth — v1.5) |
+| `@libsql/client`, `@cloudflare/d1` drivers | `ruprizzle-turso`, `ruprizzle-d1` adapters |

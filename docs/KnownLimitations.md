@@ -4,7 +4,7 @@ This is an honest list of what ruprizzle does and does not do. It is a
 feature, not an apology: knowing the boundaries up front is how you decide
 whether the tool is right for your project.
 
-## Current beta
+## Current release (`1.5.1`)
 
 - **Heuristic renames** are suggested automatically. Add `@renamedFrom` to
   confirm or ignore the prompt; the diff never renames silently.
@@ -26,8 +26,9 @@ whether the tool is right for your project.
   no containment operator.
 - **Array columns (`T[]`)** are supported for scalar and enum types. PostgreSQL
   stores them as native arrays; SQLite and MySQL store them as JSON text using
-  the dialect's JSON facilities. Array filter operators (`contains`,
-  `contained_by`, `overlaps`) are implemented across all three backends.
+  the dialect's JSON facilities. Array filter operators (`has`, `has_every`,
+  `has_some`, `contains`, `contained_by`, `overlaps`, `is_empty`,
+  `is_not_empty`) are implemented across all three backends.
 - **Rich types through `sqlx::Any` are limited.** On SQLite, `Uuid`,
   `Decimal`, `DateTime`, `Date`, `Time`, and `Json` round-trip as text. The
   `sqlite-rusqlite` feature parses them from text at decode time, which is
@@ -60,16 +61,28 @@ whether the tool is right for your project.
   `sqlx` ships, MySQL/MariaDB is supported and tested but is not marketed as
   production-grade; Postgres and SQLite carry no such exception.
 
-## Deferred to v1.2+
+## Release-specific gaps (`1.5.1`)
 
-- Full-text search.
-- PostGIS / geospatial types.
-- Soft deletes.
+- **Ruprizzle Studio has no authentication.** It binds `127.0.0.1` by default and
+  refuses `--allow-writes` on a non-loopback host without `--yes-i-know`; do not
+  expose it on an untrusted network.
+- **The Turso and D1 adapters are unverified against the live hosted services.**
+  `ruprizzle-turso` (Hrana 2 over HTTP) and `ruprizzle-d1` (Cloudflare REST API)
+  are tested end-to-end against local HTTP fakes, not real Turso/D1 databases.
+  Both send one HTTP request per statement, so neither supports interactive
+  transactions, and `stream_raw` on each is a streaming interface over a fully
+  buffered response. Turso has no embedded-replica support (that needs the
+  native libSQL library), and D1 has no in-Worker/`wasm32` binding.
+- **There is no Neon adapter, by design.** Neon is ordinary Postgres over TLS;
+  its connection string goes straight to `ruprizzle::connect`.
+- **Studio templates still use `askama` 0.12.**
+
+## Deferred / not implemented
+
 - Polymorphic relations.
-- Implicit many-to-many join tables (explicit join model works today; see
-  ADR-006).
-- Recursive tree helpers (ancestors/descendants beyond the current
-  depth-limited include).
+- Row-level security and multi-tenancy (`@@tenant`/`@@policy` are rejected at
+  validation; they were removed from the LSP so they cannot appear to work).
+- Vector / pgvector search.
 - Support for additional databases (MSSQL).
 
 ## When to choose something else

@@ -1,8 +1,9 @@
 # ruprizzle-orm 1.0.0 (archived announcement)
 
 > **This announcement was never accurate and is kept only as a record.** The
-> `v1.0.0` publish run did not upload anything, so `1.0.0` is not on crates.io.
-> The only published version is `1.0.0-rc.1`. See the
+> `v1.0.0` publish run did not upload anything, so `1.0.0` was never on crates.io.
+> The first published stable release is **`1.5.1`** (2026-09-13) — see
+> [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md) for what actually shipped. See the
 > [FAQ](faq.html) and
 > [RELEASES.md](https://github.com/vaibhavgupta9877/ruprizzle-orm/blob/main/RELEASES.md)
 > for the current state. The rest of this page is left as originally written.

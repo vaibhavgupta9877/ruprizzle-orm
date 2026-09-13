@@ -2,9 +2,11 @@
 
 This page covers the feature line developed on `dev-v2-x` after `1.0.0`.
 
-> **Release status.** All of it shipped as **`1.5.0`** (tag `v1.5.0`). The workspace
-> never moved off `1.0.0` while these five milestones landed, so the intermediate
-> numbers were never cut and one minor version carries the whole line.
+> **Release status.** All of it shipped as **`1.5.1`**, published to crates.io on
+> 2026-09-13. The `v1.5.0` tag records a publish run that failed before uploading and
+> was deliberately not moved; the line ships under the new patch number instead. The
+> workspace never moved off `1.0.0` while these five milestones landed, so the
+> intermediate numbers were never cut and one release carries the whole line.
 >
 > This line was assessed and initially **blocked**; the findings and what each of them
 > became are in

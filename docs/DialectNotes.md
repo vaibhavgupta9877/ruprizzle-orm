@@ -69,6 +69,24 @@ MySQL does not support `INTERSECT` or `EXCEPT`; MariaDB does not support
 `INTERSECT` or `EXCEPT` either. SQLite supports both but does not support
 `RIGHT JOIN` or `FULL OUTER JOIN`.
 
+## v1.1–v1.5 features per dialect
+
+The feature line shipped in `1.5.1` lands differently on each backend:
+
+| Feature | Postgres | MySQL / MariaDB | SQLite |
+|---|---|---|---|
+| Array columns + filter operators | Native `T[]` | `JSON` + `JSON_CONTAINS` / `JSON_OVERLAPS` | `TEXT` (JSON) |
+| Full-text search | Native `tsvector` / `tsquery`, `@@fulltext` + generated column | `MATCH ... AGAINST` | FTS5 virtual table |
+| Soft deletes | `@softDelete` field + transparent `WHERE` filter | same | same |
+| PostGIS / geospatial | `geo-types` mapping, spatial indexes | no | no |
+| Implicit many-to-many | join table emitted by `migrate dev` | same | same |
+| Read-replica routing / query cache / OTel | runtime-level, dialect-agnostic | same | same |
+| Serverless adapters | — | — | `ruprizzle-turso` (Hrana over HTTP), `ruprizzle-d1` (Cloudflare REST) |
+
+Turso and D1 are SQLite-family dialects reached over HTTP: one request per
+statement, no interactive transactions — see `docs/KnownLimitations.md` for the
+full caveat list.
+
 ## MySQL-specific notes
 
 - **No `RETURNING` clause.** Inserts and upserts rely on a primary-key follow-up

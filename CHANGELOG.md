@@ -7,12 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 
-## [1.5.1] - pending publication
+## [1.5.1] - 2026-09-13
 
-**Not yet on crates.io.** This is the version the next publish attempt uses, in place
-of the failed `1.5.0` (whose tag is left untouched). It carries every `1.5.0` feature
-plus the changes below. Do not describe it as released until
-`scripts/check-release-state.sh --expect 1.5.1` passes.
+**Published to crates.io on 2026-09-13** — all twelve crates, verified by
+`scripts/check-release-state.sh --expect 1.5.1`. This is the first stable release and
+the version used in place of the failed `1.5.0` (whose tag is left untouched). It
+carries every `1.5.0` feature plus the changes below.
 
 ### Known gaps
 
@@ -87,11 +87,11 @@ query-manifest JSON.
 
 ### CI
 
-- `cargo public-api diff 1.0.0-rc.1` runs for every published, semver-covered
-  crate and prints the full public API diff in the job log. It is report-only:
-  the baseline was `1.5.0`, which crates.io never served, so the job failed on
-  the fetch. After `1.5.1` is published the baseline moves to it and
-  `--deny=all` returns.
+- `cargo public-api diff 1.0.0-rc.1` ran for every published, semver-covered
+  crate and printed the full public API diff in the job log, report-only, because
+  the previous baseline `1.5.0` was never served by crates.io and failed on the
+  fetch. With `1.5.1` published the baseline has moved to it and `--deny=all` is
+  restored.
 - `cargo hack --feature-powerset --depth 2 check` runs for `ruprizzle` and
   `ruprizzle-cli`, covering every single feature and every pair rather than only
   the hand-picked combinations in the feature matrix.
@@ -115,9 +115,9 @@ Two release runs were attempted against this line:
 The tag is deliberately **not** moved: it is the immutable record of a source tree
 whose release failed. The next publication attempt will use a new version.
 
-The latest version actually served by crates.io remains `1.0.0-rc.1`. Verify with
-`scripts/check-release-state.sh`; do not re-add a "released" claim here until that
-command reports the version.
+At the time this entry was written the latest version actually served by crates.io
+was `1.0.0-rc.1`; the feature line below has since shipped as `1.5.1`. Verify the
+current registry state with `scripts/check-release-state.sh`.
 
 The v1.1–v1.5 feature line, developed on `dev-v2-x`, was collected into a single
 minor version. The workspace never moved off `1.0.0` while five milestones landed,

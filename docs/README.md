@@ -22,30 +22,28 @@ are also available: `sqlite-rusqlite` for synchronous SQLite and an experimental
 
 ## Status
 
-**The only version available on crates.io is `1.0.0-rc.1`**, for every crate in the
-workspace. `ruprizzle-turso` and `ruprizzle-d1` have never been published at all.
-Run `scripts/check-release-state.sh` to confirm this against the registry rather
-than taking this page's word for it.
+**The current published version is `1.5.1`** — the first stable release, live on
+crates.io since 2026-09-13 for every crate in the workspace, including
+`ruprizzle-turso` and `ruprizzle-d1`. Run `scripts/check-release-state.sh` to
+confirm this against the registry rather than taking this page's word for it.
 
-`1.0.1` and `1.5.0` are git tags, not releases. The `v1.5.0` publish run failed in
-the pre-publish gate and uploaded nothing; the tag is kept as evidence of the
-attempt rather than moved. Until a publish run succeeds, treat `1.0.0-rc.1` as the
-only installable version and build from source for anything newer.
+`1.0.0`, `1.0.1` and `1.5.0` are git tags, not releases: their publish runs
+failed before uploading, so the tags are kept as evidence of the attempts rather
+than moved. `1.0.0-rc.1` remains on crates.io as the previous published version.
 
 **Upgrading from `1.0.0-rc.1`?** Most applications need no code changes. See
 [Upgrading from 1.0.0-rc.1 to 1.5.1](UpgradingFromRc1.md), and pin
 `"=1.0.0-rc.1"` until you are ready, because `"1.0.0-rc.1"` also matches `1.5.1`.
 
 The core P0–P8 implementation is complete and MySQL/MariaDB support is shipped.
-The public API is covered by semantic versioning from the first stable release
-onward — which has not happened yet.
+The public API is covered by semantic versioning from `1.5.1` onward.
 
-The v1.1–v1.5 feature line is complete in the repository as `1.5.0` — array
+The v1.1–v1.5 feature line shipped as `1.5.1` — array
 filters, full-text search, soft deletes, offline query checking, nested writes,
 tree hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and
-Ruprizzle Studio. See [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md). It was
-assessed and blocked; the current blockers and the remediation plan are in
-[`ProjectPlan/ProductionReadinessSolPlan.md`](https://github.com/vaibhavgupta9877/ruprizzle-orm/blob/main/ProjectPlan/ProductionReadinessSolPlan.md).
+Ruprizzle Studio. See [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md). Known gaps
+at this release: Studio has no authentication, and the Turso/D1 adapters have not
+been run against the live hosted services (only local HTTP fakes).
 
 Two things were waived on the way here, both in writing rather than by omission:
 the W4-02 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors
@@ -120,8 +118,8 @@ db.post().find_many().filter(user::EMAIL.eq(""))  // error: expected Filter<Post
 ## Install
 
 ```bash
-cargo install ruprizzle-cli --version 1.0.0-rc.1  # the `ruprizzle` command
-cargo add ruprizzle@1.0.0-rc.1                   # the runtime crate your app uses
+cargo install ruprizzle-cli  # the `ruprizzle` command
+cargo add ruprizzle          # the runtime crate your app uses
 ```
 
 In a new or existing project:

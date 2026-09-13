@@ -16,7 +16,8 @@ This document records an apples-to-apples benchmark of **ruprizzle**, **prax**, 
   - `likes`: 20,000 rows
   - `bench_bulk`: empty table used for bulk-insert tests
 - **Versions:**
-  - ruprizzle `1.0.0` (this repo)
+  - ruprizzle `1.0.0` (this repo; pre-release snapshot — the published `1.5.1`
+    shares this code path but these numbers were not re-run for it)
   - prax-orm `0.11`
   - Sea-ORM `1.1`
   - Diesel `2.2`

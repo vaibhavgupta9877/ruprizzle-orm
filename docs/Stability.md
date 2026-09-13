@@ -1,16 +1,20 @@
 # API Stability Policy
 
-This document defines what ruprizzle commits to under semantic versioning, from `1.0.0`
-onward, and how that commitment is enforced. It exists so that "we follow semver" is a
-checkable claim rather than a habit — see W6-02 in `ProjectPlan/v1/PathToStableV1.md`.
+This document defines what ruprizzle commits to under semantic versioning, from the
+first stable release onward, and how that commitment is enforced. It exists so that
+"we follow semver" is a checkable claim rather than a habit — see W6-02 in
+`ProjectPlan/v1/PathToStableV1.md`.
 
-**`1.0.0` shipped on 2026-08-21, so this policy is now in force** — it is no longer a
-description of a target. Everything below applies to the published `1.x` line. The `0.x`
-prereleases are superseded; see `docs/MigrationGuideToV1.md` for what changed getting here
-from `0.1.1-beta.1`.
+**`1.5.1` — the first published stable release — shipped on 2026-09-13, so this policy
+is now in force** — it is no longer a description of a target. Everything below applies
+to the published `1.x` line. The `v1.0.0` and `v1.0.1` tags were cut earlier but their
+publish runs never uploaded, so they carry no stability commitment of their own. The
+`0.x` prereleases are superseded; see `docs/MigrationGuideToV1.md` for what changed
+getting here from `0.1.1-beta.1`.
 
-Two things about how `1.0.0` was reached are recorded rather than glossed: the release-candidate
-feedback window was **waived** (see the waiver at the end of this document), and the 1.0 line is
+Two things about how the stable line was reached are recorded rather than glossed: the
+release-candidate feedback window was **waived** (see the waiver at the end of this
+document), and the 1.x line is
 **pinned to `sqlx 0.8`** because ruprizzle re-exports it (see "Public dependencies").
 
 ## What is covered by semver
@@ -81,9 +85,9 @@ inherited by every crate via `rust-version.workspace = true`, and checked in CI'
 in `.github/workflows/ci.yml`, which reads the same field and runs `cargo test --workspace`
 against it).
 
-Policy from `1.0.0` onward:
+Policy for the published `1.x` line:
 
-- MSRV may be bumped in a **minor** release (e.g. `1.1.0`), not a patch release.
+- MSRV may be bumped in a **minor** release (e.g. `1.6.0`), not a patch release.
 - An MSRV bump is called out explicitly in `CHANGELOG.md` under its own heading, not buried in
   "Changed."
 - MSRV is bumped no more than roughly once every six months, and only to pick up a
@@ -182,13 +186,17 @@ prerelease.
   anything else waits for `1.1.0`.
 
 This section documents the process; it does not itself cut a release. `1.0.0-rc.1` was
-published to crates.io on **2026-08-21** from tag `v1.0.0-rc.1`. See the W6-04/W6-05 status
+published to crates.io on **2026-08-21** from tag `v1.0.0-rc.1`. The stable release this
+RC fed into was eventually published as `1.5.1` on 2026-09-13 — the `v1.0.0` and
+`v1.0.1` tags in between never produced a package. See the W6-04/W6-05 status
 note in `ProjectPlan/v1/PathToStableV1.md`.
 
 ### Waiver: the `1.0.0-rc.1` feedback window (2026-08-21)
 
-**The two-week window described above was waived for `1.0.0`.** `1.0.0` was cut the same day
-`1.0.0-rc.1` was published, rather than on or after 2026-09-04. This is recorded here rather
+**The two-week window described above was waived for the `1.0` stable line.** The `v1.0.0`
+tag was cut the same day `1.0.0-rc.1` was published, rather than on or after 2026-09-04
+(its publish run then failed before uploading; the first published stable became `1.5.1`).
+This is recorded here rather
 than left implicit, because a policy the project did not follow is worse than a policy it
 amended on purpose. The decision, its rationale, and the alternative considered are written up
 as decision **D1** in `ProjectPlan/v1/V1StableRelease.md`; it follows the same pattern as the
@@ -204,11 +212,12 @@ W4-02 soak waiver in `docs/SoakReport.md`.
   suite against a live PostgreSQL, `cargo doc --all-features` with `-D warnings`,
   `cargo deny check`, `cargo xtask harden`, and `cargo xtask release-check --tag`. Plus
   `cargo-semver-checks`, which continues to compare every published crate's API against the
-  last release on crates.io — from `1.0.0` onward that comparison *is* the semver gate.
+  last release on crates.io — from the first published stable (`1.5.1`) onward that
+  comparison *is* the semver gate.
 - **What this waiver does not do.** It does not repeal the policy. A future `2.0.0-rc.1`, or
   any RC published once real downstream users exist, gets the full window. It also does not
-  weaken the semver commitment: if an API defect surfaces in the field, the answer is `1.1.0`
-  for an addition and `2.0.0` for a break, under the deprecation process above — not a
+  weaken the semver commitment: if an API defect surfaces in the field, the answer is the
+  next minor for an addition and `2.0.0` for a break, under the deprecation process above — not a
   retroactive redefinition of what `1.0.0` promised.
 
 ## One-time exception: `1.0.0-rc.1` → `1.5.1`
@@ -223,6 +232,7 @@ apply:
 - **Every item is documented with a fix** in
   [Upgrading from 1.0.0-rc.1](UpgradingFromRc1.md), together with what was verified to
   stay compatible: clients generated by rc.1, migration snapshots and query manifests.
-- **The exception covers this one upgrade.** CI's `semver` job runs with
-  `release-type: major` only until `1.5.1` is published. After that, `1.5.1` is the
-  baseline and every rule on this page applies unchanged.
+- **The exception covered this one upgrade only.** With `1.5.1` published, the CI
+  `semver` job's temporary `release-type: major` has been removed and the
+  `public-api` baseline is `1.5.1` with `--deny=all`; every rule on this page now
+  applies unchanged.

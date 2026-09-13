@@ -22,7 +22,7 @@ Command-line interface for `ruprizzle-orm`.
 ## Installation
 
 ```bash
-cargo install ruprizzle-cli --version 1.0.0-rc.1
+cargo install ruprizzle-cli
 ruprizzle --help
 ```
 

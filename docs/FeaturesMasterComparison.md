@@ -5,7 +5,10 @@ and the measured SQLite numbers. It is intended as a reference for choosing a
 tool, not as a definitive ranking.
 
 > **Caveats:** Feature claims are based on public documentation and the version
-> measured in `docs/BenchmarkResults.md` (2026-08-18). Maturity and exact feature
+> measured in `docs/BenchmarkResults.md` (2026-08-18). ruprizzle was measured at
+> `1.0.0`, before it was published — the published `1.5.1` is a superset of what
+> was measured, and the v1.1–v1.5 additions are listed in this table even though
+> the numbers were not re-run. Maturity and exact feature
 > availability can change quickly, especially for alpha/early projects. Always
 > verify against the upstream docs for your specific use case.
 
@@ -51,7 +54,9 @@ variants.
 | DuckDB | No | No | Yes | No | No | No | No |
 | ScyllaDB / Cassandra | No | No | Yes | No | No | No | No |
 | SingleStore | No | No | No | No | No | No | Yes |
-| Serverless / edge (Neon, Turso, D1, PlanetScale) | Partial | Partial | Partial | Partial | No | Yes | Yes |
+| Serverless / edge (Neon, Turso, D1, PlanetScale) | Yes | Yes | Partial | Partial | No | Yes | Yes |
+| Turso / libSQL (dedicated adapter) | Yes (`ruprizzle-turso`) | Yes (`ruprizzle-turso`) | Partial | Partial | No | Yes | Yes |
+| Cloudflare D1 (dedicated adapter) | Yes (`ruprizzle-d1`) | Yes (`ruprizzle-d1`) | No | No | No | Yes | Yes |
 
 ## Schema & code generation
 
@@ -89,6 +94,9 @@ variants.
 | Window functions / row numbering | Yes | Yes | Yes | Partial | Yes | Yes | Yes |
 | Aggregates | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | JSON operators | Yes* | Yes* | Partial | Partial | Partial | Yes | Partial |
+| Array filter operators | Yes | Yes | Partial | Partial | Partial | Yes | Partial |
+| Full-text search | Yes (typed `tsvector`/`tsquery`, Postgres) | Yes (same builder) | Partial | Partial | Partial | Yes | Partial |
+| Soft deletes | Yes | Yes | Partial | Partial | Partial | Partial | Partial |
 | Streaming / cursors | Yes (buffered + unbuffered) | Yes (buffered + unbuffered) | Yes | Yes | Yes | Yes | Yes |
 
 ## Relations & advanced loading
@@ -102,6 +110,8 @@ variants.
 | Nested relation `include` | Yes | Yes | Yes | Partial | No | Yes | Yes |
 | Batched / auto N+1 avoidance | Yes (bounded 1 query/level) | Same | Yes | Yes (data loader) | Manual join | Yes (join or query) | Yes |
 | Per-relation filters and `take` | Yes | Yes | Yes | Partial | No | Yes | Yes |
+| Tree / hierarchy helpers | Yes | Yes | Partial | Partial | Partial | Partial | Partial |
+| Nested writes (`create`/`update` in one call) | Yes | Yes | Partial | Partial | No | Yes | Partial |
 | Lazy loading | No | No | Yes | Yes | No | Yes | No |
 
 ## Migrations & tooling
@@ -116,6 +126,7 @@ variants.
 | Offline / embedded migrations | No | No | No | Partial | Yes | No | No |
 | Transactional migrations | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | Generated-crate compile-time benchmark | Yes (`xtask bench-compile`) | Yes (`xtask bench-compile`) | No | No | No | No | No |
+| Browser Studio UI | Yes (`ruprizzle studio`) | Yes (`ruprizzle studio`) | No | No | No | Yes | Yes |
 
 ## Advanced query builder & SQL features
 
@@ -134,8 +145,17 @@ variants.
 | Nested inserts | Yes | Yes | Partial | No | Partial | Yes | No |
 | Nested updates | Yes | Yes | Partial | No | Partial | Yes | No |
 | Explicit `JOIN`s | Yes | Yes | Partial | Partial | Yes | No | Yes |
+| PostGIS / geospatial types | Yes (typed `geo-types`, Postgres) | Yes (same builder) | Partial | Partial | Partial | Partial | Partial |
 
 > **Note:** "Partial" for advanced SQL constructs usually means the feature is possible via raw SQL or a lower-level API, while "Yes" means a first-class builder method. ruprizzle's benchmark harness exercises every row above; availability in other ORMs is based on public documentation and the measured harness.
+
+## Observability & production
+
+| Feature | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
+|---|---|---|---|---|---|---|---|
+| OpenTelemetry tracing | Yes | Yes | Partial | Partial | No | Yes | No |
+| Read-replica routing | Yes (typed pool routing) | Yes | Partial | Partial | Partial | Yes | Yes |
+| Query result cache | Yes (in-flight merge + TTL eviction) | Yes | No | No | No | Partial | Partial |
 
 ## Measured SQLite benchmark (µs/op)
 
@@ -237,12 +257,18 @@ Numbers are from the latest `local/cross-orm-bench/BENCHMARKS.log`
    SQLite approximates containment with a key-existence check because JSON1 has no
    containment operator. See `KnownLimitations.md`.
 
-9. **v1.1 features added to this comparison:** partial indexes, expression indexes,
+9. **v1.1–v1.5 features added to this comparison:** partial indexes, expression indexes,
    generated columns, PostgreSQL extensions from `datasource`, `ruprizzle check`
    offline query validation, the `ruprizzle-lsp` language server, and the
-   `xtask bench-compile` generated-crate compile-time benchmark.
+   `xtask bench-compile` generated-crate compile-time benchmark (v1.1–v1.2); array
+   filter operators, full-text search, soft deletes, declarative seeding
+   (v1.1–v1.2); implicit many-to-many, nested writes, tree helpers (v1.3);
+   OpenTelemetry, replica routing, query cache, PostGIS (v1.4); Ruprizzle Studio
+   and the Turso/D1 adapters (v1.5). All shipped together in the published
+   `1.5.1`.
 
-[^2]: ruprizzle's many-to-many support uses explicit join models (ADR-006). You
-    model `PostTag` yourself, then declare `tags Tag[] @relation(through: PostTag)`
-    to get `post.tags`, `post.tags_attach(...)`, `post.tags_set(...)`, and
-    `post.tags_detach(...)` with batched `include` and transactional nested writes.
+[^2]: ruprizzle supports both implicit many-to-many (`tags Tag[]` on both sides)
+    and explicit join models (ADR-006). With an explicit `PostTag` model you declare
+    `tags Tag[] @relation(through: PostTag)` to get `post.tags`,
+    `post.tags_attach(...)`, `post.tags_set(...)`, and `post.tags_detach(...)`
+    with batched `include` and transactional nested writes.

@@ -1,12 +1,19 @@
 # Migration guide: pre-1.0 to `1.0.0`
 
 This covers every API-shape change between the `0.1.1-beta.1` publish (commit `95ec17b`,
-2026-08-13) and `1.0.0`, published 2026-08-21. `1.0.0-rc.1` and `1.0.0` are identical in
+2026-08-13) and `1.0.0`, tagged 2026-08-21. `1.0.0-rc.1` and `1.0.0` are identical in
 API shape, so a client that compiles against one compiles against the other.
+
+> **Note:** `1.0.0` was tagged but never published to crates.io — its publish run
+> failed before uploading, as did `1.0.1`'s and `1.5.0`'s. The first published stable
+> carrying this API is **`1.5.1`** (2026-09-13); upgrade straight to it. If you are on
+> `1.0.0-rc.1`, also read [Upgrading from 1.0.0-rc.1 to 1.5.1](UpgradingFromRc1.md) for
+> the handful of RC → stable breaking changes that landed after `1.0.0` was tagged.
+
 Purely additive features (savepoints, array binds, streaming, new query operators, MySQL,
 `db pull`, seeding, migration squashing, rename detection, metrics — see the parity table in
 `ProjectPlan/v1/PathToStableV1.md`) are not covered here unless they changed an existing
-signature; see `CHANGELOG.md`'s `[Unreleased]` section for the full feature list.
+signature; see `CHANGELOG.md`'s `[1.0.0-rc.1]` and `[1.5.0]` sections for the full feature list.
 
 If you generated a schema client against `0.1.1-beta.1`, regenerate it
 (`ruprizzle generate`) after upgrading — none of the changes below require editing your
@@ -193,6 +200,6 @@ signature change.
 Everything else that changed since `0.1.1-beta.1` is additive (new query operators, savepoints,
 array binds, streaming, MySQL support, prepared statements, metrics export, migration
 squashing, rename detection) and does not require call-site changes to code that already
-compiled against `0.1.1-beta.1`. See `CHANGELOG.md`'s `[Unreleased]` section for the complete
+compiled against `0.1.1-beta.1`. See `CHANGELOG.md` for the complete
 list, and `ProjectPlan/v1/PathToStableV1.md` section 5 for how each feature maps to its
 workstream.

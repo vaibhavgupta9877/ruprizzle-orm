@@ -229,13 +229,33 @@ contradict each other about which versions were released.
 
 ### 5.C Sequence
 
-- [ ] **D1 — Before publishing:** fix 5.A and the two false claims in 5.B. None depends
+- [x] **D1 — Before publishing:** fix 5.A and the two false claims in 5.B. None depends
       on the version number.
-- [ ] **D2 — Immediately after `check-release-state.sh --expect 1.5.1` passes:** update
+      *Done 2026-09-13 (post-publish catch-up):* `KnownLimitations.md` rewritten for
+      `1.5.1` (shipped features removed from "deferred"; real gaps added);
+      `FeaturesMasterComparison.md` re-audited — Turso/D1/Studio/replicas/cache/OTel/
+      PostGIS/FTS/soft-delete rows added, measured-version caveat added;
+      `DialectNotes.md` gained a per-dialect v1.1–v1.5 table; `MigratingFrom.md`
+      gained a Prisma/Drizzle map; `Operations.md` pin fixed; `BenchmarkResults.md`
+      and `SoakReport.md` labelled as pre-release `1.0.x` measurements.
+      `Stability.md` and `MigrationGuideToV1.md` now say `1.0.0`/`1.0.1` were tagged
+      but never published and name `1.5.1` as the first stable.
+- [x] **D2 — Immediately after `check-release-state.sh --expect 1.5.1` passes:** update
       every install command and "only version on crates.io" banner to `1.5.1` in one
       commit. Keep `announcement.md` archived and write a 1.5 announcement.
-- [ ] **D3 — Prevent recurrence:** add a docs CI step that fails if any `docs/` page
+      *Done 2026-09-13:* all install snippets now use bare `cargo add`/`cargo install`
+      or the `1.5` line; every "current version" banner names `1.5.1` published
+      2026-09-13. `announcement.md` stays archived with a corrected banner pointing
+      at `WhatsNewV1_1ToV1_5.md`, which serves as the 1.5 announcement.
+- [x] **D3 — Prevent recurrence:** add a docs CI step that fails if any `docs/` page
       names an installable version other than the one the registry serves (excluding
       ADRs and archived pages), reusing `scripts/check-release-state.sh`.
+      *Done 2026-09-13:* `scripts/check-docs-version.sh` queries crates.io for the
+      served version and fails if any non-excluded doc pins a different one; wired
+      into the `docs` job in `ci.yml`. The R3/R4 follow-ups landed with it —
+      `public-api` now diffs against `1.5.1 --deny=all`, and the `semver-checks`
+      `release-type: major` exception is removed.
 - [ ] **D4 — Site rebuild:** `pages.yml` deploys from `main` on merge. Spot-check the
       live `KnownLimitations.html`, which currently shows the stale text.
+      *Pending merge:* the docs job runs on merge to `main` and `pages.yml` redeploys;
+      spot-check `KnownLimitations.html`, `faq.html` and `index.html` once live.

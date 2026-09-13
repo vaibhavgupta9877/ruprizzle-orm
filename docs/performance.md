@@ -35,7 +35,10 @@ to disable the fast path entirely.
 
 Measured on a single workstation (Intel Core Ultra 7 265K, 20 logical cores,
 32 GB RAM) against a local PostgreSQL database using native `sqlx::Postgres`
-(via `ruprizzle::connect_with`).
+(via `ruprizzle::connect_with`). These numbers predate the `1.5.1` release and
+were not re-run for it; the v1.4 additions that can shift a workload's cost —
+replica routing, the query cache and OpenTelemetry spans — are off by default
+and described in `docs/Operations.md`.
 
 | Benchmark | Hand-written sqlx | ruprizzle | Acceptance | Status |
 |---|---|---|---|---|
