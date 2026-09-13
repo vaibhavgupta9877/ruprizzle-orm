@@ -38,7 +38,9 @@ as the previous published version. See
   entity modules, and exposes the generated SQL on every builder.
 - **vs SQLx:** ruprizzle adds typed models, migrations and relation loading on top of SQLx rather
   than replacing it; SQLx remains the transport.
-- **vs Prisma Client Rust:** ruprizzle has no Node sidecar and no separate query engine binary.
+- **vs Prisma:** Prisma itself is TypeScript and Rust-free since v7; ruprizzle is the
+  native-Rust take on the same schema-first workflow, with the generated client compiled
+  into the application. The community Prisma Client Rust crate is dormant.
 
 ## Documentation
 

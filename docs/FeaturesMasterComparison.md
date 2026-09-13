@@ -4,13 +4,16 @@ This doc compares the ORMs benchmarked in this repo on features, architecture,
 and the measured SQLite numbers. It is intended as a reference for choosing a
 tool, not as a definitive ranking.
 
-> **Caveats:** Feature claims are based on public documentation and the version
-> measured in `docs/BenchmarkResults.md` (2026-08-18). ruprizzle was measured at
-> `1.0.0`, before it was published — the published `1.5.1` is a superset of what
-> was measured, and the v1.1–v1.5 additions are listed in this table even though
-> the numbers were not re-run. Maturity and exact feature
-> availability can change quickly, especially for alpha/early projects. Always
-> verify against the upstream docs for your specific use case.
+> **Caveats:** Benchmark numbers are from the versions measured in
+> `docs/BenchmarkResults.md` (2026-08-18); the *feature* cells were re-audited
+> against current upstream releases on 2026-09-13 (SeaORM 2.0, Prisma 7 —
+> Rust-free client — and Drizzle 0.45 / 1.0-RC changed several answers since
+> the measurements were taken). ruprizzle was measured at `1.0.0`, before it
+> was published — the published `1.5.1` is a superset of what was measured, and
+> the v1.1–v1.5 additions are listed in this table even though the numbers were
+> not re-run. Maturity and exact feature availability can change quickly,
+> especially for alpha/early projects. Always verify against the upstream docs
+> for your specific use case.
 
 ## Legend
 
@@ -30,14 +33,15 @@ variants.
 |---|---|---|---|---|---|---|---|
 | Language | Rust | Rust | Rust | Rust | Rust | TypeScript | TypeScript |
 | Measured version | 1.0.0 | 1.0.0 | 0.11 | 1.1 | 2.2 | 6.19.3 | 0.43.0 |
+| Latest version (2026-09) | 1.5.1 | 1.5.1 | 0.11 | 2.0.x | 2.3.x | 7.x (8 in RC) | 0.45.x (1.0 in RC) |
 | Primary driver | sqlx (Any) | sqlx for Postgres, rusqlite for SQLite | tokio-postgres / sqlx / mysql_async / tokio-rusqlite | sqlx | libsqlite3-sys / mysqlclient / libpq | Prisma query engine + driver adapters | Node database drivers |
 | Async API | Yes | Yes (sync driver called on Tokio task) | Yes | Yes | Sync (blocking) | Yes | Yes / sync driver option |
 | Query style | Schema-first typed builder | Same as sqlx variant | Prisma-like fluent builder | ActiveRecord / Entity + builder | Type-safe DSL | Generated fluent client | SQL-like typed builder |
 | Schema source of truth | `schema.ruprizzle` | Same | `.prax` schema | Entity files or DB first | `table!` macros / `schema.rs` | `schema.prisma` | TypeScript schema files |
-| No hidden query engine / sidecar binary | Yes | Yes | Yes | Yes | Yes | No | Yes |
+| No hidden query engine / sidecar binary | Yes | Yes | Yes | Yes | Yes | Yes (Rust-free client since 7.0) | Yes |
 | SQL transparency (`.to_sql()` on every builder) | Yes | Yes | Partial | No | Partial | Partial | Yes (SQL-first) |
 | CLI for generate / migrate | `ruprizzle` | Same | `prax` | `sea-orm-cli` | `diesel_cli` | `prisma` | `drizzle-kit` |
-| Multi-tenancy | No | No | Yes | Partial | No | Partial | Partial |
+| Multi-tenancy / row-level security | No | No | Yes | Yes (2.0 RBAC) | No | Partial | Yes (RLS since 0.36) |
 | Vector / pgvector search | No | No | Yes | Partial | No | No | No |
 | Framework integrations | Any async runtime | Same | Axum, Actix, Armature | Axum, Actix, Loco, Salvo, Poem | Any | Nest, Next, etc. | Any TS framework |
 
@@ -48,7 +52,7 @@ variants.
 | PostgreSQL | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | MySQL / MariaDB | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | SQLite | Yes | Yes (native) | Yes | Yes | Yes | Yes | Yes |
-| Microsoft SQL Server | No | No | Yes | Partial | No | Yes | Yes |
+| Microsoft SQL Server | No | No | Yes | Yes (SeaORM X) | No | Yes | Yes |
 | MongoDB | No | No | Yes | No | No | Yes | No |
 | CockroachDB | No | No | Partial | Partial | No | Yes | Yes |
 | DuckDB | No | No | Yes | No | No | No | No |
@@ -63,12 +67,12 @@ variants.
 | Feature | ruprizzle (sqlx) | ruprizzle (rusqlite) | prax | sea-orm | diesel | prisma | drizzle |
 |---|---|---|---|---|---|---|---|
 | Declarative schema DSL | Yes | Yes | Yes | No | No | Yes | No |
-| Code-first schema in source | No | No | No | Partial | Partial | No | Yes |
+| Code-first schema in source | No | No | No | Yes (2.0 entity-first `sync`) | Partial | No | Yes |
 | Generated typed client | Yes | Yes | Yes | Partial | Partial | Yes | No |
 | Schema-first migrations (diff from schema) | Yes | Yes | Yes | Partial | No | Yes | Partial |
 | Introspection / codegen from existing DB | Yes (`db pull`) | Yes (`db pull`) | Partial | Yes | Partial (`print-schema`) | Yes | Yes |
 | Compile-time query checking | Yes (`ruprizzle check`) | Yes (`ruprizzle check`) | Yes | No | Yes | N/A | No |
-| Type-safe column tokens | Yes | Yes | Yes | Partial | Yes | Yes (generated types) | Yes (typed columns) |
+| Type-safe column tokens | Yes | Yes | Yes | Yes (2.0 `COLUMN` constants) | Yes | Yes (generated types) | Yes (typed columns) |
 | Type-safe nested `include` | Yes | Yes | Yes | Partial | No | Yes | Yes |
 | LSP for schema DSL | Yes | Yes | No | No | No | Yes | No |
 | Partial indexes | Yes (Postgres / SQLite) | Yes (Postgres / SQLite) | Partial | No | Partial | Partial | No |
@@ -107,7 +111,7 @@ variants.
 | One-to-one | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | Many-to-many | Yes [^2] | Yes [^2] | Yes | Yes | Yes | Yes | Yes |
 | Self-referential relations | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| Nested relation `include` | Yes | Yes | Yes | Partial | No | Yes | Yes |
+| Nested relation `include` | Yes | Yes | Yes | Yes (2.0 Entity Loader) | No | Yes | Yes |
 | Batched / auto N+1 avoidance | Yes (bounded 1 query/level) | Same | Yes | Yes (data loader) | Manual join | Yes (join or query) | Yes |
 | Per-relation filters and `take` | Yes | Yes | Yes | Partial | No | Yes | Yes |
 | Tree / hierarchy helpers | Yes | Yes | Partial | Partial | Partial | Partial | Partial |
@@ -126,7 +130,7 @@ variants.
 | Offline / embedded migrations | No | No | No | Partial | Yes | No | No |
 | Transactional migrations | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | Generated-crate compile-time benchmark | Yes (`xtask bench-compile`) | Yes (`xtask bench-compile`) | No | No | No | No | No |
-| Browser Studio UI | Yes (`ruprizzle studio`) | Yes (`ruprizzle studio`) | No | No | No | Yes | Yes |
+| Browser Studio UI | Yes (`ruprizzle studio`) | Yes (`ruprizzle studio`) | No | Partial (SeaORM Pro, commercial) | No | Yes | Yes |
 
 ## Advanced query builder & SQL features
 
@@ -142,8 +146,8 @@ variants.
 | Set operations (`UNION` / `INTERSECT` / `EXCEPT`) | Yes | Yes | Partial | Partial | Yes | Partial | Yes |
 | `EXISTS` subqueries | Yes | Yes | Partial | Partial | Yes | No | Partial |
 | `IN` subqueries | Yes | Yes | Partial | Partial | Yes | No | Partial |
-| Nested inserts | Yes | Yes | Partial | No | Partial | Yes | No |
-| Nested updates | Yes | Yes | Partial | No | Partial | Yes | No |
+| Nested inserts | Yes | Yes | Partial | Yes (2.0 nested ActiveModel) | Partial | Yes | No |
+| Nested updates | Yes | Yes | Partial | Yes (2.0 nested ActiveModel) | Partial | Yes | No |
 | Explicit `JOIN`s | Yes | Yes | Partial | Partial | Yes | No | Yes |
 | PostGIS / geospatial types | Yes (typed `geo-types`, Postgres) | Yes (same builder) | Partial | Partial | Partial | Partial | Partial |
 
@@ -217,7 +221,7 @@ Numbers are from the latest `local/cross-orm-bench/BENCHMARKS.log`
 | Zero build-step / runtime schema | **Drizzle** | Schema is plain TypeScript, no code generation. |
 | SQL transparency / `.to_sql()` on every builder | **ruprizzle**, **Diesel**, or **Drizzle** | ruprizzle and Diesel expose SQL cheaply; Drizzle exposes it too but is slower to construct. |
 | Production Postgres | **ruprizzle**, **Prisma**, or **Diesel** | ruprizzle's [`performance.md`](performance.md) shows it within ~5% of hand-written `sqlx` on Postgres; Diesel and Drizzle are also strong on Postgres but were not measured here. |
-| Multi-tenancy or vector search out of the box | **prax** | Advertises row-level security, schema/database isolation, and pgvector integration. |
+| Multi-tenancy or vector search out of the box | **prax**, **SeaORM 2.0** (RBAC), or **Drizzle** (RLS helpers) | prax advertises row-level security, schema/database isolation, and pgvector; SeaORM 2.0 ships table-scoped RBAC; Drizzle has Postgres RLS helpers since 0.36. |
 
 ## Footnotes
 
@@ -252,12 +256,19 @@ Numbers are from the latest `local/cross-orm-bench/BENCHMARKS.log`
    Postgres or with network latency. See `docs/BenchmarkResults.md` for the full
    methodology.
 
-8. **ruprizzle JSON operators** are supported on Postgres (`jsonb`), MySQL (`JSON`),
+8. **Newer entrants not benchmarked here:** **Toasty** (tokio-rs, 0.x — async ORM
+   spanning SQL plus NoSQL/DynamoDB, with Turso support) and **Welds** (async,
+   sqlx/Tiberius — the only Rust ORM in this list with MSSQL). Neither was part of
+   the August 2026 measurement; both are worth watching. **SeaORM Pro** is a
+   commercial admin panel on top of SeaORM — the closest paid analogue of
+   Ruprizzle Studio / Prisma Studio.
+
+9. **ruprizzle JSON operators** are supported on Postgres (`jsonb`), MySQL (`JSON`),
    and SQLite (JSON1). Postgres and MySQL support full JSON containment (`@>`);
    SQLite approximates containment with a key-existence check because JSON1 has no
    containment operator. See `KnownLimitations.md`.
 
-9. **v1.1–v1.5 features added to this comparison:** partial indexes, expression indexes,
+10. **v1.1–v1.5 features added to this comparison:** partial indexes, expression indexes,
    generated columns, PostgreSQL extensions from `datasource`, `ruprizzle check`
    offline query validation, the `ruprizzle-lsp` language server, and the
    `xtask bench-compile` generated-crate compile-time benchmark (v1.1–v1.2); array

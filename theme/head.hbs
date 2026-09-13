@@ -1,25 +1,23 @@
-<meta name="description" content="ruprizzle is a schema-first ORM for Rust: Prisma-style schemas, Drizzle-style SQL-transparent queries, automatic migrations, and type-safe relation loading for PostgreSQL, MySQL/MariaDB, and SQLite.">
 <meta name="author" content="Vaibhav Gupta">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
 
 <!--
-  `canonical` and `og:url` are intentionally NOT set here. mdBook renders this
-  partial with the same context on every page, so a value built from
-  `{{ base_url }}` would point every page at the site root and ask search
-  engines to drop the whole book bar the index. `scripts/postprocess-docs.sh`
-  injects the correct per-page URL after `mdbook build`; see that script and
+  Per-page tags are intentionally NOT set here. mdBook renders this partial
+  with the same context on every page, so a `description`, `canonical`,
+  `og:url` or `og:title` built from `{{ base_url }}`/`{{ book_title }}` would
+  be identical everywhere — a canonical would ask search engines to drop the
+  whole book bar the index, and a duplicated description wastes each page's
+  snippet. `scripts/postprocess-docs.sh` injects the correct per-page values
+  after `mdbook build` (the `description` meta it rewrites is emitted by
+  mdBook itself from book.toml's `description`); see that script and
   `.github/workflows/pages.yml`.
 -->
 
 <meta property="og:site_name" content="ruprizzle-orm">
-<meta property="og:title" content="{{ book_title }}">
-<meta property="og:description" content="A schema-first ORM for Rust with typed queries, automatic migrations, and PostgreSQL, MySQL/MariaDB and SQLite support.">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="en">
 
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="{{ book_title }}">
-<meta name="twitter:description" content="A schema-first ORM for Rust with typed queries, automatic migrations, and PostgreSQL, MySQL/MariaDB and SQLite support.">
 
 <script type="application/ld+json">
 {
@@ -49,6 +47,7 @@
       "@type": "SoftwareSourceCode",
       "name": "ruprizzle",
       "description": "A schema-first ORM for Rust. A Prisma-style schema file generates a typed client, with Drizzle-style SQL transparency and no sidecar binary. Supports PostgreSQL, MySQL/MariaDB and SQLite.",
+      "softwareVersion": "1.5.1",
       "programmingLanguage": "Rust",
       "runtimePlatform": "Rust",
       "codeRepository": "https://github.com/vaibhavgupta9877/ruprizzle-orm",

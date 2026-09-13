@@ -55,17 +55,24 @@ jobs:
           test -s book/sitemap.xml
           test -s book/robots.txt
           test -s book/llms.txt
-          # Every indexable page must carry exactly one canonical tag.
+          # Every indexable page must carry exactly one canonical tag, one
+          # meta description and one og:title — the postprocessor rewrites or
+          # injects each per page, and a duplicate means it double-ran or the
+          # theme started emitting its own again.
           fail=0
           while IFS= read -r page; do
-            case "${page#book/}" in 404.html) continue ;; esac
+            # 404 is the stub page; toc.html is the sidebar iframe (noindex
+            # chrome, no content tags by design).
+            case "${page#book/}" in 404.html | toc.html) continue ;; esac
             # mdBook redirect stubs carry their own canonical and are left alone.
             grep -qi 'http-equiv="refresh"' "$page" && continue
-            n=$(grep -c '<link rel="canonical"' "$page" || true)
-            if [ "$n" != "1" ]; then
-              echo "::error file=$page::expected 1 canonical tag, found $n"
-              fail=1
-            fi
+            for tag in '<link rel="canonical"' '<meta name="description"' '<meta property="og:title"'; do
+              n=$(grep -c "$tag" "$page" || true)
+              if [ "$n" != "1" ]; then
+                echo "::error file=$page::expected 1 of '$tag', found $n"
+                fail=1
+              fi
+            done
           done < <(find book -name '*.html')
           exit "$fail"
       - name: Setup Pages

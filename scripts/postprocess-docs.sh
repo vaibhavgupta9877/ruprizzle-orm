@@ -8,14 +8,21 @@
 #   1. adds a self-referencing <link rel="canonical"> and <meta og:url> to every
 #      page  — without these, either every page canonicalises to the site root
 #      (which de-indexes the whole book) or there is no canonical at all;
-#   2. marks mdBook's generated `print.html` noindex — it is a concatenation of
+#   2. rewrites the <meta name="description"> mdBook emits (a single value from
+#      book.toml, identical on every page) with a per-page description taken
+#      from the page's own first paragraph, and injects matching og:title,
+#      og:description, twitter:title and twitter:description tags — one page,
+#      one snippet, instead of thirty copies of the book-level blurb;
+#   3. marks mdBook's generated `print.html` noindex — it is a concatenation of
 #      every chapter and is otherwise the largest duplicate-content page on the
 #      site;
-#   3. attaches FAQPage structured data to the FAQ, so answer engines can lift
+#   4. attaches FAQPage structured data to the FAQ, so answer engines can lift
 #      the questions directly;
-#   4. generates `sitemap.xml` from the pages that actually exist, rather than
+#   5. stamps the SoftwareSourceCode schema's softwareVersion with the version
+#      from Cargo.toml, so the structured data can never drift from the crate;
+#   6. generates `sitemap.xml` from the pages that actually exist, rather than
 #      from a hand-maintained list that drifts out of date;
-#   5. copies `robots.txt` and `llms.txt` to the site root.
+#   7. copies `robots.txt` and `llms.txt` to the site root.
 #
 # Usage: scripts/postprocess-docs.sh [book-dir]
 set -euo pipefail
@@ -39,7 +46,9 @@ is_redirect() {
 
 is_excluded() {
   case "$1" in
-    404.html | print.html) return 0 ;;
+    # toc.html is the sidebar's no-JS iframe — mdBook already marks it
+    # noindex, and it carries no content of its own.
+    404.html | print.html | toc.html) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -94,6 +103,59 @@ inject_head() {
   insert_before_head "$file" "$payload"
 }
 
+# The version stamped into the SoftwareSourceCode schema comes from Cargo.toml,
+# the same source of truth scripts/check-release-state.sh uses, so the schema
+# cannot quietly claim a version that was never published.
+workspace_version=$(
+  awk '/^\[workspace\.package\]/ { in_wp = 1; next }
+       /^\[/ { in_wp = 0 }
+       in_wp && /^version/ { gsub(/[^0-9A-Za-z.+-]/, "", $NF); print $NF; exit }' Cargo.toml
+)
+
+# Per-page description: the first <p> inside <main> is the page's own summary
+# line by convention in this book. Falls back to the book-level description
+# (emitted by mdBook from book.toml) when a page has no paragraph before its
+# first heading — the tag is then left at the book-level text, still correct.
+page_description() {
+  awk '
+    /<main[ >]/ { in_main = 1 }
+    in_main && /<p>/ {
+      # Paragraphs wrap across lines in the rendered HTML — accumulate until
+      # the closing tag, then emit the whole text.
+      in_p = 1
+    }
+    in_p {
+      buf = buf " " $0
+      if ($0 ~ /<\/p>/) {
+        sub(/.*<p>/, "", buf)
+        sub(/<\/p>.*/, "", buf)
+        gsub(/<[^>]*>/, "", buf)
+        gsub(/&lt;/, "<", buf); gsub(/&gt;/, ">", buf)
+        gsub(/&quot;/, "\"", buf); gsub(/&#39;/, "'"'"'", buf); gsub(/&nbsp;/, " ", buf)
+        gsub(/&amp;/, "\\&", buf)
+        gsub(/[ \t]+/, " ", buf); gsub(/^ +| +$/, "", buf)
+        print buf
+        exit
+      }
+    }
+  ' "$1"
+}
+
+# Escape for a double-quoted HTML attribute value.
+attr_escape() {
+  printf '%s' "$1" | sed 's/&/\&amp;/g; s/"/\&quot;/g'
+}
+
+# Truncate to ~160 chars at a word boundary — the visible SERP snippet limit.
+snippet() {
+  local s="$1"
+  if [ "${#s}" -gt 160 ]; then
+    s="${s:0:160}"
+    s="${s% *}…"
+  fi
+  printf '%s' "$s"
+}
+
 pages=()
 while IFS= read -r file; do
   pages+=("$file")
@@ -104,18 +166,59 @@ echo "postprocess-docs: found ${#pages[@]} HTML pages in $BOOK_DIR"
 for file in "${pages[@]}"; do
   rel="${file#"$BOOK_DIR"/}"
   if is_redirect "$file"; then continue; fi
+  if [ "$rel" = "toc.html" ]; then
+    # Sidebar iframe, already `noindex` from mdBook — drop the head.hbs
+    # `index, follow` so the two robots metas do not contradict, and skip all
+    # per-page injection: it is chrome, not content.
+    sed -i '/<meta name="robots" content="index, follow/d' "$file"
+    continue
+  fi
   url="${BASE_URL}$(url_path_for "$rel")"
+
+  # <title> is "Page name - ruprizzle-orm"; use it verbatim for og/twitter.
+  title=$(sed -n 's/.*<title>\(.*\)<\/title>.*/\1/p' "$file" | head -1)
+  title=$(attr_escape "$title")
+
+  desc=$(page_description "$file")
+  if [ -n "$desc" ]; then
+    desc=$(snippet "$desc")
+    desc_attr=$(attr_escape "$desc")
+    # `&` in a sed replacement re-expands to the whole match, and `|` is our
+    # delimiter — both appear in attribute-escaped text, so escape for sed
+    # *after* escaping for HTML.
+    desc_sed=$(printf '%s' "$desc_attr" | sed 's/\\/\\\\/g; s/|/\\|/g; s/&/\\&/g')
+    # Replace the book-level description mdBook emitted rather than adding a
+    # second tag — duplicate description metas confuse snippet selection.
+    sed -i "s|<meta name=\"description\" content=\"[^\"]*\">|<meta name=\"description\" content=\"$desc_sed\">|" "$file"
+  fi
 
   payload="<!-- data-ruprizzle-seo -->
 <link rel=\"canonical\" href=\"$url\">
-<meta property=\"og:url\" content=\"$url\">"
+<meta property=\"og:url\" content=\"$url\">
+<meta property=\"og:title\" content=\"$title\">
+<meta name=\"twitter:title\" content=\"$title\">"
+
+  if [ -n "$desc" ]; then
+    payload="$payload
+<meta property=\"og:description\" content=\"$desc_attr\">
+<meta name=\"twitter:description\" content=\"$desc_attr\">"
+  fi
 
   if [ "$rel" = "print.html" ]; then
     payload="$payload
 <meta name=\"robots\" content=\"noindex, follow\">"
+    # head.hbs stamps `index, follow` on every page; on the print view that
+    # contradicts the noindex. Drop the permissive tag rather than rely on
+    # crawlers picking the most restrictive of the three robots metas present.
+    sed -i '/<meta name="robots" content="index, follow/d' "$file"
   fi
 
   inject_head "$file" "$payload"
+
+  # Stamp the schema's softwareVersion from Cargo.toml on every page — the
+  # JSON-LD block (theme/head.hbs) carries exactly one such key per page, so a
+  # plain rewrite keeps it honest even if the template literal drifts.
+  sed -i "s|\"softwareVersion\": \"[^\"]*\"|\"softwareVersion\": \"$workspace_version\"|" "$file"
 done
 
 # ---------------------------------------------------------------------------
