@@ -371,20 +371,39 @@ impl Migrator {
                 .ok_or_else(|| Error::MissingUp { id: id.clone() })?;
 
             let statements = split_statements(&m.down);
-            for stmt in statements {
-                let sql = stmt.trim();
-                if !sql.is_empty() && !sql.starts_with("-- ") {
-                    pool.execute_raw(Cow::Owned(sql.to_owned()), Vec::new())
-                        .await?;
-                }
-            }
-
             let update_sql = format!(
                 "UPDATE _ruprizzle_migrations SET rolled_back_at = CURRENT_TIMESTAMP WHERE id = {}",
                 dialect.placeholder(0)
             );
-            pool.execute_raw(Cow::Owned(update_sql), vec![Value::Str(id.as_str().into())])
-                .await?;
+
+            if pool.provider() == Provider::Mysql {
+                // A MySQL down migration for a foreign-key cycle is wrapped in
+                // `SET FOREIGN_KEY_CHECKS = 0/1`, which is session state. Sent
+                // through the pool, each statement may land on a different
+                // connection and the `DROP TABLE`s still see the checks enabled,
+                // so run the whole migration on one connection.
+                let tx = Tx::begin(pool).await?;
+                for stmt in statements {
+                    let sql = stmt.trim();
+                    if !sql.is_empty() && !sql.starts_with("-- ") {
+                        tx.execute_raw(Cow::Owned(sql.to_owned()), Vec::new())
+                            .await?;
+                    }
+                }
+                tx.execute_raw(Cow::Owned(update_sql), vec![Value::Str(id.as_str().into())])
+                    .await?;
+                tx.commit().await?;
+            } else {
+                for stmt in statements {
+                    let sql = stmt.trim();
+                    if !sql.is_empty() && !sql.starts_with("-- ") {
+                        pool.execute_raw(Cow::Owned(sql.to_owned()), Vec::new())
+                            .await?;
+                    }
+                }
+                pool.execute_raw(Cow::Owned(update_sql), vec![Value::Str(id.as_str().into())])
+                    .await?;
+            }
 
             applied.push(id);
         }
