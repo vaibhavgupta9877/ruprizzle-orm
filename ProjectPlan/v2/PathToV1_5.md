@@ -118,6 +118,17 @@ The rest of this plan assumes `1.5.1`.
 - [ ] **R7 — Registry token.** Confirm `CARGO_REGISTRY_TOKEN` is set in Actions
       secrets and visible to `release.yml`. Run `workflow_dispatch` with
       `publish=false` first; the credential preflight fails fast on an empty token.
+      *Partly done 2026-09-13 — workflow fixed; confirming the secret needs repo access.*
+      - *Found:* the step above could not work. The credential preflight ran only when
+        publishing (`if: steps.mode.outputs.publish == 'true'`), so a `publish=false`
+        dispatch never looked at the token.
+      - *Fixed (`e6b9e74`):* the preflight runs in both modes. A publishing run still
+        fails fast on an empty token; a dry run emits a warning and writes
+        "visible / not visible (N characters)" to the job summary, never the value.
+      - *Remaining (owner, needs GitHub access; `gh` is not authenticated here):*
+        after pushing, run **Actions → Release → Run workflow** with `publish=false`
+        on the release commit and confirm the summary shows the token as visible.
+        Tick R7 then.
 - [ ] **R8 — Crate names.** `ruprizzle-turso` and `ruprizzle-d1` have never been
       published. Confirm both names are still free on crates.io.
 - [ ] **R9 — Tag and publish.** Push `v1.5.1`, let `release.yml` publish, then run
