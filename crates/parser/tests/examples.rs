@@ -183,9 +183,17 @@ fn the_fingerprint_ignores_line_endings_and_offsets() {
     let lf = source.replace("\r\n", "\n");
     let crlf = lf.replace('\n', "\r\n");
     let shifted = format!("\n\n{lf}");
-    let hash = |s: &str| ruprizzle_parser::parse(&name, s).expect("valid").fingerprint();
+    let hash = |s: &str| {
+        ruprizzle_parser::parse(&name, s)
+            .expect("valid")
+            .fingerprint()
+    };
     assert_eq!(hash(&lf), hash(&crlf), "CRLF changed the fingerprint");
-    assert_eq!(hash(&lf), hash(&shifted), "byte offsets changed the fingerprint");
+    assert_eq!(
+        hash(&lf),
+        hash(&shifted),
+        "byte offsets changed the fingerprint"
+    );
 }
 
 #[test]
