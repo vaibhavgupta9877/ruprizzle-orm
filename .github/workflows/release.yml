@@ -51,16 +51,26 @@ jobs:
       # rendering as empty, which would have failed every `cargo publish` after
       # a full gate had already run. Check the secret is present *before*
       # spending twenty minutes on the gate, and never echo the value itself.
+      # This step also runs on a dry-run dispatch, so a `publish=false` rehearsal
+      # proves the secret is visible to this workflow before any tag is pushed.
+      # A dry-run only warns: it uploads nothing, so the rest of the gate still runs.
       - name: Preflight — registry credential
-        if: steps.mode.outputs.publish == 'true'
+        env:
+          PUBLISH: ${{ steps.mode.outputs.publish }}
         run: |
           if [ -z "${CARGO_REGISTRY_TOKEN:-}" ]; then
-            echo "::error::CARGO_REGISTRY_TOKEN is empty. This run would publish nothing."
-            echo "Set the secret under Settings → Secrets and variables → Actions," >&2
-            echo "and confirm it is visible to this workflow's environment." >&2
-            exit 1
+            if [ "$PUBLISH" = "true" ]; then
+              echo "::error::CARGO_REGISTRY_TOKEN is empty. This run would publish nothing."
+              echo "Set the secret under Settings → Secrets and variables → Actions," >&2
+              echo "and confirm it is visible to this workflow's environment." >&2
+              exit 1
+            fi
+            echo "::warning::CARGO_REGISTRY_TOKEN is empty. A publishing run (tag push) would fail here."
+            echo "- ⚠️ \`CARGO_REGISTRY_TOKEN\` is **not** visible to this workflow." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
           echo "CARGO_REGISTRY_TOKEN is present (${#CARGO_REGISTRY_TOKEN} characters)."
+          echo "- ✅ \`CARGO_REGISTRY_TOKEN\` is visible to this workflow (${#CARGO_REGISTRY_TOKEN} characters)." >> "$GITHUB_STEP_SUMMARY"
 
       # Guards that the git tag, the workspace version, and the CHANGELOG
       # heading all agree before anything is uploaded. Fails the job otherwise.
