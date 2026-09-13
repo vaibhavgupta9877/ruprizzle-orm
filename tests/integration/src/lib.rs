@@ -18,7 +18,10 @@ pub const SMOKE_DDL: &str = "CREATE TABLE widget (
 );
 CREATE TABLE widget_part (
     id        INTEGER PRIMARY KEY,
-    widget_id INTEGER NOT NULL REFERENCES widget(id) ON DELETE CASCADE,
-    label     TEXT    NOT NULL
+    widget_id INTEGER NOT NULL,
+    label     TEXT    NOT NULL,
+    -- Table-level form: MySQL parses and silently ignores an inline
+    -- column `REFERENCES` clause, so the FK would not exist there.
+    FOREIGN KEY (widget_id) REFERENCES widget(id) ON DELETE CASCADE
 );
 ";

@@ -48,11 +48,20 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
     let duration = soak_duration();
     let workers = workers();
     let pool = db.pool().clone();
+    // Placeholders differ by dialect (`$1` on Postgres, `?` on MySQL), so the
+    // statements are built once per run instead of hard-coding `$n`.
+    let dialect = pool.dialect();
+    let p1 = dialect.placeholder(0);
+    let p2 = dialect.placeholder(1);
+    let insert_sql: Arc<str> = format!("INSERT INTO soak_kv (k, v) VALUES ({p1}, {p2})").into();
+    let update_sql: Arc<str> = format!("UPDATE soak_kv SET v = {p2} WHERE k = {p1}").into();
+    let select_sql: Arc<str> = format!("SELECT v FROM soak_kv WHERE k = {p1}").into();
+    let delete_sql: Arc<str> = format!("DELETE FROM soak_kv WHERE k = {p1}").into();
     let ops = Arc::new(AtomicU64::new(0));
     let errors = Arc::new(AtomicU64::new(0));
 
     pool.execute_raw(
-        "CREATE TABLE IF NOT EXISTS soak_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)"
+        "CREATE TABLE IF NOT EXISTS soak_kv (k VARCHAR(191) PRIMARY KEY, v TEXT NOT NULL)"
             .to_owned()
             .into(),
         Vec::new(),
@@ -67,6 +76,12 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
         let pool = pool.clone();
         let ops = Arc::clone(&ops);
         let errors = Arc::clone(&errors);
+        let (insert_sql, update_sql, select_sql, delete_sql) = (
+            Arc::clone(&insert_sql),
+            Arc::clone(&update_sql),
+            Arc::clone(&select_sql),
+            Arc::clone(&delete_sql),
+        );
         handles.push(tokio::spawn(async move {
             let mut local = 0u64;
             while start.elapsed() < duration {
@@ -80,27 +95,21 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
                 let value = format!("v-{cycle}");
                 let (sql, binds) = match op {
                     0 => (
-                        "INSERT INTO soak_kv (k, v) VALUES ($1, $2)",
+                        &*insert_sql,
                         vec![
                             ruprizzle::Encodable::to_value(&key),
                             ruprizzle::Encodable::to_value(&value),
                         ],
                     ),
                     1 => (
-                        "UPDATE soak_kv SET v = $2 WHERE k = $1",
+                        &*update_sql,
                         vec![
                             ruprizzle::Encodable::to_value(&key),
                             ruprizzle::Encodable::to_value(&value),
                         ],
                     ),
-                    2 => (
-                        "SELECT v FROM soak_kv WHERE k = $1",
-                        vec![ruprizzle::Encodable::to_value(&key)],
-                    ),
-                    _ => (
-                        "DELETE FROM soak_kv WHERE k = $1",
-                        vec![ruprizzle::Encodable::to_value(&key)],
-                    ),
+                    2 => (&*select_sql, vec![ruprizzle::Encodable::to_value(&key)]),
+                    _ => (&*delete_sql, vec![ruprizzle::Encodable::to_value(&key)]),
                 };
                 let res = match op {
                     2 => pool
@@ -171,7 +180,7 @@ async fn mixed_load(db: TestDb) -> ruprizzle_testkit::Result {
 }
 
 both_dbs! {
-    setup = "CREATE TABLE IF NOT EXISTS soak_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)";
+    setup = "CREATE TABLE IF NOT EXISTS soak_kv (k VARCHAR(191) PRIMARY KEY, v TEXT NOT NULL)";
     async fn soak_mixed_load_with_connection_churn(db: TestDb) {
         mixed_load(db).await?;
     }

@@ -597,7 +597,18 @@ impl TestDb {
     ///
     /// Propagates any driver error, including a row/column shape mismatch.
     pub async fn fetch_string(&self, sql: &str) -> std::result::Result<String, sqlx::Error> {
-        sqlx::query_scalar(sql).fetch_one(self.any_pool()).await
+        use sqlx::Row as _;
+
+        // Through `sqlx::Any`, MySQL reports `TEXT` columns as `BLOB`, which
+        // does not decode as `String`. Fall back to the bytes as UTF-8.
+        let row = sqlx::query(sql).fetch_one(self.any_pool()).await?;
+        match row.try_get::<String, _>(0) {
+            Ok(s) => Ok(s),
+            Err(err) => {
+                let bytes: Vec<u8> = row.try_get(0).map_err(|_| err)?;
+                String::from_utf8(bytes).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+            }
+        }
     }
 }
 

@@ -12,7 +12,7 @@ use ruprizzle::executor::Executor;
 use ruprizzle_testkit::both_dbs;
 
 both_dbs! {
-    setup = "CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)";
+    setup = "CREATE TABLE kv (k VARCHAR(191) PRIMARY KEY, v TEXT NOT NULL)";
     async fn nested_commit_and_release(db: TestDb) {
         let tx = db.pool().begin().await?;
 
@@ -33,7 +33,7 @@ both_dbs! {
 }
 
 both_dbs! {
-    setup = "CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)";
+    setup = "CREATE TABLE kv (k VARCHAR(191) PRIMARY KEY, v TEXT NOT NULL)";
     async fn nested_rollback_leaves_outer_live(db: TestDb) {
         let tx = db.pool().begin().await?;
 
@@ -58,7 +58,7 @@ both_dbs! {
 }
 
 both_dbs! {
-    setup = "CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)";
+    setup = "CREATE TABLE kv (k VARCHAR(191) PRIMARY KEY, v TEXT NOT NULL)";
     async fn dropped_savepoint_rolls_back(db: TestDb) {
         let tx = db.pool().begin().await?;
 
@@ -81,7 +81,7 @@ both_dbs! {
 }
 
 both_dbs! {
-    setup = "CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)";
+    setup = "CREATE TABLE kv (k VARCHAR(191) PRIMARY KEY, v TEXT NOT NULL)";
     async fn depth_three(db: TestDb) {
         let tx = db.pool().begin().await?;
 
@@ -101,7 +101,7 @@ both_dbs! {
 }
 
 both_dbs! {
-    setup = "CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)";
+    setup = "CREATE TABLE kv (k VARCHAR(191) PRIMARY KEY, v TEXT NOT NULL)";
     async fn rollback_after_constraint_violation(db: TestDb) {
         let tx = db.pool().begin().await?;
 
@@ -127,7 +127,7 @@ both_dbs! {
 }
 
 both_dbs! {
-    setup = "CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)";
+    setup = "CREATE TABLE kv (k VARCHAR(191) PRIMARY KEY, v TEXT NOT NULL)";
     async fn transaction_closure_commits(db: TestDb) {
         let tx = db.pool().begin().await?;
 
@@ -150,7 +150,7 @@ both_dbs! {
 }
 
 both_dbs! {
-    setup = "CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)";
+    setup = "CREATE TABLE kv (k VARCHAR(191) PRIMARY KEY, v TEXT NOT NULL)";
     async fn transaction_closure_rolls_back(db: TestDb) {
         let tx = db.pool().begin().await?;
 

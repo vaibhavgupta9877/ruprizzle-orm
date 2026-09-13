@@ -84,8 +84,10 @@ all_dbs! {
             "INSERT INTO mysql_decimal_prices (id, amount) VALUES (1, 123.4567)"
         ).await?;
 
+        // `sqlx::Any` has no mapping for MySQL `DECIMAL`, so read it as text;
+        // the exact digits still prove native fixed-point storage.
         let amount = db.fetch_string(
-            "SELECT amount FROM mysql_decimal_prices WHERE id = 1"
+            "SELECT CAST(amount AS CHAR) FROM mysql_decimal_prices WHERE id = 1"
         ).await?;
         assert_eq!(amount, "123.4567");
     }
