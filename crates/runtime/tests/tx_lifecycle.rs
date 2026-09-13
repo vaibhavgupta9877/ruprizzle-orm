@@ -223,7 +223,8 @@ mod tokio_postgres_backend {
             }
             None => {
                 assert!(
-                    !std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok_and(|v| v != "0" && !v.is_empty()),
+                    !std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok_and(|v| v != "0" && !v.is_empty())
+                        || std::env::var("RUPRIZZLE_TEST_MYSQL_URL").is_ok_and(|v| !v.is_empty()),
                     "RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not"
                 );
                 eprintln!("skipping tokio-postgres tx lifecycle tests: no RUPRIZZLE_TEST_PG_URL");
@@ -414,7 +415,8 @@ mod sqlx_backends {
             .filter(|u| !u.is_empty())
         else {
             assert!(
-                !std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok_and(|v| v != "0" && !v.is_empty()),
+                !std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok_and(|v| v != "0" && !v.is_empty())
+                    || std::env::var("RUPRIZZLE_TEST_MYSQL_URL").is_ok_and(|v| !v.is_empty()),
                 "RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not"
             );
             return None;

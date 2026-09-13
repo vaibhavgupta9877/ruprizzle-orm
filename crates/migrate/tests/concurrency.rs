@@ -36,7 +36,9 @@ async fn ten_concurrent_deployers_all_succeed() {
         .ok()
         .filter(|u| !u.is_empty())
     else {
-        if std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok_and(|v| v != "0" && !v.is_empty()) {
+        if std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok_and(|v| v != "0" && !v.is_empty())
+            && !std::env::var("RUPRIZZLE_TEST_MYSQL_URL").is_ok_and(|v| !v.is_empty())
+        {
             panic!("RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not");
         }
         eprintln!(

@@ -140,7 +140,9 @@ async fn fresh_pool() -> (Pool, bool, Option<IsolatedSchema>) {
         let url = schema.url().to_owned();
         isolated = Some(schema);
         (url, true)
-    } else if std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok_and(|v| v != "0" && !v.is_empty()) {
+    } else if std::env::var("RUPRIZZLE_REQUIRE_DB").is_ok_and(|v| v != "0" && !v.is_empty())
+        && !std::env::var("RUPRIZZLE_TEST_MYSQL_URL").is_ok_and(|v| !v.is_empty())
+    {
         panic!("RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not");
     } else {
         let dir = std::env::current_dir().unwrap().join("target/runtime-test");
@@ -151,7 +153,9 @@ async fn fresh_pool() -> (Pool, bool, Option<IsolatedSchema>) {
             FILE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         let file = path.to_str().unwrap().replace('\\', "/");
-        let driver = if std::env::var("RUPRIZZLE_TEST_RUSQLITE").is_ok() {
+        let driver = if cfg!(feature = "sqlite-rusqlite")
+            && std::env::var("RUPRIZZLE_TEST_RUSQLITE").is_ok()
+        {
             "&driver=rusqlite"
         } else {
             ""
