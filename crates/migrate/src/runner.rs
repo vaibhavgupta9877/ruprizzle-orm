@@ -543,7 +543,8 @@ async fn user_tables(pool: &Pool) -> Result<Vec<String>, Error> {
                AND table_type = 'BASE TABLE' \
                AND table_name != '_ruprizzle_migrations'"
             .to_owned(),
-        Provider::Mysql => "SELECT table_name FROM information_schema.tables \
+        // CAST: MySQL 8.4 reports information_schema names as VARBINARY to sqlx.
+        Provider::Mysql => "SELECT CAST(table_name AS CHAR) FROM information_schema.tables \
              WHERE table_schema = DATABASE() \
                AND table_type = 'BASE TABLE' \
                AND table_name != '_ruprizzle_migrations'"

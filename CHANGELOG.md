@@ -69,6 +69,10 @@ query-manifest JSON.
     the inserted rows back in the same transaction.
   - JSON path equality against a string (`META.get("k").eq("v")`) never matched,
     because the value was bound as the JSON text `'"v"'`. It is now bound as `'v'`.
+  - `ruprizzle_migrate::detect` (drift detection) failed on MySQL 8.4 with
+    "Rust type `String` is not compatible with SQL type `VARBINARY`": the server
+    reports `information_schema` names as binary. Those columns are now cast to
+    `CHAR`, as is the table listing used by `migrate reset`.
   - `Migrator::rollback` of a foreign-key cycle failed with error 3730:
     `SET FOREIGN_KEY_CHECKS = 0` and the `DROP TABLE`s ran on different pooled
     connections. A MySQL rollback now runs on one connection.

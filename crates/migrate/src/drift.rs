@@ -107,7 +107,7 @@ async fn sqlite_tables(pool: &Pool) -> Result<TableMap, Error> {
 }
 
 async fn mysql_tables(pool: &Pool) -> Result<TableMap, Error> {
-    let names_sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' AND table_name != '_ruprizzle_migrations'";
+    let names_sql = "SELECT CAST(table_name AS CHAR) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' AND table_name != '_ruprizzle_migrations'";
     let batch = pool
         .fetch_all_raw(Cow::Owned(names_sql.into()), Vec::new())
         .await?;
@@ -115,7 +115,7 @@ async fn mysql_tables(pool: &Pool) -> Result<TableMap, Error> {
 
     let mut out = TableMap::new();
     for name in names {
-        let sql = "SELECT column_name, is_nullable FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?";
+        let sql = "SELECT CAST(column_name AS CHAR), CAST(is_nullable AS CHAR) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?";
         let rows = pool
             .fetch_all_raw(
                 Cow::Owned(sql.to_owned()),
