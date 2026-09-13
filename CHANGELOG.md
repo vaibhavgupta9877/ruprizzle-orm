@@ -14,6 +14,14 @@ of the failed `1.5.0` (whose tag is left untouched). It carries every `1.5.0` fe
 plus the changes below. Do not describe it as released until
 `scripts/check-release-state.sh --expect 1.5.1` passes.
 
+### Known gaps
+
+- **Ruprizzle Studio has no authentication.** Anyone who can reach its port can read
+  and edit the database, so do not expose it on an untrusted network.
+- **The `turso` and `d1` adapters have not been run against the providers' live
+  hosted services**; verification is against local HTTP fakes.
+- **`askama` is still on 0.12** (Studio templates in `ruprizzle-cli`, `studio` feature).
+
 ### Upgrading from 1.0.0-rc.1
 
 Most applications need no code changes. The items below are breaking under

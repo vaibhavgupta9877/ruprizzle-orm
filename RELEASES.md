@@ -77,6 +77,10 @@ Code that matches exhaustively on diagnostic or IR enums, or builds IR/manifest 
 hand, needs small mechanical fixes. See
 [docs/UpgradingFromRc1.md](docs/UpgradingFromRc1.md).
 
+**Known gaps.** Ruprizzle Studio has no authentication, so do not expose it on an
+untrusted network. The `turso` and `d1` adapters have not been run against the live
+hosted services (only local HTTP fakes). `askama` is still on 0.12.
+
 **Not yet published.** Until `scripts/check-release-state.sh --expect 1.5.1` passes,
 `1.0.0-rc.1` remains the only version on crates.io.
 

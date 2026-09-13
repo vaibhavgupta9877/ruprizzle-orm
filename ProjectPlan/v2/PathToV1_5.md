@@ -177,13 +177,17 @@ The rest of this plan assumes `1.5.1`.
       treats `-` and `_` as the same name), and the sparse index
       (`index.crates.io/ru/pr/<name>`) returns 404 for both, against 200 for
       `ruprizzle-core` as a control. Names cannot be reserved without publishing, so
-      re-run the check right before R9.
+      re-run the check right before R9. *Re-checked 2026-09-13 after the token was
+      added: both still 404 on the API and the index.*
 - [ ] **R9 — Tag and publish.** Push `v1.5.1`, let `release.yml` publish, then run
       `scripts/check-release-state.sh --expect 1.5.1`. No file may call the version
       released until that command passes.
-- [ ] **R10 — State known gaps in the release notes:** Studio has no authentication;
+- [x] **R10 — State known gaps in the release notes:** Studio has no authentication;
       the Turso and D1 adapters have not been run against the live services;
       `askama` is still on 0.12.
+      *Done 2026-09-13:* a "Known gaps" section in CHANGELOG `[1.5.1]` and a
+      "Known gaps" paragraph in the RELEASES `1.5.1` entry. `askama = "0.12"` confirmed
+      in `crates/cli/Cargo.toml`.
 
 Not verified during this assessment: recent CI results (GitHub CLI was not
 authenticated), clippy, and the full test suite. R5 and R6 cover them (both done locally).
