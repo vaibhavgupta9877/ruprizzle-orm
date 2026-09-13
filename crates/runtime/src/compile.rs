@@ -1021,7 +1021,11 @@ impl<'d> Compiler<'d> {
                     Value::Json(v.clone())
                 }
             },
+            // A JSON string must be bound as plain text: MySQL compares
+            // `JSON_EXTRACT(..) = 'x'` as JSON "x", but the quoted form `'"x"'`
+            // (how `Value::Json` is sent) never matches.
             "mysql" => match v {
+                serde_json::Value::String(s) => Value::Str(s.as_str().into()),
                 serde_json::Value::Number(n) => {
                     if let Some(i) = n.as_i64() {
                         Value::I64(i)
@@ -3083,10 +3087,7 @@ mod tests {
             c.sql,
             r##"SELECT * FROM `docs` WHERE JSON_EXTRACT(`docs`.`data`, '$.title') = ?"##
         );
-        assert_eq!(
-            c.binds,
-            vec![Value::Json(serde_json::Value::String("hello".into()))]
-        );
+        assert_eq!(c.binds, vec![Value::Str("hello".into())]);
     }
 
     #[test]
