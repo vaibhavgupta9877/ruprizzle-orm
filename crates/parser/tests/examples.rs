@@ -174,6 +174,20 @@ fn the_fingerprint_is_stable_across_runs() {
     assert_eq!(a.fingerprint(), b.fingerprint());
 }
 
+/// Generated code records the fingerprint, and a Windows checkout has CRLF line
+/// endings. The hash must describe the schema, not its byte layout, or the same
+/// commit generates different code on each OS.
+#[test]
+fn the_fingerprint_ignores_line_endings_and_offsets() {
+    let (name, source) = read("blog");
+    let lf = source.replace("\r\n", "\n");
+    let crlf = lf.replace('\n', "\r\n");
+    let shifted = format!("\n\n{lf}");
+    let hash = |s: &str| ruprizzle_parser::parse(&name, s).expect("valid").fingerprint();
+    assert_eq!(hash(&lf), hash(&crlf), "CRLF changed the fingerprint");
+    assert_eq!(hash(&lf), hash(&shifted), "byte offsets changed the fingerprint");
+}
+
 #[test]
 fn many_to_many_through_is_resolved() {
     let source = r#"

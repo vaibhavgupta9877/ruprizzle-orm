@@ -50,6 +50,11 @@ query-manifest JSON.
   ``missing field `is_created_at` ``, so `ruprizzle migrate dev` refused an existing
   project right after upgrading. `FieldAttrs::is_created_at` and `is_deleted_at` now
   default to `false` when absent, matching every other field added since the RC.
+- `Schema::fingerprint` (the `SCHEMA_HASH` in generated code and the schema hash in
+  query manifests) hashed source byte offsets, so the same schema produced a
+  different hash on a CRLF checkout (Windows) than on LF (Linux, macOS), and after
+  any blank line was added. It now ignores spans and line endings. Every schema's
+  hash changes once with this release: run `ruprizzle generate` after upgrading.
 - The `ruprizzle` crate docs claimed to re-export migration helpers from
   `ruprizzle_migrate`. It never did — migrations live in the separate
   `ruprizzle-migrate` crate, which the CLI depends on directly.

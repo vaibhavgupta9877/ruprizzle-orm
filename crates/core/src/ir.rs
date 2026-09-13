@@ -94,10 +94,31 @@ impl Schema {
     /// Panics only if the IR fails to serialise, which cannot happen: every type
     /// in this module derives `Serialize` over plain data with no custom
     /// implementations that could error.
+    ///
+    /// The hash covers what the schema means, not how its file is laid out: spans
+    /// are left out and `\r\n` is read as `\n`, so a CRLF checkout on Windows or an
+    /// added blank line produces the same hash.
     #[must_use]
     pub fn fingerprint(&self) -> String {
         use sha2::{Digest, Sha256};
-        let canonical = serde_json::to_vec(self).expect("IR is always serialisable");
+
+        fn strip_layout(value: &mut serde_json::Value) {
+            match value {
+                serde_json::Value::Object(map) => {
+                    map.remove("span");
+                    map.values_mut().for_each(strip_layout);
+                }
+                serde_json::Value::Array(items) => items.iter_mut().for_each(strip_layout),
+                serde_json::Value::String(s) if s.contains('\r') => {
+                    *s = s.replace("\r\n", "\n");
+                }
+                _ => {}
+            }
+        }
+
+        let mut value = serde_json::to_value(self).expect("IR is always serialisable");
+        strip_layout(&mut value);
+        let canonical = serde_json::to_vec(&value).expect("a JSON value is always serialisable");
         let digest = Sha256::digest(&canonical);
         digest.iter().fold(String::with_capacity(64), |mut acc, b| {
             use std::fmt::Write as _;
