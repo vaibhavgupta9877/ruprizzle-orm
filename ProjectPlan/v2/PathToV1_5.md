@@ -182,9 +182,17 @@ The rest of this plan assumes `1.5.1`.
       `ruprizzle-core` as a control. Names cannot be reserved without publishing, so
       re-run the check right before R9. *Re-checked 2026-09-13 after the token was
       added: both still 404 on the API and the index.*
-- [ ] **R9 — Tag and publish.** Push `v1.5.1`, let `release.yml` publish, then run
+- [x] **R9 — Tag and publish.** Push `v1.5.1`, let `release.yml` publish, then run
       `scripts/check-release-state.sh --expect 1.5.1`. No file may call the version
       released until that command passes.
+      *Done 2026-09-13: published.* PR #12 merged `dev-path-to-v1_5` into `main`
+      (all 33 CI checks green; merge commit `d2c0ec3`), `v1.5.1` tagged on `d2c0ec3`.
+      Release run `34746899780` passed its gate and published all 12 crates in 15m30s,
+      including its own registry verification step. Re-run locally:
+      `check-release-state.sh --expect 1.5.1` → "OK: every crate serves 1.5.1".
+      *Now unblocked:* D2 (install commands and banners → `1.5.1`), the R3/R4 CI
+      follow-ups (`public-api` baseline `1.5.1 --deny=all`, drop `release-type: major`),
+      and turning CHANGELOG `[1.5.1] - pending publication` into the release date.
 - [x] **R10 — State known gaps in the release notes:** Studio has no authentication;
       the Turso and D1 adapters have not been run against the live services;
       `askama` is still on 0.12.
