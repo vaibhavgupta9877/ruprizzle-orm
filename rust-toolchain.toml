@@ -2,4 +2,6 @@
 # Pinned so that formatting and lint output are identical for every contributor
 # and in CI. Bump deliberately, never incidentally.
 channel    = "1.95"
-components = ["rustfmt", "clippy"]
+# `rust-src` keeps rustc diagnostics identical to the recorded trybuild
+# `.stderr` snapshots, which point into `$RUST/alloc/src`.
+components = ["rustfmt", "clippy", "rust-src"]

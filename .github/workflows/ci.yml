@@ -260,6 +260,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ steps.msrv.outputs.version }}
+          # Match the trybuild `.stderr` snapshots (see rust-toolchain.toml).
+          components: rust-src
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
 
