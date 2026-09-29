@@ -29,6 +29,13 @@ sits alongside `ProjectPlan/ProductionReadiness.md` §17 (89/100 for `1.0.0`).
 > **§10.1** makes the parser reject unknown attributes, and **§10.2** replaces the
 > adapter stubs with real drivers and deletes the one crate that had no reason to
 > exist.
+>
+> **Update 2026-09-30 — re-assessment of the published `1.5.1`.** See **§11**. Score
+> **72 / 100 (C+)**, verdict **CONDITIONAL — ship a `1.5.2` patch**. The core ORM holds
+> up. Ten new findings are listed there, with their full write-ups in
+> [`PathToV1_5.md` §6](PathToV1_5.md#6-post-release-review--known-issues-and-logic-gaps).
+> They include three High items: Studio accepts cross-origin requests, Studio's
+> read-only gate can be bypassed, and `soft_delete()` fails on Postgres.
 
 | Axis | Score | Grade | `1.0.0` (§17) |
 |---|---|---|---|
@@ -768,3 +775,108 @@ OpenSSL headers on any release target.
 **Still open.** Neither adapter has been run against the live service. Turso has no
 embedded-replica support. D1 has no Worker binding and no `wasm32` target support.
 Each of those is now a documented boundary rather than a silent one.
+
+---
+
+## 11. Re-assessment of the published `1.5.1` (2026-09-30)
+
+**Tree assessed:** `main` at `1ec1db3`. That is the `v1.5.1` release commit `d2c0ec3`
+plus three docs-only commits. `1.5.1` has been on crates.io since 2026-09-13.
+**Method:** live gates on Windows with rustc 1.95.0, CI history via `gh`, and a code
+read of the v1.1–v1.5 feature paths against their rustdoc and `docs/` claims. This
+covers soft deletes, query cache, replica routing, tree helpers, Studio and the edge
+adapters. §1–§10 checked that the pieces exist. This pass checks that they do what
+they say.
+
+### 11.1 Verdict
+
+> ## VERDICT: **CONDITIONAL — ship a `1.5.2` patch**
+>
+> Keep using the core ORM: schema, codegen, query builder, migrations and the three
+> dialects. Before the patch lands, do not rely on `soft_delete()` on Postgres, on the
+> `RoutedPool` knobs listed in K6, or on Studio against any database you care about
+> while a browser is open.
+
+| Axis | Score | Grade | §1 (`f2d898a`) | `1.0.0` (§17) |
+|---|---|---|---|---|
+| **Production readiness** | **72 / 100** | **C+ — Patch required** | 56 / 100 | 89 / 100 |
+| Engineering craft | 84 / 100 | B | 87 / 100 | 90 / 100 |
+
+The §8–§10 remediation was real. Studio queries its database, the adapters speak
+their wire protocols, and the release pipeline audits itself. **The score is not
+higher because this pass found a second layer under the first.** Some public
+builder methods compile but do nothing. Some knobs are stored and never read. Some
+documented guarantees hold on the common path and fail on a side path. The gates
+cannot see any of this: every method has the right signature, and every test that
+exists passes.
+
+### 11.2 Scorecard
+
+| # | Dimension | Weight | Score | §1 | Rationale |
+|---|---|---|---|---|---|
+| 1 | Correctness & testing | 20% | **6.5** | 4.5 | 600 tests green, but they miss K3–K7. `soft_delete()` is only tested against a `TEXT` column. The replica tests compare `provider()` across three SQLite pools, so they cannot tell which pool was chosen. Mutation kill rate is 30% in `migrate` (K9). |
+| 2 | Security | 15% | **6.5** | 8.0 | The core still binds every value as a parameter. Studio is opt-in and loopback-bound, but it has no `Origin`/`Host` validation (K1), and its read-only gate can be bypassed through `EXPLAIN ANALYZE` and data-modifying CTEs (K2). Together, a web page can write to the database without `--allow-writes`. Separately, one rustls advisory (K8). |
+| 3 | Operability & observability | 15% | **7.5** | 7.5 | OTel spans and metrics are real. But `ruprizzle_cache_hits_total` / `_misses_total` are defined and never emitted (K5), and `LeastConnections` balancing always picks the first replica (K6). |
+| 4 | Data safety & migrations | 15% | **7.0** | 4.0 | Studio's diff is real (§8.2). But `Change::is_destructive` can be replaced by `true`, and all of `diff_enums` by `()`, with no test failing (K9). Soft-deleted rows leak through five read paths (K4). K2 lets a read-only session delete rows. |
+| 5 | Architecture & design | 10% | **8.0** | 7.5 | `Executor` decoupling and the write builders' concrete `&Pool` are sound: a `RoutedPool` cannot receive an ORM write. Docked for public API surface with no implementation behind it (K5). |
+| 6 | CI/CD & release engineering | 10% | **7.5** | 3.0 | Publish-coverage audit, semver-checks, public-api and the docs-version gate all hold. But `cargo deny` now fails, so `harden` fails and the next CI run on `main` will be red (K8). The weekly `mutants` job has failed three times running with nobody watching (K9). There is still no MariaDB leg. |
+| 7 | Documentation | 5% | **8.0** | 3.0 | Docs match the release and the live site is correct (D4). But `WhatsNewV1_1ToV1_5.md` says "every generated query" filters soft deletes (false, K4), and rustdoc on five no-op methods describes behaviour they lack (K5). |
+| 8 | API stability & semver | 5% | **7.5** | 4.0 | Published, semver-gated, `public-api --deny=all`. The K5 methods are now public API, so they must be deprecated, not deleted, before `2.0`. |
+| 9 | Performance | 5% | **8.0** | 8.0 | Unchanged. Benchmarks are labelled as `1.0.x` measurements. |
+
+**Weighted total: 7.175 / 10 → 72 / 100.**
+
+### 11.3 Gate results
+
+| Gate | Command | Result |
+|---|---|---|
+| Format | `cargo fmt --all --check` | **PASS** |
+| Lint | `cargo clippy --workspace --all-features --all-targets -- -D warnings` | **PASS** |
+| Tests (no DB) | `cargo test --workspace --all-features --no-fail-fast` | **PASS** — 110 test binaries, 600 passed, 0 failed, 6 ignored |
+| Dependencies | `cargo deny check` | **FAIL** — `RUSTSEC-2026-0285`, rustls 0.23.43 (fixed in ≥ 0.23.45), reached only through `reqwest` in `ruprizzle-turso` / `ruprizzle-d1`. Bans, licences and sources pass. |
+| Hardening | `cargo xtask harden` | **FAIL**, on the `cargo deny` step only. The panic, arithmetic/indexing, publish-coverage and injection audits are all within budget, and no budget was raised. |
+| CI `ci.yml` on `main` | `gh run list --workflow ci.yml` | **PASS** — last run 2026-09-13 (`34751940925`). This predates the advisory. |
+| CI `mutants.yml` (weekly) | `gh run view 36380122023` | **FAIL**, 2026-09-14, 09-21 and 09-28. On 09-28, `migrate` caught 169 and missed 395. Runtime shards 1–3 caught 229 and missed 698, but that job has no database services, so the runtime figure overstates the gap. |
+| Docs site | live `KnownLimitations.html`, `faq.html`, `index.html` | **PASS** — all state `1.5.1`, no stale text |
+
+**Not run:** DB-backed suites (Postgres/MySQL/MariaDB). They passed on 2026-09-13
+(PathToV1_5 R5/R6) and no runtime code has changed since. K3 was reproduced
+directly in PostgreSQL 17 (§6 of the plan) rather than through the suite.
+
+### 11.4 Findings
+
+Full write-ups, evidence and fixes are in
+[`PathToV1_5.md` §6](PathToV1_5.md#6-post-release-review--known-issues-and-logic-gaps).
+The IDs match.
+
+| ID | Sev. | Area | Finding |
+|---|---|---|---|
+| K1 | **High** | Studio / security | No `Origin` or `Host` validation. A cross-origin form POST (CSRF) or a DNS-rebinding page can drive every Studio route. |
+| K2 | **High** | Studio / data safety | The read-only gate checks the first keyword only. `EXPLAIN ANALYZE DELETE …` and `WITH d AS (DELETE …) SELECT …` run without `--allow-writes`. So does the `/studio/explain` endpoint when given `ANALYZE …`. |
+| K3 | **High** | Runtime / soft delete | `UpdateQuery::soft_delete()` binds a client-side RFC 3339 **string** into a `DateTime` column. Postgres rejects this with `column "deleted_at" is of type timestamp with time zone but expression is of type text`. |
+| K4 | Medium | Runtime / soft delete | The `deleted_at IS NULL` filter is skipped by includes with a per-parent limit, m2m loads, relation filters (`some`/`every`/`none`), hierarchy queries and join right-hand sides. |
+| K5 | Medium | Runtime / API | `SelectQuery::cache`, `cache_key`, `cache_tag`, `use_primary` and `use_replica` are no-ops. The query cache is not wired to execution, the cache metrics are never emitted, and `PlanCache` is used by nothing. |
+| K6 | Medium | Runtime / replicas | `fallback_to_primary(false)` is ignored. `active_conns` is never incremented, so `LeastConnections` always picks the first replica. `Random` is a fixed stride. Health checks only run when called by hand. Routing is by method, so a raw `fetch` of `INSERT … RETURNING` goes to a replica. |
+| K7 | Medium | Runtime / trees | "Cycle protection" is a depth cap of 100. Cyclic data returns duplicate rows. With protection off and no `max_depth`, Postgres and SQLite recurse without end. |
+| K8 | Medium | Supply chain / CI | RUSTSEC-2026-0285 in the lockfile. `deny` and `harden` fail, and the next push to `main` will be red. |
+| K9 | Medium | Test quality | The mutants job has been red for three weeks. In `migrate`, replacing `is_destructive` with `true` and `diff_enums` with `()` both survive. |
+| K10 | Low | D1 adapter | A non-finite `f64` is silently bound as `NULL` instead of being refused like bytes and arrays are. |
+
+Carried forward, unchanged and already documented in the `1.5.1` release notes:
+Studio has no authentication, Turso/D1 have not been run against the live services,
+`askama` is on 0.12, and CI has no MariaDB leg.
+
+### 11.5 Highest risk if left unpatched
+
+**K1 combined with K2.** Each is limited on its own: Studio binds to loopback, and
+its read-only mode is the default. Together they remove both limits. Any page a
+developer opens while `ruprizzle studio` is running can POST
+`sql=EXPLAIN ANALYZE DELETE FROM users` to `127.0.0.1:5555/studio/sandbox/execute`.
+That form is a CORS "simple request", so it needs no preflight. On Postgres the
+`DELETE` then executes, even though the user never passed `--allow-writes`. The
+attacker cannot read the response, but does not need to. Browser local-network
+protections differ by vendor and cannot be relied on.
+
+Studio is most often pointed at a real development or staging database, so this is
+the one finding that can destroy data the user did not choose to risk. Everything
+else here fails loudly (K3) or costs correctness at the edges (K4–K7).
