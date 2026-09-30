@@ -901,7 +901,27 @@ re-rated until the whole patch is released and the gates are re-run.
 | K9 | **Fixed** | `crates/migrate/tests/change_classification.rs`: `is_destructive` for all 17 `Change` variants, additive-only migration is safe, enum create/drop/add/drop-variant, unchanged schemas produce nothing, column aspects (type, enum type, native type, nullability, default, combined), index/unique create/drop, FK recreate on `onDelete`/`onUpdate`, FK add/drop, and no FK drop when the owner table is dropped, plus `@renamedFrom` from a relation field. `mutants.yml`: `migrate` job fails below a 35% kill-rate floor instead of on every run; runtime shards get Postgres/MySQL services and report only. | Local `cargo mutants -p ruprizzle-migrate`: 30% → **37.5%** (212 caught / 354 missed). `change.rs`+`diff.rs`: 19 → 62 of 72 caught; `is_destructive → true/false`, `diff_enums → ()` and the `diff_columns` `\|\|` survivors are all caught now. Workflow not yet run on GitHub. New finding **K11** (rename onto an existing column name) logged in PathToV1_5. |
 | K10 | **Fixed** | `d1/src/api.rs::to_json` refuses a non-finite `F64` with `D1Error::Unsupported` instead of binding `null`. Same fix in `turso/src/hrana.rs::to_hrana` (`TursoError::Unsupported`), where serde_json would have sent `"value": null`. The ±2^53 integer limit is documented in the D1 crate docs and `KnownLimitations.md`. | D1: `parameters_with_no_scalar_form_are_refused` now includes `NaN`, `inf` and `-inf`, and fails on the old encoder (`F64(NaN) should be refused`). `finite_floats_bind_as_json_numbers` guards the normal path. Turso: `a_non_finite_float_is_refused_rather_than_sent_as_null`. Both crates 12/12 and 13/13, clippy clean. Not run against live D1/Turso. |
 
-K1–K5 are fixed on `fix/v1-5-2-k1-k5` with one commit each. Not yet done: K6–K10,
-the MySQL legs of the K2–K4 tests (no local server), merging the branch into
-`dev-main`, and the `1.5.2` release (P1 `cargo update -p rustls` must land first, or
-CI is red on `cargo deny`).
+K1–K10 are fixed, with one commit per finding: K1–K5 on `fix/v1-5-2-k1-k5`, and
+K6–K10 on `fix/v1-5-2-k6-k10`, which is stacked on it. The K8 commit comes first on the
+second branch, so `cargo deny` is green before anything else lands.
+
+Gates run on 2026-09-30 at the tip of `fix/v1-5-2-k6-k10`:
+
+- `cargo test --workspace --all-features --no-fail-fast` with Postgres 17 **and**
+  MySQL 8.4.9 live and `RUPRIZZLE_REQUIRE_DB=1`: 654 passed, 0 failed, 6 ignored. This
+  is the first local run with the MySQL legs, including the K3, K4 and K7 tests.
+- fmt, `clippy --workspace --all-features --all-targets -D warnings`, `cargo doc`,
+  `cargo deny check` and `cargo xtask harden` all pass.
+- `public-api diff 1.5.1 --deny=all` is empty for `ruprizzle`, `ruprizzle-migrate`,
+  `ruprizzle-d1` and `ruprizzle-turso`.
+
+Still open:
+
+- K2's MySQL `START TRANSACTION READ ONLY` path has no test.
+- The new `mutants.yml` has not run on GitHub yet.
+- K11, found while fixing K9, is deferred to 1.6.
+- Deferred to 1.6 because each needs new public API: `HierarchyQuery::with_deleted()`
+  and background replica health checks.
+- The branches are not merged into `dev-main`, and `1.5.2` is not released.
+
+The §11.2 score is re-rated only after release.
