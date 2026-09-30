@@ -496,6 +496,14 @@ statement is cancelled, and MySQL fails at `cte_max_recursion_depth` (1000).
 string and test it with `instr`. Rename the option if it stays a depth cap. Add a
 cyclic-data test that asserts no duplicate ids.
 
+**Status: fixed** on `fix/v1-5-2-k6-k10`. All three dialects carry a text path
+(`,k1,k2,`) and test it with `strpos` / `LOCATE` / `instr`. Postgres does not use an
+array or the `CYCLE` clause: a model without `COLUMNS` selects `*` from the CTE, and
+the sqlx `Any` driver cannot decode an array column. The 100-level default cap is kept
+so trees deeper than that behave as in 1.5.1. Known limit: a text key containing a
+comma can be mistaken for a visited node. `cycle_protection(false)` without
+`max_depth` still recurses without end on cyclic data; that is now documented.
+
 #### K8 — RUSTSEC-2026-0285 fails the dependency gate (Medium, supply chain / CI)
 
 rustls 0.23.43 is in `Cargo.lock`. It is reached only via `reqwest` →
@@ -578,7 +586,7 @@ Semver-safe items only. K5's removal and K6's `Result`-returning fallback wait f
       Honour `fallback_to_primary(false)` without a signature change if possible
       (for example, route to the first unhealthy replica and let it error).
       Otherwise defer to 2.0.
-- [ ] **P8 — K7.** Real cycle detection, and a cyclic-data test.
+- [x] **P8 — K7.** *Done — see ProductionReadinessV1_5 §11.6.* Real cycle detection, and a cyclic-data test.
 - [ ] **P9 — K9.** `is_destructive` and `diff_enums` tests, and a kill-rate floor for
       `migrate` in `mutants.yml`.
 - [ ] **P10 — K10.** Refuse non-finite `f64` in D1.

@@ -56,6 +56,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   only plain reads (see `RoutedPool` docs) go to a replica now. `check_health()` is
   documented as the caller's job: nothing pings in the background.
 
+- **Tree cycle protection detects cycles (K7).** `HierarchyQuery`'s
+  `cycle_protection` was only a depth cap of 100, so parent links forming `A -> B ->
+  A` returned A and B about fifty times each. The recursive CTE now carries the keys
+  on each path and does not step onto one again, so every node is returned once. The
+  100-level cap still applies when `max_depth` is not set. Tested on Postgres, SQLite
+  and MySQL.
+
 ### Deprecated
 
 - **`SelectQuery::cache`, `cache_key`, `cache_tag`, `use_primary` and `use_replica`
