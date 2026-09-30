@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-09-30
+
+### Changed
+
+- **Studio's interface is rebuilt on real htmx and the schema's canonical relations.**
+  The vendored `htmx`, `alpine` and `cytoscape` scripts were ~3 KB stand-ins, so the
+  session token was never sent (every insert, edit and delete was refused), inline
+  editing crashed on load, and the schema graph drew every relation twice into a
+  fixed 1000x600 grid. Studio now ships htmx 2.0.4 and two small scripts
+  (`studio.js`, `erd.js`); Alpine and Cytoscape are gone.
+  - **Schema graph:** tables list every column with PK / FK / UQ badges and the
+    schema's own type names; one edge per relation, from the FK column to the column
+    it references, with crow's-foot cardinality and ON DELETE / ON UPDATE on hover;
+    layered automatic layout, pan, cursor-anchored zoom, draggable tables (positions
+    remembered), minimap, search, details panel, enum and relation-field toggles,
+    SVG export, and `/studio/erd#Model` deep links.
+  - **Data grid:** delete honours the confirm dialog, "Next" only appears when a page
+    can exist, paging keeps the search term, primary keys are not inline-editable,
+    failed writes show the database's error in a toast, and the insert dialog closes
+    only on success.
+  - **Explain** returns a fragment instead of a second copy of the page.
+  - The sidebar has a model filter; the read/write badge is amber and read-only green.
+
 ### Security
 
 - **Studio refuses cross-origin and DNS-rebinding requests (K1).** Every request must
@@ -31,6 +54,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Studio no longer runs database text as script.** Cell values were placed inside
+  `x-data="{ value: '…' }"` and evaluated; they are now escaped data attributes, and
+  row ids and FK values are URL-encoded in links.
 - **`UpdateQuery::soft_delete()` works on Postgres (K3).** It bound the current time
   as RFC 3339 *text*, which Postgres refuses to assign to the `TIMESTAMPTZ` column
   that `@deletedAt DateTime?` generates (`column "deleted_at" is of type timestamp
@@ -72,6 +98,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Testing
 
+- **Studio has regression tests** for the one-edge-per-relation graph, the scripts its
+  pages load, the Explain fragment, script-safe cells and the pager.
 - **Schema-diff classification is tested, and the mutation job has a floor (K9).**
   New `migrate` tests cover `Change::is_destructive` for every variant, enum
   create/drop/variant diffs, column-aspect detection, index/unique/foreign-key diffs
