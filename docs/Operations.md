@@ -170,6 +170,14 @@ read; `prune_expired()` reclaims memory eagerly if you would rather not wait for
 next lookup. Implement `QueryCache` yourself to put the same interface in front of
 Redis or any other shared store — nothing in the trait assumes a single process.
 
+**The cache is manual.** Query execution never reads or writes it: you call `get`
+before a query and `set` after it, and `ruprizzle_cache_hits_total` /
+`ruprizzle_cache_misses_total` are not emitted. `SelectQuery::cache`, `cache_key` and
+`cache_tag` exist in the `1.5` API but **do nothing**, and are deprecated since
+`1.5.2`. So are `SelectQuery::use_primary` and `use_replica`. To choose a pool, build
+the query on `RoutedPool::primary()`, on the `RoutedPool` itself, or on
+`select_replica()`.
+
 ## Alerts
 
 Suggested thresholds for a health dashboard:

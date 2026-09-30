@@ -220,6 +220,14 @@ entry sharing a tag, which is the practical way to expire a table's worth of cac
 reads after a write. The trait exists so a Redis or other shared backend can be dropped
 in without touching call sites.
 
+**The cache is manual.** Query execution never reads or writes it: you call `get`
+before a query and `set` after it, and `ruprizzle_cache_hits_total` /
+`ruprizzle_cache_misses_total` are not emitted. `SelectQuery::cache`, `cache_key` and
+`cache_tag` exist in the `1.5` API but **do nothing**, and are deprecated since
+`1.5.2`. So are `SelectQuery::use_primary` and `use_replica`. To choose a pool, build
+the query on `RoutedPool::primary()`, on the `RoutedPool` itself, or on
+`select_replica()`.
+
 ### PostGIS geospatial types
 
 `Point`, `LineString`, `Polygon` and `MultiPolygon`, each with `to_wkt()` (and

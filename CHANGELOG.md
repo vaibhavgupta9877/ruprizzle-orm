@@ -40,6 +40,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   a `LEFT JOIN` keeps the left row. Tree queries also stop at a deleted node. Relation
   filters are generated code, so **re-run `ruprizzle generate`** to pick up that part.
 
+### Deprecated
+
+- **`SelectQuery::cache`, `cache_key`, `cache_tag`, `use_primary` and `use_replica`
+  (K5).** They have always been no-ops: the argument was discarded, the query was not
+  cached and was not routed. They are now `#[deprecated]` and their rustdoc says so.
+  The query cache is manual (`InMemoryCache` / `QueryCache`, called by you), and the
+  pool is chosen by building the query on `RoutedPool::primary()`, the `RoutedPool`,
+  or `select_replica()`. The rustdoc of `metrics::CACHE_HITS_TOTAL` /
+  `CACHE_MISSES_TOTAL` (never emitted) and `PlanCache` (unused by execution) now says
+  so too. They will be implemented or removed in `2.0`.
+
 ## [1.5.1] - 2026-09-13
 
 **Published to crates.io on 2026-09-13** — all twelve crates, verified by

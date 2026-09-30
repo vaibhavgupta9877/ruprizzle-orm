@@ -434,6 +434,10 @@ they do nothing, and state in the docs that the cache is manual. **Fix (2.0):**
 either implement them, or remove them together with `PlanCache` and the two unused
 metric names.
 
+**Status: 1.5.2 part fixed** on `fix/v1-5-2-k1-k5`. The `public-api --deny=all` diff
+against `1.5.1` is empty, so deprecating the methods passes the gate. The 2.0 half is
+still open.
+
 #### K6 — `RoutedPool` settings that are never read (Medium, correctness)
 
 In `crates/runtime/src/pool.rs`:
@@ -551,7 +555,7 @@ Semver-safe items only. K5's removal and K6's `Result`-returning fallback wait f
       column on all three dialects.
 - [x] **P5 — K4.** *Done — see ProductionReadinessV1_5 §11.6.* Soft-delete predicate in partitioned includes, m2m, relation
       filters, hierarchy and join right-hand side. Correct the `WhatsNew` sentence.
-- [ ] **P6 — K5.** Deprecate the five no-op methods and rewrite their rustdoc.
+- [x] **P6 — K5.** *Done — see ProductionReadinessV1_5 §11.6.* Deprecate the five no-op methods and rewrite their rustdoc.
       Document the cache as manual.
 - [ ] **P7 — K6.** Keep the `active_conns` guard, route raw statements by keyword,
       make the `Random` / health-check docs honest, rewrite the routing tests.

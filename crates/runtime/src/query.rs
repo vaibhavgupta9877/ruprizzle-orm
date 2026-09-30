@@ -207,32 +207,65 @@ where
         }
     }
 
-    /// Sets query result caching with a specific TTL.
+    /// **Does nothing.** The argument is discarded and the query is not cached.
+    ///
+    /// Query execution never reads or writes a [`QueryCache`](crate::QueryCache).
+    /// To cache results, call [`InMemoryCache`](crate::InMemoryCache) (or your own
+    /// `QueryCache`) around the query yourself. This method will be implemented or
+    /// removed in `2.0`.
     #[must_use]
+    #[deprecated(
+        since = "1.5.2",
+        note = "has no effect: the query cache is not wired to execution; use InMemoryCache directly"
+    )]
     pub fn cache(self, _ttl: std::time::Duration) -> Self {
         self
     }
 
-    /// Sets a custom cache key for this query.
+    /// **Does nothing.** See [`SelectQuery::cache`].
     #[must_use]
+    #[deprecated(
+        since = "1.5.2",
+        note = "has no effect: the query cache is not wired to execution; use InMemoryCache directly"
+    )]
     pub fn cache_key(self, _key: impl Into<String>) -> Self {
         self
     }
 
-    /// Associates a cache invalidation tag with this query result.
+    /// **Does nothing.** See [`SelectQuery::cache`].
     #[must_use]
+    #[deprecated(
+        since = "1.5.2",
+        note = "has no effect: the query cache is not wired to execution; use InMemoryCache directly"
+    )]
     pub fn cache_tag(self, _tag: impl Into<String>) -> Self {
         self
     }
 
-    /// Forces this query to execute on the primary database pool.
+    /// **Does nothing.** The query runs on whatever executor it was built with.
+    ///
+    /// For a read that must see the primary, build the query on
+    /// [`RoutedPool::primary()`](crate::RoutedPool::primary) instead. This method
+    /// will be implemented or removed in `2.0`.
     #[must_use]
+    #[deprecated(
+        since = "1.5.2",
+        note = "has no effect: build the query on RoutedPool::primary() instead"
+    )]
     pub fn use_primary(self) -> Self {
         self
     }
 
-    /// Directs this query to execute on a read replica pool.
+    /// **Does nothing.** The query runs on whatever executor it was built with.
+    ///
+    /// To read from a replica, build the query on a
+    /// [`RoutedPool`](crate::RoutedPool) (reads are routed to replicas) or on
+    /// [`RoutedPool::select_replica()`](crate::RoutedPool::select_replica).
     #[must_use]
+    #[deprecated(
+        since = "1.5.2",
+        note = "has no effect: build the query on a RoutedPool or RoutedPool::select_replica()"
+    )]
     pub fn use_replica(self) -> Self {
         self
     }
