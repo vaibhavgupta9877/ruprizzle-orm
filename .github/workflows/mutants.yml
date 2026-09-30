@@ -16,6 +16,15 @@ jobs:
     name: cargo-mutants (migrate)
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      # Minimum share of viable mutants the tests must catch. cargo-mutants
+      # exits non-zero whenever any mutant survives, which is always true for
+      # a crate this size, so that exit code made the job red every week and
+      # nobody could tell a regression from the usual noise. The job now fails
+      # only when the kill rate drops below this floor. Raise it as tests land;
+      # never lower it to make a run pass. Measured 37.5% locally on 2026-09-30
+      # (212 caught, 354 missed) after the K9 tests; it was 30% before them.
+      KILL_RATE_FLOOR: "35"
     steps:
       - uses: actions/checkout@v4
 
@@ -27,7 +36,13 @@ jobs:
 
       - name: Run cargo-mutants for ruprizzle-migrate
         run: |
-          cargo mutants -p ruprizzle-migrate --jobs 4 --minimum-test-timeout 5 --output local/mutants-migrate
+          # Surviving mutants are expected; the floor below decides pass/fail.
+          # Exit 2 means mutants survived and 3 means some timed out. Any other code
+          # (a build error, or the unmutated tests failing) still fails this step.
+          cargo mutants -p ruprizzle-migrate --jobs 4 --minimum-test-timeout 5 --output local/mutants-migrate || { rc=$?; [ "$rc" -eq 2 ] || [ "$rc" -eq 3 ]; }
+
+      - name: Enforce kill-rate floor
+        run: python3 .github/scripts/mutants_floor.py local/mutants-migrate/mutants.out/outcomes.json "$KILL_RATE_FLOOR"
 
       - name: Upload mutation report
         if: always()
@@ -45,6 +60,37 @@ jobs:
       matrix:
         shard: [0, 1, 2, 3]
 
+    # Without these the Postgres/MySQL tests skip themselves, so every mutant
+    # they would catch was reported as missed and the kill rate meant nothing.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ruprizzle
+          POSTGRES_PASSWORD: ruprizzle
+          POSTGRES_DB: ruprizzle_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ruprizzle -d ruprizzle_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_USER: ruprizzle
+          MYSQL_PASSWORD: ruprizzle
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ruprizzle_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -uruprizzle -pruprizzle"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+
     steps:
       - uses: actions/checkout@v4
 
@@ -58,8 +104,16 @@ jobs:
         env:
           RUST_BACKTRACE: 0
           RUPRIZZLE_SOAK_DURATION_SECONDS: 0
+          RUPRIZZLE_TEST_PG_URL: postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test
+          RUPRIZZLE_TEST_MYSQL_URL: mysql://root:root@localhost:3306/ruprizzle_test
+          RUPRIZZLE_REQUIRE_DB: "1"
         run: |
-          cargo mutants -p ruprizzle --jobs 2 --minimum-test-timeout 30 --output local/mutants-runtime-shard-${{ matrix.shard }} --shard ${{ matrix.shard }}/4
+          cargo mutants -p ruprizzle --jobs 2 --minimum-test-timeout 30 --output local/mutants-runtime-shard-${{ matrix.shard }} --shard ${{ matrix.shard }}/4 || { rc=$?; [ "$rc" -eq 2 ] || [ "$rc" -eq 3 ]; }
+
+      # Report-only until a baseline with databases exists; then add a floor
+      # here as for `migrate`.
+      - name: Report kill rate
+        run: python3 .github/scripts/mutants_floor.py local/mutants-runtime-shard-${{ matrix.shard }}/mutants.out/outcomes.json 0
 
       - name: Upload mutation report
         if: always()

@@ -548,6 +548,29 @@ and enum add/remove/rename diff tests. Then set a kill-rate floor for `migrate` 
 the workflow, so the job fails on a regression rather than always. Add Postgres
 and MySQL services to the runtime shards, or scope them to DB-free modules.
 
+**Status: fixed** on `fix/v1-5-2-k6-k10`. `crates/migrate/tests/change_classification.rs`
+(13 tests). Local `cargo mutants -p ruprizzle-migrate` (27.1.0): **212 caught, 354
+missed, 11 timeouts, 53 unviable = 37.5%**, up from 30%. On `change.rs` + `diff.rs`
+alone: 19 → 62 of 72 viable caught; every survivor named above is now caught. The
+10 left there are near-equivalent: `scalar_changed` arms that fall through to
+`prev != next`, `db_name == … && p == ix` where `p == ix` implies the first, and the
+last three `||` in the FK comparison, where the constraint name is derived from the
+owner columns. `mutants.yml`: `migrate` fails only below `KILL_RATE_FLOOR=35`
+(`.github/scripts/mutants_floor.py`, exit codes 2/3 from cargo-mutants are
+tolerated). Runtime shards get Postgres 17 and MySQL 8.4 services with
+`RUPRIZZLE_REQUIRE_DB=1` and report their rate with no floor until a baseline with
+databases exists. The workflow change is not yet run on GitHub.
+
+#### K11 — `@renamedFrom` onto an existing column name (Low, found while fixing K9)
+
+`diff_columns` with `prev {a Int, b String}` and `next {b Int @renamedFrom("a")}`
+emits only `RenameColumn a -> b`. The old `b` is neither dropped nor altered, so
+the planned `RENAME COLUMN a TO b` collides with the existing column and the
+migration fails at apply time rather than at plan time. **Fix (1.6):** drop the old
+same-named column first (destructive, so it goes behind `--accept-data-loss`), or
+refuse the plan with a clear diagnostic. Pinned in part by
+`a_renamed_field_is_not_altered_against_a_namesake`.
+
 #### K10 — D1 binds a non-finite float as `NULL` (Low)
 
 `crates/d1/src/api.rs:131`: `Number::from_f64(f).map_or(Json::Null, …)`. `NaN` and
@@ -593,7 +616,7 @@ Semver-safe items only. K5's removal and K6's `Result`-returning fallback wait f
       (for example, route to the first unhealthy replica and let it error).
       Otherwise defer to 2.0.
 - [x] **P8 — K7.** *Done — see ProductionReadinessV1_5 §11.6.* Real cycle detection, and a cyclic-data test.
-- [ ] **P9 — K9.** `is_destructive` and `diff_enums` tests, and a kill-rate floor for
+- [x] **P9 — K9.** *Done — see ProductionReadinessV1_5 §11.6.* `is_destructive` and `diff_enums` tests, and a kill-rate floor for
       `migrate` in `mutants.yml`.
 - [x] **P10 — K10.** *Done — see ProductionReadinessV1_5 §11.6.* Refuse non-finite `f64` in D1.
 - [ ] **P11 — Release.** CHANGELOG `[1.5.2]` with a **Fixed** entry per item, then

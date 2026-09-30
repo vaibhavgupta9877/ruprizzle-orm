@@ -70,6 +70,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with no value. Both now return `Unsupported`. The D1 docs also state that integers
   beyond ±2^53 are rounded by D1's JavaScript runtime, in both directions.
 
+### Testing
+
+- **Schema-diff classification is tested, and the mutation job has a floor (K9).**
+  New `migrate` tests cover `Change::is_destructive` for every variant, enum
+  create/drop/variant diffs, column-aspect detection, index/unique/foreign-key diffs
+  and `@renamedFrom` edge cases. Mutation kill rate for `ruprizzle-migrate` rose from
+  30% to 37.5%, and `mutants.yml` now fails only below a 35% floor instead of on
+  every run. The runtime shards get Postgres and MySQL services so DB-backed tests
+  no longer skip, and report their rate without a floor for now.
+
 ### Deprecated
 
 - **`SelectQuery::cache`, `cache_key`, `cache_tag`, `use_primary` and `use_replica`
