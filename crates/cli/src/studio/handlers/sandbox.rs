@@ -24,6 +24,7 @@ const MAX_RENDERED_ROWS: usize = 500;
 #[derive(Template)]
 #[template(path = "sandbox/view.html")]
 pub struct SandboxViewTemplate<'a> {
+    pub session_token: &'a str,
     pub models: &'a [ModelNav],
     pub current_model: &'a str,
     pub provider: &'a str,
@@ -38,6 +39,7 @@ pub struct ExecuteForm {
 /// Renders the SQL playground page.
 pub async fn render_sandbox_view(State(state): State<Arc<AppState>>) -> Response {
     let tmpl = SandboxViewTemplate {
+        session_token: &state.session_token,
         models: &state.models,
         current_model: "",
         provider: state.schema.datasource.provider.as_str(),

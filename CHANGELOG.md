@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Security
+
+- **Studio refuses cross-origin and DNS-rebinding requests (K1).** Every request must
+  carry a `Host` that names Studio (a loopback name, or the exact bind address).
+  Every `POST`/`PATCH`/`DELETE` must also carry an `Origin` equal to Studio's own,
+  and a per-process session token that the page shell hands to htmx. Previously a
+  cross-origin `<form>` could drive every Studio route, and a rebound hostname could
+  read every table. Off-loopback binds accept other hostnames only with
+  `--yes-i-know`.
 
 ## [1.5.1] - 2026-09-13
 

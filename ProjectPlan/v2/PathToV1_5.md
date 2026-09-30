@@ -303,6 +303,10 @@ any non-GET request whose `Origin` is absent or does not match. Add a per-proces
 random token to every mutating form, and require it. Test all three with `tower`
 `oneshot` requests that carry a foreign `Origin` and `Host`.
 
+**Status: fixed** on `fix/v1-5-2-k1-k5` (`crates/cli/src/studio/guard.rs`). The token
+is delivered through `hx-headers` on `<body>` rather than per form, so every htmx
+request carries it. Consequence: scripted `curl` mutations are refused too.
+
 #### K2 — Studio's read-only gate can be bypassed (High, data safety)
 
 `sandbox::is_read_only` (`handlers/sandbox.rs:62`) classifies a statement by its
@@ -516,7 +520,7 @@ Semver-safe items only. K5's removal and K6's `Result`-returning fallback wait f
 
 - [ ] **P1 — K8.** `cargo update -p rustls`, `cargo deny check`, `cargo xtask harden`.
       Do this first, so CI is green before any other change lands.
-- [ ] **P2 — K1.** `Host` / `Origin` validation and a per-process form token in Studio,
+- [x] **P2 — K1.** *Done — see ProductionReadinessV1_5 §11.6.* `Host` / `Origin` validation and a per-process form token in Studio,
       with `oneshot` tests.
 - [ ] **P3 — K2.** Read-only transactions for sandbox reads and EXPLAIN. Refuse
       `ANALYZE` in `/studio/explain`. Add regression tests on SQLite and Postgres.

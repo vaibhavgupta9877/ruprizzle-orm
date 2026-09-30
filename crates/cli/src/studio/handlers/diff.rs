@@ -40,6 +40,7 @@ pub struct DiffChange {
 #[derive(Template)]
 #[template(path = "diff/view.html")]
 pub struct DiffViewTemplate<'a> {
+    pub session_token: &'a str,
     pub models: &'a [ModelNav],
     pub current_model: &'a str,
     pub provider: &'a str,
@@ -67,6 +68,7 @@ pub async fn render_diff_view(State(state): State<Arc<AppState>>) -> Response {
     };
 
     let tmpl = DiffViewTemplate {
+        session_token: &state.session_token,
         models: &state.models,
         current_model: "",
         provider: state.schema.datasource.provider.as_str(),

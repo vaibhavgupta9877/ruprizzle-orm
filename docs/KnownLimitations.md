@@ -65,7 +65,10 @@ whether the tool is right for your project.
 
 - **Ruprizzle Studio has no authentication.** It binds `127.0.0.1` by default and
   refuses `--allow-writes` on a non-loopback host without `--yes-i-know`; do not
-  expose it on an untrusted network.
+  expose it on an untrusted network. Since `1.5.2` it refuses requests whose `Host`
+  is not Studio's own name (DNS rebinding) and mutations without Studio's `Origin`
+  and session token (CSRF), so a web page open in the same browser cannot drive it.
+  Scripted `POST`s from `curl` are refused for the same reason.
 - **The Turso and D1 adapters are unverified against the live hosted services.**
   `ruprizzle-turso` (Hrana 2 over HTTP) and `ruprizzle-d1` (Cloudflare REST API)
   are tested end-to-end against local HTTP fakes, not real Turso/D1 databases.

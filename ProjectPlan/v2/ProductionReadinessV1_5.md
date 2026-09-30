@@ -880,3 +880,17 @@ protections differ by vendor and cannot be relied on.
 Studio is most often pointed at a real development or staging database, so this is
 the one finding that can destroy data the user did not choose to risk. Everything
 else here fails loudly (K3) or costs correctness at the edges (K4–K7).
+
+### 11.6 `1.5.2` remediation status
+
+Work happens on `fix/v1-5-2-k1-k5`, branched from `dev-main` after `dev-main` was
+fast-forwarded to `main`. One commit per finding. The §11.2 score is **not**
+re-rated until the whole patch is released and the gates are re-run.
+
+| ID | Status | Fix | Evidence |
+|---|---|---|---|
+| K1 | **Fixed** | `studio/guard.rs`: middleware on every route. `Host` must be a loopback name or the exact bind address (any name only for an off-loopback bind with `--yes-i-know`). Non-`GET` requests must carry `Origin == http://{Host}` and the per-process `x-studio-token`, which `base.html` hands to htmx via `hx-headers`. | `studio_tests.rs`: `a_cross_origin_form_post_cannot_drive_studio` (foreign origin, other local port, no origin, wrong/missing token, `DELETE` row; row count unchanged), `a_rebound_hostname_cannot_read_studio`, `the_page_shell_hands_htmx_the_session_token`, `host_check_accepts_studio_names_and_nothing_else`. 22/22 pass. |
+| K2 | Open | | |
+| K3 | Open | | |
+| K4 | Open | | |
+| K5 | Open | | |

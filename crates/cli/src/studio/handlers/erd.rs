@@ -12,6 +12,7 @@ use super::{AppState, ModelNav};
 #[derive(Template)]
 #[template(path = "erd/view.html")]
 pub struct ErdViewTemplate<'a> {
+    pub session_token: &'a str,
     pub models: &'a [ModelNav],
     pub current_model: &'a str,
     pub provider: &'a str,
@@ -47,6 +48,7 @@ pub struct ErdGraphData {
 /// Renders the interactive ERD view page.
 pub async fn render_erd_view(State(state): State<Arc<AppState>>) -> Response {
     let tmpl = ErdViewTemplate {
+        session_token: &state.session_token,
         models: &state.models,
         current_model: "",
         provider: state.schema.datasource.provider.as_str(),

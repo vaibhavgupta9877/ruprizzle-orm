@@ -26,6 +26,9 @@ pub struct AppState {
     #[allow(dead_code)]
     pub pool: Option<ruprizzle::Pool>,
     pub models: Vec<ModelNav>,
+    /// Per-process token every mutating request must echo in
+    /// [`crate::studio::guard::TOKEN_HEADER`]. Rendered into the page shell.
+    pub session_token: String,
 }
 
 impl AppState {
@@ -44,6 +47,7 @@ impl AppState {
             config,
             pool,
             models,
+            session_token: crate::studio::guard::new_session_token(),
         }
     }
 }

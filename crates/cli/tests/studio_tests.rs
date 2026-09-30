@@ -3,12 +3,29 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
+use ruprizzle_cli::studio::guard::{TOKEN_HEADER, host_is_allowed};
 use ruprizzle_cli::studio::handlers::AppState;
-use ruprizzle_cli::studio::{
-    StudioConfig, create_router, is_loopback_host, looks_like_production_url,
-};
+use ruprizzle_cli::studio::{StudioConfig, is_loopback_host, looks_like_production_url};
 use std::sync::Arc;
 use tower::ServiceExt;
+
+/// What a browser sends for a page served from the default bind.
+const HOST: &str = "127.0.0.1:5555";
+const ORIGIN: &str = "http://127.0.0.1:5555";
+const TOKEN: &str = "test-session-token";
+
+/// Builds Studio's router with a known session token, so tests can send it.
+fn create_router(state: Arc<AppState>) -> axum::Router {
+    let mut state = (*state).clone();
+    state.session_token = TOKEN.to_string();
+    ruprizzle_cli::studio::create_router(Arc::new(state))
+}
+
+/// A request as the Studio page itself would send it: right `Host`, and for a
+/// mutation (after `.method(..)`) the page's `Origin` and session token.
+fn studio_request() -> axum::http::request::Builder {
+    Request::builder().header("host", HOST)
+}
 
 fn sample_schema() -> ruprizzle_core::ir::Schema {
     let schema_str = r#"
@@ -95,10 +112,7 @@ async fn test_studio_dashboard_and_erd_endpoints() {
     let app = create_router(state);
 
     // Test Dashboard (GET /studio)
-    let req = Request::builder()
-        .uri("/studio")
-        .body(Body::empty())
-        .unwrap();
+    let req = studio_request().uri("/studio").body(Body::empty()).unwrap();
     let res = app.clone().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -108,7 +122,7 @@ async fn test_studio_dashboard_and_erd_endpoints() {
     assert!(body_str.contains("Post"));
 
     // Test ERD Data (GET /studio/erd/data)
-    let req = Request::builder()
+    let req = studio_request()
         .uri("/studio/erd/data")
         .body(Body::empty())
         .unwrap();
@@ -156,8 +170,10 @@ async fn test_studio_write_guardrails() {
     ));
     let read_only_app = create_router(read_only_state);
 
-    let req = Request::builder()
+    let req = studio_request()
         .method("POST")
+        .header("origin", ORIGIN)
+        .header(TOKEN_HEADER, TOKEN)
         .uri("/studio/models/User/rows")
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from("name=Alice&email=alice@example.com"))
@@ -176,8 +192,10 @@ async fn test_studio_write_guardrails() {
     ));
     let disconnected_app = create_router(disconnected_state);
 
-    let req = Request::builder()
+    let req = studio_request()
         .method("POST")
+        .header("origin", ORIGIN)
+        .header(TOKEN_HEADER, TOKEN)
         .uri("/studio/models/User/rows")
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from("name=Alice&email=alice@example.com"))
@@ -193,7 +211,7 @@ async fn test_studio_static_assets() {
     let app = create_router(state);
 
     // CSS asset
-    let req = Request::builder()
+    let req = studio_request()
         .uri("/studio/assets/css/studio.css")
         .body(Body::empty())
         .unwrap();
@@ -201,7 +219,7 @@ async fn test_studio_static_assets() {
     assert_eq!(res.status(), StatusCode::OK);
 
     // JS asset
-    let req = Request::builder()
+    let req = studio_request()
         .uri("/studio/assets/js/htmx.min.js")
         .body(Body::empty())
         .unwrap();
@@ -230,7 +248,7 @@ async fn drifted_pool(dir: &std::path::Path) -> ruprizzle::Pool {
 }
 
 async fn get_body(app: axum::Router, uri: &str) -> String {
-    let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+    let req = studio_request().uri(uri).body(Body::empty()).unwrap();
     let res = app.oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -355,8 +373,10 @@ async fn patching_a_cell_writes_it_and_shows_what_was_stored() {
     let pool = seeded_pool(dir.path()).await;
     let app = writable_app(pool.clone());
 
-    let req = Request::builder()
+    let req = studio_request()
         .method("PATCH")
+        .header("origin", ORIGIN)
+        .header(TOKEN_HEADER, TOKEN)
         .uri("/studio/models/User/rows/1/cell?column=name")
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from("value=Alicia"))
@@ -379,8 +399,10 @@ async fn deleting_a_row_removes_it_and_a_missing_row_is_not_reported_as_success(
     let pool = seeded_pool(dir.path()).await;
     let app = writable_app(pool.clone());
 
-    let req = Request::builder()
+    let req = studio_request()
         .method("DELETE")
+        .header("origin", ORIGIN)
+        .header(TOKEN_HEADER, TOKEN)
         .uri("/studio/models/User/rows/2")
         .body(Body::empty())
         .unwrap();
@@ -393,8 +415,10 @@ async fn deleting_a_row_removes_it_and_a_missing_row_is_not_reported_as_success(
         "1"
     );
 
-    let req = Request::builder()
+    let req = studio_request()
         .method("DELETE")
+        .header("origin", ORIGIN)
+        .header(TOKEN_HEADER, TOKEN)
         .uri("/studio/models/User/rows/999")
         .body(Body::empty())
         .unwrap();
@@ -411,8 +435,10 @@ async fn inserting_a_row_writes_it_and_reads_it_back() {
     let pool = seeded_pool(dir.path()).await;
     let app = writable_app(pool.clone());
 
-    let req = Request::builder()
+    let req = studio_request()
         .method("POST")
+        .header("origin", ORIGIN)
+        .header(TOKEN_HEADER, TOKEN)
         .uri("/studio/models/User/rows")
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from("name=Carol&email=carol@example.com"))
@@ -438,8 +464,10 @@ async fn the_sandbox_runs_the_statement_it_was_given() {
     let pool = seeded_pool(dir.path()).await;
     let app = writable_app(pool);
 
-    let req = Request::builder()
+    let req = studio_request()
         .method("POST")
+        .header("origin", ORIGIN)
+        .header(TOKEN_HEADER, TOKEN)
         .uri("/studio/sandbox/execute")
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from("sql=SELECT+email+FROM+%22users%22+ORDER+BY+id"))
@@ -462,8 +490,10 @@ async fn the_sandbox_reports_a_failing_statement_as_a_failure() {
     let pool = seeded_pool(dir.path()).await;
     let app = writable_app(pool);
 
-    let req = Request::builder()
+    let req = studio_request()
         .method("POST")
+        .header("origin", ORIGIN)
+        .header(TOKEN_HEADER, TOKEN)
         .uri("/studio/sandbox/execute")
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from("sql=SELECT+*+FROM+no_such_table"))
@@ -486,8 +516,10 @@ async fn the_sandbox_does_not_execute_mutations_in_read_only_mode() {
         Some(pool.clone()),
     )));
 
-    let req = Request::builder()
+    let req = studio_request()
         .method("POST")
+        .header("origin", ORIGIN)
+        .header(TOKEN_HEADER, TOKEN)
         .uri("/studio/sandbox/execute")
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from("sql=DELETE+FROM+%22users%22"))
@@ -509,8 +541,10 @@ async fn explain_returns_the_database_plan_for_the_submitted_query() {
     let pool = seeded_pool(dir.path()).await;
     let app = writable_app(pool);
 
-    let req = Request::builder()
+    let req = studio_request()
         .method("POST")
+        .header("origin", ORIGIN)
+        .header(TOKEN_HEADER, TOKEN)
         .uri("/studio/explain")
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from("sql=SELECT+*+FROM+%22users%22"))
@@ -542,4 +576,167 @@ async fn the_relation_drawer_reads_the_record_it_points_at() {
         body.contains("points at a record that is not there"),
         "{body}"
     );
+}
+
+// ---- K1: cross-origin and DNS-rebinding requests are refused ---------------------
+
+async fn user_count(pool: &ruprizzle::Pool) -> String {
+    scalar(pool, "SELECT CAST(count(*) AS TEXT) FROM \"users\"").await
+}
+
+fn sandbox_delete() -> axum::http::request::Builder {
+    studio_request()
+        .method("POST")
+        .uri("/studio/sandbox/execute")
+        .header("content-type", "application/x-www-form-urlencoded")
+}
+
+#[tokio::test]
+async fn a_cross_origin_form_post_cannot_drive_studio() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = writable_app(pool.clone());
+
+    // What a hostile page's auto-submitting <form> sends: its own Origin, no token.
+    let req = sandbox_delete()
+        .header("origin", "http://evil.example")
+        .body(Body::from("sql=DELETE+FROM+%22users%22"))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+    // A local app on another port is a different origin too.
+    let req = sandbox_delete()
+        .header("origin", "http://127.0.0.1:3000")
+        .header(TOKEN_HEADER, TOKEN)
+        .body(Body::from("sql=DELETE+FROM+%22users%22"))
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(req).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+
+    // No Origin at all is refused as well.
+    let req = sandbox_delete()
+        .header(TOKEN_HEADER, TOKEN)
+        .body(Body::from("sql=DELETE+FROM+%22users%22"))
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(req).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+
+    // Right Origin, wrong or missing token.
+    for token in [Some("guess"), None] {
+        let mut req = sandbox_delete().header("origin", ORIGIN);
+        if let Some(token) = token {
+            req = req.header(TOKEN_HEADER, token);
+        }
+        let req = req.body(Body::from("sql=DELETE+FROM+%22users%22")).unwrap();
+        assert_eq!(
+            app.clone().oneshot(req).await.unwrap().status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    // Row deletion through the table route is guarded the same way.
+    let req = studio_request()
+        .method("DELETE")
+        .uri("/studio/models/User/rows/1")
+        .header("origin", "http://evil.example")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.oneshot(req).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+
+    assert_eq!(user_count(&pool).await, "2", "no refused request may write");
+}
+
+#[tokio::test]
+async fn a_rebound_hostname_cannot_read_studio() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = writable_app(pool);
+
+    // A DNS-rebinding page reaches 127.0.0.1 but still sends its own name.
+    let req = Request::builder()
+        .uri("/studio/models/User/table")
+        .header("host", "attacker.example:5555")
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    assert!(!String::from_utf8_lossy(&body).contains("alice@example.com"));
+
+    // No Host header at all is refused.
+    let req = Request::builder()
+        .uri("/studio")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(req).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+
+    // `localhost` with a port is the normal case and is served.
+    let req = Request::builder()
+        .uri("/studio")
+        .header("host", "localhost:5555")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(app.oneshot(req).await.unwrap().status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn the_page_shell_hands_htmx_the_session_token() {
+    let app = create_router(Arc::new(AppState::new(
+        sample_schema(),
+        StudioConfig::default(),
+        None,
+    )));
+    let body = get_body(app, "/studio").await;
+    assert!(
+        body.contains(&format!(r#"hx-headers='{{"x-studio-token": "{TOKEN}"}}'"#)),
+        "{body}"
+    );
+}
+
+#[test]
+fn host_check_accepts_studio_names_and_nothing_else() {
+    let loopback = StudioConfig::default();
+    for host in [
+        "127.0.0.1:5555",
+        "localhost:5555",
+        "LOCALHOST",
+        "[::1]:5555",
+    ] {
+        assert!(host_is_allowed(Some(host), &loopback), "{host}");
+    }
+    for host in ["attacker.example:5555", "192.168.1.10:5555", ""] {
+        assert!(!host_is_allowed(Some(host), &loopback), "{host}");
+    }
+    assert!(!host_is_allowed(None, &loopback));
+
+    // Bound to a specific LAN address: that address is Studio's name.
+    let lan = StudioConfig {
+        host: "192.168.1.10".into(),
+        ..Default::default()
+    };
+    assert!(host_is_allowed(Some("192.168.1.10:5555"), &lan));
+    assert!(!host_is_allowed(Some("attacker.example"), &lan));
+
+    // Bound to every interface: clients may use any name only with --yes-i-know.
+    let wildcard = StudioConfig {
+        host: "0.0.0.0".into(),
+        ..Default::default()
+    };
+    assert!(!host_is_allowed(Some("studio.lan:5555"), &wildcard));
+    let trusted = StudioConfig {
+        yes_i_know: true,
+        ..wildcard
+    };
+    assert!(host_is_allowed(Some("studio.lan:5555"), &trusted));
 }

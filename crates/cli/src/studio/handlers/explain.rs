@@ -29,6 +29,7 @@ pub struct ExplainNode {
 #[derive(Template)]
 #[template(path = "explain/view.html")]
 pub struct ExplainViewTemplate<'a> {
+    pub session_token: &'a str,
     pub models: &'a [ModelNav],
     pub current_model: &'a str,
     pub provider: &'a str,
@@ -70,6 +71,7 @@ pub async fn render_explain_tree(
     };
 
     let tmpl = ExplainViewTemplate {
+        session_token: &state.session_token,
         models: &state.models,
         current_model: "",
         provider: state.schema.datasource.provider.as_str(),

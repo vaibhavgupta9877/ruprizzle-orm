@@ -9,7 +9,7 @@
   <script src="/studio/assets/js/alpine.min.js" defer></script>
   <script src="/studio/assets/js/cytoscape.min.js"></script>
 </head>
-<body>
+<body hx-headers='{"x-studio-token": "{{ session_token }}"}'>
   <div class="app-container">
     <!-- Sidebar -->
     <aside class="sidebar">

@@ -50,6 +50,7 @@ pub struct RowInfo {
 #[derive(Template)]
 #[template(path = "table/view.html")]
 pub struct TableViewTemplate<'a> {
+    pub session_token: &'a str,
     pub models: &'a [ModelNav],
     pub current_model: &'a str,
     pub provider: &'a str,
@@ -119,6 +120,7 @@ pub async fn render_table_view(
     let (rows, error) = load_rows(&state, model, page, query.search.as_deref()).await;
 
     let tmpl = TableViewTemplate {
+        session_token: &state.session_token,
         models: &state.models,
         current_model: &model_name,
         provider: state.schema.datasource.provider.as_str(),

@@ -19,6 +19,7 @@ pub struct ModelSummary {
 #[derive(Template)]
 #[template(path = "dashboard.html")]
 pub struct DashboardTemplate<'a> {
+    pub session_token: &'a str,
     pub models: &'a [ModelNav],
     pub current_model: &'a str,
     pub provider: &'a str,
@@ -58,6 +59,7 @@ pub async fn render_dashboard(State(state): State<Arc<AppState>>) -> Response {
         .collect();
 
     let tmpl = DashboardTemplate {
+        session_token: &state.session_token,
         models: &state.models,
         current_model: "",
         provider: provider_name,
