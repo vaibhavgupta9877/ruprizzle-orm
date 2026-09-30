@@ -91,6 +91,10 @@ Post::find_many().with_deleted().fetch_all(&pool).await?;   // live + deleted
 Post::find_many().only_deleted().fetch_all(&pool).await?;   // the recycle bin
 ```
 
+Until `1.5.2` this did not hold for includes with `.take(n)`, relation filters, joins,
+tree queries or m2m reloads. See the [query guide](QueryGuide.md#soft-deletes) for
+how each of them applies it now.
+
 ---
 
 ## v1.2 — Developer tooling and zero-database CI

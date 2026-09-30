@@ -390,6 +390,7 @@ where
                 right_columns: J::COLUMNS,
                 right_alias,
                 on: on.into(),
+                right_deleted_at: J::DELETED_AT_COLUMN,
             }),
             with_deleted: self.with_deleted,
             only_deleted: self.only_deleted,
@@ -544,6 +545,19 @@ where
         let dialect = self.exec.dialect();
         let eff_filter = self.effective_filter();
         if let Some(ref join) = self.join {
+            // `with_deleted()` opts both sides out. `only_deleted()` selects the
+            // left model's recycle bin but still joins live right-hand rows.
+            let on = match join.right_deleted_at {
+                Some(column) if !self.with_deleted => FilterNode::And(vec![
+                    join.on.node.clone(),
+                    FilterNode::Null {
+                        table: join.right_alias.unwrap_or(join.right_table),
+                        column,
+                        negated: false,
+                    },
+                ]),
+                _ => join.on.node.clone(),
+            };
             Ok(join_select_with_columns::<M>(
                 dialect,
                 M::TABLE,
@@ -552,7 +566,7 @@ where
                 join.right_columns,
                 join.right_alias,
                 join.kind,
-                &join.on.node,
+                &on,
                 &eff_filter.node,
                 &self.order,
                 self.limit,

@@ -32,6 +32,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with time zone but expression is of type text`). It now binds a timestamp, like
   any other `DateTime` field. The rustdoc no longer claims the database's `now()`:
   the stamp comes from the application clock.
+- **Soft-deleted rows no longer leak through side paths (K4).** `SelectQuery` filtered
+  `deleted_at IS NULL`, but five paths that build their own SQL did not: includes
+  with `.take(n)`, generated relation filters (`_some` / `_none` / `_every`), the
+  right-hand side of a join, `ancestors` / `descendants`, and the rows an m2m write
+  reloads. All five now apply the predicate. On a join it goes in the `ON` clause, so
+  a `LEFT JOIN` keeps the left row. Tree queries also stop at a deleted node. Relation
+  filters are generated code, so **re-run `ruprizzle generate`** to pick up that part.
 
 ## [1.5.1] - 2026-09-13
 

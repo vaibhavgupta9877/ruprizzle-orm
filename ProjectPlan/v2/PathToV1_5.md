@@ -396,6 +396,15 @@ without it:
 **Fix:** apply the child model's soft-delete predicate in each of these paths. Add
 one test per row. Until then, correct the docs sentence.
 
+**Status: fixed** on `fix/v1-5-2-k1-k5`. Two corrections to the table above, found
+while fixing it. First, the plain m2m *include* (`IncludeMany`) already went through
+`SelectQuery` and was correct. The leak at `m2m.rs:185` is the reload after an m2m
+*write*. Second, the relation filters are emitted by codegen (`emit.rs`, `_some` /
+`_none` / `_every`). `rel.rs:231` is the delete-cascade filter, which is a write and
+correctly unfiltered. Users must regenerate to get the relation-filter part.
+`HierarchyQuery` has no `with_deleted()` opt-out yet, because adding one changes
+public API. That is deferred to `1.6`.
+
 #### K5 — Public builder methods that do nothing (Medium, API honesty)
 
 In `crates/runtime/src/query.rs:210–238`, all five of these bodies are `self` with
@@ -540,7 +549,7 @@ Semver-safe items only. K5's removal and K6's `Result`-returning fallback wait f
       `ANALYZE` in `/studio/explain`. Add regression tests on SQLite and Postgres.
 - [x] **P4 — K3.** *Done (PG + SQLite; MySQL not run) — see ProductionReadinessV1_5 §11.6.* `soft_delete()` binds a real timestamp. Test on a `DateTime`
       column on all three dialects.
-- [ ] **P5 — K4.** Soft-delete predicate in partitioned includes, m2m, relation
+- [x] **P5 — K4.** *Done — see ProductionReadinessV1_5 §11.6.* Soft-delete predicate in partitioned includes, m2m, relation
       filters, hierarchy and join right-hand side. Correct the `WhatsNew` sentence.
 - [ ] **P6 — K5.** Deprecate the five no-op methods and rewrite their rustdoc.
       Document the cache as manual.

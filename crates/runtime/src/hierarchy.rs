@@ -256,6 +256,22 @@ impl<'db, M: Model> HierarchyQuery<'db, M> {
             (None, false) => "1 = 1".to_owned(),
         };
 
+        // Soft-deleted nodes are excluded, and so is everything reached only
+        // through one: a deleted folder hides its subtree, just as a normal
+        // query hides the folder. The predicate goes on both halves of the CTE,
+        // because filtering the final SELECT would drop the node but still walk
+        // past it.
+        let (anchor_live, step_live) = match M::DELETED_AT_COLUMN {
+            Some(col) => {
+                let q_col = dialect.quote_ident(col);
+                (
+                    format!(" AND {q_col} IS NULL"),
+                    format!(" AND c.{q_col} IS NULL"),
+                )
+            }
+            None => (String::new(), String::new()),
+        };
+
         let order_clause = match self.order_by_depth {
             Some(ruprizzle_core::ir::SortOrder::Asc) => " ORDER BY __depth ASC",
             Some(ruprizzle_core::ir::SortOrder::Desc) => " ORDER BY __depth DESC",
@@ -264,10 +280,10 @@ impl<'db, M: Model> HierarchyQuery<'db, M> {
 
         let sql = format!(
             "WITH RECURSIVE __hierarchy AS (\n  \
-               SELECT {cols_str}, 0 AS __depth FROM {q_table} WHERE {q_pk} = {placeholder}\n  \
+               SELECT {cols_str}, 0 AS __depth FROM {q_table} WHERE {q_pk} = {placeholder}{anchor_live}\n  \
                UNION ALL\n  \
                SELECT {c_cols_str}, h.__depth + 1 AS __depth FROM {q_table} c \
-               JOIN __hierarchy h ON {join_cond} WHERE {depth_cond}\n\
+               JOIN __hierarchy h ON {join_cond} WHERE {depth_cond}{step_live}\n\
              )\n\
              SELECT {cols_str} FROM __hierarchy{order_clause}"
         );

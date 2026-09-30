@@ -180,8 +180,11 @@ where
     }
 
     async fn load_targets(&self, exec: &dyn Executor) -> Result<Vec<C>, Error> {
-        let filter = Filter::<C>::new(FilterNode::And(Vec::new()))
-            .and(self.target_pk().in_set(self.target_ids.clone()));
+        // Compiled directly rather than through `SelectQuery`, so the
+        // soft-delete predicate has to be added here.
+        let live = crate::model::live_rows_node::<C>(self.target_table)
+            .unwrap_or_else(|| FilterNode::And(Vec::new()));
+        let filter = Filter::<C>::new(live).and(self.target_pk().in_set(self.target_ids.clone()));
         let compiled = select::<C>(
             exec.dialect(),
             self.target_table,

@@ -163,3 +163,27 @@ pub trait Model: RowDecode {
     /// The audit update timestamp column name, if configured with `@updatedAt`.
     const UPDATED_AT_COLUMN: Option<&'static str> = None;
 }
+
+/// The soft-delete predicate `<table>.<deleted_at> IS NULL` for `M`, or `None`
+/// when `M` has no `@deletedAt` column.
+///
+/// [`SelectQuery`](crate::SelectQuery) applies this through `effective_filter`.
+/// Every other read path that compiles its own SQL for a model (partitioned
+/// includes, m2m reloads, join right-hand sides, hierarchy CTEs) must apply it
+/// too, or soft-deleted rows leak through that path. `table` is the qualifier to
+/// use, which differs from `M::TABLE` under a join alias.
+pub(crate) fn live_rows_node<M: Model>(table: &'static str) -> Option<crate::filter::FilterNode> {
+    M::DELETED_AT_COLUMN.map(|column| crate::filter::FilterNode::Null {
+        table,
+        column,
+        negated: false,
+    })
+}
+
+/// [`live_rows_node`] as a `Filter<M>` on `M::TABLE`; the empty filter when `M`
+/// is not soft-deletable.
+pub(crate) fn live_rows<M: Model>() -> crate::filter::Filter<M> {
+    crate::filter::Filter::new(
+        live_rows_node::<M>(M::TABLE).unwrap_or_else(|| crate::filter::FilterNode::And(Vec::new())),
+    )
+}
