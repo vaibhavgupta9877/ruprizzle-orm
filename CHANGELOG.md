@@ -45,6 +45,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   a `LEFT JOIN` keeps the left row. Tree queries also stop at a deleted node. Relation
   filters are generated code, so **re-run `ruprizzle generate`** to pick up that part.
 
+- **`RoutedPool` settings do what they say (K6).** `fallback_to_primary(false)` was
+  stored and never read: reads now fail with an error when no replica is healthy,
+  instead of reaching the primary. `LeastConnections` always picked the first replica
+  because nothing counted in-flight reads; the router now holds a count on
+  `ReplicaPool::active_conns` for each read, and for a stream until it is dropped.
+  `Random` was a fixed stride (plain alternation for two replicas) and now draws per
+  call. Raw statements through the router were routed by method, so `INSERT …
+  RETURNING` or `SELECT … FOR UPDATE` passed to `fetch_all_raw` went to a replica;
+  only plain reads (see `RoutedPool` docs) go to a replica now. `check_health()` is
+  documented as the caller's job: nothing pings in the background.
+
 ### Deprecated
 
 - **`SelectQuery::cache`, `cache_key`, `cache_tag`, `use_primary` and `use_replica`

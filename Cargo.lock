@@ -2962,6 +2962,7 @@ name = "ruprizzle-integration-tests"
 version = "1.5.1"
 dependencies = [
  "futures-core",
+ "futures-util",
  "insta",
  "miette",
  "ruprizzle",

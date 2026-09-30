@@ -471,6 +471,17 @@ their leading keyword, sending anything other than `SELECT`/`WITH … SELECT` to
 primary. Rewrite the tests to use three distinct file databases, each holding a
 marker row.
 
+**Status: fixed** on `fix/v1-5-2-k6-k10`, with no public API change (the `public-api
+--deny=all` diff is empty). `fallback_to_primary(false)` makes the executor return an
+error; `select_replica()` cannot fail, so it returns the first (unhealthy) replica
+instead of the primary. A router with **no** replicas still reads from the primary.
+An `InFlight` guard holds `active_conns` for each routed read, and for a stream until
+it is dropped. `Random` hashes a counter with a fresh `RandomState`. Raw statements go
+to a replica only if `is_replica_safe` passes (read keyword first, no
+write/lock/sequence word anywhere). `check_health` is documented as manual rather
+than adding a `spawn_health_checks` method, which would be new public API; that is
+deferred to 1.6.
+
 #### K7 — Tree "cycle protection" is a depth cap (Medium, correctness)
 
 `hierarchy.rs:253`: with `cycle_protection` on (the default) and no `max_depth`, the
@@ -562,7 +573,7 @@ Semver-safe items only. K5's removal and K6's `Result`-returning fallback wait f
       filters, hierarchy and join right-hand side. Correct the `WhatsNew` sentence.
 - [x] **P6 — K5.** *Done — see ProductionReadinessV1_5 §11.6.* Deprecate the five no-op methods and rewrite their rustdoc.
       Document the cache as manual.
-- [ ] **P7 — K6.** Keep the `active_conns` guard, route raw statements by keyword,
+- [x] **P7 — K6.** *Done — see ProductionReadinessV1_5 §11.6.* Keep the `active_conns` guard, route raw statements by keyword,
       make the `Random` / health-check docs honest, rewrite the routing tests.
       Honour `fallback_to_primary(false)` without a signature change if possible
       (for example, route to the first unhealthy replica and let it error).

@@ -126,6 +126,10 @@ Interpretation:
 ## Read-replica routing
 
 `RoutedPool` sends reads to replicas and keeps writes and transactions on the primary.
+A raw statement goes to a replica only if it starts with `SELECT`, `WITH`, `VALUES`,
+`TABLE` or `SHOW` and contains none of `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `INTO`,
+`RETURNING`, `LOCK`, `SHARE`, `NEXTVAL` or `SETVAL` as a word; anything else, such as
+`SELECT … FOR UPDATE` or `INSERT … RETURNING`, runs on the primary.
 
 ```rust,ignore
 use ruprizzle::{connect, LoadBalancing, RoutedPool};
@@ -146,7 +150,10 @@ replica is only ever chosen while it is marked healthy, and `check_health()` pin
 every replica and updates those flags — call it on a timer from your own supervisor;
 nothing pings in the background on your behalf. With `fallback_to_primary(true)`, a
 read is served by the primary when no replica is healthy rather than failing; set it
-to `false` when serving stale-free reads from the primary is worse than an error.
+to `false` when moving read load onto the primary is worse than an error: reads through
+the router then fail with a `fallback_to_primary` error. `LeastConnections` counts the
+reads in flight through the router on each replica (a stream counts until dropped);
+`Random` draws uniformly per call.
 
 ## Query result cache
 

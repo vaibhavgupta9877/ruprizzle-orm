@@ -198,7 +198,13 @@ let pool = RoutedPool::builder(primary)
 
 Three strategies are available — `RoundRobin`, `LeastConnections` and `Random`.
 Unhealthy replicas are skipped, and when no replica is healthy the router falls back to
-the primary rather than failing. `begin()` always opens the transaction on the primary,
+the primary rather than failing, unless `fallback_to_primary(false)` is set. Health is
+only updated when you call `check_health()`.
+
+> **Before 1.5.2**, `fallback_to_primary(false)` was ignored, `LeastConnections`
+> always chose the first replica (nothing counted in-flight reads), `Random` was a
+> fixed stride, and a raw `INSERT … RETURNING` or `SELECT … FOR UPDATE` run through
+> the router went to a replica. All four are fixed in 1.5.2. `begin()` always opens the transaction on the primary,
 so read-your-writes inside a transaction is never at risk.
 
 ### Query result cache

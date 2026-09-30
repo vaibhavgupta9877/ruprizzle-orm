@@ -1,5 +1,6 @@
 //! Connection pool construction, replica routing, and configuration.
 
+use std::hash::{BuildHasher, RandomState};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -601,7 +602,11 @@ pub enum LoadBalancing {
     RoundRobin,
     /// Directs requests to the replica with the fewest active connections.
     LeastConnections,
-    /// Selects a random healthy replica.
+    /// Selects a random healthy replica for each call.
+    ///
+    /// The draw uses the standard library's randomly keyed `SipHash`: it is
+    /// uniform and unpredictable enough to spread load, but it is not a
+    /// cryptographic RNG.
     Random,
 }
 
@@ -612,7 +617,11 @@ pub struct ReplicaPool {
     pub pool: Pool,
     /// Liveness / health status indicator.
     pub healthy: Arc<AtomicBool>,
-    /// Active query / connection count currently in flight on this replica.
+    /// Number of routed reads currently in flight on this replica.
+    ///
+    /// Every read the [`RoutedPool`] executor sends here holds one count until
+    /// its result is returned or, for a stream, until the stream is dropped.
+    /// `LoadBalancing::LeastConnections` picks the replica with the lowest count.
     pub active_conns: Arc<AtomicUsize>,
 }
 
@@ -647,9 +656,19 @@ impl ReplicaPool {
 
 /// Primary / Read-Replica connection router.
 ///
-/// Automatically distributes read queries (`SELECT`) across healthy replicas
-/// using configurable load balancing algorithms, while routing writes
-/// (`INSERT`, `UPDATE`, `DELETE`) and transactions exclusively to the primary.
+/// Used as an [`Executor`](crate::Executor), it sends a statement to a healthy
+/// replica only when the statement is a plain read: it starts with `SELECT`,
+/// `WITH`, `VALUES`, `TABLE` or `SHOW`, and contains none of `INSERT`,
+/// `UPDATE`, `DELETE`, `MERGE`, `INTO`, `RETURNING`, `LOCK`, `SHARE`,
+/// `NEXTVAL` or `SETVAL` as a word. Everything else, including
+/// `SELECT … FOR UPDATE` and a data-modifying `WITH`, runs on the primary. The
+/// check is by keyword, so a string literal that contains one of those words
+/// also sends the read to the primary; that costs load, never correctness.
+/// `execute_raw` and transactions always use the primary.
+///
+/// Health is not checked in the background. A replica stays healthy until
+/// [`check_health`](Self::check_health) or [`ReplicaPool::set_healthy`] says
+/// otherwise, so run `check_health` on a timer from your own supervisor.
 #[derive(Debug, Clone)]
 pub struct RoutedPool {
     pub(crate) primary: Pool,
@@ -689,33 +708,61 @@ impl RoutedPool {
         self.primary.begin().await
     }
 
-    /// Selects an appropriate replica (or primary fallback) for a read query.
+    /// Selects the pool a read query should use.
+    ///
+    /// This is a healthy replica chosen by the load-balancing strategy. When no
+    /// replica is healthy it is the primary, unless `fallback_to_primary(false)`
+    /// was set: then it is the first configured replica, even though it is
+    /// marked unhealthy, so the read fails or succeeds on a replica and never
+    /// reaches the primary. With no replicas configured it is the primary.
+    ///
+    /// A pool returned here is not counted in [`ReplicaPool::active_conns`];
+    /// only reads made through the `RoutedPool` executor are. That executor also
+    /// refuses a read outright when fallback is off and no replica is healthy.
     #[must_use]
     pub fn select_replica(&self) -> &Pool {
-        let healthy: Vec<&ReplicaPool> = self.replicas.iter().filter(|r| r.is_healthy()).collect();
+        match self.route_read() {
+            ReadRoute::Replica(r) => &r.pool,
+            ReadRoute::Primary => &self.primary,
+            ReadRoute::NoHealthyReplica => self.replicas.first().map_or(&self.primary, |r| &r.pool),
+        }
+    }
 
+    /// Where a read goes: a healthy replica, the primary, or nowhere.
+    pub(crate) fn route_read(&self) -> ReadRoute<'_> {
+        match self.pick_healthy() {
+            Some(replica) => ReadRoute::Replica(replica),
+            None if self.fallback_to_primary || self.replicas.is_empty() => ReadRoute::Primary,
+            None => ReadRoute::NoHealthyReplica,
+        }
+    }
+
+    fn pick_healthy(&self) -> Option<&ReplicaPool> {
+        let healthy: Vec<&ReplicaPool> = self.replicas.iter().filter(|r| r.is_healthy()).collect();
         let count = healthy.len();
         if count == 0 {
-            return &self.primary;
+            return None;
         }
 
         match self.load_balancing {
             LoadBalancing::RoundRobin => {
                 let idx = self.rr_index.fetch_add(1, Ordering::Relaxed);
-                let target = idx.checked_rem(count).unwrap_or(0);
-                healthy.get(target).map_or(&self.primary, |r| &r.pool)
+                healthy.get(idx.checked_rem(count).unwrap_or(0)).copied()
             }
             LoadBalancing::LeastConnections => {
-                let best = healthy.iter().min_by_key(|r| r.active_connections());
-                best.map_or(&self.primary, |r| &r.pool)
+                healthy.into_iter().min_by_key(|r| r.active_connections())
             }
             LoadBalancing::Random => {
-                let seed = self
-                    .rr_index
-                    .fetch_add(1, Ordering::Relaxed)
-                    .wrapping_mul(2654435761);
-                let target = seed.checked_rem(count).unwrap_or(0);
-                healthy.get(target).map_or(&self.primary, |r| &r.pool)
+                // A fresh `RandomState` is keyed per thread from the OS RNG and
+                // re-keyed on every call, so hashing a counter gives a uniform draw.
+                let draw =
+                    RandomState::new().hash_one(self.rr_index.fetch_add(1, Ordering::Relaxed));
+                let bound = u64::try_from(count).unwrap_or(u64::MAX);
+                let target = draw
+                    .checked_rem(bound)
+                    .and_then(|t| usize::try_from(t).ok())
+                    .unwrap_or(0);
+                healthy.get(target).copied()
             }
         }
     }
@@ -732,6 +779,73 @@ impl RoutedPool {
     #[must_use]
     pub fn falls_back_to_primary(&self) -> bool {
         self.fallback_to_primary
+    }
+}
+
+/// Where [`RoutedPool::route_read`] sends a read.
+pub(crate) enum ReadRoute<'a> {
+    Replica(&'a ReplicaPool),
+    Primary,
+    /// Every replica is unhealthy and `fallback_to_primary` is off.
+    NoHealthyReplica,
+}
+
+/// Holds one count in a replica's `active_conns` while a routed read runs.
+pub(crate) struct InFlight(Arc<AtomicUsize>);
+
+impl InFlight {
+    pub(crate) fn start(replica: &ReplicaPool) -> Self {
+        replica.active_conns.fetch_add(1, Ordering::Relaxed);
+        Self(Arc::clone(&replica.active_conns))
+    }
+}
+
+impl Drop for InFlight {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
+/// Whether a raw statement may run on a replica.
+///
+/// Conservative by design: any doubt sends the statement to the primary. The
+/// first keyword (after comments) must be a read, and no word anywhere in the
+/// text may write, lock, or advance a sequence.
+pub(crate) fn is_replica_safe(sql: &str) -> bool {
+    const READ_START: &[&str] = &["SELECT", "WITH", "VALUES", "TABLE", "SHOW"];
+    const NOT_ON_REPLICA: &[&str] = &[
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "MERGE",
+        "INTO",
+        "RETURNING",
+        "LOCK",
+        "SHARE",
+        "NEXTVAL",
+        "SETVAL",
+    ];
+
+    let mut words = strip_leading_comments(sql)
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .filter(|w| !w.is_empty());
+    let Some(first) = words.next() else {
+        return false;
+    };
+    READ_START.iter().any(|k| first.eq_ignore_ascii_case(k))
+        && !words.any(|w| NOT_ON_REPLICA.iter().any(|k| w.eq_ignore_ascii_case(k)))
+}
+
+fn strip_leading_comments(mut sql: &str) -> &str {
+    loop {
+        sql = sql.trim_start();
+        if let Some(rest) = sql.strip_prefix("--") {
+            sql = rest.split_once('\n').map_or("", |(_, after)| after);
+        } else if let Some(rest) = sql.strip_prefix("/*") {
+            sql = rest.split_once("*/").map_or("", |(_, after)| after);
+        } else {
+            return sql;
+        }
     }
 }
 
@@ -770,7 +884,11 @@ impl RoutedPoolBuilder {
         self
     }
 
-    /// Whether to fall back to the primary pool when all replicas are unhealthy or none configured.
+    /// Whether reads go to the primary when every replica is unhealthy (default `true`).
+    ///
+    /// With `false`, a read made through the `RoutedPool` executor fails with an
+    /// error instead, so a replica outage cannot move read load onto the
+    /// primary. A router with no replicas at all always reads from the primary.
     #[must_use]
     pub fn fallback_to_primary(mut self, fallback: bool) -> Self {
         self.fallback_to_primary = fallback;
@@ -786,6 +904,52 @@ impl RoutedPoolBuilder {
             load_balancing: self.load_balancing,
             rr_index: Arc::new(AtomicUsize::new(0)),
             fallback_to_primary: self.fallback_to_primary,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_replica_safe;
+
+    #[test]
+    fn plain_reads_may_use_a_replica() {
+        for sql in [
+            "SELECT * FROM users",
+            "  select id from users where updated_at > $1",
+            "WITH recent AS (SELECT id FROM posts) SELECT * FROM recent",
+            "VALUES (1), (2)",
+            "TABLE users",
+            "SHOW server_version",
+            "-- leading comment\nSELECT 1",
+            "/* hint */ SELECT 1",
+        ] {
+            assert!(is_replica_safe(sql), "{sql}");
+        }
+    }
+
+    #[test]
+    fn writes_locks_and_sequences_stay_on_the_primary() {
+        for sql in [
+            "INSERT INTO users (name) VALUES ($1) RETURNING id",
+            "UPDATE users SET name = $1 RETURNING *",
+            "DELETE FROM users WHERE id = $1 RETURNING id",
+            "WITH gone AS (DELETE FROM users RETURNING id) SELECT * FROM gone",
+            "SELECT * FROM users WHERE id = $1 FOR UPDATE",
+            "SELECT * FROM users FOR SHARE",
+            "SELECT * FROM users LOCK IN SHARE MODE",
+            "SELECT * INTO backup FROM users",
+            "SELECT nextval('users_id_seq')",
+            "SELECT setval('users_id_seq', 1)",
+            "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE",
+            "EXPLAIN ANALYZE DELETE FROM users",
+            "CALL refresh()",
+            "/* SELECT */ DELETE FROM users",
+            "-- SELECT\nUPDATE users SET name = 'x'",
+            "",
+            "   ",
+        ] {
+            assert!(!is_replica_safe(sql), "{sql}");
         }
     }
 }
