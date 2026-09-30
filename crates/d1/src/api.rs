@@ -119,7 +119,8 @@ impl QueryResult {
 ///
 /// # Errors
 ///
-/// Returns [`D1Error::Unsupported`] for byte and array parameters.
+/// Returns [`D1Error::Unsupported`] for byte and array parameters, and for a
+/// non-finite float (`NaN`, `inf`, `-inf`), which JSON cannot represent.
 pub(crate) fn to_json(value: &Value) -> Result<Json, D1Error> {
     Ok(match value {
         Value::Null => Json::Null,
@@ -128,7 +129,13 @@ pub(crate) fn to_json(value: &Value) -> Result<Json, D1Error> {
         Value::Bool(b) => Json::from(i64::from(*b)),
         Value::I32(i) => Json::from(*i),
         Value::I64(i) => Json::from(*i),
-        Value::F64(f) => serde_json::Number::from_f64(*f).map_or(Json::Null, Json::Number),
+        // `from_f64` has no JSON form for NaN or infinity. Mapping those to
+        // `null` would store NULL where the caller wrote a number.
+        Value::F64(f) => Json::Number(serde_json::Number::from_f64(*f).ok_or_else(|| {
+            D1Error::Unsupported(format!(
+                "D1's HTTP API takes JSON parameters, and JSON has no form for the                  non-finite float {f}; bind NULL explicitly or store it as text"
+            ))
+        })?),
         Value::Decimal(d) => Json::from(d.to_string()),
         Value::Str(s) => Json::from(s.to_string()),
         Value::Uuid(u) => Json::from(u.to_string()),
@@ -226,6 +233,16 @@ mod tests {
     }
 
     #[test]
+    fn finite_floats_bind_as_json_numbers() {
+        assert_eq!(to_json(&Value::F64(1.5)).unwrap(), Json::from(1.5));
+        assert_eq!(to_json(&Value::F64(-0.0)).unwrap(), Json::from(-0.0));
+        assert_eq!(
+            to_json(&Value::F64(f64::MAX)).unwrap(),
+            Json::from(f64::MAX)
+        );
+    }
+
+    #[test]
     fn booleans_bind_as_sqlite_stores_them() {
         assert_eq!(to_json(&Value::Bool(true)).unwrap(), Json::from(1));
     }
@@ -235,6 +252,9 @@ mod tests {
         for value in [
             Value::Bytes(vec![1, 2, 3].into()),
             Value::Array(vec![Value::I64(1)]),
+            Value::F64(f64::NAN),
+            Value::F64(f64::INFINITY),
+            Value::F64(f64::NEG_INFINITY),
         ] {
             assert!(
                 matches!(to_json(&value), Err(D1Error::Unsupported(_))),

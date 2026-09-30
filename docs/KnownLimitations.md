@@ -76,6 +76,10 @@ whether the tool is right for your project.
   transactions, and `stream_raw` on each is a streaming interface over a fully
   buffered response. Turso has no embedded-replica support (that needs the
   native libSQL library), and D1 has no in-Worker/`wasm32` binding.
+- **D1 parameters and results are JSON.** Binary parameters and non-finite floats
+  (`NaN`, `±inf`) are refused with `D1Error::Unsupported`. Integers beyond ±2^53 are
+  rounded by D1's JavaScript runtime before the adapter sees them, in both
+  directions; store 64-bit identifiers as text on D1.
 - **There is no Neon adapter, by design.** Neon is ordinary Postgres over TLS;
   its connection string goes straight to `ruprizzle::connect`.
 - **Studio templates still use `askama` 0.12.**

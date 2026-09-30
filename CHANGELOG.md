@@ -63,6 +63,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   100-level cap still applies when `max_depth` is not set. Tested on Postgres, SQLite
   and MySQL.
 
+- **D1 and Turso refuse non-finite floats (K10).** `ruprizzle-d1` sent `NaN` and
+  `±inf` as JSON `null`, so D1 stored `NULL` where the caller wrote a number, while
+  bytes and arrays in the same function were refused. `ruprizzle-turso` had the same
+  gap: serde_json writes a non-finite float as `null`, so Hrana received a float
+  with no value. Both now return `Unsupported`. The D1 docs also state that integers
+  beyond ±2^53 are rounded by D1's JavaScript runtime, in both directions.
+
 ### Deprecated
 
 - **`SelectQuery::cache`, `cache_key`, `cache_tag`, `use_primary` and `use_replica`

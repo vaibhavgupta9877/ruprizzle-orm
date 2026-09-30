@@ -556,6 +556,12 @@ function are refused with `D1Error::Unsupported`. Make non-finite floats
 `Unsupported` too. Also document that D1 returns integers as JSON numbers, so
 values beyond 2^53 lose precision on the server before the adapter sees them.
 
+**Status: fixed** on `fix/v1-5-2-k6-k10`. `to_json` returns `D1Error::Unsupported`
+for `NaN` / `±inf`. The same gap was in `ruprizzle-turso` (`to_hrana` put the float in
+`HranaValue::Float`, which serde_json serialises as `"value": null`), so it is fixed
+there too. The ±2^53 limit is documented in the `ruprizzle-d1` crate docs and in
+`KnownLimitations.md`. Neither adapter has been run against the live service.
+
 #### Carried forward (already in the `1.5.1` release notes, still open)
 
 - Studio has no authentication. K1 is a separate, cheaper fix that does not depend
@@ -589,7 +595,7 @@ Semver-safe items only. K5's removal and K6's `Result`-returning fallback wait f
 - [x] **P8 — K7.** *Done — see ProductionReadinessV1_5 §11.6.* Real cycle detection, and a cyclic-data test.
 - [ ] **P9 — K9.** `is_destructive` and `diff_enums` tests, and a kill-rate floor for
       `migrate` in `mutants.yml`.
-- [ ] **P10 — K10.** Refuse non-finite `f64` in D1.
+- [x] **P10 — K10.** *Done — see ProductionReadinessV1_5 §11.6.* Refuse non-finite `f64` in D1.
 - [ ] **P11 — Release.** CHANGELOG `[1.5.2]` with a **Fixed** entry per item, then
       `cargo xtask release-check --tag v1.5.2`, then the R5 local gate, then tag
       through `dev-main → main`. **Branching note:** `dev-main` is currently behind
