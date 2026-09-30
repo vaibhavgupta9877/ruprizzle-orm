@@ -499,6 +499,11 @@ the advisory.
 Downstream users who resolve fresh already get the fixed version; the lockfile only
 affects this repository.
 
+**Status: fixed** on `fix/v1-5-2-k6-k10`. rustls is 0.23.45 and `cargo deny check`
+passes. `cargo xtask harden` then exposed one more direct index in the K1 code
+(`studio/guard.rs`, CLI indexing budget 5 of 4); it now uses `get`, and `harden`
+completes.
+
 #### K9 — The mutation job is red and unwatched (Medium, test quality)
 
 `mutants.yml` has failed on every scheduled run since the release: 2026-09-14,
@@ -545,7 +550,7 @@ values beyond 2^53 lose precision on the server before the adapter sees them.
 Semver-safe items only. K5's removal and K6's `Result`-returning fallback wait for
 `2.0` if they change a signature.
 
-- [ ] **P1 — K8.** `cargo update -p rustls`, `cargo deny check`, `cargo xtask harden`.
+- [x] **P1 — K8.** *Done — see ProductionReadinessV1_5 §11.6.* `cargo update -p rustls`, `cargo deny check`, `cargo xtask harden`.
       Do this first, so CI is green before any other change lands.
 - [x] **P2 — K1.** *Done — see ProductionReadinessV1_5 §11.6.* `Host` / `Origin` validation and a per-process form token in Studio,
       with `oneshot` tests.

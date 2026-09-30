@@ -55,9 +55,9 @@ pub fn new_session_token() -> String {
 fn host_name(authority: &str) -> &str {
     let authority = authority.trim();
     if authority.starts_with('[') {
-        return authority
-            .find(']')
-            .map_or(authority, |end| &authority[..=end]);
+        return authority.split_once(']').map_or(authority, |(inner, _)| {
+            authority.get(..=inner.len()).unwrap_or(authority)
+        });
     }
     authority.split(':').next().unwrap_or(authority)
 }

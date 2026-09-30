@@ -883,8 +883,9 @@ else here fails loudly (K3) or costs correctness at the edges (K4–K7).
 
 ### 11.6 `1.5.2` remediation status
 
-Work happens on `fix/v1-5-2-k1-k5`, branched from `dev-main` after `dev-main` was
-fast-forwarded to `main`. One commit per finding. The §11.2 score is **not**
+K1–K5 are on `fix/v1-5-2-k1-k5`, branched from `dev-main` after `dev-main` was
+fast-forwarded to `main`. K6–K10 are on `fix/v1-5-2-k6-k10`, stacked on it. One
+commit per finding. The §11.2 score is **not**
 re-rated until the whole patch is released and the gates are re-run.
 
 | ID | Status | Fix | Evidence |
@@ -894,6 +895,7 @@ re-rated until the whole patch is released and the gates are re-run.
 | K3 | **Fixed** | `UpdateQuery::soft_delete` binds `Value::DateTime(Utc::now())` instead of RFC 3339 text, so it takes the same encoding path as every other `DateTime` write. Rustdoc now says the stamp is the application clock, not `now()`. | `runtime/tests/v1_1_features.rs::test_soft_deletes` now uses a `TIMESTAMPTZ` column on Postgres and decodes `Option<DateTime<Utc>>`, and asserts the stamp is within 60 s of now. It failed with the K3 error before the fix. Passes on PG 17, sqlx-SQLite and rusqlite, and compiles with `postgres-tokio-postgres`. MySQL not run locally: the fixture has no MySQL leg, and `Value::DateTime` on MySQL is the encoding every `DateTime` write already uses. |
 | K4 | **Fixed** | Crate-private `model::live_rows` / `live_rows_node`, applied in: partitioned include (`include.rs`), m2m reload (`m2m.rs`), join right-hand side (new `JoinSpec::right_deleted_at`, predicate in `ON`; `with_deleted()` opts both sides out), hierarchy CTE (anchor and recursive step, so deleted nodes prune their subtree). Codegen adds the child's `deleted_at IS NULL` to `_some`/`_none` and to the negated inner filter of `_every`. No public API added (the `ruprizzle` public-api gate is `--deny=all`). Docs: `QueryGuide.md` lists the paths; `WhatsNew` notes the pre-1.5.2 gap. | `tests/integration/tests/soft_delete_paths.rs` (4 cases × PG/SQLite, also rusqlite + tokio-postgres): all 8 real-DB legs fail before the fix and pass after it. `codegen/tests/soft_delete_relation_filters.rs` fails before and passes after. `codegen/tests/compile.rs` now also compiles and pedantic-lints a `@deletedAt` schema on all 3 dialects. MySQL legs skipped (no local server). Known limit: `HierarchyQuery` has no `with_deleted()`, because adding one would change public API. |
 | K5 | **Fixed (1.5.2 scope)** | The five methods are `#[deprecated(since = "1.5.2")]` with a note naming the working alternative, and their rustdoc now opens with **Does nothing**. `CACHE_HITS_TOTAL` / `CACHE_MISSES_TOTAL` are documented as reserved and not emitted, and `PlanCache` as unused by execution. `Operations.md` and `WhatsNew` state that the cache is manual. The 2.0 decision (implement or remove) remains open. | `cargo +nightly public-api -p ruprizzle diff 1.5.1 --deny=all`: no removed, changed or added items, so the CI gate still passes. Workspace clippy `-D warnings` is clean (no in-tree callers). Full workspace suite: 626 passed, 0 failed, 6 ignored (`--all-features`, Postgres 17). |
+| K8 | **Fixed** | `cargo update -p rustls` (0.23.43 → 0.23.45); lockfile only. `harden` then failed on the CLI indexing budget because of one direct slice in the K1 `guard.rs::host_name`, replaced with `str::get`. | `cargo deny check`: `advisories ok, bans ok, licenses ok, sources ok`. `cargo xtask harden`: complete (CLI 4 indexing, budget 4). Studio `host_check` / `guard` tests pass, including `[::1]:5555`. |
 
 K1–K5 are fixed on `fix/v1-5-2-k1-k5` with one commit each. Not yet done: K6–K10,
 the MySQL legs of the K2–K4 tests (no local server), merging the branch into

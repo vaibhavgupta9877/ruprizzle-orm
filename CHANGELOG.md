@@ -23,6 +23,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   rolled back, or on a connection opened `SQLITE_OPEN_READONLY` (SQLite).
   `/studio/explain` always runs this way, even with `--allow-writes`, and refuses
   `ANALYZE`, `ANALYSE` and parenthesised option lists.
+- **rustls 0.23.45 in the lockfile (K8).** Clears RUSTSEC-2026-0285 (TLS 1.3
+  handshake messages accepted across encryption-level boundaries), which made
+  `cargo deny check` and `cargo xtask harden` fail. It is reached only through
+  `reqwest` in `ruprizzle-turso` / `ruprizzle-d1`; downstream builds resolving fresh
+  already got the fixed version.
 
 ### Fixed
 
