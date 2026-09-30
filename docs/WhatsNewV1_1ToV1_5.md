@@ -91,6 +91,10 @@ Post::find_many().with_deleted().fetch_all(&pool).await?;   // live + deleted
 Post::find_many().only_deleted().fetch_all(&pool).await?;   // the recycle bin
 ```
 
+Until `1.5.2` this did not hold for includes with `.take(n)`, relation filters, joins,
+tree queries or m2m reloads. See the [query guide](QueryGuide.md#soft-deletes) for
+how each of them applies it now.
+
 ---
 
 ## v1.2 — Developer tooling and zero-database CI
@@ -194,7 +198,13 @@ let pool = RoutedPool::builder(primary)
 
 Three strategies are available — `RoundRobin`, `LeastConnections` and `Random`.
 Unhealthy replicas are skipped, and when no replica is healthy the router falls back to
-the primary rather than failing. `begin()` always opens the transaction on the primary,
+the primary rather than failing, unless `fallback_to_primary(false)` is set. Health is
+only updated when you call `check_health()`.
+
+> **Before 1.5.2**, `fallback_to_primary(false)` was ignored, `LeastConnections`
+> always chose the first replica (nothing counted in-flight reads), `Random` was a
+> fixed stride, and a raw `INSERT … RETURNING` or `SELECT … FOR UPDATE` run through
+> the router went to a replica. All four are fixed in 1.5.2. `begin()` always opens the transaction on the primary,
 so read-your-writes inside a transaction is never at risk.
 
 ### Query result cache
@@ -215,6 +225,14 @@ Entries carry a TTL and a set of tags; `invalidate_tag` / `invalidate_tags` drop
 entry sharing a tag, which is the practical way to expire a table's worth of cached
 reads after a write. The trait exists so a Redis or other shared backend can be dropped
 in without touching call sites.
+
+**The cache is manual.** Query execution never reads or writes it: you call `get`
+before a query and `set` after it, and `ruprizzle_cache_hits_total` /
+`ruprizzle_cache_misses_total` are not emitted. `SelectQuery::cache`, `cache_key` and
+`cache_tag` exist in the `1.5` API but **do nothing**, and are deprecated since
+`1.5.2`. So are `SelectQuery::use_primary` and `use_replica`. To choose a pool, build
+the query on `RoutedPool::primary()`, on the `RoutedPool` itself, or on
+`select_replica()`.
 
 ### PostGIS geospatial types
 

@@ -174,7 +174,8 @@ impl ExecuteResult {
 ///
 /// # Errors
 ///
-/// Returns [`TursoError::Unsupported`] for values `SQLite` has no column type for.
+/// Returns [`TursoError::Unsupported`] for values `SQLite` has no column type for,
+/// and for a non-finite float (`NaN`, `inf`, `-inf`), which JSON cannot carry.
 pub(crate) fn to_hrana(value: &Value) -> Result<HranaValue, TursoError> {
     Ok(match value {
         Value::Null => HranaValue::Null,
@@ -189,6 +190,13 @@ pub(crate) fn to_hrana(value: &Value) -> Result<HranaValue, TursoError> {
         Value::I64(i) => HranaValue::Integer {
             value: i.to_string(),
         },
+        // serde_json writes NaN and infinity as `null`, which would reach the
+        // server as a float with no value.
+        Value::F64(f) if !f.is_finite() => {
+            return Err(TursoError::Unsupported(format!(
+                "the Hrana protocol carries floats as JSON numbers, and JSON has no                  form for the non-finite float {f}; bind NULL explicitly or store it as text"
+            )));
+        }
         Value::F64(f) => HranaValue::Float { value: *f },
         Value::Decimal(d) => HranaValue::Text {
             value: d.to_string(),
@@ -310,6 +318,21 @@ mod tests {
             HranaValue::Integer {
                 value: "1".to_owned()
             }
+        );
+    }
+
+    #[test]
+    fn a_non_finite_float_is_refused_rather_than_sent_as_null() {
+        for f in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let err = to_hrana(&Value::F64(f)).unwrap_err();
+            assert!(
+                matches!(err, TursoError::Unsupported(_)),
+                "{f}: got {err:?}"
+            );
+        }
+        assert_eq!(
+            to_hrana(&Value::F64(1.5)).unwrap(),
+            HranaValue::Float { value: 1.5 }
         );
     }
 

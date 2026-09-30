@@ -65,7 +65,10 @@ whether the tool is right for your project.
 
 - **Ruprizzle Studio has no authentication.** It binds `127.0.0.1` by default and
   refuses `--allow-writes` on a non-loopback host without `--yes-i-know`; do not
-  expose it on an untrusted network.
+  expose it on an untrusted network. Since `1.5.2` it refuses requests whose `Host`
+  is not Studio's own name (DNS rebinding) and mutations without Studio's `Origin`
+  and session token (CSRF), so a web page open in the same browser cannot drive it.
+  Scripted `POST`s from `curl` are refused for the same reason.
 - **The Turso and D1 adapters are unverified against the live hosted services.**
   `ruprizzle-turso` (Hrana 2 over HTTP) and `ruprizzle-d1` (Cloudflare REST API)
   are tested end-to-end against local HTTP fakes, not real Turso/D1 databases.
@@ -73,6 +76,10 @@ whether the tool is right for your project.
   transactions, and `stream_raw` on each is a streaming interface over a fully
   buffered response. Turso has no embedded-replica support (that needs the
   native libSQL library), and D1 has no in-Worker/`wasm32` binding.
+- **D1 parameters and results are JSON.** Binary parameters and non-finite floats
+  (`NaN`, `±inf`) are refused with `D1Error::Unsupported`. Integers beyond ±2^53 are
+  rounded by D1's JavaScript runtime before the adapter sees them, in both
+  directions; store 64-bit identifiers as text on D1.
 - **There is no Neon adapter, by design.** Neon is ordinary Postgres over TLS;
   its connection string goes straight to `ruprizzle::connect`.
 - **Studio templates still use `askama` 0.12.**

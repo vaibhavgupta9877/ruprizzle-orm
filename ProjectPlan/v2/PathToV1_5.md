@@ -303,6 +303,10 @@ any non-GET request whose `Origin` is absent or does not match. Add a per-proces
 random token to every mutating form, and require it. Test all three with `tower`
 `oneshot` requests that carry a foreign `Origin` and `Host`.
 
+**Status: fixed** on `fix/v1-5-2-k1-k5` (`crates/cli/src/studio/guard.rs`). The token
+is delivered through `hx-headers` on `<body>` rather than per form, so every htmx
+request carries it. Consequence: scripted `curl` mutations are refused too.
+
 #### K2 — Studio's read-only gate can be bypassed (High, data safety)
 
 `sandbox::is_read_only` (`handlers/sandbox.rs:62`) classifies a statement by its
@@ -328,6 +332,14 @@ database-enforced read-only transaction, then roll it back:
 In `/studio/explain`, refuse input that starts with `ANALYZE` or `(`, and run it
 through the same read-only transaction. Add regression tests for each row of the
 table above on SQLite and Postgres.
+
+**Status: fixed** on `fix/v1-5-2-k1-k5` (`studio/db.rs::fetch_dynamic_read_only`).
+One deviation from the plan: SQLite does not use `PRAGMA query_only`, because
+SQLite runs every `;`-separated statement in one call and a later statement could
+switch the pragma off. It opens a separate `SQLITE_OPEN_READONLY` connection
+instead. The same multi-statement behaviour was a second, SQLite-only K2 vector
+(`SELECT 1; DELETE …`), now covered by a test. MySQL is implemented but was not
+run locally.
 
 #### K3 — `soft_delete()` fails on Postgres (High, correctness)
 
@@ -358,6 +370,12 @@ database's `now()`, although the rustdoc says `now()`.
 as a SQL expression. Change the test fixture to the column type that
 `ruprizzle migrate` generates, and run it on all three dialects.
 
+**Status: fixed** on `fix/v1-5-2-k1-k5`. Binds `Value::DateTime`. Client clock kept,
+and the rustdoc corrected, rather than emitting `CURRENT_TIMESTAMP`, because SQLite's
+`CURRENT_TIMESTAMP` text format differs from the RFC 3339 that every other
+`DateTime` write stores. The test fixture is now `TIMESTAMPTZ` on Postgres. Still
+open: the `v1_1_features` fixture has no MySQL leg.
+
 #### K4 — Soft-deleted rows leak through side paths (Medium, correctness)
 
 `SelectQuery::effective_filter` (`query.rs:514`) adds `deleted_at IS NULL`, and
@@ -377,6 +395,15 @@ without it:
 
 **Fix:** apply the child model's soft-delete predicate in each of these paths. Add
 one test per row. Until then, correct the docs sentence.
+
+**Status: fixed** on `fix/v1-5-2-k1-k5`. Two corrections to the table above, found
+while fixing it. First, the plain m2m *include* (`IncludeMany`) already went through
+`SelectQuery` and was correct. The leak at `m2m.rs:185` is the reload after an m2m
+*write*. Second, the relation filters are emitted by codegen (`emit.rs`, `_some` /
+`_none` / `_every`). `rel.rs:231` is the delete-cascade filter, which is a write and
+correctly unfiltered. Users must regenerate to get the relation-filter part.
+`HierarchyQuery` has no `with_deleted()` opt-out yet, because adding one changes
+public API. That is deferred to `1.6`.
 
 #### K5 — Public builder methods that do nothing (Medium, API honesty)
 
@@ -406,6 +433,10 @@ use RoutedPool::primary() / InMemoryCache directly")]`, rewrite their rustdoc to
 they do nothing, and state in the docs that the cache is manual. **Fix (2.0):**
 either implement them, or remove them together with `PlanCache` and the two unused
 metric names.
+
+**Status: 1.5.2 part fixed** on `fix/v1-5-2-k1-k5`. The `public-api --deny=all` diff
+against `1.5.1` is empty, so deprecating the methods passes the gate. The 2.0 half is
+still open.
 
 #### K6 — `RoutedPool` settings that are never read (Medium, correctness)
 
@@ -440,6 +471,17 @@ their leading keyword, sending anything other than `SELECT`/`WITH … SELECT` to
 primary. Rewrite the tests to use three distinct file databases, each holding a
 marker row.
 
+**Status: fixed** on `fix/v1-5-2-k6-k10`, with no public API change (the `public-api
+--deny=all` diff is empty). `fallback_to_primary(false)` makes the executor return an
+error; `select_replica()` cannot fail, so it returns the first (unhealthy) replica
+instead of the primary. A router with **no** replicas still reads from the primary.
+An `InFlight` guard holds `active_conns` for each routed read, and for a stream until
+it is dropped. `Random` hashes a counter with a fresh `RandomState`. Raw statements go
+to a replica only if `is_replica_safe` passes (read keyword first, no
+write/lock/sequence word anywhere). `check_health` is documented as manual rather
+than adding a `spawn_health_checks` method, which would be new public API; that is
+deferred to 1.6.
+
 #### K7 — Tree "cycle protection" is a depth cap (Medium, correctness)
 
 `hierarchy.rs:253`: with `cycle_protection` on (the default) and no `max_depth`, the
@@ -454,6 +496,14 @@ statement is cancelled, and MySQL fails at `cte_max_recursion_depth` (1000).
 string and test it with `instr`. Rename the option if it stays a depth cap. Add a
 cyclic-data test that asserts no duplicate ids.
 
+**Status: fixed** on `fix/v1-5-2-k6-k10`. All three dialects carry a text path
+(`,k1,k2,`) and test it with `strpos` / `LOCATE` / `instr`. Postgres does not use an
+array or the `CYCLE` clause: a model without `COLUMNS` selects `*` from the CTE, and
+the sqlx `Any` driver cannot decode an array column. The 100-level default cap is kept
+so trees deeper than that behave as in 1.5.1. Known limit: a text key containing a
+comma can be mistaken for a visited node. `cycle_protection(false)` without
+`max_depth` still recurses without end on cyclic data; that is now documented.
+
 #### K8 — RUSTSEC-2026-0285 fails the dependency gate (Medium, supply chain / CI)
 
 rustls 0.23.43 is in `Cargo.lock`. It is reached only via `reqwest` →
@@ -467,6 +517,11 @@ the advisory.
 **Fix:** `cargo update -p rustls` (to ≥ 0.23.45), then re-run `cargo deny check`.
 Downstream users who resolve fresh already get the fixed version; the lockfile only
 affects this repository.
+
+**Status: fixed** on `fix/v1-5-2-k6-k10`. rustls is 0.23.45 and `cargo deny check`
+passes. `cargo xtask harden` then exposed one more direct index in the K1 code
+(`studio/guard.rs`, CLI indexing budget 5 of 4); it now uses `get`, and `harden`
+completes.
 
 #### K9 — The mutation job is red and unwatched (Medium, test quality)
 
@@ -493,6 +548,29 @@ and enum add/remove/rename diff tests. Then set a kill-rate floor for `migrate` 
 the workflow, so the job fails on a regression rather than always. Add Postgres
 and MySQL services to the runtime shards, or scope them to DB-free modules.
 
+**Status: fixed** on `fix/v1-5-2-k6-k10`. `crates/migrate/tests/change_classification.rs`
+(13 tests). Local `cargo mutants -p ruprizzle-migrate` (27.1.0): **212 caught, 354
+missed, 11 timeouts, 53 unviable = 37.5%**, up from 30%. On `change.rs` + `diff.rs`
+alone: 19 → 62 of 72 viable caught; every survivor named above is now caught. The
+10 left there are near-equivalent: `scalar_changed` arms that fall through to
+`prev != next`, `db_name == … && p == ix` where `p == ix` implies the first, and the
+last three `||` in the FK comparison, where the constraint name is derived from the
+owner columns. `mutants.yml`: `migrate` fails only below `KILL_RATE_FLOOR=35`
+(`.github/scripts/mutants_floor.py`, exit codes 2/3 from cargo-mutants are
+tolerated). Runtime shards get Postgres 17 and MySQL 8.4 services with
+`RUPRIZZLE_REQUIRE_DB=1` and report their rate with no floor until a baseline with
+databases exists. The workflow change is not yet run on GitHub.
+
+#### K11 — `@renamedFrom` onto an existing column name (Low, found while fixing K9)
+
+`diff_columns` with `prev {a Int, b String}` and `next {b Int @renamedFrom("a")}`
+emits only `RenameColumn a -> b`. The old `b` is neither dropped nor altered, so
+the planned `RENAME COLUMN a TO b` collides with the existing column and the
+migration fails at apply time rather than at plan time. **Fix (1.6):** drop the old
+same-named column first (destructive, so it goes behind `--accept-data-loss`), or
+refuse the plan with a clear diagnostic. Pinned in part by
+`a_renamed_field_is_not_altered_against_a_namesake`.
+
 #### K10 — D1 binds a non-finite float as `NULL` (Low)
 
 `crates/d1/src/api.rs:131`: `Number::from_f64(f).map_or(Json::Null, …)`. `NaN` and
@@ -500,6 +578,12 @@ and MySQL services to the runtime shards, or scope them to DB-free modules.
 function are refused with `D1Error::Unsupported`. Make non-finite floats
 `Unsupported` too. Also document that D1 returns integers as JSON numbers, so
 values beyond 2^53 lose precision on the server before the adapter sees them.
+
+**Status: fixed** on `fix/v1-5-2-k6-k10`. `to_json` returns `D1Error::Unsupported`
+for `NaN` / `±inf`. The same gap was in `ruprizzle-turso` (`to_hrana` put the float in
+`HranaValue::Float`, which serde_json serialises as `"value": null`), so it is fixed
+there too. The ±2^53 limit is documented in the `ruprizzle-d1` crate docs and in
+`KnownLimitations.md`. Neither adapter has been run against the live service.
 
 #### Carried forward (already in the `1.5.1` release notes, still open)
 
@@ -514,27 +598,27 @@ values beyond 2^53 lose precision on the server before the adapter sees them.
 Semver-safe items only. K5's removal and K6's `Result`-returning fallback wait for
 `2.0` if they change a signature.
 
-- [ ] **P1 — K8.** `cargo update -p rustls`, `cargo deny check`, `cargo xtask harden`.
+- [x] **P1 — K8.** *Done — see ProductionReadinessV1_5 §11.6.* `cargo update -p rustls`, `cargo deny check`, `cargo xtask harden`.
       Do this first, so CI is green before any other change lands.
-- [ ] **P2 — K1.** `Host` / `Origin` validation and a per-process form token in Studio,
+- [x] **P2 — K1.** *Done — see ProductionReadinessV1_5 §11.6.* `Host` / `Origin` validation and a per-process form token in Studio,
       with `oneshot` tests.
-- [ ] **P3 — K2.** Read-only transactions for sandbox reads and EXPLAIN. Refuse
+- [x] **P3 — K2.** *Done — see ProductionReadinessV1_5 §11.6.* Read-only transactions for sandbox reads and EXPLAIN. Refuse
       `ANALYZE` in `/studio/explain`. Add regression tests on SQLite and Postgres.
-- [ ] **P4 — K3.** `soft_delete()` binds a real timestamp. Test on a `DateTime`
+- [x] **P4 — K3.** *Done (PG + SQLite; MySQL not run) — see ProductionReadinessV1_5 §11.6.* `soft_delete()` binds a real timestamp. Test on a `DateTime`
       column on all three dialects.
-- [ ] **P5 — K4.** Soft-delete predicate in partitioned includes, m2m, relation
+- [x] **P5 — K4.** *Done — see ProductionReadinessV1_5 §11.6.* Soft-delete predicate in partitioned includes, m2m, relation
       filters, hierarchy and join right-hand side. Correct the `WhatsNew` sentence.
-- [ ] **P6 — K5.** Deprecate the five no-op methods and rewrite their rustdoc.
+- [x] **P6 — K5.** *Done — see ProductionReadinessV1_5 §11.6.* Deprecate the five no-op methods and rewrite their rustdoc.
       Document the cache as manual.
-- [ ] **P7 — K6.** Keep the `active_conns` guard, route raw statements by keyword,
+- [x] **P7 — K6.** *Done — see ProductionReadinessV1_5 §11.6.* Keep the `active_conns` guard, route raw statements by keyword,
       make the `Random` / health-check docs honest, rewrite the routing tests.
       Honour `fallback_to_primary(false)` without a signature change if possible
       (for example, route to the first unhealthy replica and let it error).
       Otherwise defer to 2.0.
-- [ ] **P8 — K7.** Real cycle detection, and a cyclic-data test.
-- [ ] **P9 — K9.** `is_destructive` and `diff_enums` tests, and a kill-rate floor for
+- [x] **P8 — K7.** *Done — see ProductionReadinessV1_5 §11.6.* Real cycle detection, and a cyclic-data test.
+- [x] **P9 — K9.** *Done — see ProductionReadinessV1_5 §11.6.* `is_destructive` and `diff_enums` tests, and a kill-rate floor for
       `migrate` in `mutants.yml`.
-- [ ] **P10 — K10.** Refuse non-finite `f64` in D1.
+- [x] **P10 — K10.** *Done — see ProductionReadinessV1_5 §11.6.* Refuse non-finite `f64` in D1.
 - [ ] **P11 — Release.** CHANGELOG `[1.5.2]` with a **Fixed** entry per item, then
       `cargo xtask release-check --tag v1.5.2`, then the R5 local gate, then tag
       through `dev-main → main`. **Branching note:** `dev-main` is currently behind

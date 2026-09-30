@@ -207,32 +207,65 @@ where
         }
     }
 
-    /// Sets query result caching with a specific TTL.
+    /// **Does nothing.** The argument is discarded and the query is not cached.
+    ///
+    /// Query execution never reads or writes a [`QueryCache`](crate::QueryCache).
+    /// To cache results, call [`InMemoryCache`](crate::InMemoryCache) (or your own
+    /// `QueryCache`) around the query yourself. This method will be implemented or
+    /// removed in `2.0`.
     #[must_use]
+    #[deprecated(
+        since = "1.5.2",
+        note = "has no effect: the query cache is not wired to execution; use InMemoryCache directly"
+    )]
     pub fn cache(self, _ttl: std::time::Duration) -> Self {
         self
     }
 
-    /// Sets a custom cache key for this query.
+    /// **Does nothing.** See [`SelectQuery::cache`].
     #[must_use]
+    #[deprecated(
+        since = "1.5.2",
+        note = "has no effect: the query cache is not wired to execution; use InMemoryCache directly"
+    )]
     pub fn cache_key(self, _key: impl Into<String>) -> Self {
         self
     }
 
-    /// Associates a cache invalidation tag with this query result.
+    /// **Does nothing.** See [`SelectQuery::cache`].
     #[must_use]
+    #[deprecated(
+        since = "1.5.2",
+        note = "has no effect: the query cache is not wired to execution; use InMemoryCache directly"
+    )]
     pub fn cache_tag(self, _tag: impl Into<String>) -> Self {
         self
     }
 
-    /// Forces this query to execute on the primary database pool.
+    /// **Does nothing.** The query runs on whatever executor it was built with.
+    ///
+    /// For a read that must see the primary, build the query on
+    /// [`RoutedPool::primary()`](crate::RoutedPool::primary) instead. This method
+    /// will be implemented or removed in `2.0`.
     #[must_use]
+    #[deprecated(
+        since = "1.5.2",
+        note = "has no effect: build the query on RoutedPool::primary() instead"
+    )]
     pub fn use_primary(self) -> Self {
         self
     }
 
-    /// Directs this query to execute on a read replica pool.
+    /// **Does nothing.** The query runs on whatever executor it was built with.
+    ///
+    /// To read from a replica, build the query on a
+    /// [`RoutedPool`](crate::RoutedPool) (reads are routed to replicas) or on
+    /// [`RoutedPool::select_replica()`](crate::RoutedPool::select_replica).
     #[must_use]
+    #[deprecated(
+        since = "1.5.2",
+        note = "has no effect: build the query on a RoutedPool or RoutedPool::select_replica()"
+    )]
     pub fn use_replica(self) -> Self {
         self
     }
@@ -390,6 +423,7 @@ where
                 right_columns: J::COLUMNS,
                 right_alias,
                 on: on.into(),
+                right_deleted_at: J::DELETED_AT_COLUMN,
             }),
             with_deleted: self.with_deleted,
             only_deleted: self.only_deleted,
@@ -544,6 +578,19 @@ where
         let dialect = self.exec.dialect();
         let eff_filter = self.effective_filter();
         if let Some(ref join) = self.join {
+            // `with_deleted()` opts both sides out. `only_deleted()` selects the
+            // left model's recycle bin but still joins live right-hand rows.
+            let on = match join.right_deleted_at {
+                Some(column) if !self.with_deleted => FilterNode::And(vec![
+                    join.on.node.clone(),
+                    FilterNode::Null {
+                        table: join.right_alias.unwrap_or(join.right_table),
+                        column,
+                        negated: false,
+                    },
+                ]),
+                _ => join.on.node.clone(),
+            };
             Ok(join_select_with_columns::<M>(
                 dialect,
                 M::TABLE,
@@ -552,7 +599,7 @@ where
                 join.right_columns,
                 join.right_alias,
                 join.kind,
-                &join.on.node,
+                &on,
                 &eff_filter.node,
                 &self.order,
                 self.limit,
@@ -2085,7 +2132,11 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
         self
     }
 
-    /// Sets the model's soft-delete column (`@deletedAt`) to the current timestamp (`now()`).
+    /// Sets the model's soft-delete column (`@deletedAt`) to the current UTC time.
+    ///
+    /// The time is taken from the application's clock (`Utc::now()`), not the
+    /// database's, and is bound as a timestamp, the same way as any other
+    /// `DateTime` field.
     ///
     /// # Errors
     /// Returns an error if the model does not have a `@deletedAt` column configured.
@@ -2096,8 +2147,12 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
                 M::TABLE
             ))
         })?;
-        let now = chrono::Utc::now().to_rfc3339();
-        Ok(self.set(Column::<M, String>::new(M::TABLE, col), now))
+        // Bound as `Value::DateTime`, not as RFC 3339 text: Postgres types a text
+        // parameter as `text` and refuses to assign it to a `timestamptz` column.
+        Ok(self.set(
+            Column::<M, chrono::DateTime<chrono::Utc>>::new(M::TABLE, col),
+            chrono::Utc::now(),
+        ))
     }
 
     /// Attaches a many-to-many nested write to this update.

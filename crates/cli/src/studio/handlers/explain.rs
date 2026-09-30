@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use ruprizzle_core::ir::Provider;
 
-use super::{AppState, ModelNav};
+use super::AppState;
 use crate::studio::db;
 
 #[derive(Debug, Clone)]
@@ -26,13 +26,13 @@ pub struct ExplainNode {
     pub is_scan: bool,
 }
 
+/// The plan, rendered as a fragment for the sandbox's result panel.
+///
+/// This used to extend the page shell, so htmx swapped a second sidebar and
+/// navbar into the sandbox's result card.
 #[derive(Template)]
-#[template(path = "explain/view.html")]
-pub struct ExplainViewTemplate<'a> {
-    pub models: &'a [ModelNav],
-    pub current_model: &'a str,
-    pub provider: &'a str,
-    pub allow_writes: bool,
+#[template(path = "explain/plan.html")]
+pub struct ExplainPlanTemplate {
     pub nodes: Vec<ExplainNode>,
     /// Set when no plan could be obtained. Suppresses the tree.
     pub error: Option<String>,
@@ -52,9 +52,19 @@ pub async fn render_explain_tree(
 
     let (nodes, error) = if sql.is_empty() {
         (Vec::new(), Some("No statement was submitted.".to_string()))
+    } else if requests_execution(sql) {
+        (
+            Vec::new(),
+            Some(
+                "Not run: EXPLAIN ANALYZE executes the statement, so Studio accepts                  neither ANALYZE nor a parenthesised option list. Submit the                  statement alone to see its plan."
+                    .to_string(),
+            ),
+        )
     } else if let Some(pool) = state.pool.as_ref() {
         let provider = pool.provider();
-        match db::fetch_dynamic(pool, explain_sql(provider, sql), Vec::new()).await {
+        // A plan is always a read, even with --allow-writes, so the database is
+        // told to refuse writes whatever the text says.
+        match db::fetch_dynamic_read_only(pool, &explain_sql(provider, sql)).await {
             Ok((_, rows)) => (parse_plan(provider, &rows), None),
             Err(e) => (Vec::new(), Some(format!("EXPLAIN failed: {e}"))),
         }
@@ -69,14 +79,7 @@ pub async fn render_explain_tree(
         )
     };
 
-    let tmpl = ExplainViewTemplate {
-        models: &state.models,
-        current_model: "",
-        provider: state.schema.datasource.provider.as_str(),
-        allow_writes: state.config.allow_writes,
-        nodes,
-        error,
-    };
+    let tmpl = ExplainPlanTemplate { nodes, error };
 
     match tmpl.render() {
         Ok(html) => Html(html).into_response(),
@@ -86,6 +89,26 @@ pub async fn render_explain_tree(
         )
             .into_response(),
     }
+}
+
+/// Whether `sql` would turn the `EXPLAIN` prefix into `EXPLAIN ANALYZE`, which
+/// executes the statement on Postgres and `MySQL`.
+///
+/// Covers `ANALYZE`, Postgres's `ANALYSE` spelling, and a parenthesised option
+/// list such as `(ANALYZE true)`. A form that slips past this (for example behind
+/// a comment) still runs inside a read-only transaction, so it cannot write.
+#[must_use]
+pub fn requests_execution(sql: &str) -> bool {
+    let sql = sql.trim_start();
+    if sql.starts_with('(') {
+        return true;
+    }
+    let head = sql
+        .split(|c: char| c.is_whitespace() || c == '(')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    matches!(head.as_str(), "ANALYZE" | "ANALYSE")
 }
 
 /// Prefixes `sql` with the provider's plan statement.
@@ -160,6 +183,21 @@ fn extract_between(text: &str, marker: &str, end: char) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn analyze_forms_are_recognised() {
+        for sql in [
+            "ANALYZE DELETE FROM users",
+            "analyse delete from users",
+            "  (ANALYZE true) DELETE FROM users",
+            "(FORMAT JSON) SELECT 1",
+        ] {
+            assert!(requests_execution(sql), "{sql}");
+        }
+        for sql in ["SELECT 1", "SELECT analyze FROM t", "DELETE FROM users"] {
+            assert!(!requests_execution(sql), "{sql}");
+        }
+    }
 
     #[test]
     fn plan_statement_never_analyzes() {

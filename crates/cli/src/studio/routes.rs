@@ -7,6 +7,7 @@ use axum::routing::{delete, get, patch, post};
 use std::sync::Arc;
 
 use super::assets::serve_asset;
+use super::guard::guard_request;
 use super::handlers::{AppState, dashboard, diff, erd, explain, relations, sandbox, table};
 
 async fn handle_asset(Path(path): Path<String>) -> Response {
@@ -50,5 +51,9 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/studio/diff", get(diff::render_diff_view))
         .route("/studio/explain", post(explain::render_explain_tree))
         .route("/studio/assets/{*path}", get(handle_asset))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&state),
+            guard_request,
+        ))
         .with_state(state)
 }

@@ -1,40 +1,15 @@
-<tr id="row-{{ row.id }}">
+{% let row_id = row.id.as_str() %}
+<tr>
   {% for cell in row.cells %}
-  <td x-data="{ editing: false, value: '{{ cell.value }}' }">
-    <div x-show="!editing" @dblclick="{% if allow_writes %}editing = true{% endif %}">
-      {% if cell.is_relation %}
-      <span class="cell-relation" hx-get="/studio/relations/{{ cell.relation_target }}/{{ cell.value }}" hx-target="#relation-drawer">
-        ↗ {{ cell.value }}
-      </span>
-      {% else if cell.is_id %}
-      <span class="cell-pk">{{ cell.value }}</span>
-      {% else if cell.is_null %}
-      <span class="cell-null">null</span>
-      {% else %}
-      <span>{{ cell.value }}</span>
-      {% endif %}
-    </div>
-    {% if allow_writes %}
-    <div x-show="editing" style="display:none;">
-      <input type="text" class="input-text" style="padding:2px 6px; font-size:12px; width:100%;"
-             x-model="value"
-             hx-patch="/studio/models/{{ current_model }}/rows/{{ row.id }}/cell?column={{ cell.column_name }}"
-             hx-vals="js:{ value: value }"
-             hx-target="#row-{{ row.id }}"
-             hx-swap="outerHTML"
-             @keydown.enter="editing = false"
-             @keydown.escape="editing = false"
-             @blur="editing = false">
-    </div>
-    {% endif %}
-  </td>
+  {% include "table/_cell.html" %}
   {% endfor %}
   {% if allow_writes %}
-  <td style="text-align:center;">
-    <button class="btn btn-danger btn-sm" hx-delete="/studio/models/{{ current_model }}/rows/{{ row.id }}"
-            hx-target="#row-{{ row.id }}" hx-swap="outerHTML"
-            onclick="return confirm('Delete this record?')">
-      🗑
+  <td class="row-actions">
+    <button type="button" class="btn btn-ghost-danger btn-icon" aria-label="Delete row {{ row.id }}" title="Delete row"
+            hx-delete="/studio/models/{{ current_model|urlencode_strict }}/rows/{{ row.id|urlencode_strict }}"
+            hx-target="closest tr" hx-swap="outerHTML swap:150ms"
+            hx-confirm="Delete this {{ current_model }} row ({{ row.id }})? This cannot be undone.">
+      <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.6 9h4.8L11 4" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
   </td>
   {% endif %}

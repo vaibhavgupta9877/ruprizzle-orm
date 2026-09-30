@@ -3,6 +3,7 @@
 //! - Full-Text Search: .matches()
 //! - Soft Deletes: .with_deleted(), .only_deleted(), .soft_delete()
 
+use ruprizzle::types::chrono::{DateTime, Utc};
 use ruprizzle::{Column, Executor, InsertQuery, Model, Pool, SelectQuery, UpdateQuery, connect};
 use ruprizzle_testkit::IsolatedSchema;
 use sqlx::Row;
@@ -15,7 +16,9 @@ struct Post {
     title: String,
     content: String,
     tags: Vec<String>,
-    deleted_at: Option<String>,
+    /// A real timestamp, as `@deletedAt DateTime?` generates. This was `String`
+    /// over a `TEXT` column, which hid that `soft_delete()` bound text (K3).
+    deleted_at: Option<DateTime<Utc>>,
 }
 
 impl<'r> sqlx::FromRow<'r, sqlx::any::AnyRow> for Post {
@@ -25,7 +28,7 @@ impl<'r> sqlx::FromRow<'r, sqlx::any::AnyRow> for Post {
             title: row.try_get("title")?,
             content: row.try_get("content")?,
             tags: ruprizzle::decode::array(row, "tags")?,
-            deleted_at: row.try_get("deleted_at")?,
+            deleted_at: ruprizzle::decode::text_opt(row, "deleted_at")?,
         })
     }
 }
@@ -37,7 +40,7 @@ impl<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow> for Post {
             title: row.try_get(1)?,
             content: row.try_get(2)?,
             tags: row.try_get(3)?,
-            deleted_at: row.try_get(4)?,
+            deleted_at: ruprizzle::decode::rich_opt_idx(row, 4)?,
         })
     }
 }
@@ -49,7 +52,7 @@ impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for Post {
             title: row.try_get(1)?,
             content: row.try_get(2)?,
             tags: ruprizzle::decode::array_idx(row, 3usize)?,
-            deleted_at: row.try_get(4)?,
+            deleted_at: ruprizzle::decode::rich_opt_idx(row, 4)?,
         })
     }
 }
@@ -61,7 +64,7 @@ impl<'r> sqlx::FromRow<'r, sqlx::mysql::MySqlRow> for Post {
             title: row.try_get(1)?,
             content: row.try_get(2)?,
             tags: ruprizzle::decode::array_idx(row, 3usize)?,
-            deleted_at: row.try_get(4)?,
+            deleted_at: ruprizzle::decode::rich_opt_idx(row, 4)?,
         })
     }
 }
@@ -85,7 +88,7 @@ impl ruprizzle::tokio_postgres::FromTokioPostgresRow for Post {
                 .try_get::<usize, Vec<String>>(3)
                 .map_err(ruprizzle::Error::TokioPostgres)?,
             deleted_at: row
-                .try_get::<usize, Option<String>>(4)
+                .try_get::<usize, Option<DateTime<Utc>>>(4)
                 .map_err(ruprizzle::Error::TokioPostgres)?,
         })
     }
@@ -99,7 +102,7 @@ impl ruprizzle::rusqlite::FromRusqliteRow for Post {
             title: ::ruprizzle::rusqlite::get::<String>(row, 1)?,
             content: ::ruprizzle::rusqlite::get::<String>(row, 2)?,
             tags: ::ruprizzle::rusqlite::get::<Vec<String>>(row, 3)?,
-            deleted_at: ::ruprizzle::rusqlite::get_text_opt(row, 4)?,
+            deleted_at: ::ruprizzle::rusqlite::get::<Option<DateTime<Utc>>>(row, 4)?,
         })
     }
 }
@@ -112,7 +115,7 @@ impl ruprizzle::rusqlite::FromOwnedRow for Post {
             title: row.get::<String>(1)?,
             content: row.get::<String>(2)?,
             tags: row.get::<Vec<String>>(3)?,
-            deleted_at: row.get::<Option<String>>(4)?,
+            deleted_at: row.get::<Option<DateTime<Utc>>>(4)?,
         })
     }
 }
@@ -173,7 +176,7 @@ async fn fresh_pool() -> (Pool, bool, Option<IsolatedSchema>) {
             .unwrap();
         Executor::execute_raw(
             &pool,
-            "CREATE TABLE posts (id BIGSERIAL PRIMARY KEY, title TEXT NOT NULL, content TEXT NOT NULL, tags TEXT[] NOT NULL, deleted_at TEXT)"
+            "CREATE TABLE posts (id BIGSERIAL PRIMARY KEY, title TEXT NOT NULL, content TEXT NOT NULL, tags TEXT[] NOT NULL, deleted_at TIMESTAMPTZ)"
                 .into(),
             Vec::new(),
         )
@@ -359,7 +362,13 @@ async fn test_soft_deletes() {
         .unwrap();
     assert_eq!(all_posts.len(), 2);
     assert_eq!(all_posts[0].title, "Active Post 1");
-    assert!(all_posts[0].deleted_at.is_some());
+    let stamped = all_posts[0]
+        .deleted_at
+        .expect("soft_delete must stamp the row");
+    assert!(
+        (Utc::now() - stamped).num_seconds().abs() < 60,
+        "the stamp is the current time, not {stamped}"
+    );
     assert_eq!(all_posts[1].title, "Active Post 2");
     assert!(all_posts[1].deleted_at.is_none());
 

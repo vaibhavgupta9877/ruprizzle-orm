@@ -66,9 +66,11 @@ pub mod names {
     pub const MIGRATION_APPLIED_TOTAL: &str = "ruprizzle_migration_applied_total";
     /// Per-migration duration histogram, in seconds.
     pub const MIGRATION_DURATION_SECONDS: &str = "ruprizzle_migration_duration_seconds";
-    /// Total number of query cache hits.
+    /// Reserved name for query cache hits. **Not emitted in `1.5`:** query
+    /// execution does not consult a cache, so nothing records hits.
     pub const CACHE_HITS_TOTAL: &str = "ruprizzle_cache_hits_total";
-    /// Total number of query cache misses.
+    /// Reserved name for query cache misses. **Not emitted in `1.5`**, for the
+    /// same reason as [`CACHE_HITS_TOTAL`].
     pub const CACHE_MISSES_TOTAL: &str = "ruprizzle_cache_misses_total";
     /// Total number of replica queries routed.
     pub const REPLICA_ROUTING_TOTAL: &str = "ruprizzle_replica_routing_total";

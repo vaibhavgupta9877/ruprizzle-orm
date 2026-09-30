@@ -719,6 +719,22 @@ db.post().find_many().only_deleted().fetch_all().await?;  // the recycle bin
 `.to_sql()` shows the added `WHERE deleted_at IS NULL` predicate, so you can always see
 which of the three you built.
 
+The same predicate applies wherever a soft-deletable model is read as a *related* row:
+
+- **Includes**, with or without `.take(n)`.
+- **Relation filters** (`_some`, `_none`, `_every`). A soft-deleted child does not count,
+  and `_every` ranges over live children only.
+- **The right-hand side of a join.** The predicate goes in the `ON` clause, so a
+  `left_join` to a deleted row yields `NULL`s rather than dropping the left row.
+  `.with_deleted()` opts both sides out; `.only_deleted()` applies to the left model only.
+- **Tree queries** (`ancestors` / `descendants`). A deleted node is skipped, and so is
+  everything reached only through it. These builders have no `with_deleted()`; use raw
+  SQL to walk deleted nodes.
+- **The rows an m2m write reloads** onto the parent.
+
+Before `1.5.2`, the `.take(n)` include, relation filters, joins, tree queries and m2m
+reloads returned soft-deleted rows.
+
 ## Prepared statements
 
 Prepare a query once and rebind the placeholders for each execution. Bind positions are zero-based.

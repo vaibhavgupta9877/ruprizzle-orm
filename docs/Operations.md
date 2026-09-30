@@ -126,6 +126,10 @@ Interpretation:
 ## Read-replica routing
 
 `RoutedPool` sends reads to replicas and keeps writes and transactions on the primary.
+A raw statement goes to a replica only if it starts with `SELECT`, `WITH`, `VALUES`,
+`TABLE` or `SHOW` and contains none of `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `INTO`,
+`RETURNING`, `LOCK`, `SHARE`, `NEXTVAL` or `SETVAL` as a word; anything else, such as
+`SELECT … FOR UPDATE` or `INSERT … RETURNING`, runs on the primary.
 
 ```rust,ignore
 use ruprizzle::{connect, LoadBalancing, RoutedPool};
@@ -146,7 +150,10 @@ replica is only ever chosen while it is marked healthy, and `check_health()` pin
 every replica and updates those flags — call it on a timer from your own supervisor;
 nothing pings in the background on your behalf. With `fallback_to_primary(true)`, a
 read is served by the primary when no replica is healthy rather than failing; set it
-to `false` when serving stale-free reads from the primary is worse than an error.
+to `false` when moving read load onto the primary is worse than an error: reads through
+the router then fail with a `fallback_to_primary` error. `LeastConnections` counts the
+reads in flight through the router on each replica (a stream counts until dropped);
+`Random` draws uniformly per call.
 
 ## Query result cache
 
@@ -169,6 +176,14 @@ from, and invalidate that tag on every write to those tables. Entries expire laz
 read; `prune_expired()` reclaims memory eagerly if you would rather not wait for the
 next lookup. Implement `QueryCache` yourself to put the same interface in front of
 Redis or any other shared store — nothing in the trait assumes a single process.
+
+**The cache is manual.** Query execution never reads or writes it: you call `get`
+before a query and `set` after it, and `ruprizzle_cache_hits_total` /
+`ruprizzle_cache_misses_total` are not emitted. `SelectQuery::cache`, `cache_key` and
+`cache_tag` exist in the `1.5` API but **do nothing**, and are deprecated since
+`1.5.2`. So are `SelectQuery::use_primary` and `use_replica`. To choose a pool, build
+the query on `RoutedPool::primary()`, on the `RoutedPool` itself, or on
+`select_replica()`.
 
 ## Alerts
 

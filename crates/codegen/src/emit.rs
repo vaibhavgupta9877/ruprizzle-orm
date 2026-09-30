@@ -2066,6 +2066,25 @@ fn emit_relation_filter_helpers(
     let child_module_ident = format_ident!("{}", child_module);
     let child_type = format_ident!("{}", child.as_str());
 
+    // A soft-deleted child does not count: "has a post" must not match a user
+    // whose only post is deleted. `every` ranges over live children only, so the
+    // predicate is added to the negated inner filter, not to `f`.
+    let live = child_model
+        .fields
+        .values()
+        .find(|f| f.attrs.is_deleted_at)
+        .map(|f| {
+            let col = f.column.as_str();
+            quote! {
+                .and(::ruprizzle::Filter::new(::ruprizzle::FilterNode::Null {
+                    table: #child_table,
+                    column: #col,
+                    negated: false,
+                }))
+            }
+        })
+        .unwrap_or_default();
+
     let base = safe_field_ident(field.name.as_str());
     let some_name = format_ident!("{}_some", base);
     let none_name = format_ident!("{}_none", base);
@@ -2079,7 +2098,7 @@ fn emit_relation_filter_helpers(
                 child_col: #child_col,
                 parent_table: #parent_table,
                 parent_col: #parent_col,
-                filter: Box::new(f.node),
+                filter: Box::new(f #live .node),
                 negated: false,
             })
         }
@@ -2091,7 +2110,7 @@ fn emit_relation_filter_helpers(
                 child_col: #child_col,
                 parent_table: #parent_table,
                 parent_col: #parent_col,
-                filter: Box::new(f.node),
+                filter: Box::new(f #live .node),
                 negated: true,
             })
         }
@@ -2104,7 +2123,7 @@ fn emit_relation_filter_helpers(
                 child_col: #child_col,
                 parent_table: #parent_table,
                 parent_col: #parent_col,
-                filter: Box::new((!f).node),
+                filter: Box::new((!f) #live .node),
                 negated: true,
             })
         }

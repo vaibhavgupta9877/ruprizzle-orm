@@ -82,6 +82,10 @@ pub(crate) struct JoinSpec {
     pub right_columns: &'static [&'static str],
     pub right_alias: Option<&'static str>,
     pub on: JoinOn,
+    /// The right-hand model's `@deletedAt` column, if it has one. Its
+    /// `IS NULL` predicate goes into the `ON` clause, so a `LEFT JOIN` to a
+    /// soft-deleted row yields `NULL`s rather than dropping the left row.
+    pub right_deleted_at: Option<&'static str>,
 }
 
 /// A model that can appear as one side of an explicit join.

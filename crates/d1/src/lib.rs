@@ -17,7 +17,13 @@
 //! `BEGIN` and `COMMIT` sent separately would not share a connection and are not
 //! supported. D1's HTTP interface also takes no binary parameter, so [`ruprizzle`]
 //! `Bytes` values are refused rather than mangled — store them encoded in a text
-//! column.
+//! column. The same goes for a non-finite `F64` (`NaN`, `±inf`): JSON has no form
+//! for it, and before `1.5.2` it was sent as `null` and stored as `NULL`.
+//!
+//! Parameters and results cross the API as JSON numbers, which D1's JavaScript
+//! runtime holds as doubles. An integer beyond ±2^53 (9 007 199 254 740 992) is
+//! therefore rounded by D1 itself, on the way in and on the way out, before this
+//! adapter sees it. Store such values (64-bit IDs, snowflakes) as text.
 //!
 //! # Example
 //!

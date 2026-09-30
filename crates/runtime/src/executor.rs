@@ -22,6 +22,10 @@ use sqlx::sqlite::SqliteRow;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
+use futures_util::StreamExt as _;
+
+use crate::pool::{InFlight, ReadRoute};
+
 static FULL_TABLE_INCLUDE_LIMIT: AtomicU64 = AtomicU64::new(100_000);
 static SLOW_QUERY_THRESHOLD_NS: AtomicU64 = AtomicU64::new(0);
 
@@ -803,15 +807,45 @@ impl Executor for crate::pool::RoutedPool {
         sql: Cow<'static, str>,
         binds: Vec<Value>,
     ) -> BoxFuture<'_, Result<RowBatch, Error>> {
-        let pool = self.select_replica().clone();
+        if !crate::pool::is_replica_safe(&sql) {
+            return self.primary().fetch_all_raw(sql, binds);
+        }
         crate::metrics::counter(crate::metrics::REPLICA_ROUTING_TOTAL, 1);
-        Box::pin(async move { pool.fetch_all_raw(sql, binds).await })
+        match self.route_read() {
+            ReadRoute::Replica(replica) => {
+                let in_flight = InFlight::start(replica);
+                let pool = &replica.pool;
+                Box::pin(async move {
+                    let result = pool.fetch_all_raw(sql, binds).await;
+                    drop(in_flight);
+                    result
+                })
+            }
+            ReadRoute::Primary => self.primary().fetch_all_raw(sql, binds),
+            ReadRoute::NoHealthyReplica => Box::pin(async { Err(no_healthy_replica()) }),
+        }
     }
 
     fn stream_raw<'a>(&'a self, sql: Cow<'static, str>, binds: Vec<Value>) -> BoxRowStream<'a> {
-        let pool = self.select_replica();
+        if !crate::pool::is_replica_safe(&sql) {
+            return self.primary().stream_raw(sql, binds);
+        }
         crate::metrics::counter(crate::metrics::REPLICA_ROUTING_TOTAL, 1);
-        pool.stream_raw(sql, binds)
+        match self.route_read() {
+            ReadRoute::Replica(replica) => {
+                // The count is held until the stream is dropped, not just until
+                // the first row, so a slow consumer still counts as load.
+                let in_flight = InFlight::start(replica);
+                Box::pin(replica.pool.stream_raw(sql, binds).map(move |row| {
+                    let _held = &in_flight;
+                    row
+                }))
+            }
+            ReadRoute::Primary => self.primary().stream_raw(sql, binds),
+            ReadRoute::NoHealthyReplica => Box::pin(futures_util::stream::iter(std::iter::once(
+                Err(no_healthy_replica()),
+            ))),
+        }
     }
 
     fn execute_raw(
@@ -821,4 +855,12 @@ impl Executor for crate::pool::RoutedPool {
     ) -> BoxFuture<'_, Result<u64, Error>> {
         self.primary().execute_raw(sql, binds)
     }
+}
+
+fn no_healthy_replica() -> Error {
+    Error::Message(
+        "no healthy read replica, and fallback_to_primary is disabled; \
+         call RoutedPool::check_health() or mark a replica healthy"
+            .into(),
+    )
 }
