@@ -2085,7 +2085,11 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
         self
     }
 
-    /// Sets the model's soft-delete column (`@deletedAt`) to the current timestamp (`now()`).
+    /// Sets the model's soft-delete column (`@deletedAt`) to the current UTC time.
+    ///
+    /// The time is taken from the application's clock (`Utc::now()`), not the
+    /// database's, and is bound as a timestamp, the same way as any other
+    /// `DateTime` field.
     ///
     /// # Errors
     /// Returns an error if the model does not have a `@deletedAt` column configured.
@@ -2096,8 +2100,12 @@ impl<'db, M: Model> UpdateQuery<'db, M> {
                 M::TABLE
             ))
         })?;
-        let now = chrono::Utc::now().to_rfc3339();
-        Ok(self.set(Column::<M, String>::new(M::TABLE, col), now))
+        // Bound as `Value::DateTime`, not as RFC 3339 text: Postgres types a text
+        // parameter as `text` and refuses to assign it to a `timestamptz` column.
+        Ok(self.set(
+            Column::<M, chrono::DateTime<chrono::Utc>>::new(M::TABLE, col),
+            chrono::Utc::now(),
+        ))
     }
 
     /// Attaches a many-to-many nested write to this update.

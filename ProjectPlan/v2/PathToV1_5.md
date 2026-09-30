@@ -370,6 +370,12 @@ database's `now()`, although the rustdoc says `now()`.
 as a SQL expression. Change the test fixture to the column type that
 `ruprizzle migrate` generates, and run it on all three dialects.
 
+**Status: fixed** on `fix/v1-5-2-k1-k5`. Binds `Value::DateTime`. Client clock kept,
+and the rustdoc corrected, rather than emitting `CURRENT_TIMESTAMP`, because SQLite's
+`CURRENT_TIMESTAMP` text format differs from the RFC 3339 that every other
+`DateTime` write stores. The test fixture is now `TIMESTAMPTZ` on Postgres. Still
+open: the `v1_1_features` fixture has no MySQL leg.
+
 #### K4 — Soft-deleted rows leak through side paths (Medium, correctness)
 
 `SelectQuery::effective_filter` (`query.rs:514`) adds `deleted_at IS NULL`, and
@@ -532,7 +538,7 @@ Semver-safe items only. K5's removal and K6's `Result`-returning fallback wait f
       with `oneshot` tests.
 - [x] **P3 — K2.** *Done — see ProductionReadinessV1_5 §11.6.* Read-only transactions for sandbox reads and EXPLAIN. Refuse
       `ANALYZE` in `/studio/explain`. Add regression tests on SQLite and Postgres.
-- [ ] **P4 — K3.** `soft_delete()` binds a real timestamp. Test on a `DateTime`
+- [x] **P4 — K3.** *Done (PG + SQLite; MySQL not run) — see ProductionReadinessV1_5 §11.6.* `soft_delete()` binds a real timestamp. Test on a `DateTime`
       column on all three dialects.
 - [ ] **P5 — K4.** Soft-delete predicate in partitioned includes, m2m, relation
       filters, hierarchy and join right-hand side. Correct the `WhatsNew` sentence.

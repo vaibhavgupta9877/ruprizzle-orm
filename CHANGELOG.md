@@ -24,6 +24,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `/studio/explain` always runs this way, even with `--allow-writes`, and refuses
   `ANALYZE`, `ANALYSE` and parenthesised option lists.
 
+### Fixed
+
+- **`UpdateQuery::soft_delete()` works on Postgres (K3).** It bound the current time
+  as RFC 3339 *text*, which Postgres refuses to assign to the `TIMESTAMPTZ` column
+  that `@deletedAt DateTime?` generates (`column "deleted_at" is of type timestamp
+  with time zone but expression is of type text`). It now binds a timestamp, like
+  any other `DateTime` field. The rustdoc no longer claims the database's `now()`:
+  the stamp comes from the application clock.
+
 ## [1.5.1] - 2026-09-13
 
 **Published to crates.io on 2026-09-13** — all twelve crates, verified by
