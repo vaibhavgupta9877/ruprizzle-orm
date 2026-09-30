@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use ruprizzle_core::ir::Provider;
 
-use super::{AppState, ModelNav};
+use super::AppState;
 use crate::studio::db;
 
 #[derive(Debug, Clone)]
@@ -26,14 +26,13 @@ pub struct ExplainNode {
     pub is_scan: bool,
 }
 
+/// The plan, rendered as a fragment for the sandbox's result panel.
+///
+/// This used to extend the page shell, so htmx swapped a second sidebar and
+/// navbar into the sandbox's result card.
 #[derive(Template)]
-#[template(path = "explain/view.html")]
-pub struct ExplainViewTemplate<'a> {
-    pub session_token: &'a str,
-    pub models: &'a [ModelNav],
-    pub current_model: &'a str,
-    pub provider: &'a str,
-    pub allow_writes: bool,
+#[template(path = "explain/plan.html")]
+pub struct ExplainPlanTemplate {
     pub nodes: Vec<ExplainNode>,
     /// Set when no plan could be obtained. Suppresses the tree.
     pub error: Option<String>,
@@ -80,15 +79,7 @@ pub async fn render_explain_tree(
         )
     };
 
-    let tmpl = ExplainViewTemplate {
-        session_token: &state.session_token,
-        models: &state.models,
-        current_model: "",
-        provider: state.schema.datasource.provider.as_str(),
-        allow_writes: state.config.allow_writes,
-        nodes,
-        error,
-    };
+    let tmpl = ExplainPlanTemplate { nodes, error };
 
     match tmpl.render() {
         Ok(html) => Html(html).into_response(),

@@ -1,0 +1,29 @@
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Query plan</h3>
+      <p class="card-description">As the database reported it. <span class="plan-scan-dot"></span> marks a full table scan.</p>
+    </div>
+  </div>
+
+  {% match error %}{% when Some with (message) %}
+  <div class="notice notice-error">
+    <div class="notice-title">No plan was obtained</div>
+    <div class="notice-body">{{ message }}</div>
+  </div>
+  {% when None %}
+  <div class="plan-tree">
+    {% for node in nodes %}
+    <div class="plan-node{% if node.is_scan %} plan-node-scan{% endif %}" style="margin-left: {{ node.depth * 20 }}px;">
+      <span class="plan-op">{{ node.operation }}</span>
+      {% if !node.target.is_empty() %}<span class="plan-target">on {{ node.target }}</span>{% endif %}
+      {% if !node.cost.is_empty() %}<span class="plan-meta">cost={{ node.cost }}</span>{% endif %}
+      {% if !node.rows.is_empty() %}<span class="plan-meta">rows={{ node.rows }}</span>{% endif %}
+    </div>
+    {% endfor %}
+    {% if nodes.is_empty() %}
+    <div class="empty-state">The database returned an empty plan.</div>
+    {% endif %}
+  </div>
+  {% endmatch %}
+</div>

@@ -4,13 +4,12 @@
 {% block page_title %}{{ current_model }}{% endblock %}
 
 {% block top_actions %}
-<button class="btn btn-secondary btn-sm" hx-get="/studio/models/{{ current_model }}/table" hx-target="#grid-container">
-  <span>🔄 Refresh</span>
+<a class="btn btn-secondary btn-sm" href="/studio/erd#{{ current_model|urlencode_strict }}" title="Show this model in the schema graph">View in graph</a>
+<button type="button" class="btn btn-secondary btn-sm" hx-get="/studio/models/{{ current_model|urlencode_strict }}/table" hx-include="#table-search" hx-target="#grid-container">
+  Refresh
 </button>
 {% if allow_writes %}
-<button class="btn btn-primary btn-sm" onclick="document.getElementById('insert-modal').style.display='block'">
-  <span>+ New Record</span>
-</button>
+<button type="button" class="btn btn-primary btn-sm" data-open-dialog="insert-modal">+ New record</button>
 {% endif %}
 {% endblock %}
 
@@ -18,10 +17,14 @@
 <div class="table-container">
   <div class="table-toolbar">
     <div class="filter-bar">
-      <input type="text" class="input-search" placeholder="Filter records..." name="search"
-             hx-get="/studio/models/{{ current_model }}/table" hx-target="#grid-container" hx-trigger="keyup changed delay:300ms">
+      <input id="table-search" type="search" class="input-search" placeholder="Search every column  /" name="search" value="{{ search }}"
+             aria-label="Search {{ current_model }} records" autocomplete="off" data-search-shortcut
+             hx-get="/studio/models/{{ current_model|urlencode_strict }}/table" hx-target="#grid-container"
+             hx-trigger="input changed delay:300ms, search">
     </div>
-    <span class="card-description">Double-click cell to inline edit • Click foreign key badge to inspect relation</span>
+    <span class="card-description">
+      {% if allow_writes %}Double-click a cell to edit · Enter saves, Esc cancels · {% endif %}Click a foreign key to inspect the row it points at
+    </span>
   </div>
 
   <div id="grid-container">
@@ -30,33 +33,34 @@
 </div>
 
 {% if allow_writes %}
-<!-- Insert Record Modal -->
-<div id="insert-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:1000;">
-  <div style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:480px; background:#18181b; border:1px solid #27272a; border-radius:12px; padding:24px; box-shadow:0 20px 40px rgba(0,0,0,0.6);">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-      <h3 style="color:#fff; font-size:16px; font-weight:600;">Insert New {{ current_model }}</h3>
-      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('insert-modal').style.display='none'">✕</button>
+<dialog id="insert-modal" class="modal" aria-labelledby="insert-modal-title">
+  <form hx-post="/studio/models/{{ current_model|urlencode_strict }}/rows" hx-target="#table-body" hx-swap="beforeend"
+        data-reset-on-success data-success-message="{{ current_model }} record inserted.">
+    <div class="modal-header">
+      <h3 id="insert-modal-title">New {{ current_model }}</h3>
+      <button type="button" class="btn btn-secondary btn-sm" data-close-dialog aria-label="Close">✕</button>
     </div>
 
-    <form hx-post="/studio/models/{{ current_model }}/rows" hx-target="#table-body" hx-swap="beforeend"
-          onsubmit="document.getElementById('insert-modal').style.display='none'">
-      <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:20px; max-height:360px; overflow-y:auto;">
-        {% for field in fields %}
-        {% if !field.is_id %}
-        <div>
-          <label style="display:block; font-size:12px; color:#a1a1aa; margin-bottom:4px;">{{ field.name }} ({{ field.type_name }})</label>
-          <input type="text" name="{{ field.name }}" class="input-text" style="width:100%;" placeholder="Enter {{ field.name }}...">
-        </div>
-        {% endif %}
-        {% endfor %}
-      </div>
+    <div class="modal-body">
+      {% for field in fields %}
+      {% if field.insertable %}
+      <label class="form-field">
+        <span class="form-label">
+          {{ field.name }} <span class="form-type">{{ field.type_name }}</span>
+          {% if !field.optional %}<span class="form-required">required</span>{% endif %}
+        </span>
+        <input type="text" name="{{ field.name }}" class="input-text" autocomplete="off"
+               placeholder="{% if field.optional %}Leave empty for the default / NULL{% else %}{{ field.name }}{% endif %}">
+      </label>
+      {% endif %}
+      {% endfor %}
+    </div>
 
-      <div style="display:flex; justify-content:flex-end; gap:8px;">
-        <button type="button" class="btn btn-secondary" onclick="document.getElementById('insert-modal').style.display='none'">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save Record</button>
-      </div>
-    </form>
-  </div>
-</div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-close-dialog>Cancel</button>
+      <button type="submit" class="btn btn-primary">Insert record</button>
+    </div>
+  </form>
+</dialog>
 {% endif %}
 {% endblock %}

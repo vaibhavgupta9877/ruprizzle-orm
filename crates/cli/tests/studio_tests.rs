@@ -926,3 +926,130 @@ async fn read_only_mode_holds_against_postgres_write_forms() {
     pg_exec(&pool, format!("DROP TABLE IF EXISTS {t}_copy")).await;
     pg_exec(&pool, format!("DROP TABLE {t}")).await;
 }
+
+#[tokio::test]
+async fn the_schema_graph_draws_each_relation_once_between_its_key_columns() {
+    let state = Arc::new(AppState::new(
+        sample_schema(),
+        StudioConfig::default(),
+        None,
+    ));
+    let body = get_body(create_router(state), "/studio/erd/data").await;
+    let graph: serde_json::Value = serde_json::from_str(&body).expect("ERD data must be JSON");
+
+    // `User.posts` and `Post.author` are two sides of one relation: one edge.
+    let relations = graph["relations"].as_array().unwrap();
+    assert_eq!(relations.len(), 1, "{body}");
+    let edge = &relations[0];
+    assert_eq!(edge["from"], "Post");
+    assert_eq!(edge["to"], "User");
+    assert_eq!(edge["from_fields"], serde_json::json!(["authorId"]));
+    assert_eq!(edge["to_fields"], serde_json::json!(["id"]));
+    assert_eq!(edge["kind"], "many_to_one");
+
+    let post = graph["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["name"] == "Post")
+        .unwrap();
+    let author_id = post["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["name"] == "authorId")
+        .unwrap();
+    assert_eq!(author_id["is_fk"], true);
+    // The DSL spelling, not the IR's `Debug` output.
+    assert_eq!(author_id["type_name"], "Int");
+    assert!(!body.contains("Scalar("), "{body}");
+}
+
+#[tokio::test]
+async fn studio_serves_the_scripts_its_pages_load() {
+    let state = Arc::new(AppState::new(
+        sample_schema(),
+        StudioConfig::default(),
+        None,
+    ));
+    let app = create_router(state);
+
+    let erd_page = get_body(app.clone(), "/studio/erd").await;
+    for script in ["htmx.min.js", "studio.js", "erd.js"] {
+        let uri = format!("/studio/assets/js/{script}");
+        if script != "erd.js" {
+            assert!(
+                erd_page.contains(&uri),
+                "{script} is not loaded by the page"
+            );
+        }
+        let body = get_body(app.clone(), &uri).await;
+        assert!(body.len() > 1000, "{script} is missing or a stub");
+    }
+    assert!(erd_page.contains("/studio/assets/js/erd.js"));
+    // The real htmx, not a hand-written subset that ignored `hx-headers`.
+    let htmx = get_body(app, "/studio/assets/js/htmx.min.js").await;
+    assert!(
+        htmx.contains("hx-headers"),
+        "vendored htmx is not the real library"
+    );
+}
+
+#[tokio::test]
+async fn explain_answers_with_a_fragment_not_a_second_page() {
+    let dir = tempfile::tempdir().unwrap();
+    let app = writable_app(seeded_pool(dir.path()).await);
+
+    let body = post_form(app, "/studio/explain", "SELECT * FROM \"users\"").await;
+    assert!(body.contains("Query plan"), "{body}");
+    // The sandbox swaps this into its result card; a page shell here nested a
+    // second sidebar inside it.
+    assert!(!body.contains("<html"), "{body}");
+    assert!(!body.contains("sidebar"), "{body}");
+}
+
+#[tokio::test]
+async fn table_cells_keep_database_text_out_of_scripts() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    ruprizzle::Executor::execute_raw(
+        &pool,
+        std::borrow::Cow::Borrowed(
+            "INSERT INTO \"users\" (id, email, name) VALUES (3, 'x@example.com', '''+alert(1)+''<b>')",
+        ),
+        Vec::new(),
+    )
+    .await
+    .unwrap();
+    let body = get_body(writable_app(pool), "/studio/models/User").await;
+
+    // Cell values used to be spliced into `x-data="{ value: '…' }"`, which the
+    // page evaluated as JavaScript.
+    assert!(!body.contains("x-data"), "{body}");
+    assert!(!body.contains("<b>"), "{body}");
+    // Editable cells carry the value as an escaped attribute...
+    assert!(body.contains("data-column=\"name\""), "{body}");
+    assert!(body.contains("rows/3/cell?column=name"), "{body}");
+    // ...but a primary key is never offered for inline editing.
+    assert!(!body.contains("cell?column=id"), "{body}");
+}
+
+#[tokio::test]
+async fn the_grid_only_offers_a_next_page_when_one_can_exist() {
+    let dir = tempfile::tempdir().unwrap();
+    let app = writable_app(seeded_pool(dir.path()).await);
+
+    let body = get_body(app, "/studio/models/User/table?search=bob").await;
+    assert!(body.contains("bob@example.com"), "{body}");
+    // Paging keeps the active search.
+    assert!(body.contains("hx-include=\"#table-search\""), "{body}");
+    let next = body
+        .split("Next →")
+        .next()
+        .and_then(|head| head.rsplit("<button").next())
+        .unwrap();
+    assert!(
+        next.contains("disabled"),
+        "Next is live on the last page: {next}"
+    );
+}

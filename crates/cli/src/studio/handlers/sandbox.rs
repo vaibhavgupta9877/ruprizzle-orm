@@ -42,7 +42,7 @@ pub async fn render_sandbox_view(State(state): State<Arc<AppState>>) -> Response
         session_token: &state.session_token,
         models: &state.models,
         current_model: "",
-        provider: state.schema.datasource.provider.as_str(),
+        provider: state.provider,
         allow_writes: state.config.allow_writes,
     };
 

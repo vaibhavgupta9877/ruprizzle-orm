@@ -1,77 +1,62 @@
-<div style="overflow-x: auto;">
+<div class="grid-scroll">
   <table class="data-table">
     <thead>
       <tr>
         {% for field in fields %}
-        <th>
-          <div style="display:flex; align-items:center; gap:6px;">
-            {% if field.is_id %}<span>🔑</span>{% endif %}
-            <span>{{ field.name }}</span>
-            <span style="font-size:10px; color:#71717a; font-weight:normal;">{{ field.type_name }}</span>
+        <th scope="col">
+          <div class="th-inner">
+            {% if field.is_id %}<span class="key-badge key-pk" title="Primary key">PK</span>{% else if field.is_relation %}<span class="key-badge key-fk" title="Foreign key">FK</span>{% endif %}
+            <span class="th-name">{{ field.name }}</span>
+            <span class="th-type">{{ field.type_name }}</span>
           </div>
         </th>
         {% endfor %}
         {% if allow_writes %}
-        <th style="width:60px; text-align:center;">Actions</th>
+        <th scope="col" class="row-actions"><span class="sr-only">Actions</span></th>
         {% endif %}
       </tr>
     </thead>
     <tbody id="table-body">
       {% for row in rows %}
-      <tr id="row-{{ row.id }}">
+      {% let row_id = row.id.as_str() %}
+      <tr>
         {% for cell in row.cells %}
-        <td x-data="{ editing: false, value: '{{ cell.value }}' }">
-          <div x-show="!editing" @dblclick="{% if allow_writes %}editing = true{% endif %}">
-            {% if cell.is_relation %}
-            <span class="cell-relation" hx-get="/studio/relations/{{ cell.relation_target }}/{{ cell.value }}" hx-target="#relation-drawer">
-              ↗ {{ cell.value }}
-            </span>
-            {% else if cell.is_id %}
-            <span class="cell-pk">{{ cell.value }}</span>
-            {% else if cell.is_null %}
-            <span class="cell-null">null</span>
-            {% else %}
-            <span>{{ cell.value }}</span>
-            {% endif %}
-          </div>
-          {% if allow_writes %}
-          <div x-show="editing" style="display:none;">
-            <input type="text" class="input-text" style="padding:2px 6px; font-size:12px; width:100%;"
-                   x-model="value"
-                   hx-patch="/studio/models/{{ current_model }}/rows/{{ row.id }}/cell?column={{ cell.column_name }}"
-                   hx-vals="js:{ value: value }"
-                   hx-target="#row-{{ row.id }}"
-                   hx-swap="outerHTML"
-                   @keydown.enter="editing = false"
-                   @keydown.escape="editing = false"
-                   @blur="editing = false">
-          </div>
-          {% endif %}
-        </td>
+        {% include "table/_cell.html" %}
         {% endfor %}
         {% if allow_writes %}
-        <td style="text-align:center;">
-          <button class="btn btn-danger btn-sm" hx-delete="/studio/models/{{ current_model }}/rows/{{ row.id }}"
-                  hx-target="#row-{{ row.id }}" hx-swap="outerHTML"
-                  onclick="return confirm('Delete this record?')">
-            🗑
+        <td class="row-actions">
+          {% if !row.id.is_empty() %}
+          <button type="button" class="btn btn-ghost-danger btn-icon" aria-label="Delete row {{ row.id }}" title="Delete row"
+                  hx-delete="/studio/models/{{ current_model|urlencode_strict }}/rows/{{ row.id|urlencode_strict }}"
+                  hx-target="closest tr" hx-swap="outerHTML swap:150ms"
+                  hx-confirm="Delete this {{ current_model }} row ({{ row.id }})? This cannot be undone.">
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.6 9h4.8L11 4" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
+          {% endif %}
         </td>
         {% endif %}
       </tr>
       {% endfor %}
       {% match error %}{% when Some with (message) %}
-      <tr>
-        <td colspan="{{ fields.len() + 1 }}" style="padding:24px; color:#fda4af; background:#1c1416;">
-          <div style="font-weight:600; margin-bottom:4px;">⛔ No rows were read</div>
-          <div style="font-size:12px;">{{ message }}</div>
+      <tr class="grid-message">
+        <td colspan="{{ fields.len() + 1 }}">
+          <div class="notice notice-error">
+            <div class="notice-title">No rows were read</div>
+            <div class="notice-body">{{ message }}</div>
+          </div>
         </td>
       </tr>
       {% when None %}
       {% if rows.is_empty() %}
-      <tr>
-        <td colspan="{{ fields.len() + 1 }}" style="text-align:center; padding:40px; color:#71717a;">
-          No records found.
+      <tr id="empty-row" class="grid-message">
+        <td colspan="{{ fields.len() + 1 }}">
+          <div class="empty-state">
+            {% if search.is_empty() %}
+            {% if page > 1 %}No more records.{% else %}This table has no records yet.{% endif %}
+            {% else %}
+            No records match “{{ search }}”.
+            {% endif %}
+          </div>
         </td>
       </tr>
       {% endif %}
@@ -80,16 +65,20 @@
   </table>
 </div>
 
-<div style="padding:12px 16px; border-top:1px solid #27272a; display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#a1a1aa;">
-  <span>Showing <strong>{{ rows.len() }}</strong> records (Page {{ page }})</span>
-  <div style="display:flex; gap:6px;">
-    {% if page > 1 %}
-    <button class="btn btn-secondary btn-sm" hx-get="/studio/models/{{ current_model }}/table?page={{ page - 1 }}" hx-target="#grid-container">
-      Previous
+<div class="grid-footer">
+  <span>
+    {% if rows.is_empty() %}No records{% else %}Records <strong>{{ (page - 1) * page_size + 1 }}–{{ (page - 1) * page_size + rows.len() }}</strong>{% endif %}
+    {% if !search.is_empty() %} matching “{{ search }}”{% endif %}
+    · page {{ page }}
+  </span>
+  <div class="grid-pager">
+    <button type="button" class="btn btn-secondary btn-sm" {% if page <= 1 %}disabled{% endif %}
+            hx-get="/studio/models/{{ current_model|urlencode_strict }}/table?page={{ page - 1 }}" hx-include="#table-search" hx-target="#grid-container">
+      ← Previous
     </button>
-    {% endif %}
-    <button class="btn btn-secondary btn-sm" hx-get="/studio/models/{{ current_model }}/table?page={{ page + 1 }}" hx-target="#grid-container">
-      Next
+    <button type="button" class="btn btn-secondary btn-sm" {% if !has_next %}disabled{% endif %}
+            hx-get="/studio/models/{{ current_model|urlencode_strict }}/table?page={{ page + 1 }}" hx-include="#table-search" hx-target="#grid-container">
+      Next →
     </button>
   </div>
 </div>
