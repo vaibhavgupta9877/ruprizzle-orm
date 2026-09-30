@@ -333,6 +333,14 @@ In `/studio/explain`, refuse input that starts with `ANALYZE` or `(`, and run it
 through the same read-only transaction. Add regression tests for each row of the
 table above on SQLite and Postgres.
 
+**Status: fixed** on `fix/v1-5-2-k1-k5` (`studio/db.rs::fetch_dynamic_read_only`).
+One deviation from the plan: SQLite does not use `PRAGMA query_only`, because
+SQLite runs every `;`-separated statement in one call and a later statement could
+switch the pragma off. It opens a separate `SQLITE_OPEN_READONLY` connection
+instead. The same multi-statement behaviour was a second, SQLite-only K2 vector
+(`SELECT 1; DELETE …`), now covered by a test. MySQL is implemented but was not
+run locally.
+
 #### K3 — `soft_delete()` fails on Postgres (High, correctness)
 
 `UpdateQuery::soft_delete` (`crates/runtime/src/query.rs:2092`) does this:
@@ -522,7 +530,7 @@ Semver-safe items only. K5's removal and K6's `Result`-returning fallback wait f
       Do this first, so CI is green before any other change lands.
 - [x] **P2 — K1.** *Done — see ProductionReadinessV1_5 §11.6.* `Host` / `Origin` validation and a per-process form token in Studio,
       with `oneshot` tests.
-- [ ] **P3 — K2.** Read-only transactions for sandbox reads and EXPLAIN. Refuse
+- [x] **P3 — K2.** *Done — see ProductionReadinessV1_5 §11.6.* Read-only transactions for sandbox reads and EXPLAIN. Refuse
       `ANALYZE` in `/studio/explain`. Add regression tests on SQLite and Postgres.
 - [ ] **P4 — K3.** `soft_delete()` binds a real timestamp. Test on a `DateTime`
       column on all three dialects.

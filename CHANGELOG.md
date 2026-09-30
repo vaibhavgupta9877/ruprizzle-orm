@@ -15,6 +15,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   cross-origin `<form>` could drive every Studio route, and a rebound hostname could
   read every table. Off-loopback binds accept other hostnames only with
   `--yes-i-know`.
+- **Studio's read-only mode is enforced by the database (K2).** It used to classify
+  a statement by its first keyword, so `EXPLAIN ANALYZE DELETE …`, `WITH d AS
+  (DELETE …) SELECT …` and `SELECT … INTO` ran without `--allow-writes` on Postgres,
+  and `SELECT 1; DELETE …` ran on SQLite. Read-only statements now run in
+  `BEGIN READ ONLY` (Postgres) or `START TRANSACTION READ ONLY` (MySQL) and are
+  rolled back, or on a connection opened `SQLITE_OPEN_READONLY` (SQLite).
+  `/studio/explain` always runs this way, even with `--allow-writes`, and refuses
+  `ANALYZE`, `ANALYSE` and parenthesised option lists.
 
 ## [1.5.1] - 2026-09-13
 

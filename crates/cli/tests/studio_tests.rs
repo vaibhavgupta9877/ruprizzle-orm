@@ -740,3 +740,189 @@ fn host_check_accepts_studio_names_and_nothing_else() {
     };
     assert!(host_is_allowed(Some("studio.lan:5555"), &trusted));
 }
+
+// ---- K2: read-only mode is enforced by the database, not by the first keyword ----
+
+fn read_only_app(pool: ruprizzle::Pool) -> axum::Router {
+    create_router(Arc::new(AppState::new(
+        sample_schema(),
+        StudioConfig::default(),
+        Some(pool),
+    )))
+}
+
+async fn post_form(app: axum::Router, uri: &str, sql: &str) -> String {
+    let mut body = String::from("sql=");
+    for byte in sql.bytes() {
+        if byte.is_ascii_alphanumeric() {
+            body.push(char::from(byte));
+        } else {
+            body.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    let req = studio_request()
+        .method("POST")
+        .header("origin", ORIGIN)
+        .header(TOKEN_HEADER, TOKEN)
+        .uri(uri)
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from(body))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+#[tokio::test]
+async fn a_read_keyword_cannot_smuggle_a_write_past_read_only_mode_on_sqlite() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = read_only_app(pool.clone());
+
+    // SQLite runs every `;`-separated statement in one call, so this used to
+    // pass the first-keyword check and then delete.
+    let body = post_form(
+        app.clone(),
+        "/studio/sandbox/execute",
+        "SELECT 1; DELETE FROM \"users\"",
+    )
+    .await;
+    assert!(body.contains("Query failed"), "{body}");
+    assert_eq!(user_count(&pool).await, "2");
+
+    // The same smuggling through the EXPLAIN endpoint.
+    let _ = post_form(
+        app.clone(),
+        "/studio/explain",
+        "SELECT 1; DELETE FROM \"users\"",
+    )
+    .await;
+    assert_eq!(user_count(&pool).await, "2");
+
+    // Reads still work in read-only mode.
+    let body = post_form(
+        app,
+        "/studio/sandbox/execute",
+        "SELECT email FROM \"users\" ORDER BY id",
+    )
+    .await;
+    assert!(body.contains("alice@example.com"), "{body}");
+}
+
+#[tokio::test]
+async fn explain_refuses_analyze_in_every_spelling() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    // Even with --allow-writes, a plan request must never execute the statement.
+    let app = writable_app(pool.clone());
+
+    for sql in [
+        "ANALYZE DELETE FROM \"users\"",
+        "analyse DELETE FROM \"users\"",
+        "(ANALYZE) DELETE FROM \"users\"",
+    ] {
+        let body = post_form(app.clone(), "/studio/explain", sql).await;
+        assert!(
+            body.contains("EXPLAIN ANALYZE executes the statement"),
+            "{sql}: {body}"
+        );
+    }
+    assert_eq!(user_count(&pool).await, "2");
+}
+
+/// A Postgres pool from `RUPRIZZLE_TEST_PG_URL`, or `None` to skip. With
+/// `RUPRIZZLE_REQUIRE_DB` set, an unreachable database fails the test instead.
+async fn pg_pool() -> Option<ruprizzle::Pool> {
+    let Ok(url) = std::env::var("RUPRIZZLE_TEST_PG_URL") else {
+        assert!(
+            std::env::var_os("RUPRIZZLE_REQUIRE_DB").is_none(),
+            "RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_PG_URL is not"
+        );
+        return None;
+    };
+    match ruprizzle::connect(&url).await {
+        Ok(pool) => Some(pool),
+        Err(e) if std::env::var_os("RUPRIZZLE_REQUIRE_DB").is_some() => {
+            panic!("Postgres unreachable: {e}")
+        }
+        Err(_) => None,
+    }
+}
+
+async fn pg_exec(pool: &ruprizzle::Pool, sql: String) {
+    ruprizzle::Executor::execute_raw(pool, std::borrow::Cow::Owned(sql), Vec::new())
+        .await
+        .expect("setup statement must run");
+}
+
+async fn pg_count(pool: &ruprizzle::Pool, table: &str) -> i64 {
+    let batch = ruprizzle::Executor::fetch_all_raw(
+        pool,
+        std::borrow::Cow::Owned(format!("SELECT count(*) FROM {table}")),
+        Vec::new(),
+    )
+    .await
+    .expect("count must run");
+    match batch {
+        ruprizzle::RowBatch::Postgres(rows) => {
+            use ruprizzle::sqlx::Row as _;
+            rows[0].get::<i64, _>(0)
+        }
+        other => panic!("unexpected batch: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn read_only_mode_holds_against_postgres_write_forms() {
+    let Some(pool) = pg_pool().await else {
+        eprintln!("skipped: RUPRIZZLE_TEST_PG_URL not set");
+        return;
+    };
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let t = format!("studio_k2_{nanos}");
+    pg_exec(
+        &pool,
+        format!("CREATE TABLE {t} (id SERIAL PRIMARY KEY, v TEXT)"),
+    )
+    .await;
+    pg_exec(&pool, format!("INSERT INTO {t} (v) VALUES ('a'), ('b')")).await;
+
+    let app = read_only_app(pool.clone());
+    for sql in [
+        // EXPLAIN ANALYZE executes the statement it explains.
+        format!("EXPLAIN ANALYZE DELETE FROM {t}"),
+        // A data-modifying CTE behind a SELECT.
+        format!("WITH d AS (DELETE FROM {t} RETURNING *) SELECT count(*) FROM d"),
+        // DDL and sequence mutation dressed as SELECT.
+        format!("SELECT * INTO {t}_copy FROM {t}"),
+        format!("SELECT setval('{t}_id_seq', 1000)"),
+    ] {
+        let body = post_form(app.clone(), "/studio/sandbox/execute", &sql).await;
+        assert!(body.contains("read-only transaction"), "{sql}: {body}");
+    }
+    let body = post_form(
+        app.clone(),
+        "/studio/explain",
+        &format!("ANALYZE DELETE FROM {t}"),
+    )
+    .await;
+    assert!(
+        body.contains("EXPLAIN ANALYZE executes the statement"),
+        "{body}"
+    );
+
+    assert_eq!(pg_count(&pool, &t).await, 2, "no row may be deleted");
+    let body = post_form(
+        app,
+        "/studio/sandbox/execute",
+        &format!("SELECT v FROM {t} ORDER BY id"),
+    )
+    .await;
+    assert!(body.contains("2 row(s)"), "reads still work: {body}");
+
+    pg_exec(&pool, format!("DROP TABLE IF EXISTS {t}_copy")).await;
+    pg_exec(&pool, format!("DROP TABLE {t}")).await;
+}

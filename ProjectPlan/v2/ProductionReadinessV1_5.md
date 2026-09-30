@@ -890,7 +890,7 @@ re-rated until the whole patch is released and the gates are re-run.
 | ID | Status | Fix | Evidence |
 |---|---|---|---|
 | K1 | **Fixed** | `studio/guard.rs`: middleware on every route. `Host` must be a loopback name or the exact bind address (any name only for an off-loopback bind with `--yes-i-know`). Non-`GET` requests must carry `Origin == http://{Host}` and the per-process `x-studio-token`, which `base.html` hands to htmx via `hx-headers`. | `studio_tests.rs`: `a_cross_origin_form_post_cannot_drive_studio` (foreign origin, other local port, no origin, wrong/missing token, `DELETE` row; row count unchanged), `a_rebound_hostname_cannot_read_studio`, `the_page_shell_hands_htmx_the_session_token`, `host_check_accepts_studio_names_and_nothing_else`. 22/22 pass. |
-| K2 | Open | | |
+| K2 | **Fixed** | `studio/db.rs::fetch_dynamic_read_only`. Without `--allow-writes`, reads run in `BEGIN READ ONLY` (Postgres) / `START TRANSACTION READ ONLY` (MySQL) and are rolled back, or on a fresh `SQLITE_OPEN_READONLY` connection (SQLite, where one call runs every `;`-separated statement). `/studio/explain` always runs read-only and refuses `ANALYZE`, `ANALYSE` and `(…)` option lists. The first-keyword check remains only as a friendly message. | `studio_tests.rs`: `read_only_mode_holds_against_postgres_write_forms` (EXPLAIN ANALYZE DELETE, DML CTE, `SELECT … INTO`, `setval`; PG 17, row count unchanged), `a_read_keyword_cannot_smuggle_a_write_past_read_only_mode_on_sqlite` (`SELECT 1; DELETE …` via sandbox and explain), `explain_refuses_analyze_in_every_spelling`. All three fail on the pre-fix handlers. MySQL path not run locally (no server). |
 | K3 | Open | | |
 | K4 | Open | | |
 | K5 | Open | | |
