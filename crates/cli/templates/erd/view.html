@@ -1,29 +1,51 @@
 {% extends "base.html" %}
 
-{% block title %}Schema ERD — Ruprizzle Studio{% endblock %}
+{% block title %}Schema graph — Ruprizzle Studio{% endblock %}
+{% block head_extra %}<script src="/studio/assets/js/erd.js" defer></script>{% endblock %}
 {% block nav_erd %}active{% endblock %}
-{% block page_title %}Schema ERD Visualizer{% endblock %}
+{% block page_title %}Schema graph{% endblock %}
+{% block page_class %}page-body-flush{% endblock %}
 
 {% block content %}
-<div class="card" style="padding:0; overflow:hidden; display:flex; flex-direction:column; flex:1;">
-  <div class="table-toolbar">
-    <div>
-      <h3 class="card-title">Interactive Entity-Relationship Graph</h3>
-      <p class="card-description">Displays models, scalar types, primary keys, and foreign-key relation edges.</p>
+<section class="erd" data-erd-source="/studio/erd/data">
+  <div class="erd-toolbar">
+    <div class="erd-toolbar-group">
+      <input type="search" class="input-search erd-search" placeholder="Find a table or column  /" aria-label="Find a table or column" data-erd-search data-search-shortcut autocomplete="off">
+      <span class="erd-stats" data-erd-stats></span>
     </div>
-    <div style="display:flex; gap:8px;">
-      <button class="btn btn-secondary btn-sm" onclick="window.renderERD('erd-canvas', '/studio/erd/data')">Reset View</button>
+    <div class="erd-toolbar-group">
+      <div class="segmented" role="group" aria-label="What to show">
+        <button type="button" class="seg-btn" data-erd-toggle="keysOnly" aria-pressed="false" title="Show only key columns">Keys only</button>
+        <button type="button" class="seg-btn" data-erd-toggle="navFields" aria-pressed="false" title="Show relation navigation fields">Relation fields</button>
+        <button type="button" class="seg-btn" data-erd-toggle="enums" aria-pressed="false" title="Show enums as nodes">Enums</button>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" data-erd-action="relayout" title="Discard dragged positions and lay the graph out again">Auto-arrange</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-erd-action="export" title="Download the diagram as SVG">Export SVG</button>
     </div>
   </div>
 
-  <div id="erd-canvas" style="flex:1; min-height:600px; position:relative; background:#09090b;"></div>
-</div>
+  <div class="erd-stage" data-erd-stage>
+    <div class="erd-status" data-erd-status role="status"></div>
 
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    if (window.renderERD) {
-      window.renderERD('erd-canvas', '/studio/erd/data');
-    }
-  });
-</script>
+    <div class="erd-zoom" role="group" aria-label="Zoom">
+      <button type="button" class="erd-zoom-btn" data-erd-action="zoom-out" aria-label="Zoom out" title="Zoom out (−)">−</button>
+      <span class="erd-zoom-label" data-erd-zoom-label>100%</span>
+      <button type="button" class="erd-zoom-btn" data-erd-action="zoom-in" aria-label="Zoom in" title="Zoom in (+)">+</button>
+      <button type="button" class="erd-zoom-btn erd-zoom-fit" data-erd-action="fit" title="Fit to screen (F)">Fit</button>
+    </div>
+
+    <details class="erd-legend">
+      <summary>Legend</summary>
+      <dl>
+        <div><dt><span class="key-badge key-pk">PK</span></dt><dd>Primary key</dd></div>
+        <div><dt><span class="key-badge key-fk">FK</span></dt><dd>Foreign key</dd></div>
+        <div><dt><span class="key-badge key-uq">UQ</span></dt><dd>Unique</dd></div>
+        <div><dt><svg width="34" height="14" aria-hidden="true"><path d="M2,7 H32 M8,1 V13 M13,1 V13" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></dt><dd>Exactly one</dd></div>
+        <div><dt><svg width="34" height="14" aria-hidden="true"><path d="M2,7 H32 M8,1 V13" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="17" cy="7" r="3.5" fill="#09090b" stroke="currentColor" stroke-width="1.5"/></svg></dt><dd>Zero or one</dd></div>
+        <div><dt><svg width="34" height="14" aria-hidden="true"><path d="M2,7 H32 M2,0 L13,7 L2,14" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="17" cy="7" r="3.5" fill="#09090b" stroke="currentColor" stroke-width="1.5"/></svg></dt><dd>Zero or many</dd></div>
+      </dl>
+      <p>Drag to pan, scroll to zoom, drag a table to move it. Double-click a table to open its data.</p>
+    </details>
+  </div>
+</section>
 {% endblock %}

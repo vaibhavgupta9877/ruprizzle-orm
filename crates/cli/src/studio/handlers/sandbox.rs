@@ -24,6 +24,7 @@ const MAX_RENDERED_ROWS: usize = 500;
 #[derive(Template)]
 #[template(path = "sandbox/view.html")]
 pub struct SandboxViewTemplate<'a> {
+    pub session_token: &'a str,
     pub models: &'a [ModelNav],
     pub current_model: &'a str,
     pub provider: &'a str,
@@ -38,9 +39,10 @@ pub struct ExecuteForm {
 /// Renders the SQL playground page.
 pub async fn render_sandbox_view(State(state): State<Arc<AppState>>) -> Response {
     let tmpl = SandboxViewTemplate {
+        session_token: &state.session_token,
         models: &state.models,
         current_model: "",
-        provider: state.schema.datasource.provider.as_str(),
+        provider: state.provider,
         allow_writes: state.config.allow_writes,
     };
 
@@ -54,10 +56,13 @@ pub async fn render_sandbox_view(State(state): State<Arc<AppState>>) -> Response
     }
 }
 
-/// Whether a statement only reads.
+/// Whether a statement *looks* like a read, by its first keyword.
 ///
-/// Deliberately conservative: anything not recognised as a read is treated as a
-/// mutation and needs `--allow-writes`.
+/// This is a courtesy check that gives an obvious `INSERT` a clear message. It is
+/// **not** what keeps read-only mode read-only: `EXPLAIN ANALYZE DELETE …`, a
+/// data-modifying CTE and `SELECT 1; DELETE …` all start with a read keyword. In
+/// read-only mode every statement that passes this check is run by
+/// [`db::fetch_dynamic_read_only`], where the database itself refuses writes.
 #[must_use]
 pub fn is_read_only(sql: &str) -> bool {
     let head = sql
@@ -100,7 +105,11 @@ pub async fn execute_sandbox_query(
 
     let start = Instant::now();
     if read_only {
-        let result = db::fetch_dynamic(pool, sql.to_string(), Vec::new()).await;
+        let result = if state.config.allow_writes {
+            db::fetch_dynamic(pool, sql.to_string(), Vec::new()).await
+        } else {
+            db::fetch_dynamic_read_only(pool, sql).await
+        };
         let micros = start.elapsed().as_micros();
         match result {
             Ok((columns, rows)) => result_card(&columns, &rows, micros).into_response(),

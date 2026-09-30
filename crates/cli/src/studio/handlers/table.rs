@@ -17,21 +17,26 @@ use ruprizzle::{Pool, Value};
 use ruprizzle_core::ir::{Model, Provider};
 use ruprizzle_dialect::dialect_for;
 
-use super::{AppState, ModelNav};
+use super::{AppState, ModelNav, field_type_label};
 use crate::studio::db;
 
 /// Rows fetched per page of the browser.
 const PAGE_SIZE: usize = 50;
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct FieldInfo {
     pub name: String,
     pub type_name: String,
     pub is_id: bool,
     pub is_relation: bool,
+    /// Whether an insert form can set this column.
+    pub insertable: bool,
+    pub optional: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct CellInfo {
     pub column_name: String,
     pub value: String,
@@ -39,6 +44,11 @@ pub struct CellInfo {
     pub is_null: bool,
     pub is_relation: bool,
     pub relation_target: String,
+    /// Whether the cell can be edited inline. Primary keys never can: changing one
+    /// would orphan the row's own URL and every foreign key pointing at it.
+    pub editable: bool,
+    /// Whether an emptied cell is written as `NULL`.
+    pub optional: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -50,6 +60,7 @@ pub struct RowInfo {
 #[derive(Template)]
 #[template(path = "table/view.html")]
 pub struct TableViewTemplate<'a> {
+    pub session_token: &'a str,
     pub models: &'a [ModelNav],
     pub current_model: &'a str,
     pub provider: &'a str,
@@ -57,6 +68,11 @@ pub struct TableViewTemplate<'a> {
     pub fields: Vec<FieldInfo>,
     pub rows: Vec<RowInfo>,
     pub page: usize,
+    /// Whether a further page may exist.
+    pub has_next: bool,
+    pub page_size: usize,
+    /// The active search term, echoed back into the filter box.
+    pub search: String,
     /// Set when the rows could not be read. The grid renders the message instead.
     pub error: Option<String>,
 }
@@ -69,6 +85,9 @@ pub struct TableGridTemplate<'a> {
     pub fields: Vec<FieldInfo>,
     pub rows: Vec<RowInfo>,
     pub page: usize,
+    pub has_next: bool,
+    pub page_size: usize,
+    pub search: String,
     pub error: Option<String>,
 }
 
@@ -119,13 +138,17 @@ pub async fn render_table_view(
     let (rows, error) = load_rows(&state, model, page, query.search.as_deref()).await;
 
     let tmpl = TableViewTemplate {
+        session_token: &state.session_token,
         models: &state.models,
         current_model: &model_name,
-        provider: state.schema.datasource.provider.as_str(),
+        provider: state.provider,
         allow_writes: state.config.allow_writes,
         fields: extract_field_infos(model),
+        has_next: rows.len() == PAGE_SIZE,
+        page_size: PAGE_SIZE,
         rows,
         page,
+        search: query.search.unwrap_or_default(),
         error,
     };
 
@@ -149,8 +172,11 @@ pub async fn render_table_grid(
         current_model: &model_name,
         allow_writes: state.config.allow_writes,
         fields: extract_field_infos(model),
+        has_next: rows.len() == PAGE_SIZE,
+        page_size: PAGE_SIZE,
         rows,
         page,
+        search: query.search.unwrap_or_default(),
         error,
     };
 
@@ -544,6 +570,9 @@ async fn select_rows(
                     is_null: value.is_none(),
                     is_relation: relation_target(model, field).is_some(),
                     relation_target: relation_target(model, field).unwrap_or_default(),
+                    // Without a key there is no row to address the write to.
+                    editable: id_index.is_some() && db::is_editable(field) && !field.attrs.is_id,
+                    optional: field.optional,
                 })
                 .collect();
 
@@ -578,9 +607,13 @@ fn extract_field_infos(model: &Model) -> Vec<FieldInfo> {
         .filter(|f| f.has_column())
         .map(|f| FieldInfo {
             name: f.name.to_string(),
-            type_name: format!("{:?}", f.kind),
+            type_name: field_type_label(f),
             is_id: f.attrs.is_id,
             is_relation: relation_target(model, f).is_some(),
+            // A generated key is left to the database; a key without a default
+            // has to be typed in.
+            insertable: db::is_editable(f) && !(f.attrs.is_id && f.default.is_some()),
+            optional: f.optional || f.default.is_some(),
         })
         .collect()
 }

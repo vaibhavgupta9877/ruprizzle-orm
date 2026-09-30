@@ -1954,7 +1954,11 @@ impl<'d> Compiler<'d> {
     }
 }
 
-/// Thread-safe AST Query Plan Cache for reusable compiled parameterized SQL statements.
+/// A thread-safe key → SQL string map.
+///
+/// **Not used by query execution.** Nothing in `ruprizzle` compiles through it,
+/// so it caches only what you put in it yourself. It will be wired in or removed
+/// in `2.0`.
 #[derive(Debug, Default)]
 pub struct PlanCache {
     cache: std::sync::RwLock<std::collections::HashMap<String, String>>,

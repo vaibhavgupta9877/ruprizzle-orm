@@ -79,8 +79,11 @@ where
 
         let mut all = Vec::new();
         for chunk in keys.chunks(chunk_size) {
+            // This path compiles its own SQL instead of going through
+            // `SelectQuery`, so it must add the soft-delete predicate itself.
             let combined = filter
                 .clone()
+                .and(crate::model::live_rows::<C>())
                 .and(child_key.in_set(chunk.iter().copied().cloned().collect::<Vec<_>>()));
             let compiled = select_partitioned::<C>(
                 dialect,

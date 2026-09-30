@@ -7,6 +7,7 @@
 pub mod assets;
 pub mod config;
 pub mod db;
+pub mod guard;
 pub mod handlers;
 pub mod routes;
 

@@ -16,6 +16,26 @@ use ruprizzle_parser::parse;
 
 const EXAMPLES: [&str; 5] = ["blog", "ecommerce", "m2m", "saas-tenant", "minimal"];
 
+/// A soft-deletable child behind a one-to-many relation.
+const SOFT_DELETE_SCHEMA: &str = r#"
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id    Int    @id
+  posts Post[]
+}
+
+model Post {
+  id        Int       @id
+  authorId  Int       @map("author_id")
+  author    User      @relation(fields: [authorId], references: [id])
+  deletedAt DateTime? @deletedAt @map("deleted_at")
+}
+"#;
+
 #[test]
 #[ignore = "runs cargo check over 12 generated crates; expensive (CI: --ignored)"]
 fn all_examples_all_dialects_compile() {
@@ -75,6 +95,27 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio",
             // points at the directory.
             lib_rs.push_str(&format!("pub mod {module};\n"));
         }
+    }
+
+    // No example uses `@deletedAt`, so without this the relation filters that
+    // add a child's soft-delete predicate (K4) would never be compiled.
+    for (label, provider) in [
+        ("postgres", Provider::Postgres),
+        ("sqlite", Provider::Sqlite),
+        ("mysql", Provider::Mysql),
+    ] {
+        let mut schema = parse("schema.ruprizzle", SOFT_DELETE_SCHEMA).unwrap();
+        schema.datasource.provider = provider;
+        let module = format!("soft_delete_{label}");
+        let dir = out.join("src").join(&module);
+        fs::create_dir_all(&dir).unwrap();
+        for (path, content) in generate_all(&schema) {
+            fs::write(dir.join(&path), content).unwrap();
+        }
+        lib_rs.push_str(&format!(
+            "pub mod {module};
+"
+        ));
     }
 
     fs::write(out.join("src/lib.rs"), lib_rs).unwrap();

@@ -6,6 +6,118 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-09-30
+
+### Changed
+
+- **Studio's interface is rebuilt on real htmx and the schema's canonical relations.**
+  The vendored `htmx`, `alpine` and `cytoscape` scripts were ~3 KB stand-ins, so the
+  session token was never sent (every insert, edit and delete was refused), inline
+  editing crashed on load, and the schema graph drew every relation twice into a
+  fixed 1000x600 grid. Studio now ships htmx 2.0.4 and two small scripts
+  (`studio.js`, `erd.js`); Alpine and Cytoscape are gone.
+  - **Schema graph:** tables list every column with PK / FK / UQ badges and the
+    schema's own type names; one edge per relation, from the FK column to the column
+    it references, with crow's-foot cardinality and ON DELETE / ON UPDATE on hover;
+    layered automatic layout, pan, cursor-anchored zoom, draggable tables (positions
+    remembered), minimap, search, details panel, enum and relation-field toggles,
+    SVG export, and `/studio/erd#Model` deep links.
+  - **Data grid:** delete honours the confirm dialog, "Next" only appears when a page
+    can exist, paging keeps the search term, primary keys are not inline-editable,
+    failed writes show the database's error in a toast, and the insert dialog closes
+    only on success.
+  - **Explain** returns a fragment instead of a second copy of the page.
+  - The sidebar has a model filter; the read/write badge is amber and read-only green.
+
+### Security
+
+- **Studio refuses cross-origin and DNS-rebinding requests (K1).** Every request must
+  carry a `Host` that names Studio (a loopback name, or the exact bind address).
+  Every `POST`/`PATCH`/`DELETE` must also carry an `Origin` equal to Studio's own,
+  and a per-process session token that the page shell hands to htmx. Previously a
+  cross-origin `<form>` could drive every Studio route, and a rebound hostname could
+  read every table. Off-loopback binds accept other hostnames only with
+  `--yes-i-know`.
+- **Studio's read-only mode is enforced by the database (K2).** It used to classify
+  a statement by its first keyword, so `EXPLAIN ANALYZE DELETE …`, `WITH d AS
+  (DELETE …) SELECT …` and `SELECT … INTO` ran without `--allow-writes` on Postgres,
+  and `SELECT 1; DELETE …` ran on SQLite. Read-only statements now run in
+  `BEGIN READ ONLY` (Postgres) or `START TRANSACTION READ ONLY` (MySQL) and are
+  rolled back, or on a connection opened `SQLITE_OPEN_READONLY` (SQLite).
+  `/studio/explain` always runs this way, even with `--allow-writes`, and refuses
+  `ANALYZE`, `ANALYSE` and parenthesised option lists.
+- **rustls 0.23.45 in the lockfile (K8).** Clears RUSTSEC-2026-0285 (TLS 1.3
+  handshake messages accepted across encryption-level boundaries), which made
+  `cargo deny check` and `cargo xtask harden` fail. It is reached only through
+  `reqwest` in `ruprizzle-turso` / `ruprizzle-d1`; downstream builds resolving fresh
+  already got the fixed version.
+
+### Fixed
+
+- **Studio no longer runs database text as script.** Cell values were placed inside
+  `x-data="{ value: '…' }"` and evaluated; they are now escaped data attributes, and
+  row ids and FK values are URL-encoded in links.
+- **`UpdateQuery::soft_delete()` works on Postgres (K3).** It bound the current time
+  as RFC 3339 *text*, which Postgres refuses to assign to the `TIMESTAMPTZ` column
+  that `@deletedAt DateTime?` generates (`column "deleted_at" is of type timestamp
+  with time zone but expression is of type text`). It now binds a timestamp, like
+  any other `DateTime` field. The rustdoc no longer claims the database's `now()`:
+  the stamp comes from the application clock.
+- **Soft-deleted rows no longer leak through side paths (K4).** `SelectQuery` filtered
+  `deleted_at IS NULL`, but five paths that build their own SQL did not: includes
+  with `.take(n)`, generated relation filters (`_some` / `_none` / `_every`), the
+  right-hand side of a join, `ancestors` / `descendants`, and the rows an m2m write
+  reloads. All five now apply the predicate. On a join it goes in the `ON` clause, so
+  a `LEFT JOIN` keeps the left row. Tree queries also stop at a deleted node. Relation
+  filters are generated code, so **re-run `ruprizzle generate`** to pick up that part.
+
+- **`RoutedPool` settings do what they say (K6).** `fallback_to_primary(false)` was
+  stored and never read: reads now fail with an error when no replica is healthy,
+  instead of reaching the primary. `LeastConnections` always picked the first replica
+  because nothing counted in-flight reads; the router now holds a count on
+  `ReplicaPool::active_conns` for each read, and for a stream until it is dropped.
+  `Random` was a fixed stride (plain alternation for two replicas) and now draws per
+  call. Raw statements through the router were routed by method, so `INSERT …
+  RETURNING` or `SELECT … FOR UPDATE` passed to `fetch_all_raw` went to a replica;
+  only plain reads (see `RoutedPool` docs) go to a replica now. `check_health()` is
+  documented as the caller's job: nothing pings in the background.
+
+- **Tree cycle protection detects cycles (K7).** `HierarchyQuery`'s
+  `cycle_protection` was only a depth cap of 100, so parent links forming `A -> B ->
+  A` returned A and B about fifty times each. The recursive CTE now carries the keys
+  on each path and does not step onto one again, so every node is returned once. The
+  100-level cap still applies when `max_depth` is not set. Tested on Postgres, SQLite
+  and MySQL.
+
+- **D1 and Turso refuse non-finite floats (K10).** `ruprizzle-d1` sent `NaN` and
+  `±inf` as JSON `null`, so D1 stored `NULL` where the caller wrote a number, while
+  bytes and arrays in the same function were refused. `ruprizzle-turso` had the same
+  gap: serde_json writes a non-finite float as `null`, so Hrana received a float
+  with no value. Both now return `Unsupported`. The D1 docs also state that integers
+  beyond ±2^53 are rounded by D1's JavaScript runtime, in both directions.
+
+### Testing
+
+- **Studio has regression tests** for the one-edge-per-relation graph, the scripts its
+  pages load, the Explain fragment, script-safe cells and the pager.
+- **Schema-diff classification is tested, and the mutation job has a floor (K9).**
+  New `migrate` tests cover `Change::is_destructive` for every variant, enum
+  create/drop/variant diffs, column-aspect detection, index/unique/foreign-key diffs
+  and `@renamedFrom` edge cases. Mutation kill rate for `ruprizzle-migrate` rose from
+  30% to 37.5%, and `mutants.yml` now fails only below a 35% floor instead of on
+  every run. The runtime shards get Postgres and MySQL services so DB-backed tests
+  no longer skip, and report their rate without a floor for now.
+
+### Deprecated
+
+- **`SelectQuery::cache`, `cache_key`, `cache_tag`, `use_primary` and `use_replica`
+  (K5).** They have always been no-ops: the argument was discarded, the query was not
+  cached and was not routed. They are now `#[deprecated]` and their rustdoc says so.
+  The query cache is manual (`InMemoryCache` / `QueryCache`, called by you), and the
+  pool is chosen by building the query on `RoutedPool::primary()`, the `RoutedPool`,
+  or `select_replica()`. The rustdoc of `metrics::CACHE_HITS_TOTAL` /
+  `CACHE_MISSES_TOTAL` (never emitted) and `PlanCache` (unused by execution) now says
+  so too. They will be implemented or removed in `2.0`.
 
 ## [1.5.1] - 2026-09-13
 

@@ -1,41 +1,40 @@
 {% extends "base.html" %}
 
-{% block title %}SQL Sandbox — Ruprizzle Studio{% endblock %}
+{% block title %}SQL sandbox — Ruprizzle Studio{% endblock %}
 {% block nav_sandbox %}active{% endblock %}
-{% block page_title %}SQL Sandbox &amp; Playground{% endblock %}
+{% block page_title %}SQL sandbox{% endblock %}
 
 {% block content %}
-<div style="display:flex; flex-direction:column; gap:20px; flex:1;">
-  <div class="card">
-    <div class="card-header">
-      <div>
-        <h3 class="card-title">Interactive SQL Query Execution</h3>
-        <p class="card-description">Runs the statement you type against the connected database and shows what came back. Mutations require <code>--allow-writes</code>.</p>
-      </div>
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Run a statement</h3>
+      <p class="card-description">
+        Runs exactly what you type against the connected database and shows what came back.
+        {% if allow_writes %}Writes are <strong>enabled</strong>.{% else %}Read-only: the database itself refuses writes. Start with <code>--allow-writes</code> to change data.{% endif %}
+      </p>
     </div>
-
-    <form hx-post="/studio/sandbox/execute" hx-target="#sandbox-results">
-      <textarea name="sql" class="code-textarea" placeholder="SELECT * FROM users LIMIT 10;">SELECT 1 as result, 'Ruprizzle Studio' as engine;</textarea>
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
-        <span style="font-size:12px; color:#71717a;">Execute runs the statement against the connected database. Explain asks the database for its plan without running it.</span>
-        <div style="display:flex; gap:8px;">
-          <button type="submit" class="btn btn-secondary" hx-post="/studio/explain" hx-target="#sandbox-results">
-            <span>🌲 Explain Plan</span>
-          </button>
-          <button type="submit" class="btn btn-primary">
-            <span>⚡ Execute Query</span>
-          </button>
-        </div>
-      </div>
-    </form>
   </div>
 
-  <div id="sandbox-results">
-    <div class="card">
-      <div style="color:#71717a; text-align:center; padding:30px;">
-        Query results and latency breakdown will appear here.
+  <form hx-post="/studio/sandbox/execute" hx-target="#sandbox-results" hx-indicator="#sandbox-busy">
+    <textarea name="sql" class="code-textarea" spellcheck="false" aria-label="SQL statement" data-submit-on-ctrl-enter
+              placeholder="SELECT * FROM users LIMIT 10;">SELECT 1 AS result, 'Ruprizzle Studio' AS engine;</textarea>
+    <div class="sandbox-actions">
+      <span class="card-description"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> runs · Explain shows the plan without running the statement.</span>
+      <div class="sandbox-buttons">
+        <span id="sandbox-busy" class="htmx-indicator spinner" aria-label="Running"></span>
+        <button type="button" class="btn btn-secondary" hx-post="/studio/explain" hx-include="closest form" hx-target="#sandbox-results" hx-indicator="#sandbox-busy">
+          Explain plan
+        </button>
+        <button type="submit" class="btn btn-primary">Run</button>
       </div>
     </div>
+  </form>
+</div>
+
+<div id="sandbox-results" aria-live="polite">
+  <div class="card">
+    <div class="empty-state">Results appear here.</div>
   </div>
 </div>
 {% endblock %}

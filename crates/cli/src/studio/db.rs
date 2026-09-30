@@ -122,6 +122,67 @@ pub async fn fetch_dynamic(
     }
 }
 
+/// Runs one user-supplied statement where the **database** refuses writes, and
+/// returns its rows.
+///
+/// Studio's read-only mode used to trust the statement's first keyword. That let
+/// `EXPLAIN ANALYZE DELETE …` and `WITH d AS (DELETE …) SELECT …` through on
+/// Postgres, and on `SQLite`, where one call runs every `;`-separated statement,
+/// `SELECT 1; DELETE FROM users`. Classifying SQL text cannot be made safe, so this
+/// does not try:
+///
+/// - Postgres runs the statement in `BEGIN READ ONLY` and `MySQL` in
+///   `START TRANSACTION READ ONLY`, and both are rolled back. Both drivers send the
+///   statement as a prepared statement, which cannot contain a second command.
+/// - `SQLite` runs it on a fresh connection opened with `SQLITE_OPEN_READONLY`,
+///   which no `PRAGMA` inside the statement can undo.
+///
+/// # Errors
+///
+/// Returns a display message if the statement fails, including when it tries to
+/// write, and for pool kinds Studio cannot open read-only.
+pub async fn fetch_dynamic_read_only(
+    pool: &Pool,
+    sql: &str,
+) -> Result<(Vec<String>, Vec<TextRow>), String> {
+    use ruprizzle::sqlx::{self, Connection as _};
+
+    match pool {
+        Pool::Postgres(p) => {
+            let mut tx = p
+                .begin_with("BEGIN READ ONLY")
+                .await
+                .map_err(|e| e.to_string())?;
+            let rows = sqlx::query(sql).fetch_all(&mut *tx).await;
+            let _ = tx.rollback().await;
+            rows.map(|r| dynamic_rows(&r)).map_err(|e| e.to_string())
+        }
+        Pool::Mysql(p) => {
+            let mut tx = p
+                .begin_with("START TRANSACTION READ ONLY")
+                .await
+                .map_err(|e| e.to_string())?;
+            let rows = sqlx::query(sql).fetch_all(&mut *tx).await;
+            let _ = tx.rollback().await;
+            rows.map(|r| dynamic_rows(&r)).map_err(|e| e.to_string())
+        }
+        Pool::Sqlite(p) => {
+            let options = (*p.connect_options()).clone().read_only(true);
+            let mut conn = sqlx::SqliteConnection::connect_with(&options)
+                .await
+                .map_err(|e| format!("could not open a read-only connection: {e}"))?;
+            let rows = sqlx::query(sql).fetch_all(&mut conn).await;
+            let _ = conn.close().await;
+            rows.map(|r| dynamic_rows(&r)).map_err(|e| e.to_string())
+        }
+        _ => Err(
+            "this pool kind cannot be opened read-only, so the statement was not run; \
+             start studio with --allow-writes to run it unguarded"
+                .to_string(),
+        ),
+    }
+}
+
 /// Builds the SQL expression that binds a user-supplied text value into `field`.
 ///
 /// Studio's editors are text inputs, so every value arrives as a string. Binding a

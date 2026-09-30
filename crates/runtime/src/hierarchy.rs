@@ -118,6 +118,36 @@ impl<M> HierarchyNode<M> {
     }
 }
 
+/// Depth limit applied while cycle protection is on and no `max_depth` is set.
+const DEFAULT_DEPTH_CAP: usize = 100;
+
+/// SQL fragments that carry the visited keys through the recursive CTE: the
+/// anchor's path column, the step's extended path, and the step's condition
+/// that the next node is not already on the path.
+fn cycle_guard(dialect: &str, q_pk: &str) -> (String, String, String) {
+    match dialect {
+        // Text rather than an array: a model without `COLUMNS` selects `*` from
+        // the CTE, and the sqlx `Any` driver cannot decode a Postgres array.
+        "postgres" => (
+            format!(", ',' || CAST({q_pk} AS TEXT) || ',' AS __path"),
+            format!(", h.__path || CAST(c.{q_pk} AS TEXT) || ',' AS __path"),
+            format!(" AND strpos(h.__path, ',' || CAST(c.{q_pk} AS TEXT) || ',') = 0"),
+        ),
+        // MySQL types a recursive CTE column from the anchor alone, so the path
+        // is widened there or a deep path would be truncated.
+        "mysql" => (
+            format!(", CAST(CONCAT(',', {q_pk}, ',') AS CHAR(16383)) AS __path"),
+            format!(", CONCAT(h.__path, c.{q_pk}, ',') AS __path"),
+            format!(" AND LOCATE(CONCAT(',', c.{q_pk}, ','), h.__path) = 0"),
+        ),
+        _ => (
+            format!(", ',' || {q_pk} || ',' AS __path"),
+            format!(", h.__path || c.{q_pk} || ',' AS __path"),
+            format!(" AND instr(h.__path, ',' || c.{q_pk} || ',') = 0"),
+        ),
+    }
+}
+
 /// A query builder for recursive hierarchy queries (`.ancestors()` and `.descendants()`).
 pub struct HierarchyQuery<'db, M: Model> {
     pool: &'db Pool,
@@ -214,6 +244,17 @@ impl<'db, M: Model> HierarchyQuery<'db, M> {
     }
 
     /// Configures cycle and infinite loop protection (default: true).
+    ///
+    /// When on, the query tracks the keys on each path and never steps onto a
+    /// node already on it, so cyclic parent links return each node once. It
+    /// also caps the depth at 100 levels unless [`max_depth`](Self::max_depth)
+    /// is set. The path is a comma-separated string, so a text key that itself
+    /// contains a comma can be mistaken for a visited node.
+    ///
+    /// When off, there is neither a path check nor a depth cap: on cyclic data
+    /// Postgres and SQLite recurse until the statement is cancelled, and MySQL
+    /// fails at `cte_max_recursion_depth`. Turn it off only for data known to be
+    /// acyclic, or together with `max_depth`.
     #[must_use]
     pub const fn cycle_protection(mut self, enabled: bool) -> Self {
         self.cycle_protection = enabled;
@@ -252,8 +293,34 @@ impl<'db, M: Model> HierarchyQuery<'db, M> {
 
         let depth_cond = match (self.max_depth, self.cycle_protection) {
             (Some(max), _) => format!("h.__depth < {max}"),
-            (None, true) => "h.__depth < 100".to_owned(),
+            (None, true) => format!("h.__depth < {DEFAULT_DEPTH_CAP}"),
             (None, false) => "1 = 1".to_owned(),
+        };
+
+        // Cycle protection carries the keys already on the path and refuses to
+        // step onto one of them, so `A -> B -> A` yields A and B once each. A
+        // depth cap alone would stop the recursion but emit every node of the
+        // cycle once per lap.
+        let (anchor_path, step_path, not_visited) = if self.cycle_protection {
+            cycle_guard(dialect.name(), &q_pk)
+        } else {
+            (String::new(), String::new(), String::new())
+        };
+
+        // Soft-deleted nodes are excluded, and so is everything reached only
+        // through one: a deleted folder hides its subtree, just as a normal
+        // query hides the folder. The predicate goes on both halves of the CTE,
+        // because filtering the final SELECT would drop the node but still walk
+        // past it.
+        let (anchor_live, step_live) = match M::DELETED_AT_COLUMN {
+            Some(col) => {
+                let q_col = dialect.quote_ident(col);
+                (
+                    format!(" AND {q_col} IS NULL"),
+                    format!(" AND c.{q_col} IS NULL"),
+                )
+            }
+            None => (String::new(), String::new()),
         };
 
         let order_clause = match self.order_by_depth {
@@ -264,10 +331,10 @@ impl<'db, M: Model> HierarchyQuery<'db, M> {
 
         let sql = format!(
             "WITH RECURSIVE __hierarchy AS (\n  \
-               SELECT {cols_str}, 0 AS __depth FROM {q_table} WHERE {q_pk} = {placeholder}\n  \
+               SELECT {cols_str}, 0 AS __depth{anchor_path} FROM {q_table} WHERE {q_pk} = {placeholder}{anchor_live}\n  \
                UNION ALL\n  \
-               SELECT {c_cols_str}, h.__depth + 1 AS __depth FROM {q_table} c \
-               JOIN __hierarchy h ON {join_cond} WHERE {depth_cond}\n\
+               SELECT {c_cols_str}, h.__depth + 1 AS __depth{step_path} FROM {q_table} c \
+               JOIN __hierarchy h ON {join_cond} WHERE {depth_cond}{step_live}{not_visited}\n\
              )\n\
              SELECT {cols_str} FROM __hierarchy{order_clause}"
         );

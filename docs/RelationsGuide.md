@@ -337,9 +337,15 @@ let tree = db.category().tree_from_root(root_id).await?;
 
 `ancestors` and `descendants` return a `HierarchyQuery`, which has `max_depth`,
 `order_by_depth_asc` / `order_by_depth_desc`, `cycle_protection`, and — like every other builder — `to_sql()`, so the generated
-`WITH RECURSIVE` statement is inspectable. Cycle protection is on by default: a row
-already visited is not expanded again, so a corrupted parent chain cannot spin.
-Pass `cycle_protection(false)` only when the data is known to be acyclic.
+`WITH RECURSIVE` statement is inspectable. Cycle protection is on by default: each
+path carries the keys it has visited and never steps onto one again, so a corrupted
+parent chain returns each node once instead of spinning. It also caps the walk at 100
+levels unless `max_depth` is set. The visited keys are kept as a comma-separated
+string, so a text key that contains a comma can be mistaken for a visited node.
+Pass `cycle_protection(false)` only when the data is known to be acyclic: with it off
+and no `max_depth`, a cycle recurses until Postgres or SQLite cancel the statement, or
+MySQL hits `cte_max_recursion_depth`. (Before 1.5.2, protection was only the depth
+cap, and a cycle came back as dozens of duplicate rows.)
 
 ## `some`, `every`, and `none` relation filters
 

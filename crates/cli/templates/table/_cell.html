@@ -1,0 +1,18 @@
+<td class="data-cell{% if cell.editable && allow_writes %} is-editable{% endif %}" data-column="{{ cell.column_name }}"
+    {%- if cell.editable && allow_writes %} data-editable tabindex="0" title="Double-click or press Enter to edit"
+    data-patch="/studio/models/{{ current_model|urlencode_strict }}/rows/{{ row_id|urlencode_strict }}/cell?column={{ cell.column_name|urlencode_strict }}"
+    data-value="{{ cell.value }}" data-null="{{ cell.is_null }}" data-optional="{{ cell.optional }}"{% endif %}>
+  {%- if cell.is_null -%}
+  <span class="cell-null">NULL</span>
+  {%- else if cell.is_relation -%}
+  <button type="button" class="cell-relation" hx-get="/studio/relations/{{ cell.relation_target|urlencode_strict }}/{{ cell.value|urlencode_strict }}" hx-target="#relation-drawer" title="Open the {{ cell.relation_target }} this points at">
+    <span aria-hidden="true">↗</span> {{ cell.value }}
+  </button>
+  {%- else if cell.is_id -%}
+  <span class="cell-pk">{{ cell.value }}</span>
+  {%- else if cell.value.is_empty() -%}
+  <span class="cell-empty">empty</span>
+  {%- else -%}
+  <span class="cell-text">{{ cell.value }}</span>
+  {%- endif -%}
+</td>

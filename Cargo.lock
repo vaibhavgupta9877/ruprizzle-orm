@@ -2814,7 +2814,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "bytes",
  "chrono",
@@ -2850,7 +2850,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-check"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "ruprizzle-core",
  "ruprizzle-parser",
@@ -2861,7 +2861,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-cli"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "askama",
  "axum",
@@ -2892,7 +2892,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-codegen"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "criterion",
  "insta",
@@ -2907,7 +2907,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-core"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "indexmap",
  "miette",
@@ -2919,7 +2919,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-d1"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -2934,7 +2934,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-deep-tests"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "futures-util",
  "proptest",
@@ -2950,7 +2950,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-dialect"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "ruprizzle-core",
  "ruprizzle-parser",
@@ -2959,9 +2959,10 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-integration-tests"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "futures-core",
+ "futures-util",
  "insta",
  "miette",
  "ruprizzle",
@@ -2977,7 +2978,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-lsp"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "miette",
  "ruprizzle-core",
@@ -2989,7 +2990,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-macros"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -3001,7 +3002,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-migrate"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "chrono",
  "proptest",
@@ -3022,7 +3023,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-parser"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "indexmap",
  "insta",
@@ -3034,7 +3035,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-testkit"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "ruprizzle",
  "sqlx",
@@ -3046,7 +3047,7 @@ dependencies = [
 
 [[package]]
 name = "ruprizzle-turso"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "base64",
  "futures-core",
@@ -3155,9 +3156,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.43"
+version = "0.23.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
+checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
 dependencies = [
  "once_cell",
  "ring",
@@ -4843,7 +4844,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "proc-macro2",
  "syn 2.0.119",
