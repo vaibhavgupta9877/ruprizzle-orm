@@ -3,9 +3,9 @@
 //! - Full-Text Search: .matches()
 //! - Soft Deletes: .with_deleted(), .only_deleted(), .soft_delete()
 
+use ruprizzle::types::chrono::{DateTime, Utc};
 use ruprizzle::{Column, Executor, InsertQuery, Model, Pool, SelectQuery, UpdateQuery, connect};
 use ruprizzle_testkit::IsolatedSchema;
-use ruprizzle::types::chrono::{DateTime, Utc};
 use sqlx::Row;
 
 static FILE_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -362,7 +362,9 @@ async fn test_soft_deletes() {
         .unwrap();
     assert_eq!(all_posts.len(), 2);
     assert_eq!(all_posts[0].title, "Active Post 1");
-    let stamped = all_posts[0].deleted_at.expect("soft_delete must stamp the row");
+    let stamped = all_posts[0]
+        .deleted_at
+        .expect("soft_delete must stamp the row");
     assert!(
         (Utc::now() - stamped).num_seconds().abs() < 60,
         "the stamp is the current time, not {stamped}"
