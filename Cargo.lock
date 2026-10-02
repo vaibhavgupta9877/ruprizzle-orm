@@ -2902,7 +2902,7 @@ dependencies = [
  "miette",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "thiserror",
 ]
 
@@ -3002,7 +3002,7 @@ dependencies = [
  "ruprizzle-testkit",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "sqlx",
  "tempfile",
  "thiserror",
