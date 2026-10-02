@@ -42,8 +42,7 @@ The v1.1–v1.5 feature line shipped as `1.5.1` — array
 filters, full-text search, soft deletes, offline query checking, nested writes,
 tree hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and
 Ruprizzle Studio. See [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md). Known gaps
-at this release: Studio has no authentication, and the Turso/D1 adapters have not
-been run against the live hosted services (only local HTTP fakes).
+at this release: the Turso/D1 adapters have not been run against the live hosted services (only local HTTP fakes).
 
 Two things were waived on the way here, both in writing rather than by omission:
 the W4-02 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors

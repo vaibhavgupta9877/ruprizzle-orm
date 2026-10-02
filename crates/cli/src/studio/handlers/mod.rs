@@ -60,8 +60,9 @@ pub struct AppState {
     pub models: Vec<ModelNav>,
     /// Display name of the schema's provider, e.g. `PostgreSQL`.
     pub provider: &'static str,
-    /// Per-process token every mutating request must echo in
-    /// [`crate::studio::guard::TOKEN_HEADER`]. Rendered into the page shell.
+    /// Session token every request must present (see [`crate::studio::guard`]);
+    /// mutations must echo it in [`crate::studio::guard::TOKEN_HEADER`].
+    /// Rendered into the page shell.
     pub session_token: String,
 }
 
@@ -77,14 +78,19 @@ impl AppState {
             .collect();
 
         let provider = provider_label(schema.datasource.provider);
+        let session_token = config
+            .auth_token
+            .clone()
+            .filter(|t| !t.trim().is_empty())
+            .unwrap_or_else(crate::studio::guard::new_session_token);
 
         Self {
-            provider,
             schema,
             config,
             pool,
             models,
-            session_token: crate::studio::guard::new_session_token(),
+            provider,
+            session_token,
         }
     }
 }

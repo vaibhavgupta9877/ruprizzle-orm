@@ -188,3 +188,57 @@ async fn test_in_memory_hierarchy_node_tree_reconstruction() {
     let flattened = tree.flatten();
     assert_eq!(flattened.len(), 7);
 }
+
+/// A soft-delete model, used only to compile hierarchy SQL.
+#[derive(Debug, Clone, PartialEq, Default, sqlx::FromRow)]
+struct Folder {
+    id: String,
+}
+
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Folder);
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromRusqliteRow for Folder {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: ::ruprizzle::rusqlite::get::<String>(row, 0)?,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+impl ruprizzle::rusqlite::FromOwnedRow for Folder {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<String>(0)?,
+        })
+    }
+}
+
+impl Model for Folder {
+    const TABLE: &'static str = "folders";
+    const PRIMARY_KEY: &'static str = "id";
+    const COLUMNS: &'static [&'static str] = &["id"];
+    const DELETED_AT_COLUMN: Option<&'static str> = Some("deleted_at");
+}
+
+#[tokio::test]
+async fn hierarchy_with_deleted_drops_the_live_predicate_from_both_halves() {
+    let (pool, _dir) = setup_db().await;
+
+    let live = HierarchyQuery::<Folder>::descendants(&pool, "folders", "id", "parent_id", "root")
+        .to_sql()
+        .sql;
+    assert_eq!(
+        live.matches("deleted_at` IS NULL").count() + live.matches("deleted_at\" IS NULL").count(),
+        2,
+        "{live}"
+    );
+
+    let all = HierarchyQuery::<Folder>::descendants(&pool, "folders", "id", "parent_id", "root")
+        .with_deleted()
+        .to_sql()
+        .sql;
+    assert!(!all.contains("deleted_at"), "{all}");
+}

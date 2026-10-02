@@ -23,8 +23,13 @@ fn create_router(state: Arc<AppState>) -> axum::Router {
 
 /// A request as the Studio page itself would send it: right `Host`, and for a
 /// mutation (after `.method(..)`) the page's `Origin` and session token.
+///
+/// Every request also carries the session cookie the launch URL sets. The cookie
+/// alone does not authorize a mutation; that needs the header token as well.
 fn studio_request() -> axum::http::request::Builder {
-    Request::builder().header("host", HOST)
+    Request::builder()
+        .header("host", HOST)
+        .header("cookie", format!("ruprizzle_studio_5555={TOKEN}"))
 }
 
 fn sample_schema() -> ruprizzle_core::ir::Schema {
@@ -685,6 +690,7 @@ async fn a_rebound_hostname_cannot_read_studio() {
     let req = Request::builder()
         .uri("/studio")
         .header("host", "localhost:5555")
+        .header("cookie", format!("ruprizzle_studio_5555={TOKEN}"))
         .body(Body::empty())
         .unwrap();
     assert_eq!(app.oneshot(req).await.unwrap().status(), StatusCode::OK);
@@ -849,7 +855,7 @@ async fn pg_pool() -> Option<ruprizzle::Pool> {
     }
 }
 
-async fn pg_exec(pool: &ruprizzle::Pool, sql: String) {
+async fn db_exec(pool: &ruprizzle::Pool, sql: String) {
     ruprizzle::Executor::execute_raw(pool, std::borrow::Cow::Owned(sql), Vec::new())
         .await
         .expect("setup statement must run");
@@ -883,12 +889,12 @@ async fn read_only_mode_holds_against_postgres_write_forms() {
         .unwrap()
         .as_nanos();
     let t = format!("studio_k2_{nanos}");
-    pg_exec(
+    db_exec(
         &pool,
         format!("CREATE TABLE {t} (id SERIAL PRIMARY KEY, v TEXT)"),
     )
     .await;
-    pg_exec(&pool, format!("INSERT INTO {t} (v) VALUES ('a'), ('b')")).await;
+    db_exec(&pool, format!("INSERT INTO {t} (v) VALUES ('a'), ('b')")).await;
 
     let app = read_only_app(pool.clone());
     for sql in [
@@ -923,8 +929,8 @@ async fn read_only_mode_holds_against_postgres_write_forms() {
     .await;
     assert!(body.contains("2 row(s)"), "reads still work: {body}");
 
-    pg_exec(&pool, format!("DROP TABLE IF EXISTS {t}_copy")).await;
-    pg_exec(&pool, format!("DROP TABLE {t}")).await;
+    db_exec(&pool, format!("DROP TABLE IF EXISTS {t}_copy")).await;
+    db_exec(&pool, format!("DROP TABLE {t}")).await;
 }
 
 #[tokio::test]
@@ -1052,4 +1058,248 @@ async fn the_grid_only_offers_a_next_page_when_one_can_exist() {
         next.contains("disabled"),
         "Next is live on the last page: {next}"
     );
+}
+
+#[tokio::test]
+async fn studio_refuses_reads_without_the_session_token() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = writable_app(pool);
+
+    // Right Host, no token: another local user or process cannot read data.
+    for uri in ["/studio", "/studio/models/User/table", "/studio/erd/data"] {
+        let req = Request::builder()
+            .uri(uri)
+            .header("host", HOST)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "{uri}");
+        let body = res.into_body().collect().await.unwrap().to_bytes();
+        assert!(!String::from_utf8_lossy(&body).contains("alice@example.com"));
+    }
+
+    // A wrong cookie, header or bearer token is refused too.
+    for (name, value) in [
+        ("cookie", "ruprizzle_studio_5555=guess".to_owned()),
+        ("cookie", format!("ruprizzle_studio_7777={TOKEN}")),
+        (TOKEN_HEADER, "guess".to_owned()),
+        ("authorization", "Bearer guess".to_owned()),
+    ] {
+        let req = Request::builder()
+            .uri("/studio/models/User/table")
+            .header("host", HOST)
+            .header(name, value)
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            app.clone().oneshot(req).await.unwrap().status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    // Scripts may authenticate with a header or bearer token.
+    for (name, value) in [
+        (TOKEN_HEADER, TOKEN.to_owned()),
+        ("authorization", format!("Bearer {TOKEN}")),
+    ] {
+        let req = Request::builder()
+            .uri("/studio/models/User/table")
+            .header("host", HOST)
+            .header(name, value)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+}
+
+#[tokio::test]
+async fn the_launch_url_trades_its_token_for_a_strict_cookie() {
+    let app = create_router(Arc::new(AppState::new(
+        sample_schema(),
+        StudioConfig::default(),
+        None,
+    )));
+
+    let req = Request::builder()
+        .uri(format!("/studio?token={TOKEN}"))
+        .header("host", HOST)
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()["location"], "/studio");
+    let cookie = res.headers()["set-cookie"].to_str().unwrap();
+    assert!(cookie.starts_with(&format!("ruprizzle_studio_5555={TOKEN};")));
+    assert!(cookie.contains("HttpOnly") && cookie.contains("SameSite=Strict"));
+
+    let req = Request::builder()
+        .uri("/studio?token=guess")
+        .header("host", HOST)
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    assert!(res.headers().get("set-cookie").is_none());
+}
+
+#[test]
+fn a_configured_token_replaces_the_random_one() {
+    let state = AppState::new(
+        sample_schema(),
+        StudioConfig {
+            auth_token: Some("fixed-token".to_owned()),
+            ..Default::default()
+        },
+        None,
+    );
+    assert_eq!(state.session_token, "fixed-token");
+}
+
+/// A `MySQL` pool from `RUPRIZZLE_TEST_MYSQL_URL`, or `None` to skip. With
+/// `RUPRIZZLE_REQUIRE_DB` set, an unreachable database fails the test instead.
+async fn mysql_pool() -> Option<ruprizzle::Pool> {
+    let Ok(url) = std::env::var("RUPRIZZLE_TEST_MYSQL_URL") else {
+        assert!(
+            std::env::var_os("RUPRIZZLE_REQUIRE_DB").is_none(),
+            "RUPRIZZLE_REQUIRE_DB is set but RUPRIZZLE_TEST_MYSQL_URL is not"
+        );
+        return None;
+    };
+    match ruprizzle::connect(&url).await {
+        Ok(pool) => Some(pool),
+        Err(e) if std::env::var_os("RUPRIZZLE_REQUIRE_DB").is_some() => {
+            panic!("MySQL unreachable: {e}")
+        }
+        Err(_) => None,
+    }
+}
+
+async fn mysql_text(pool: &ruprizzle::Pool, sql: &'static str) -> String {
+    use ruprizzle::sqlx::Row as _;
+    let p = pool.as_mysql().expect("a MySQL pool");
+    ruprizzle::sqlx::query(sql)
+        .fetch_one(p)
+        .await
+        .expect("query must run")
+        .get::<String, _>(0)
+}
+
+async fn mysql_count(pool: &ruprizzle::Pool, sql: String) -> i64 {
+    use ruprizzle::sqlx::Row as _;
+    let p = pool.as_mysql().expect("a MySQL pool");
+    ruprizzle::sqlx::query(&sql)
+        .fetch_one(p)
+        .await
+        .expect("count must run")
+        .get::<i64, _>(0)
+}
+
+#[tokio::test]
+async fn read_only_mode_holds_against_mysql_write_forms() {
+    let Some(pool) = mysql_pool().await else {
+        eprintln!("skipped: RUPRIZZLE_TEST_MYSQL_URL not set");
+        return;
+    };
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let t = format!("studio_k2_{nanos}");
+    db_exec(
+        &pool,
+        format!("CREATE TABLE {t} (id INT AUTO_INCREMENT PRIMARY KEY, v TEXT)"),
+    )
+    .await;
+    db_exec(&pool, format!("INSERT INTO {t} (v) VALUES ('a'), ('b')")).await;
+
+    // A function that writes, so `SELECT …_w()` passes the keyword check.
+    // `CREATE FUNCTION` is not preparable, so this goes over the text protocol.
+    let create_fn = format!(
+        "CREATE FUNCTION {t}_w() RETURNS INT DETERMINISTIC MODIFIES SQL DATA \
+         BEGIN DELETE FROM {t}; RETURN 1; END"
+    );
+    ruprizzle::sqlx::raw_sql(&create_fn)
+        .execute(pool.as_mysql().expect("a MySQL pool"))
+        .await
+        .expect("the writing function is created");
+
+    let mariadb = mysql_text(&pool, "SELECT VERSION()")
+        .await
+        .contains("MariaDB");
+
+    let app = read_only_app(pool.clone());
+    // These pass Studio's first-keyword check, so only the database's
+    // `START TRANSACTION READ ONLY` stands between them and the data.
+    let body = post_form(
+        app.clone(),
+        "/studio/sandbox/execute",
+        &format!("SELECT {t}_w()"),
+    )
+    .await;
+    assert!(body.contains("READ ONLY transaction"), "{body}");
+    // MySQL 8 runs these; MariaDB has no `WITH … DELETE` or `EXPLAIN ANALYZE`
+    // and rejects them as syntax errors, which is just as safe.
+    for sql in [
+        format!("WITH c AS (SELECT 1) DELETE FROM {t}"),
+        format!("WITH c AS (SELECT 1) UPDATE {t} SET v = 'x'"),
+        format!("EXPLAIN ANALYZE DELETE {t} FROM {t} JOIN (SELECT 1 AS one) j ON j.one = 1"),
+    ] {
+        let body = post_form(app.clone(), "/studio/sandbox/execute", &sql).await;
+        assert!(body.contains("Query failed"), "{sql}: {body}");
+        assert!(
+            mariadb || body.contains("READ ONLY transaction"),
+            "{sql}: {body}"
+        );
+    }
+    // Plain writes and DDL never get that far.
+    for sql in [
+        format!("DELETE FROM {t}"),
+        format!("CREATE TABLE {t}_copy AS SELECT * FROM {t}"),
+        format!("DROP TABLE {t}"),
+    ] {
+        let body = post_form(app.clone(), "/studio/sandbox/execute", &sql).await;
+        assert!(body.contains("Nothing was executed"), "{sql}: {body}");
+    }
+
+    let schema = "SELECT count(*) FROM information_schema.tables \
+                  WHERE table_schema = DATABASE() AND table_name";
+    assert_eq!(
+        mysql_count(&pool, format!("{schema} = '{t}_copy'")).await,
+        0,
+        "no table may be created"
+    );
+    assert_eq!(
+        mysql_count(&pool, format!("{schema} = '{t}'")).await,
+        1,
+        "the table may not be dropped"
+    );
+    assert_eq!(
+        mysql_count(
+            &pool,
+            format!("SELECT count(*) FROM {t} WHERE v IN ('a', 'b')")
+        )
+        .await,
+        2,
+        "no row may be changed"
+    );
+    assert_eq!(
+        mysql_count(&pool, format!("SELECT count(*) FROM {t}")).await,
+        2
+    );
+    let body = post_form(
+        app,
+        "/studio/sandbox/execute",
+        &format!("SELECT v FROM {t} ORDER BY id"),
+    )
+    .await;
+    assert!(body.contains("2 row(s)"), "reads still work: {body}");
+
+    ruprizzle::sqlx::raw_sql(&format!("DROP FUNCTION {t}_w"))
+        .execute(pool.as_mysql().expect("a MySQL pool"))
+        .await
+        .expect("the writing function is dropped");
+    db_exec(&pool, format!("DROP TABLE IF EXISTS {t}_copy")).await;
+    db_exec(&pool, format!("DROP TABLE {t}")).await;
 }

@@ -35,7 +35,8 @@ metrics           = { version = "0.24", default-features = false, optional = tru
 # Only for `sync::Mutex`, whose guard is `Send` across an await. The std guard
 # is not, which makes `Executor`'s boxed futures un-`Send`. sqlx already pulls
 # tokio in via `runtime-tokio`, so this adds no new dependency to the tree.
-tokio             = { version = "1", default-features = false, features = ["sync"] }
+# `rt` and `time` drive `RoutedPool::spawn_health_checks`.
+tokio             = { version = "1", default-features = false, features = ["sync", "rt", "time"] }
 uuid              = { workspace = true }
 
 [features]

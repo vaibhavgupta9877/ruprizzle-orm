@@ -253,3 +253,28 @@ async fn routed_pool_execution_and_transactions() {
     assert!(tx.is_ok());
     tx.unwrap().rollback().await.unwrap();
 }
+
+#[tokio::test]
+async fn background_health_checks_restore_a_replica_until_stopped() {
+    let c = cluster().await;
+    let routed = c.builder().build();
+    routed.replicas()[0].set_healthy(false);
+
+    let task = routed.spawn_health_checks(std::time::Duration::from_millis(10));
+    let restored = async {
+        while !routed.replicas()[0].is_healthy() {
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(5), restored)
+        .await
+        .expect("the supervisor pings the live replica and marks it healthy");
+
+    task.stop();
+    routed.replicas()[0].set_healthy(false);
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert!(
+        !routed.replicas()[0].is_healthy(),
+        "a stopped supervisor no longer touches the flags"
+    );
+}

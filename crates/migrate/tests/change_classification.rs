@@ -294,9 +294,8 @@ model Post {
 /// A renamed field is compared against the field it was renamed from, never
 /// against an unrelated old field that happens to share its new name.
 ///
-/// This pins only the "no alter" half. The old `b` is not dropped either, so
-/// the planned `RENAME COLUMN a TO b` collides with it; that gap is tracked
-/// separately (PathToV1_5 K11).
+/// The old `b` is dropped (destructive, so behind `--accept-data-loss`) so
+/// the `RENAME COLUMN a TO b` does not collide with it (K11).
 #[test]
 fn a_renamed_field_is_not_altered_against_a_namesake() {
     let prev = schema(
@@ -328,6 +327,21 @@ model User {
         "{:?}",
         changes.iter().map(Change::description).collect::<Vec<_>>()
     );
+    let drop = changes
+        .iter()
+        .find(|c| matches!(c, Change::DropColumn { column, .. } if column == "b"))
+        .expect("the shadowed column is dropped");
+    assert!(drop.is_destructive());
+
+    // The drop must run before the rename, or the rename collides.
+    let up = ruprizzle_migrate::up_sql(
+        &prev,
+        &next,
+        ruprizzle_dialect::dialect_for(next.datasource.provider),
+    );
+    let drop_at = up.find("DROP COLUMN \"b\"").expect(&up);
+    let rename_at = up.find("RENAME COLUMN \"a\" TO \"b\"").expect(&up);
+    assert!(drop_at < rename_at, "{up}");
 }
 
 #[test]
