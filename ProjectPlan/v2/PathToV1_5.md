@@ -564,7 +564,10 @@ owner columns. `mutants.yml`: `migrate` fails only below `KILL_RATE_FLOOR=35`
 (`.github/scripts/mutants_floor.py`, exit codes 2/3 from cargo-mutants are
 tolerated). Runtime shards get Postgres 17 and MySQL 8.4 services with
 `RUPRIZZLE_REQUIRE_DB=1` and report their rate with no floor until a baseline with
-databases exists. The workflow change is not yet run on GitHub.
+databases exists. The workflow change is not yet run on GitHub. **Local dry run (2026-10-03, cargo-mutants 27.1.0,
+the job's exact commands):** the step tolerated exit 3 as designed and the floor script
+passed at caught 210, missed 390, timeout 12, unviable 24: **35.0%**, exactly on the floor.
+It still needs a run on GitHub, and the margin needs tests rather than a lower floor.
 
 #### K11 — `@renamedFrom` onto an existing column name (Low, found while fixing K9)
 
