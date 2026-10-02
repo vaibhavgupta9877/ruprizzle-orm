@@ -483,7 +483,9 @@ it is dropped. `Random` hashes a counter with a fresh `RandomState`. Raw stateme
 to a replica only if `is_replica_safe` passes (read keyword first, no
 write/lock/sequence word anywhere). `check_health` is documented as manual rather
 than adding a `spawn_health_checks` method, which would be new public API; that is
-deferred to 1.6.
+deferred to 1.6. **Done (1.6):** `RoutedPool::spawn_health_checks(interval)` returns a
+`HealthCheckTask` that aborts on drop; pinned by
+`background_health_checks_restore_a_replica_until_stopped`.
 
 #### K7 — Tree "cycle protection" is a depth cap (Medium, correctness)
 

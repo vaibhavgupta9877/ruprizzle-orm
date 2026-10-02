@@ -147,8 +147,10 @@ let tx = routed.begin().await?;            // always the primary
 
 `LoadBalancing` is `RoundRobin` (the default), `LeastConnections`, or `Random`. A
 replica is only ever chosen while it is marked healthy, and `check_health()` pings
-every replica and updates those flags — call it on a timer from your own supervisor;
-nothing pings in the background on your behalf. With `fallback_to_primary(true)`, a
+every replica and updates those flags. Nothing pings in the background unless you
+ask: `let _checks = routed.spawn_health_checks(Duration::from_secs(5));` (since 1.6)
+runs `check_health()` on that interval until the returned handle is dropped, or
+call `check_health()` from your own supervisor. With `fallback_to_primary(true)`, a
 read is served by the primary when no replica is healthy rather than failing; set it
 to `false` when moving read load onto the primary is worse than an error: reads through
 the router then fail with a `fallback_to_primary` error. `LeastConnections` counts the
