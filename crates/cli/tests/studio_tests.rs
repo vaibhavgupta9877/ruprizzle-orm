@@ -929,10 +929,6 @@ async fn read_only_mode_holds_against_postgres_write_forms() {
     .await;
     assert!(body.contains("2 row(s)"), "reads still work: {body}");
 
-    ruprizzle::sqlx::raw_sql(&format!("DROP FUNCTION {t}_w"))
-        .execute(pool.as_mysql().expect("a MySQL pool"))
-        .await
-        .expect("the writing function is dropped");
     db_exec(&pool, format!("DROP TABLE IF EXISTS {t}_copy")).await;
     db_exec(&pool, format!("DROP TABLE {t}")).await;
 }
@@ -1180,6 +1176,16 @@ async fn mysql_pool() -> Option<ruprizzle::Pool> {
     }
 }
 
+async fn mysql_text(pool: &ruprizzle::Pool, sql: &'static str) -> String {
+    use ruprizzle::sqlx::Row as _;
+    let p = pool.as_mysql().expect("a MySQL pool");
+    ruprizzle::sqlx::query(sql)
+        .fetch_one(p)
+        .await
+        .expect("query must run")
+        .get::<String, _>(0)
+}
+
 async fn mysql_count(pool: &ruprizzle::Pool, sql: String) -> i64 {
     use ruprizzle::sqlx::Row as _;
     let p = pool.as_mysql().expect("a MySQL pool");
@@ -1219,18 +1225,31 @@ async fn read_only_mode_holds_against_mysql_write_forms() {
         .await
         .expect("the writing function is created");
 
+    let mariadb = mysql_text(&pool, "SELECT VERSION()")
+        .await
+        .contains("MariaDB");
+
     let app = read_only_app(pool.clone());
     // These pass Studio's first-keyword check, so only the database's
     // `START TRANSACTION READ ONLY` stands between them and the data.
+    let body = post_form(
+        app.clone(),
+        "/studio/sandbox/execute",
+        &format!("SELECT {t}_w()"),
+    )
+    .await;
+    assert!(body.contains("READ ONLY transaction"), "{body}");
+    // MySQL 8 runs these; MariaDB has no `WITH … DELETE` or `EXPLAIN ANALYZE`
+    // and rejects them as syntax errors, which is just as safe.
     for sql in [
         format!("WITH c AS (SELECT 1) DELETE FROM {t}"),
         format!("WITH c AS (SELECT 1) UPDATE {t} SET v = 'x'"),
         format!("EXPLAIN ANALYZE DELETE {t} FROM {t} JOIN (SELECT 1 AS one) j ON j.one = 1"),
-        format!("SELECT {t}_w()"),
     ] {
         let body = post_form(app.clone(), "/studio/sandbox/execute", &sql).await;
+        assert!(body.contains("Query failed"), "{sql}: {body}");
         assert!(
-            body.contains("Query failed") && body.contains("READ ONLY transaction"),
+            mariadb || body.contains("READ ONLY transaction"),
             "{sql}: {body}"
         );
     }
