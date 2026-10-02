@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `HttpOnly`, `SameSite=Strict` cookie, and scripts may send `x-studio-token` or
   `Authorization: Bearer`. `--token` / `RUPRIZZLE_STUDIO_TOKEN` fixes the token.
 
+### Changed
+
+- Studio's `askama` is upgraded from 0.12 to 0.14 (the newest release whose MSRV,
+  1.83, fits the workspace's 1.85).
+
 ### Fixed
 
 - `@renamedFrom` onto the name of an existing column (K11) now drops the old

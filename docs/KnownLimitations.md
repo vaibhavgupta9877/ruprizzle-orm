@@ -87,7 +87,8 @@ whether the tool is right for your project.
   directions; store 64-bit identifiers as text on D1.
 - **There is no Neon adapter, by design.** Neon is ordinary Postgres over TLS;
   its connection string goes straight to `ruprizzle::connect`.
-- **Studio templates still use `askama` 0.12.**
+- **Studio templates use `askama` 0.14**, not the latest 0.15+/0.16, because
+  those need Rust 1.88 and the workspace MSRV is 1.85.
 
 ## Deferred / not implemented
 
