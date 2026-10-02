@@ -602,7 +602,7 @@ there too. The ±2^53 limit is documented in the `ruprizzle-d1` crate docs and i
   on building authentication.
 - The Turso and D1 adapters have not been run against the live services.
 - `askama` is on 0.12.
-- CI has no MariaDB leg (R6 follow-up).
+- ~~CI has no MariaDB leg (R6 follow-up).~~ Done (1.6): `integration-mariadb` runs the workspace and studio suites on MariaDB 11.4 LTS; verified locally on 11.4.8 (all binaries green with `RUPRIZZLE_REQUIRE_DB=1`).
 
 ### 6.B `1.5.2` patch plan
 
