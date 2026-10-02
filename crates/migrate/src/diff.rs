@@ -140,7 +140,10 @@ fn diff_columns(model: &ModelName, prev: &Model, next: &Model, changes: &mut Vec
         if !field.has_column() {
             continue;
         }
-        if !next.fields.contains_key(name) {
+        // A field renamed onto this one's name replaces it: the old column must
+        // go, or the rename collides with it (K11). The planner runs such drops
+        // before the renames.
+        if !next.fields.contains_key(name) || renamed.contains(name) {
             changes.push(Change::DropColumn {
                 model: model.clone(),
                 column: field.column.clone(),

@@ -123,6 +123,7 @@ impl<'a> Planner<'a> {
         stmts.extend(self.enum_variants_to_add());
         stmts.extend(self.models_to_create());
         stmts.extend(self.columns_to_add());
+        stmts.extend(self.shadowed_columns_to_drop());
         stmts.extend(self.columns_to_rename());
         stmts.extend(self.columns_to_alter());
         // Drop dependent objects before recreating them with new definitions.
@@ -395,8 +396,29 @@ impl<'a> Planner<'a> {
         self.dialect.add_column(self.next, target, field)
     }
 
+    /// Whether `column` of `model` is dropped to make room for a column renamed
+    /// onto its name (K11). Such a drop must run before the rename.
+    fn is_shadowed_drop(&self, model: &ModelName, column: &str) -> bool {
+        self.changes.iter().any(|c| {
+            matches!(c, Change::RenameColumn { model: m, to_column, from_column, .. }
+                if m == model && to_column == column && from_column != column)
+        })
+    }
+
+    fn shadowed_columns_to_drop(&self) -> Vec<Stmt> {
+        self.filter(|c| matches!(c, Change::DropColumn { model, column } if self.is_shadowed_drop(model, column)))
+            .flat_map(|c| match c {
+                Change::DropColumn { model, column } => {
+                    let m = self.model(model);
+                    self.dialect.drop_column(&m.table, column)
+                }
+                _ => Vec::new(),
+            })
+            .collect()
+    }
+
     fn columns_to_drop(&self) -> Vec<Stmt> {
-        self.filter(|c| matches!(c, Change::DropColumn { .. }))
+        self.filter(|c| matches!(c, Change::DropColumn { model, column } if !self.is_shadowed_drop(model, column)))
             .flat_map(|c| match c {
                 Change::DropColumn { model, column } => {
                     let m = self.model(model);

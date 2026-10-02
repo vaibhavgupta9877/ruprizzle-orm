@@ -571,6 +571,12 @@ same-named column first (destructive, so it goes behind `--accept-data-loss`), o
 refuse the plan with a clear diagnostic. Pinned in part by
 `a_renamed_field_is_not_altered_against_a_namesake`.
 
+**Fixed (1.6):** `diff_columns` now emits a `DropColumn` for the shadowed old
+column (destructive, so it needs `--accept-data-loss`), and the planner runs such
+drops in a phase before `columns_to_rename`. Pinned by
+`a_renamed_field_is_not_altered_against_a_namesake`, which now asserts the drop and
+that it precedes the rename in `up.sql`.
+
 #### K10 — D1 binds a non-finite float as `NULL` (Low)
 
 `crates/d1/src/api.rs:131`: `Number::from_f64(f).map_or(Json::Null, …)`. `NaN` and
