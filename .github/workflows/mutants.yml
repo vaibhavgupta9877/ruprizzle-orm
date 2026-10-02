@@ -26,7 +26,7 @@ jobs:
       # (212 caught, 354 missed) after the K9 tests; it was 30% before them.
       KILL_RATE_FLOOR: "35"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -92,7 +92,7 @@ jobs:
           --health-retries 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
