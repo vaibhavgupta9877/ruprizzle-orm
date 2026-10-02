@@ -33,7 +33,7 @@ than moved. `1.0.0-rc.1` remains on crates.io as the previous published version.
 
 **Upgrading from `1.0.0-rc.1`?** Most applications need no code changes. See
 [Upgrading from 1.0.0-rc.1 to 1.5.1](UpgradingFromRc1.md), and pin
-`"=1.0.0-rc.1"` until you are ready, because `"1.0.0-rc.1"` also matches `1.5.1`.
+`"=1.0.0-rc.1"` until you are ready, because `"1.0.0-rc.1"` also matches `1.6.0`.
 
 The core P0–P8 implementation is complete and MySQL/MariaDB support is shipped.
 The public API is covered by semantic versioning from `1.5.1` onward.
@@ -41,8 +41,10 @@ The public API is covered by semantic versioning from `1.5.1` onward.
 The v1.1–v1.5 feature line shipped as `1.5.1` — array
 filters, full-text search, soft deletes, offline query checking, nested writes,
 tree hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and
-Ruprizzle Studio. See [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md). Known gaps
-at this release: the Turso/D1 adapters have not been run against the live hosted services (only local HTTP fakes).
+Ruprizzle Studio. See [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md). The current
+release is `1.6.0`: Studio authentication, `with_deleted()` on hierarchies, background
+replica health checks and the K11 rename fix — see [What's new in 1.6](WhatsNewV1_6.md).
+Known gap: the Turso/D1 live smoke tests have not yet been run against the hosted services.
 
 Two things were waived on the way here, both in writing rather than by omission:
 the W4-02 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors

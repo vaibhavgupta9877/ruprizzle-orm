@@ -86,5 +86,5 @@ Feature names differ:
 | pgvector extensions | not supported |
 | Prisma read replicas / Drizzle `withReplicas` | `PoolConfig` replica routing (typed, v1.4) |
 | Prisma Accelerate / Drizzle cache | in-process query cache (v1.4) |
-| Prisma Studio / Drizzle Studio | `ruprizzle studio` (local, no auth — v1.5) |
+| Prisma Studio / Drizzle Studio | `ruprizzle studio` (local, per-run token auth since 1.6) |
 | `@libsql/client`, `@cloudflare/d1` drivers | `ruprizzle-turso`, `ruprizzle-d1` adapters |

@@ -57,6 +57,10 @@ bearer token, bound parameters, and the closing pipeline step — as well as how
 reads rows, affected-row counts, statement errors and transport failures. No network
 access and no Turso account are needed.
 
+`cargo test -p ruprizzle-turso --test live` runs a smoke test against a real Turso
+database when `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are set, and skips
+otherwise. It creates and drops one uniquely named table.
+
 ## License
 
 Licensed under either of MIT or Apache-2.0.

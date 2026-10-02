@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-`1.5.1` is the current stable release on crates.io, published 2026-09-13 for all
-twelve crates. The `v1.0.0`, `v1.0.1` and `v1.5.0` git tags never produced a
+`1.6.0` is the current stable release on crates.io, published 2026-10-03 for all
+twelve crates. `1.5.2` was never published; its security fixes ship in `1.6.0`. The `v1.0.0`, `v1.0.1` and `v1.5.0` git tags never produced a
 package — their publish runs did not upload anything. Confirm the current
 registry state with `scripts/check-release-state.sh`.
 
@@ -12,13 +12,14 @@ Fixes are developed against `main`.
 
 | Version | Supported |
 |---|---|
-| `1.5.1` (current on crates.io) | ✅ |
-| `1.0.0-rc.1` (previous published version) | ❌ — upgrade to `1.5.1` |
+| `1.6.0` (current on crates.io) | ✅ |
+| `1.5.1` | ❌ — upgrade to `1.6.0` (Studio CSRF, DNS-rebinding and read-only fixes) |
+| `1.0.0-rc.1` | ❌ — upgrade to `1.6.0` |
 | `main` / source builds | ✅ — best effort, no published artifact |
 | `0.x` (alpha and beta lines) | ❌ |
 
 If you are running a source build of the `1.5.0` tag, say so in your report and
-move to the published `1.5.1`: that tag records a failed release.
+move to the published `1.6.0`: that tag records a failed release.
 
 ## Known accepted dependency risk
 
