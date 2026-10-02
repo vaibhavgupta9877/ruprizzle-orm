@@ -2,9 +2,9 @@
 
 For a sectioned, versioned changelog, see [CHANGELOG.md](CHANGELOG.md).
 
-> **Current registry state: `1.5.1`.** All twelve crates — including
-> `ruprizzle-turso` and `ruprizzle-d1`, published for the first time — serve
-> `1.5.1` on crates.io. The `v1.0.0`, `v1.0.1` and `v1.5.0` tags all exist
+> **Current registry state: `1.6.0`.** All twelve crates — including
+> `ruprizzle-turso` and `ruprizzle-d1` — serve `1.6.0` on crates.io. `1.5.2` was
+> prepared on `main` but never tagged or published; its fixes ship in `1.6.0`. The `v1.0.0`, `v1.0.1` and `v1.5.0` tags all exist
 > without a corresponding package, because their publish runs failed before
 > uploading. Run `scripts/check-release-state.sh` before writing anything in this
 > file that describes a version as released; a tag is not a release.
@@ -60,6 +60,35 @@ pauses between uploads to let that indexing propagate. Live publishes are refuse
 when `CI` or `GITHUB_ACTIONS` is set, so the workflow is the only automated path.
 
 
+## 1.6.0
+
+Published 2026-10-03 from tag `v1.6.0`. Additive over `1.5.1`, with one behaviour
+change in Studio. It also carries every fix from the unpublished `1.5.2` (Studio
+CSRF/DNS-rebinding protection, database-enforced read-only mode, soft-delete leaks,
+replica-routing fixes, rustls 0.23.45).
+
+- **Studio authentication.** Every request needs the per-run session token. Open the
+  printed `/studio?token=…` URL (it sets an `HttpOnly`, `SameSite=Strict` cookie), or
+  send `x-studio-token` / `Authorization: Bearer`. `--token` or
+  `RUPRIZZLE_STUDIO_TOKEN` fixes the token. A bare `/studio` now returns `401`.
+- `HierarchyQuery::with_deleted()` walks soft-deleted nodes and their subtrees.
+- `RoutedPool::spawn_health_checks(interval)` checks replica health in the
+  background until the returned `HealthCheckTask` is dropped.
+- `@renamedFrom` onto the name of an existing column drops the old column first
+  (destructive, needs `--accept-data-loss`) instead of failing at apply time (K11).
+- Studio's `askama` is 0.14; CI gains a MariaDB 11.4 leg and opt-in Turso/D1 live
+  smoke tests.
+
+**Upgrading from `1.5.1`.** No code changes. Update any Studio bookmarks or scripts to
+send the token.
+
+**Known gaps.** Studio's token is sent over plain HTTP and there are no user accounts;
+keep it on loopback. The Turso/D1 live smoke tests exist but have not yet run against
+the hosted services.
+
+Full detail in [CHANGELOG.md](CHANGELOG.md#160---2026-10-03).
+
+
 ## 1.5.1
 
 Published 2026-09-13 from tag `v1.5.1`; all twelve crates are live on crates.io,
@@ -79,9 +108,9 @@ Code that matches exhaustively on diagnostic or IR enums, or builds IR/manifest 
 hand, needs small mechanical fixes. See
 [docs/UpgradingFromRc1.md](docs/UpgradingFromRc1.md).
 
-**Known gaps.** Ruprizzle Studio has no authentication, so do not expose it on an
-untrusted network. The `turso` and `d1` adapters have not been run against the live
-hosted services (only local HTTP fakes). `askama` is still on 0.12.
+**Known gaps (at 1.5.1; addressed in 1.6.0 except where noted).** Ruprizzle Studio had
+no authentication. The `turso` and `d1` adapters had not been run against the live
+hosted services (still open). `askama` was on 0.12.
 
 Full detail in [CHANGELOG.md](CHANGELOG.md#151---2026-09-13).
 

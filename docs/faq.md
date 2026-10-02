@@ -8,14 +8,15 @@ SQL. It targets PostgreSQL, MySQL/MariaDB, and SQLite 3+.
 
 ## Is it production-ready?
 
-`1.5.1` is the first stable release, published to crates.io on 2026-09-13, and
-the public API is covered by semantic versioning from here on. Earlier tags —
+Yes, within the limits below. `1.5.1` (2026-09-13) was the first stable release and
+the public API is covered by semantic versioning from there on; the current release is
+`1.6.0` (2026-10-03). Earlier tags —
 `v1.0.0`, `v1.0.1`, `v1.5.0` — are git tags whose publish runs failed before
 uploading anything; none of them exists on crates.io.
 
 The design is complete and the test suite is broad, and the release gate ran
-green end-to-end for `1.5.1`. Known gaps are still stated plainly in the release
-notes: the Turso and D1 adapters have not been run against the live hosted services. See
+green end-to-end for `1.5.1` and `1.6.0`. Known gaps are still stated plainly in the release
+notes: the Turso and D1 adapters have opt-in live smoke tests that have not yet been run against the hosted services. See
 [Known limitations](KnownLimitations.md) for the deliberate boundaries before
 making it a mission-critical dependency.
 

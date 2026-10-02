@@ -34,6 +34,19 @@ ruprizzle generate
 ruprizzle migrate dev
 ```
 
+## Studio
+
+Ruprizzle Studio, a local browser UI for your data, is behind the `studio` feature:
+
+```bash
+cargo install ruprizzle-cli --features studio
+ruprizzle studio                 # read-only; add --allow-writes to edit
+```
+
+Open the URL it prints (`http://127.0.0.1:5555/studio?token=…`). Since 1.6 every
+request needs that per-run token; use `--token` or `RUPRIZZLE_STUDIO_TOKEN` to fix it,
+and send it as `x-studio-token` or `Authorization: Bearer` from scripts.
+
 See the [project homepage](https://vaibhavgupta9877.github.io/ruprizzle-orm) for the full guide.
 
 - [Repository](https://github.com/vaibhavgupta9877/ruprizzle-orm)
