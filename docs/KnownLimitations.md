@@ -61,7 +61,7 @@ whether the tool is right for your project.
   `sqlx` ships, MySQL/MariaDB is supported and tested but is not marketed as
   production-grade; Postgres and SQLite carry no such exception.
 
-## Release-specific gaps (`1.5.1`)
+## Release-specific gaps (`1.6.0`)
 
 - **Ruprizzle Studio has token authentication only.** Since `1.6` every request
   needs the per-run session token (random, or `--token` / `RUPRIZZLE_STUDIO_TOKEN`):
