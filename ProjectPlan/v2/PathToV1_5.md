@@ -403,7 +403,10 @@ while fixing it. First, the plain m2m *include* (`IncludeMany`) already went thr
 `_none` / `_every`). `rel.rs:231` is the delete-cascade filter, which is a write and
 correctly unfiltered. Users must regenerate to get the relation-filter part.
 `HierarchyQuery` has no `with_deleted()` opt-out yet, because adding one changes
-public API. That is deferred to `1.6`.
+public API. That is deferred to `1.6`. **Done (1.6):** `HierarchyQuery::with_deleted()`
+removes the predicate from both halves of the CTE; pinned in
+`tree_hierarchy_test.rs`. The public-api CI gate now denies only changed/removed
+items, so additive 1.6 API passes.
 
 #### K5 — Public builder methods that do nothing (Medium, API honesty)
 

@@ -159,6 +159,7 @@ pub struct HierarchyQuery<'db, M: Model> {
     max_depth: Option<usize>,
     order_by_depth: Option<ruprizzle_core::ir::SortOrder>,
     cycle_protection: bool,
+    with_deleted: bool,
     _marker: PhantomData<fn() -> M>,
 }
 
@@ -182,6 +183,7 @@ impl<'db, M: Model> HierarchyQuery<'db, M> {
             max_depth: None,
             order_by_depth: None,
             cycle_protection: true,
+            with_deleted: false,
             _marker: PhantomData,
         }
     }
@@ -261,6 +263,18 @@ impl<'db, M: Model> HierarchyQuery<'db, M> {
         self
     }
 
+    /// Includes soft-deleted nodes, and the subtrees reached through them.
+    ///
+    /// By default a soft-deleted node is excluded and so is everything reached
+    /// only through it. This removes the `deleted_at IS NULL` predicate from
+    /// both halves of the recursive CTE. It has no effect on models without a
+    /// soft-delete column.
+    #[must_use]
+    pub const fn with_deleted(mut self) -> Self {
+        self.with_deleted = true;
+        self
+    }
+
     /// Compiles this hierarchy query to native SQL and binds.
     #[must_use]
     pub fn to_sql(&self) -> CompiledSql {
@@ -313,14 +327,14 @@ impl<'db, M: Model> HierarchyQuery<'db, M> {
         // because filtering the final SELECT would drop the node but still walk
         // past it.
         let (anchor_live, step_live) = match M::DELETED_AT_COLUMN {
-            Some(col) => {
+            Some(col) if !self.with_deleted => {
                 let q_col = dialect.quote_ident(col);
                 (
                     format!(" AND {q_col} IS NULL"),
                     format!(" AND c.{q_col} IS NULL"),
                 )
             }
-            None => (String::new(), String::new()),
+            _ => (String::new(), String::new()),
         };
 
         let order_clause = match self.order_by_depth {
