@@ -15,8 +15,7 @@ uploading anything; none of them exists on crates.io.
 
 The design is complete and the test suite is broad, and the release gate ran
 green end-to-end for `1.5.1`. Known gaps are still stated plainly in the release
-notes: Ruprizzle Studio has no authentication, and the Turso and D1 adapters have
-not been run against the live hosted services. See
+notes: the Turso and D1 adapters have not been run against the live hosted services. See
 [Known limitations](KnownLimitations.md) for the deliberate boundaries before
 making it a mission-critical dependency.
 

@@ -10,10 +10,15 @@
 //!   with `Host: attacker.example`, and the attacker's page is then same-origin
 //!   with Studio and can read every response.
 //!
-//! [`guard_request`] closes both. Every request must carry a `Host` that names
-//! Studio. Every request that is not `GET`/`HEAD`/`OPTIONS` must also carry an
-//! `Origin` equal to `http://{Host}` and the per-process token that the page
-//! shell hands to htmx through `hx-headers`.
+//! [`guard_request`] closes both, and authenticates every request. Every request
+//! must carry a `Host` that names Studio and the session token: as the
+//! `HttpOnly`, `SameSite=Strict` cookie set when the launch URL
+//! (`/studio?token=…`) is opened, as the [`TOKEN_HEADER`] header, or as
+//! `Authorization: Bearer …`. Every request that is not `GET`/`HEAD`/`OPTIONS`
+//! must also carry an `Origin` equal to `http://{Host}` and the token in
+//! [`TOKEN_HEADER`] (which the page shell hands to htmx through `hx-headers`);
+//! the cookie alone never authorizes a write, because a browser attaches it to
+//! cross-site requests too.
 
 use axum::extract::{Request, State};
 use axum::http::{Method, StatusCode, header};
@@ -27,6 +32,56 @@ use super::is_loopback_host;
 
 /// Header that carries the per-process session token on mutating requests.
 pub const TOKEN_HEADER: &str = "x-studio-token";
+
+/// Name of the session cookie for a Studio bound to `port`.
+///
+/// Cookies are not scoped by port, so two Studios on one host need distinct names.
+#[must_use]
+pub fn session_cookie_name(port: u16) -> String {
+    format!("ruprizzle_studio_{port}")
+}
+
+/// Compares two tokens in time independent of where they first differ.
+fn tokens_match(given: &str, expected: &str) -> bool {
+    let (a, b) = (given.as_bytes(), expected.as_bytes());
+    a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+/// The token a request presents through a header or the session cookie.
+fn presented_tokens<'r>(request: &'r Request, cookie_name: &str) -> Vec<&'r str> {
+    let headers = request.headers();
+    let mut tokens = Vec::new();
+    if let Some(t) = headers.get(TOKEN_HEADER).and_then(|v| v.to_str().ok()) {
+        tokens.push(t.trim());
+    }
+    if let Some(t) = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.trim().strip_prefix("Bearer "))
+    {
+        tokens.push(t.trim());
+    }
+    for value in headers.get_all(header::COOKIE) {
+        let Ok(value) = value.to_str() else { continue };
+        for pair in value.split(';') {
+            if let Some((name, t)) = pair.trim().split_once('=') {
+                if name == cookie_name {
+                    tokens.push(t.trim());
+                }
+            }
+        }
+    }
+    tokens
+}
+
+/// The `token` query parameter, if the request carries one.
+fn query_token(request: &Request) -> Option<&str> {
+    request
+        .uri()
+        .query()?
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("token="))
+}
 
 /// Returns a fresh 128-bit hex token for one Studio process.
 ///
@@ -89,6 +144,14 @@ fn refuse(reason: &'static str) -> Response {
     (StatusCode::FORBIDDEN, reason).into_response()
 }
 
+fn unauthorized() -> Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        "Studio requires its session token. Open the URL Studio printed when it          started (it ends in ?token=…), or send the token as `x-studio-token` or          `Authorization: Bearer`.",
+    )
+        .into_response()
+}
+
 /// Axum middleware applying the `Host`, `Origin` and token checks.
 pub async fn guard_request(
     State(state): State<Arc<AppState>>,
@@ -107,6 +170,35 @@ pub async fn guard_request(
         *request.method(),
         Method::GET | Method::HEAD | Method::OPTIONS
     );
+    let cookie_name = session_cookie_name(state.config.port);
+
+    // The launch URL: trade the token in the query for a session cookie and
+    // redirect, so the token does not stay in the address bar or history.
+    if safe_method {
+        if let Some(token) = query_token(&request) {
+            if !tokens_match(token, &state.session_token) {
+                return unauthorized();
+            }
+            let location = request.uri().path().to_owned();
+            let cookie = format!(
+                "{cookie_name}={}; Path=/; HttpOnly; SameSite=Strict",
+                state.session_token
+            );
+            return (
+                StatusCode::SEE_OTHER,
+                [(header::LOCATION, location), (header::SET_COOKIE, cookie)],
+            )
+                .into_response();
+        }
+    }
+
+    let authenticated = presented_tokens(&request, &cookie_name)
+        .into_iter()
+        .any(|t| tokens_match(t, &state.session_token));
+    if !authenticated {
+        return unauthorized();
+    }
+
     if !safe_method {
         let expected_origin = host.map(|h| format!("http://{}", h.trim()));
         let origin = request
@@ -127,7 +219,7 @@ pub async fn guard_request(
             .headers()
             .get(TOKEN_HEADER)
             .and_then(|v| v.to_str().ok())
-            .is_some_and(|t| t == state.session_token);
+            .is_some_and(|t| tokens_match(t, &state.session_token));
         if !token_ok {
             return refuse("Studio refused this request: missing or wrong session token.");
         }
@@ -145,6 +237,14 @@ mod tests {
         assert_eq!(host_name("127.0.0.1:5555"), "127.0.0.1");
         assert_eq!(host_name("localhost"), "localhost");
         assert_eq!(host_name("[::1]:5555"), "[::1]");
+    }
+
+    #[test]
+    fn token_comparison_needs_an_exact_match() {
+        assert!(tokens_match("abc", "abc"));
+        assert!(!tokens_match("abd", "abc"));
+        assert!(!tokens_match("ab", "abc"));
+        assert!(!tokens_match("", "abc"));
     }
 
     #[test]

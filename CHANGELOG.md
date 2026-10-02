@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `HierarchyQuery::with_deleted()` walks soft-deleted nodes and their subtrees.
+- `RoutedPool::spawn_health_checks(interval)` runs `check_health` in the
+  background; the returned `HealthCheckTask` stops it when dropped.
+- **Studio authentication.** Every Studio request, reads included, now needs the
+  per-run session token: the printed launch URL (`/studio?token=…`) sets it as an
+  `HttpOnly`, `SameSite=Strict` cookie, and scripts may send `x-studio-token` or
+  `Authorization: Bearer`. `--token` / `RUPRIZZLE_STUDIO_TOKEN` fixes the token.
+
+### Fixed
+
+- `@renamedFrom` onto the name of an existing column (K11) now drops the old
+  column (destructive, needs `--accept-data-loss`) before the rename, instead of
+  planning a `RENAME COLUMN` that collides at apply time.
+
 ## [1.5.2] - 2026-09-30
 
 ### Changed

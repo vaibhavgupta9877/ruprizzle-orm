@@ -33,8 +33,7 @@ PostgreSQL, MySQL/MariaDB, and SQLite 3+ are supported from day one behind a `Db
 > query checking, nested writes, tree hierarchies, OpenTelemetry, read-replica routing,
 > query caching, PostGIS and Ruprizzle Studio — described in
 > [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md). Known gaps at this release:
-> Ruprizzle Studio has no authentication, and the Turso/D1 adapters are real drivers
-> over their providers' HTTP APIs but have not been run against the live hosted
+> the Turso/D1 adapters are real drivers over their providers' HTTP APIs but have not been run against the live hosted
 > services. There is no Neon adapter, because Neon is ordinary Postgres.
 >
 > P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is covered by semantic versioning from `1.5.1` onward. Two gates were waived on the way, both in writing: the 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors (`docs/SoakReport.md`), and the two-week RC feedback window, for want of any external consumer to collect feedback from ([Stability](docs/Stability.md#waiver-the-100-rc1-feedback-window-2026-08-21)). Note that the 1.x line is pinned to `sqlx 0.8`, which ruprizzle re-exports as part of its own public API. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
@@ -623,8 +622,8 @@ This is an honest list of boundaries. It is a feature, not an apology: knowing t
   and `json_set` are supported; the `sqlite-rusqlite` feature also decodes `Json`
   without the `sqlx::Any` text round-trip. JSON containment (`@>`) is
   approximated because JSON1 has no containment operator.
-- **Ruprizzle Studio has no authentication** — do not expose it on an untrusted
-  network.
+- **Ruprizzle Studio authenticates with a single per-run token over plain HTTP**
+  — there are no user accounts or TLS, so do not expose it on an untrusted network.
 - **The Turso and D1 adapters** have been verified against local HTTP fakes, not
   the live hosted services, and send one HTTP request per statement (no
   interactive transactions).

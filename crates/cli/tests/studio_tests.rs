@@ -23,8 +23,13 @@ fn create_router(state: Arc<AppState>) -> axum::Router {
 
 /// A request as the Studio page itself would send it: right `Host`, and for a
 /// mutation (after `.method(..)`) the page's `Origin` and session token.
+///
+/// Every request also carries the session cookie the launch URL sets. The cookie
+/// alone does not authorize a mutation; that needs the header token as well.
 fn studio_request() -> axum::http::request::Builder {
-    Request::builder().header("host", HOST)
+    Request::builder()
+        .header("host", HOST)
+        .header("cookie", format!("ruprizzle_studio_5555={TOKEN}"))
 }
 
 fn sample_schema() -> ruprizzle_core::ir::Schema {
@@ -685,6 +690,7 @@ async fn a_rebound_hostname_cannot_read_studio() {
     let req = Request::builder()
         .uri("/studio")
         .header("host", "localhost:5555")
+        .header("cookie", format!("ruprizzle_studio_5555={TOKEN}"))
         .body(Body::empty())
         .unwrap();
     assert_eq!(app.oneshot(req).await.unwrap().status(), StatusCode::OK);
@@ -1052,4 +1058,101 @@ async fn the_grid_only_offers_a_next_page_when_one_can_exist() {
         next.contains("disabled"),
         "Next is live on the last page: {next}"
     );
+}
+
+#[tokio::test]
+async fn studio_refuses_reads_without_the_session_token() {
+    let dir = tempfile::tempdir().unwrap();
+    let pool = seeded_pool(dir.path()).await;
+    let app = writable_app(pool);
+
+    // Right Host, no token: another local user or process cannot read data.
+    for uri in ["/studio", "/studio/models/User/table", "/studio/erd/data"] {
+        let req = Request::builder()
+            .uri(uri)
+            .header("host", HOST)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "{uri}");
+        let body = res.into_body().collect().await.unwrap().to_bytes();
+        assert!(!String::from_utf8_lossy(&body).contains("alice@example.com"));
+    }
+
+    // A wrong cookie, header or bearer token is refused too.
+    for (name, value) in [
+        ("cookie", "ruprizzle_studio_5555=guess".to_owned()),
+        ("cookie", format!("ruprizzle_studio_7777={TOKEN}")),
+        (TOKEN_HEADER, "guess".to_owned()),
+        ("authorization", "Bearer guess".to_owned()),
+    ] {
+        let req = Request::builder()
+            .uri("/studio/models/User/table")
+            .header("host", HOST)
+            .header(name, value)
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            app.clone().oneshot(req).await.unwrap().status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    // Scripts may authenticate with a header or bearer token.
+    for (name, value) in [
+        (TOKEN_HEADER, TOKEN.to_owned()),
+        ("authorization", format!("Bearer {TOKEN}")),
+    ] {
+        let req = Request::builder()
+            .uri("/studio/models/User/table")
+            .header("host", HOST)
+            .header(name, value)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+}
+
+#[tokio::test]
+async fn the_launch_url_trades_its_token_for_a_strict_cookie() {
+    let app = create_router(Arc::new(AppState::new(
+        sample_schema(),
+        StudioConfig::default(),
+        None,
+    )));
+
+    let req = Request::builder()
+        .uri(format!("/studio?token={TOKEN}"))
+        .header("host", HOST)
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()["location"], "/studio");
+    let cookie = res.headers()["set-cookie"].to_str().unwrap();
+    assert!(cookie.starts_with(&format!("ruprizzle_studio_5555={TOKEN};")));
+    assert!(cookie.contains("HttpOnly") && cookie.contains("SameSite=Strict"));
+
+    let req = Request::builder()
+        .uri("/studio?token=guess")
+        .header("host", HOST)
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    assert!(res.headers().get("set-cookie").is_none());
+}
+
+#[test]
+fn a_configured_token_replaces_the_random_one() {
+    let state = AppState::new(
+        sample_schema(),
+        StudioConfig {
+            auth_token: Some("fixed-token".to_owned()),
+            ..Default::default()
+        },
+        None,
+    );
+    assert_eq!(state.session_token, "fixed-token");
 }

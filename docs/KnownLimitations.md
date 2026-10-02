@@ -63,9 +63,14 @@ whether the tool is right for your project.
 
 ## Release-specific gaps (`1.5.1`)
 
-- **Ruprizzle Studio has no authentication.** It binds `127.0.0.1` by default and
-  refuses `--allow-writes` on a non-loopback host without `--yes-i-know`; do not
-  expose it on an untrusted network. Since `1.5.2` it refuses requests whose `Host`
+- **Ruprizzle Studio has token authentication only.** Since `1.6` every request
+  needs the per-run session token (random, or `--token` / `RUPRIZZLE_STUDIO_TOKEN`):
+  the launch URL Studio prints (`/studio?token=…`) sets it as an `HttpOnly`,
+  `SameSite=Strict` cookie, and scripts send it as `x-studio-token` or
+  `Authorization: Bearer`. There are no user accounts or roles and no TLS, so off
+  loopback the token crosses the network in cleartext. It binds `127.0.0.1` by
+  default and refuses `--allow-writes` on a non-loopback host without
+  `--yes-i-know`; do not expose it on an untrusted network. Since `1.5.2` it refuses requests whose `Host`
   is not Studio's own name (DNS rebinding) and mutations without Studio's `Origin`
   and session token (CSRF), so a web page open in the same browser cannot drive it.
   Scripted `POST`s from `curl` are refused for the same reason.
