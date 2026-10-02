@@ -118,8 +118,8 @@ pub use nested::{
 pub use order::OrderBy;
 pub use page::Page;
 pub use pool::{
-    LoadBalancing, Pool, PoolConfig, PoolStats, ReplicaPool, RoutedPool, RoutedPoolBuilder,
-    connect, connect_with, ping, stats,
+    HealthCheckTask, LoadBalancing, Pool, PoolConfig, PoolStats, ReplicaPool, RoutedPool,
+    RoutedPoolBuilder, connect, connect_with, ping, stats,
 };
 pub use query::{
     AggregateQuery, DeleteQuery, GroupedQuery, InsertManyQuery, InsertQuery, NestedSetter,

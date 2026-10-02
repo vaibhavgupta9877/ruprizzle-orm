@@ -117,8 +117,8 @@ enum Command {
 
         /// Host address to bind to (default 127.0.0.1).
         ///
-        /// Studio has no authentication. Binding off loopback exposes it to
-        /// everyone who can reach the port.
+        /// Studio serves plain HTTP. Binding off loopback sends its session
+        /// token across the network in cleartext.
         #[arg(long, default_value = "127.0.0.1")]
         host: String,
 
@@ -133,6 +133,10 @@ enum Command {
         /// Disable auto-opening the web browser on launch.
         #[arg(long)]
         no_browser: bool,
+
+        /// Session token every request must present (default: random per run).
+        #[arg(long, env = "RUPRIZZLE_STUDIO_TOKEN", hide_env_values = true)]
+        token: Option<String>,
     },
 }
 
@@ -271,6 +275,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             allow_writes,
             yes_i_know,
             no_browser,
+            token,
         } => {
             let db_url = resolve_database_url(&cli.schema, cli.verbose).ok();
             let config = studio::StudioConfig {
@@ -281,6 +286,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 allow_writes: *allow_writes,
                 yes_i_know: *yes_i_know,
                 no_browser: *no_browser,
+                auth_token: token.clone(),
             };
             studio::run_studio(config).await
         }

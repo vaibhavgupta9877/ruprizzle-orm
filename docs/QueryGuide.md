@@ -728,8 +728,8 @@ The same predicate applies wherever a soft-deletable model is read as a *related
   `left_join` to a deleted row yields `NULL`s rather than dropping the left row.
   `.with_deleted()` opts both sides out; `.only_deleted()` applies to the left model only.
 - **Tree queries** (`ancestors` / `descendants`). A deleted node is skipped, and so is
-  everything reached only through it. These builders have no `with_deleted()`; use raw
-  SQL to walk deleted nodes.
+  everything reached only through it. `.with_deleted()` (since 1.6) walks deleted
+  nodes and their subtrees too.
 - **The rows an m2m write reloads** onto the parent.
 
 Before `1.5.2`, the `.take(n)` include, relation filters, joins, tree queries and m2m

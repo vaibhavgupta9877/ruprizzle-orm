@@ -160,14 +160,14 @@ optional fields do not need a branch at the call site.
 Self-referencing models get recursive-CTE traversal through `HierarchyQuery`:
 
 ```rust
-let subtree = Category::hierarchy()
-    .descendants(root_id, /* max_depth */ Some(5))
-    .fetch(&pool)
-    .await?;
+// Flat list of the subtree, at most 5 levels down.
+let subtree = db.category().descendants(root_id).max_depth(5).all().await?;
 
-subtree.count();               // nodes in the result
-subtree.max_subtree_depth();   // deepest level reached
-subtree.flatten();             // depth-first Vec<&Category>
+// In-memory tree rooted at `root_id`.
+let tree = db.category().tree_from_root(root_id).await?;
+tree.count();               // nodes in the tree
+tree.max_subtree_depth();   // deepest level reached
+tree.flatten();             // depth-first Vec<&Category>
 ```
 
 `ancestors()` walks the other direction, and `HierarchyQuery::to_sql()` prints the CTE
@@ -199,7 +199,8 @@ let pool = RoutedPool::builder(primary)
 Three strategies are available — `RoundRobin`, `LeastConnections` and `Random`.
 Unhealthy replicas are skipped, and when no replica is healthy the router falls back to
 the primary rather than failing, unless `fallback_to_primary(false)` is set. Health is
-only updated when you call `check_health()`.
+only updated when you call `check_health()`, or, since 1.6, in the background with
+`pool.spawn_health_checks(Duration::from_secs(10))` (keep the returned handle alive).
 
 > **Before 1.5.2**, `fallback_to_primary(false)` was ignored, `LeastConnections`
 > always chose the first replica (nothing counted in-flight reads), `Random` was a
@@ -278,7 +279,10 @@ an unreachable database can never be mistaken for a safe migration.
 
 Two limits worth knowing:
 
-- **Studio has no authentication.** It binds `127.0.0.1` by default. `--allow-writes`
+- **Studio authentication (since 1.6).** Every request needs the per-run session
+  token: open the URL Studio prints (`/studio?token=…`), or send `x-studio-token` /
+  `Authorization: Bearer`; `--token` or `RUPRIZZLE_STUDIO_TOKEN` fixes it. Before 1.6
+  Studio had no authentication. It binds `127.0.0.1` by default. `--allow-writes`
   on a non-loopback host is refused unless you pass `--yes-i-know`, because that
   combination publishes `INSERT`, `UPDATE` and `DELETE` to anyone who can reach the
   port.

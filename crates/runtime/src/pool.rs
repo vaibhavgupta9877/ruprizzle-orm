@@ -666,9 +666,11 @@ impl ReplicaPool {
 /// also sends the read to the primary; that costs load, never correctness.
 /// `execute_raw` and transactions always use the primary.
 ///
-/// Health is not checked in the background. A replica stays healthy until
-/// [`check_health`](Self::check_health) or [`ReplicaPool::set_healthy`] says
-/// otherwise, so run `check_health` on a timer from your own supervisor.
+/// Health is not checked in the background by default. A replica stays
+/// healthy until [`check_health`](Self::check_health) or
+/// [`ReplicaPool::set_healthy`] says otherwise. Call
+/// [`spawn_health_checks`](Self::spawn_health_checks) to run `check_health` on
+/// a timer, or drive it from your own supervisor.
 #[derive(Debug, Clone)]
 pub struct RoutedPool {
     pub(crate) primary: Pool,
@@ -775,10 +777,62 @@ impl RoutedPool {
         }
     }
 
+    /// Spawns a background task that runs [`check_health`](Self::check_health)
+    /// every `interval`, starting immediately.
+    ///
+    /// The task holds a clone of this router (the replicas share their health
+    /// flags with it) and runs until the returned [`HealthCheckTask`] is
+    /// stopped or dropped. A zero `interval` is raised to one millisecond.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called outside a Tokio runtime.
+    #[must_use = "dropping the handle stops the health checks"]
+    pub fn spawn_health_checks(&self, interval: Duration) -> HealthCheckTask {
+        let router = self.clone();
+        let period = interval.max(Duration::from_millis(1));
+        let handle = tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(period);
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                ticker.tick().await;
+                router.check_health().await;
+            }
+        });
+        HealthCheckTask { handle }
+    }
+
     /// Whether this router falls back to the primary pool when all replicas are unavailable.
     #[must_use]
     pub fn falls_back_to_primary(&self) -> bool {
         self.fallback_to_primary
+    }
+}
+
+/// Handle to the background task started by
+/// [`RoutedPool::spawn_health_checks`]. Dropping it stops the task.
+#[derive(Debug)]
+pub struct HealthCheckTask {
+    handle: tokio::task::JoinHandle<()>,
+}
+
+impl HealthCheckTask {
+    /// Stops the health checks. A check already in flight is cancelled at its
+    /// next await point; replica flags keep their last value.
+    pub fn stop(self) {
+        drop(self);
+    }
+
+    /// Whether the task has stopped.
+    #[must_use]
+    pub fn is_finished(&self) -> bool {
+        self.handle.is_finished()
+    }
+}
+
+impl Drop for HealthCheckTask {
+    fn drop(&mut self) {
+        self.handle.abort();
     }
 }
 

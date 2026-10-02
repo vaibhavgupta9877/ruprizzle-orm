@@ -263,9 +263,10 @@ fn owning_side_relations(schema: &Schema) -> Vec<ErdRelation> {
                 .fields
                 .iter()
                 .any(|name| m.field(name.as_str()).is_some_and(|fk| fk.optional));
-            let unique = rel.fields.len() == 1
-                && m.field(rel.fields[0].as_str())
-                    .is_some_and(|fk| fk.attrs.is_unique);
+            let unique = match rel.fields.as_slice() {
+                [only] => m.field(only.as_str()).is_some_and(|fk| fk.attrs.is_unique),
+                _ => false,
+            };
             out.push(ErdRelation {
                 from: m.name.to_string(),
                 to: rel.target.to_string(),

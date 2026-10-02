@@ -141,6 +141,8 @@ pub async fn fetch_dynamic(
 ///
 /// Returns a display message if the statement fails, including when it tries to
 /// write, and for pool kinds Studio cannot open read-only.
+// Which other `Pool` variants the wildcard covers depends on the driver features.
+#[allow(clippy::match_wildcard_for_single_variants)]
 pub async fn fetch_dynamic_read_only(
     pool: &Pool,
     sql: &str,

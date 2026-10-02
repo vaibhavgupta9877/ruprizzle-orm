@@ -38,6 +38,42 @@ jobs:
   studio:
     name: studio feature
     runs-on: ubuntu-latest
+    # The read-only sandbox tests for Postgres (`BEGIN READ ONLY`) and MySQL
+    # (`START TRANSACTION READ ONLY`) need real servers; without these services
+    # they skip.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ruprizzle
+          POSTGRES_PASSWORD: ruprizzle
+          POSTGRES_DB: ruprizzle_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ruprizzle -d ruprizzle_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_USER: ruprizzle
+          MYSQL_PASSWORD: ruprizzle
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ruprizzle_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -uruprizzle -pruprizzle"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      RUPRIZZLE_TEST_PG_URL: postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test
+      # root: the MySQL test creates a stored function.
+      RUPRIZZLE_TEST_MYSQL_URL: mysql://root:root@localhost:3306/ruprizzle_test
+      RUPRIZZLE_REQUIRE_DB: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -50,8 +86,8 @@ jobs:
       # askama templates went a whole release line unlinted and untested by CI as a
       # result. See ProjectPlan/v2/ProductionReadinessV1_5.md section 4.5.
       #
-      # The tests run against a temp-file SQLite database created in-process, so no
-      # service container is needed here.
+      # Most tests run against a temp-file SQLite database created in-process; the
+      # Postgres and MySQL read-only tests use the services above.
       - name: Clippy studio
         run: cargo clippy -p ruprizzle-cli --features studio --all-targets -- -D warnings
       - name: Test studio
@@ -118,6 +154,51 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
+
+  integration-mariadb:
+    name: integration (postgres + mariadb + sqlite)
+    runs-on: ubuntu-latest
+    # The same suite as `integration`, with MariaDB 11.4 LTS in place of MySQL.
+    # `Provider::Mysql` claims MariaDB support; this leg is what backs the claim.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ruprizzle
+          POSTGRES_PASSWORD: ruprizzle
+          POSTGRES_DB: ruprizzle_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ruprizzle -d ruprizzle_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_USER: ruprizzle
+          MARIADB_PASSWORD: ruprizzle
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: ruprizzle_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      RUPRIZZLE_TEST_PG_URL: postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test
+      # root, as for MySQL: the testkit creates a throwaway database per test.
+      RUPRIZZLE_TEST_MYSQL_URL: mysql://root:root@127.0.0.1:3306/ruprizzle_test
+      RUPRIZZLE_REQUIRE_DB: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --no-fail-fast
+      - run: cargo test -p ruprizzle-cli --features studio --no-fail-fast
 
   feature-combination:
     name: feature matrix (${{ matrix.features }}) on ${{ matrix.db }}
@@ -321,8 +402,9 @@ jobs:
     runs-on: ubuntu-latest
     # `cargo semver-checks` above catches the changes it has lints for.
     # `cargo public-api` is the complementary check: it prints *every* item
-    # added, changed or removed from the public surface and, with `--deny=all`,
-    # fails on any of them.
+    # added, changed or removed from the public surface. On the 1.6 minor line
+    # additions are semver-compatible (e.g. `HierarchyQuery::with_deleted`), so
+    # only changed or removed items fail the job; additions are still printed.
     #
     # The baseline must be a version crates.io actually serves — that is
     # `1.5.1`, the first published stable. (During the RC -> stable gap this job
@@ -356,7 +438,7 @@ jobs:
         with:
           tool: cargo-public-api
       - name: Diff public API against the 1.5.1 baseline
-        run: cargo public-api -p ${{ matrix.package }} diff 1.5.1 --deny=all
+        run: cargo public-api -p ${{ matrix.package }} diff 1.5.1 --deny=changed --deny=removed
 
   feature-powerset:
     name: feature powerset (depth 2)

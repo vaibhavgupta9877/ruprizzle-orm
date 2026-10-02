@@ -4,7 +4,59 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.0] - 2026-10-03
+
+### Added
+
+- `HierarchyQuery::with_deleted()` walks soft-deleted nodes and their subtrees.
+  It removes the `deleted_at IS NULL` predicate from both halves of the recursive
+  CTE, so a subtree reached only through a deleted node is returned; it has no
+  effect on models without a soft-delete column.
+- `RoutedPool::spawn_health_checks(interval)` runs `check_health` in the
+  background; the returned `HealthCheckTask` stops it when dropped. Health is
+  still not checked in the background unless you ask for it.
+- **Studio authentication.** Every Studio request, reads included, now needs the
+  per-run session token: the printed launch URL (`/studio?token=…`) sets it as an
+  `HttpOnly`, `SameSite=Strict` cookie, and scripts may send `x-studio-token` or
+  `Authorization: Bearer`. `--token` / `RUPRIZZLE_STUDIO_TOKEN` fixes the token.
+- Opt-in **live smoke tests** for the Turso and D1 adapters
+  (`cargo test -p ruprizzle-turso --test live`, likewise `ruprizzle-d1`); they
+  skip unless the provider credentials are set.
+
+### Changed
+
+- Studio's `askama` is upgraded from 0.12 to 0.14 (the newest release whose MSRV,
+  1.83, fits the workspace's 1.85).
+
+### Fixed
+
+- `@renamedFrom` onto the name of an existing column (K11) now drops the old
+  column (destructive, needs `--accept-data-loss`) before the rename, instead of
+  planning a `RENAME COLUMN` that collides at apply time.
+
+### Testing
+
+- **Studio's MySQL read-only sandbox path is covered (K2).**
+  `read_only_mode_holds_against_mysql_write_forms` runs `WITH … DELETE/UPDATE`, a
+  multi-table `EXPLAIN ANALYZE DELETE` and a `SELECT` of a data-modifying function
+  against MySQL, and fails when the read-only transaction is removed.
+- **Background health checks and `with_deleted()` are pinned** by
+  `background_health_checks_restore_a_replica_until_stopped` and
+  `hierarchy_with_deleted_drops_the_live_predicate_from_both_halves`.
+- The Studio suite runs on MariaDB as well as MySQL and Postgres.
+
+### CI
+
+- **A MariaDB 11.4 LTS integration leg** (`integration-mariadb`) runs the
+  workspace and Studio suites on MariaDB in place of MySQL, backing
+  `Provider::Mysql`'s MariaDB support claim.
+- The `studio` job now runs with Postgres 17 and MySQL 8.4 services, so its
+  read-only sandbox tests no longer skip.
+- **`edge-live`** is a scheduled workflow that runs the Turso and D1 live smoke
+  tests against the hosted services when their secrets are configured.
+- The `public-api` job now denies only **changed** and **removed** items against
+  the `1.5.1` baseline; additive API on the `1.6` line (such as
+  `HierarchyQuery::with_deleted`) is still printed but no longer fails the job.
 
 ## [1.5.2] - 2026-09-30
 
@@ -723,7 +775,9 @@ Initial alpha release of **ruprizzle-orm**: a schema-first ORM for Rust. Write a
 
 See `docs/KnownLimitations.md` for the full list.
 
-[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.5.2...v1.6.0
+[1.5.2]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.1...v1.5.0
 [1.0.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.0.0...v1.0.1

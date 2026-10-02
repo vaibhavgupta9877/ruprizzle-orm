@@ -60,6 +60,10 @@ bearer token and bound parameters — as well as how it reads rows, change count
 Cloudflare's error envelope and transport failures. No network access and no
 Cloudflare account are needed.
 
+`cargo test -p ruprizzle-d1 --test live` runs a smoke test against a real D1 database
+when `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID` and `CLOUDFLARE_API_TOKEN` are set, and
+skips otherwise. It creates and drops one uniquely named table.
+
 ## License
 
 Licensed under either of MIT or Apache-2.0.

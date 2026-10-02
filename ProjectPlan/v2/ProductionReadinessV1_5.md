@@ -917,7 +917,7 @@ Gates run on 2026-09-30 at the tip of `fix/v1-5-2-k6-k10`:
 
 Still open:
 
-- K2's MySQL `START TRANSACTION READ ONLY` path has no test.
+- ~~K2's MySQL `START TRANSACTION READ ONLY` path has no test.~~ Done (1.6): `read_only_mode_holds_against_mysql_write_forms` (`WITH … DELETE/UPDATE`, `EXPLAIN ANALYZE` multi-table `DELETE`, `SELECT` of a data-modifying function) passes on MySQL 8.4.9 and fails with `READ ONLY` removed; the CI `studio` job now has Postgres and MySQL services.
 - The new `mutants.yml` has not run on GitHub yet.
 - K11, found while fixing K9, is deferred to 1.6.
 - Deferred to 1.6 because each needs new public API: `HierarchyQuery::with_deleted()`

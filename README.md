@@ -17,24 +17,31 @@ It combines the best parts of Prisma and Drizzle:
 
 PostgreSQL, MySQL/MariaDB, and SQLite 3+ are supported from day one behind a `DbDialect` trait, so more backends are additive. Built on [`sqlx`](https://github.com/launchbadge/sqlx) for the wire protocol and pooling; ruprizzle does not write its own driver. Native driver features are also available: `sqlite-rusqlite` for synchronous SQLite, and an experimental `postgres-tokio-postgres` for PostgreSQL. See [Dialects](#dialects) below for details.
 
-> **Status — what you can actually install today.** The current published version is
-> **`1.5.1`** — the first stable release, live on crates.io since 2026-09-13 for all
-> twelve crates in the workspace, including `ruprizzle-turso` and `ruprizzle-d1`.
-> Verify at any time with `scripts/check-release-state.sh`.
+> **Status — what you can actually install today.** The current release is
+> **`1.6.0`** (2026-10-03), published to crates.io for all twelve crates in the
+> workspace, including `ruprizzle-turso` and `ruprizzle-d1`. Verify at any time with
+> `scripts/check-release-state.sh`.
 >
-> **Upgrading from `1.0.0-rc.1`?** Most applications need no code changes. Read
-> [Upgrading from 1.0.0-rc.1](docs/UpgradingFromRc1.md) first, and pin
-> `"=1.0.0-rc.1"` until you are ready, because `"1.0.0-rc.1"` also matches `1.5.1`.
+> **New in 1.6:** Studio requires its per-run session token on every request (open
+> the printed `/studio?token=…` URL), `HierarchyQuery::with_deleted()`,
+> `RoutedPool::spawn_health_checks(interval)` for background replica health checks,
+> and a fix for `@renamedFrom` onto the name of an existing column. `1.5.2`
+> (Studio security and soft-delete fixes) was prepared but never published; everything in
+> it ships in `1.6.0`. See the [changelog](CHANGELOG.md).
+>
+> **Upgrading from `1.5.x`?** No code changes are needed. The one behaviour change is
+> Studio's authentication: bookmarks to a bare `/studio` URL now get a `401`.
+> **Upgrading from `1.0.0-rc.1`?** Read [Upgrading from 1.0.0-rc.1](docs/UpgradingFromRc1.md)
+> first, and pin `"=1.0.0-rc.1"` until you are ready, because `"1.0.0-rc.1"` also
+> matches `1.6.0`.
 >
 > `1.0.0`, `1.0.1` and `1.5.0` exist as git tags, not as releases: their publish runs
-> failed before uploading, so no crate was ever built from them. The tags are
-> deliberately left in place as evidence of those attempts, and the feature line they
-> carried shipped as `1.5.1` — array filters, full-text search, soft deletes, offline
-> query checking, nested writes, tree hierarchies, OpenTelemetry, read-replica routing,
-> query caching, PostGIS and Ruprizzle Studio — described in
-> [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md). Known gaps at this release:
-> Ruprizzle Studio has no authentication, and the Turso/D1 adapters are real drivers
-> over their providers' HTTP APIs but have not been run against the live hosted
+> failed before uploading. The feature line they carried shipped as `1.5.1` — array
+> filters, full-text search, soft deletes, offline query checking, nested writes, tree
+> hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and
+> Ruprizzle Studio — described in [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md).
+> Known gap: the Turso/D1 adapters are real drivers over their providers' HTTP APIs and
+> have opt-in live smoke tests, but those have not yet been run against the hosted
 > services. There is no Neon adapter, because Neon is ordinary Postgres.
 >
 > P0–P8 feature work is complete, MySQL/MariaDB support is shipped, and the public API is covered by semantic versioning from `1.5.1` onward. Two gates were waived on the way, both in writing: the 48-hour `rusqlite` soak, accepted on 15.56 h / 1.46 B ops / 0 errors (`docs/SoakReport.md`), and the two-week RC feedback window, for want of any external consumer to collect feedback from ([Stability](docs/Stability.md#waiver-the-100-rc1-feedback-window-2026-08-21)). Note that the 1.x line is pinned to `sqlx 0.8`, which ruprizzle re-exports as part of its own public API. See [Known limitations](#known-limitations) for deliberate boundaries and [Stability](docs/Stability.md) for the semver policy.
@@ -250,7 +257,7 @@ Rows must include their primary key; repeated runs update the existing row inste
 
 ## Installation
 
-`1.5.1` is on crates.io, so a bare `cargo add` / `cargo install` resolves to it:
+`1.6.0` is on crates.io, so a bare `cargo add` / `cargo install` resolves to it:
 
 ```bash
 # The CLI
@@ -264,6 +271,19 @@ That gives you the whole v1.1–v1.5 feature line — Studio, array filters, ful
 search, soft deletes, offline query checking, nested writes, tree hierarchies,
 OpenTelemetry, replica routing, query caching, PostGIS — plus the Turso and D1
 adapters (`cargo add ruprizzle-turso` / `cargo add ruprizzle-d1`).
+
+Ruprizzle Studio is behind the CLI's `studio` feature:
+
+```bash
+$ cargo install ruprizzle-cli --features studio
+$ ruprizzle studio            # prints http://127.0.0.1:5555/studio?token=…
+```
+
+Open the printed URL: it stores the session token in a cookie, and every Studio
+request needs it (since 1.6). Pass `--token <value>` or set
+`RUPRIZZLE_STUDIO_TOKEN` for a stable token; scripts can send it as
+`x-studio-token` or `Authorization: Bearer`. Studio is read-only unless started
+with `--allow-writes`.
 
 MSRV: **Rust 1.85**.
 
@@ -514,7 +534,7 @@ The table below focuses on the features that differentiate ruprizzle from the to
 
 ## Architecture and repository layout
 
-The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.5.1`). The workspace crates and the VS Code extension move in lockstep on one number; see [Versioning](docs/Versioning.md).
+The workspace is split so that parser and codegen never enter the user's runtime dependency graph. Every crate in the table below uses the shared workspace version (`1.6.0`). The workspace crates and the VS Code extension move in lockstep on one number; see [Versioning](docs/Versioning.md).
 
 | Directory | Crate | Role | Ships to users? | Status |
 |---|---|---|---|---|
@@ -576,7 +596,7 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 
 ## Status and roadmap
 
-`1.5.1` is the published release on crates.io (2026-09-13) and the version the workspace is pinned to. The twelve publishable crates move together on one version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API is covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
+`1.6.0` is the published release on crates.io (2026-10-03) and the version the workspace is pinned to. The twelve publishable crates move together on one version. P0–P8 and W0–W5 are complete, including LSP and compile-time query checking. The public API is covered by semver, enforced mechanically by `cargo-semver-checks` in CI.
 
 ### The v1.1–v1.5 line — shipped in `1.5.1`
 
@@ -589,15 +609,17 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 | v1.3 | Implicit m2m, nested writes, tree hierarchies | ✅ shipped in 1.5.1 |
 | v1.4 | OpenTelemetry, replica routing, query cache, PostGIS | ✅ shipped in 1.5.1 |
 | v1.5 | Ruprizzle Studio, Turso and D1 adapters | ✅ shipped in 1.5.1 |
+| v1.6 | Studio auth, replica health checks, `with_deleted()` on hierarchies, K11 fix | ✅ shipped in 1.6.0 |
 
 Before release this line was assessed at 56/100 and **blocked**: the edge adapter crates and most of Studio's data plane returned fabricated results rather than querying a database, and Studio's "migration safety diff" reported `SAFE` unconditionally. §8 and §10 of [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md) record what each of those became — Studio queries the database on every screen, and the adapters are real HTTP drivers tested end-to-end against local servers. The `v1.5.0` tag records a publish run that failed in the pre-publish gate; the line shipped under `1.5.1` instead.
 
 The plan behind the `1.0.0` tag, including the two decisions it turned on, is `ProjectPlan/v1/V1StableRelease.md`. What remains open:
 
 - Migrate to `sqlx 0.9`. Deferred to `2.0.0`, because `sqlx` is a public dependency — see the "Public dependencies" section of `docs/Stability.md`.
-- Run the Turso and D1 adapters against the live hosted services; today they are verified against local HTTP fakes.
+- Run the Turso and D1 live smoke tests (`edge-live` workflow, added in 1.6) against the hosted services; so far the adapters are verified against local HTTP fakes only.
 - ~~Publish `1.0.0-rc.1` to crates.io~~ **done 2026-08-21**.
 - ~~Publish a stable release~~ **`1.5.1` published 2026-09-13**; the automated release workflow ran end-to-end on tag push.
+- ~~Studio authentication, background replica health checks, `with_deleted()` on hierarchies, a MariaDB CI leg~~ **shipped in `1.6.0`**.
 - ~~Two-week RC feedback window~~ **waived 2026-08-21**, with reasons recorded in `docs/Stability.md`.
 - ~~Complete the clean 48-hour soak test (W4-02) after resolving the SQLite `rusqlite` lock-contention issue documented in `docs/SoakReport.md`.~~ **Waived** after 15.56 h / 1.46 B ops / 0 errors.
 
@@ -623,10 +645,10 @@ This is an honest list of boundaries. It is a feature, not an apology: knowing t
   and `json_set` are supported; the `sqlite-rusqlite` feature also decodes `Json`
   without the `sqlx::Any` text round-trip. JSON containment (`@>`) is
   approximated because JSON1 has no containment operator.
-- **Ruprizzle Studio has no authentication** — do not expose it on an untrusted
-  network.
-- **The Turso and D1 adapters** have been verified against local HTTP fakes, not
-  the live hosted services, and send one HTTP request per statement (no
+- **Ruprizzle Studio authenticates with a single per-run token over plain HTTP**
+  — there are no user accounts or TLS, so do not expose it on an untrusted network.
+- **The Turso and D1 adapters** have been verified against local HTTP fakes; their
+  opt-in live smoke tests have not yet been run against the hosted services. They send one HTTP request per statement (no
   interactive transactions).
 - **Polymorphic relations, row-level security, multi-tenancy and vector
   (pgvector) search** are not implemented.

@@ -403,7 +403,10 @@ while fixing it. First, the plain m2m *include* (`IncludeMany`) already went thr
 `_none` / `_every`). `rel.rs:231` is the delete-cascade filter, which is a write and
 correctly unfiltered. Users must regenerate to get the relation-filter part.
 `HierarchyQuery` has no `with_deleted()` opt-out yet, because adding one changes
-public API. That is deferred to `1.6`.
+public API. That is deferred to `1.6`. **Done (1.6):** `HierarchyQuery::with_deleted()`
+removes the predicate from both halves of the CTE; pinned in
+`tree_hierarchy_test.rs`. The public-api CI gate now denies only changed/removed
+items, so additive 1.6 API passes.
 
 #### K5 — Public builder methods that do nothing (Medium, API honesty)
 
@@ -480,7 +483,9 @@ it is dropped. `Random` hashes a counter with a fresh `RandomState`. Raw stateme
 to a replica only if `is_replica_safe` passes (read keyword first, no
 write/lock/sequence word anywhere). `check_health` is documented as manual rather
 than adding a `spawn_health_checks` method, which would be new public API; that is
-deferred to 1.6.
+deferred to 1.6. **Done (1.6):** `RoutedPool::spawn_health_checks(interval)` returns a
+`HealthCheckTask` that aborts on drop; pinned by
+`background_health_checks_restore_a_replica_until_stopped`.
 
 #### K7 — Tree "cycle protection" is a depth cap (Medium, correctness)
 
@@ -559,7 +564,10 @@ owner columns. `mutants.yml`: `migrate` fails only below `KILL_RATE_FLOOR=35`
 (`.github/scripts/mutants_floor.py`, exit codes 2/3 from cargo-mutants are
 tolerated). Runtime shards get Postgres 17 and MySQL 8.4 services with
 `RUPRIZZLE_REQUIRE_DB=1` and report their rate with no floor until a baseline with
-databases exists. The workflow change is not yet run on GitHub.
+databases exists. The workflow change is not yet run on GitHub. **Local dry run (2026-10-03, cargo-mutants 27.1.0,
+the job's exact commands):** the step tolerated exit 3 as designed and the floor script
+passed at caught 210, missed 390, timeout 12, unviable 24: **35.0%**, exactly on the floor.
+It still needs a run on GitHub, and the margin needs tests rather than a lower floor.
 
 #### K11 — `@renamedFrom` onto an existing column name (Low, found while fixing K9)
 
@@ -570,6 +578,12 @@ migration fails at apply time rather than at plan time. **Fix (1.6):** drop the 
 same-named column first (destructive, so it goes behind `--accept-data-loss`), or
 refuse the plan with a clear diagnostic. Pinned in part by
 `a_renamed_field_is_not_altered_against_a_namesake`.
+
+**Fixed (1.6):** `diff_columns` now emits a `DropColumn` for the shadowed old
+column (destructive, so it needs `--accept-data-loss`), and the planner runs such
+drops in a phase before `columns_to_rename`. Pinned by
+`a_renamed_field_is_not_altered_against_a_namesake`, which now asserts the drop and
+that it precedes the rename in `up.sql`.
 
 #### K10 — D1 binds a non-finite float as `NULL` (Low)
 
@@ -591,7 +605,7 @@ there too. The ±2^53 limit is documented in the `ruprizzle-d1` crate docs and i
   on building authentication.
 - The Turso and D1 adapters have not been run against the live services.
 - `askama` is on 0.12.
-- CI has no MariaDB leg (R6 follow-up).
+- ~~CI has no MariaDB leg (R6 follow-up).~~ Done (1.6): `integration-mariadb` runs the workspace and studio suites on MariaDB 11.4 LTS; verified locally on 11.4.8 (all binaries green with `RUPRIZZLE_REQUIRE_DB=1`).
 
 ### 6.B `1.5.2` patch plan
 

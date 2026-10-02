@@ -36,10 +36,9 @@ pub fn looks_like_production_url(url: &str) -> bool {
 
 /// Whether `host` is a loopback address.
 ///
-/// A non-loopback bind puts Studio's unauthenticated mutation routes — including
-/// `DELETE` — on the network. Studio has no authentication of any kind, so the
-/// bind address is the only thing standing between those routes and anyone who can
-/// reach the port.
+/// A non-loopback bind puts Studio's mutation routes — including `DELETE` — on
+/// the network. They require the session token, but Studio serves plain HTTP, so
+/// the token crosses that network in cleartext.
 #[must_use]
 pub fn is_loopback_host(host: &str) -> bool {
     let host = host.trim().trim_start_matches('[').trim_end_matches(']');
@@ -72,11 +71,11 @@ pub async fn run_studio(
         );
     }
 
-    // Studio has no authentication. Binding it off loopback with writes enabled
-    // publishes DELETE routes to anyone who can reach the port.
+    // Studio serves plain HTTP: off loopback its session token crosses the
+    // network in cleartext, so anyone on the path can replay it against DELETE.
     if !is_loopback_host(&config.host) && config.allow_writes && !config.yes_i_know {
         return Err(format!(
-            "Refusing to bind Studio to {} with --allow-writes. Studio has no authentication,              so this publishes its INSERT, UPDATE and DELETE routes to every host that can              reach port {}. Drop --allow-writes, bind to 127.0.0.1, or pass --yes-i-know if              the network is genuinely trusted.",
+            "Refusing to bind Studio to {} with --allow-writes. Studio serves plain HTTP, so              its session token crosses the network in cleartext and anyone who sees it can              use the INSERT, UPDATE and DELETE routes on port {}. Drop --allow-writes, bind to 127.0.0.1, or pass --yes-i-know if              the network is genuinely trusted.",
             config.host, config.port
         )
         .into());
@@ -96,13 +95,14 @@ pub async fn run_studio(
     };
 
     let state = Arc::new(AppState::new(schema, config.clone(), pool));
-    let app = create_router(state);
+    let app = create_router(Arc::clone(&state));
 
     let bind_addr = format!("{}:{}", config.host, config.port);
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    let url = format!("http://{bind_addr}/studio");
+    let url = format!("http://{bind_addr}/studio?token={}", state.session_token);
 
     println!("⚡ Ruprizzle Studio running at: {url}");
+    println!("   Every request needs this token; the link above sets it as a cookie.");
     if config.allow_writes {
         println!("   Mode: read-write (--allow-writes)");
     } else {
@@ -110,7 +110,7 @@ pub async fn run_studio(
     }
     if !is_loopback_host(&config.host) {
         println!(
-            "   ⚠ Bound to {} — Studio has no authentication, so anyone who can reach              port {} can use it.",
+            "   ⚠ Bound to {} — Studio serves plain HTTP, so the token crosses the network              in cleartext on port {}.",
             config.host, config.port
         );
     }

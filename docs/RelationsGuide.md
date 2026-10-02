@@ -336,7 +336,7 @@ let tree = db.category().tree_from_root(root_id).await?;
 ```
 
 `ancestors` and `descendants` return a `HierarchyQuery`, which has `max_depth`,
-`order_by_depth_asc` / `order_by_depth_desc`, `cycle_protection`, and — like every other builder — `to_sql()`, so the generated
+`order_by_depth_asc` / `order_by_depth_desc`, `cycle_protection`, `with_deleted` (since 1.6; includes soft-deleted nodes and the subtrees below them), and — like every other builder — `to_sql()`, so the generated
 `WITH RECURSIVE` statement is inspectable. Cycle protection is on by default: each
 path carries the keys it has visited and never steps onto one again, so a corrupted
 parent chain returns each node once instead of spinning. It also caps the walk at 100

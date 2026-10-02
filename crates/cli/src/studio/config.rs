@@ -19,6 +19,9 @@ pub struct StudioConfig {
     pub yes_i_know: bool,
     /// Disable auto-opening the web browser on launch.
     pub no_browser: bool,
+    /// Session token every request must present. `None` generates a fresh
+    /// random one per process.
+    pub auth_token: Option<String>,
 }
 
 impl Default for StudioConfig {
@@ -31,6 +34,7 @@ impl Default for StudioConfig {
             allow_writes: false,
             yes_i_know: false,
             no_browser: false,
+            auth_token: None,
         }
     }
 }

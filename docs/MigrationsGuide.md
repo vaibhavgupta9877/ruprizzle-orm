@@ -230,6 +230,14 @@ model User {
 Without `@renamedFrom`, the engine may produce a `DROP` + `ADD` pair, which
 loses data. Always review renames.
 
+If the new name is already taken by a column that still exists — for example
+`email` is renamed to `legacy_email` in the database you are migrating, and a new
+`email` field says `@renamedFrom("email_address")` — the existing `email` column is
+dropped first and then `email_address` is renamed onto its name (since 1.6; earlier
+versions planned a `RENAME` that failed at apply time). The drop is destructive, so
+`migrate dev` / `migrate deploy` require `--accept-data-loss` for it. Copy anything you
+need out of the old column before applying.
+
 ## Mutual foreign-key cycles
 
 If two or more models reference each other in a closed loop, the migration
