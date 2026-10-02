@@ -1,0 +1,43 @@
+name: edge-live
+
+# Runs the Turso and D1 adapters against the real hosted services. The tests in
+# crates/{turso,d1}/tests/live.rs skip themselves when their credentials are
+# unset, so a missing secret shows up as "skipped" in the log, not as a pass
+# that tested something. Each run creates and drops one uniquely named table.
+#
+# Secrets: TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, CLOUDFLARE_ACCOUNT_ID,
+# D1_DATABASE_ID, CLOUDFLARE_API_TOKEN.
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+env:
+  CARGO_TARGET_DIR: target
+
+jobs:
+  turso:
+    name: turso (live)
+    runs-on: ubuntu-latest
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p ruprizzle-turso --test live -- --nocapture
+
+  d1:
+    name: d1 (live)
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p ruprizzle-d1 --test live -- --nocapture

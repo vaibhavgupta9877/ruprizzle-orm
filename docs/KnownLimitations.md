@@ -77,6 +77,9 @@ whether the tool is right for your project.
 - **The Turso and D1 adapters are unverified against the live hosted services.**
   `ruprizzle-turso` (Hrana 2 over HTTP) and `ruprizzle-d1` (Cloudflare REST API)
   are tested end-to-end against local HTTP fakes, not real Turso/D1 databases.
+  Live smoke tests exist (`cargo test -p ruprizzle-turso --test live`, likewise
+  for `ruprizzle-d1`, and the `edge-live` workflow) but skip without credentials
+  and have not yet been run against the hosted services.
   Both send one HTTP request per statement, so neither supports interactive
   transactions, and `stream_raw` on each is a streaming interface over a fully
   buffered response. Turso has no embedded-replica support (that needs the
