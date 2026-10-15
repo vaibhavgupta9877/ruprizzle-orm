@@ -14,7 +14,7 @@ separate commit. The older implementation plan below is retained as history.
 | REV-05 | Pagination: offset without limit compiles to valid SQL for SQLite and MySQL across query builders. | Fixed | Regression failed before fix; dialect unit tests (22) and runtime compiler tests (77) pass. SELECT, JOIN and aggregate compilation delegate to dialect rendering. |
 | REV-06 | Migration splitting: preserve quoted identifiers and comment markers inside them. | Fixed | Both new regressions failed before fix; all 10 splitter tests pass. Covers double quotes, backticks, SQLite brackets, doubled quote escapes and nested block comments. |
 | REV-07 | Documentation: accurately describe standalone caching and deprecated query-cache methods. | Fixed | README and known limitations now explicitly describe manual get/set/invalidation and deprecated no-op methods, consistent with query.rs and the existing cache example. |
-| REV-08 | Build instructions: describe portable repository config and per-developer target overrides accurately. | Open | Pending |
+| REV-08 | Build instructions: describe portable repository config and per-developer target overrides accurately. | Fixed | AGENTS.md now matches .cargo/config.toml and CONTRIBUTING.md; shared paths are developer overrides and cargo clean implications are explicit. |
 
 Validation notes and any environment limits are recorded with each completed fix.
 

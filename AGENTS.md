@@ -2,13 +2,15 @@
 
 ## Build target directory
 
-- This workspace is configured to use `G:\cargo-target` as the shared build
-  target by default (see `.cargo/config.toml`).  This keeps the checkout on `D:`
-  small and centralizes build artifacts.
-- You can override the location at any time with the `CARGO_TARGET_DIR`
-  environment variable.
-- To free build artifacts for this project, run `cargo clean` from the workspace
-  root.  This will remove the directory configured as `target-dir`.
+- `.cargo/config.toml` is portable and does not set a build target directory.
+  Cargo uses the workspace `target` directory unless a developer's Cargo config
+  or `CARGO_TARGET_DIR` overrides it.
+- For a shared build directory (for example `G:\cargo-target`), configure
+  `[build] target-dir` in your user Cargo config or set `CARGO_TARGET_DIR`.
+  See `CONTRIBUTING.md` for the build-environment guidance.
+- `cargo clean` from the workspace root removes artifacts in the selected target
+  directory. If that directory is shared, it also contains other projects'
+  artifacts; use package-scoped cleaning when that is the intent.
 
 ## Useful commands
 
