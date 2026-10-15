@@ -307,13 +307,12 @@ mod tests {
 
         // Ensure "admins" tag index was pruned when user_2 was removed
         assert!(
-            cache
+            !cache
                 .state
                 .read()
                 .unwrap()
                 .tag_index
-                .get("admins")
-                .is_none()
+                .contains_key("admins")
         );
     }
 
