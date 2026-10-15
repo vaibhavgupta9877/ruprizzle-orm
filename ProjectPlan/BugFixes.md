@@ -10,7 +10,7 @@ separate commit. The older implementation plan below is retained as history.
 | REV-01 | SQLite rebuild/reset: disable FK enforcement before BEGIN on the same connection; validate references before commit; never leak disabled enforcement. | Open | Pending |
 | REV-02 | Migration rollback: execute statements and tracking update atomically on one connection where transactional DDL is supported. | Open | Pending |
 | REV-03 | PostgreSQL placeholder rewriting: preserve UTF-8 and quoted/comment text; shift only bind parameters. | Fixed | Regression reproduced corruption before fix; all 78 compiler tests pass. Shared scanner covers both composition paths, quoted identifiers, strings, dollar quotes and nested comments. |
-| REV-04 | Cache: replacement removes old tags; entries and indexes mutate atomically; pruning never removes a refreshed entry. | Open | Pending |
+| REV-04 | Cache: replacement removes old tags; entries and indexes mutate atomically; pruning never removes a refreshed entry. | Fixed | Three regressions failed before fix; all 8 cache tests pass, including concurrent mutation/index consistency. Also enforce zero capacity and exclude expired entries from len(). |
 | REV-05 | Pagination: offset without limit compiles to valid SQL for SQLite and MySQL across query builders. | Fixed | Regression failed before fix; dialect unit tests (22) and runtime compiler tests (77) pass. SELECT, JOIN and aggregate compilation delegate to dialect rendering. |
 | REV-06 | Migration splitting: preserve quoted identifiers and comment markers inside them. | Open | Pending |
 | REV-07 | Documentation: accurately describe standalone caching and deprecated query-cache methods. | Open | Pending |

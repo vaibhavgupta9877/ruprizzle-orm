@@ -44,11 +44,32 @@ struct CacheEntry {
     tags: Vec<String>,
 }
 
+#[derive(Debug, Default)]
+struct CacheState {
+    entries: HashMap<String, CacheEntry>,
+    tag_index: HashMap<String, HashSet<String>>,
+}
+
+impl CacheState {
+    fn remove(&mut self, key: &str) {
+        if let Some(entry) = self.entries.remove(key) {
+            for tag in entry.tags {
+                if let Some(keys) = self.tag_index.get_mut(&tag) {
+                    keys.remove(key);
+                    if keys.is_empty() {
+                        self.tag_index.remove(&tag);
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// In-memory thread-safe query cache with TTL and tag invalidation.
 #[derive(Debug)]
 pub struct InMemoryCache {
-    entries: RwLock<HashMap<String, CacheEntry>>,
-    tag_index: RwLock<HashMap<String, HashSet<String>>>,
+    // Entries and tags form one state: every mutation must be atomic across both.
+    state: RwLock<CacheState>,
     max_entries: usize,
 }
 
@@ -63,40 +84,23 @@ impl InMemoryCache {
     #[must_use]
     pub fn new(max_entries: usize) -> Self {
         Self {
-            entries: RwLock::new(HashMap::new()),
-            tag_index: RwLock::new(HashMap::new()),
+            state: RwLock::new(CacheState::default()),
             max_entries,
         }
     }
 
     /// Prunes expired entries from the cache.
     pub fn prune_expired(&self) {
-        let now = Instant::now();
-        let mut expired_keys = Vec::new();
-
-        if let Ok(entries) = self.entries.read() {
-            for (key, entry) in entries.iter() {
-                if let Some(exp) = entry.expires_at {
-                    if exp <= now {
-                        expired_keys.push(key.clone());
-                    }
-                }
-            }
-        }
-
-        if !expired_keys.is_empty() {
-            if let Ok(mut entries) = self.entries.write() {
-                if let Ok(mut tag_index) = self.tag_index.write() {
-                    for key in expired_keys {
-                        if let Some(entry) = entries.remove(&key) {
-                            for tag in entry.tags {
-                                if let Some(keys) = tag_index.get_mut(&tag) {
-                                    keys.remove(&key);
-                                }
-                            }
-                        }
-                    }
-                }
+        if let Ok(mut state) = self.state.write() {
+            let now = Instant::now();
+            let expired: Vec<String> = state
+                .entries
+                .iter()
+                .filter(|(_, entry)| entry.expires_at.is_some_and(|exp| exp <= now))
+                .map(|(key, _)| key.clone())
+                .collect();
+            for key in expired {
+                state.remove(&key);
             }
         }
     }
@@ -104,102 +108,72 @@ impl InMemoryCache {
 
 impl QueryCache for InMemoryCache {
     fn get(&self, key: &str) -> Option<Vec<u8>> {
-        let entries = self.entries.read().ok()?;
-        let entry = entries.get(key)?;
-        if let Some(expires_at) = entry.expires_at {
-            if Instant::now() >= expires_at {
-                return None;
-            }
+        let state = self.state.read().ok()?;
+        let entry = state.entries.get(key)?;
+        if entry.expires_at.is_some_and(|exp| Instant::now() >= exp) {
+            return None;
         }
         Some(entry.data.clone())
     }
 
     fn set(&self, key: &str, value: Vec<u8>, ttl: Option<Duration>, tags: &[&str]) {
-        let expires_at = ttl.map(|d| Instant::now() + d);
-        let tag_strings: Vec<String> = tags.iter().map(|s| (*s).to_string()).collect();
-
-        if let Ok(mut entries) = self.entries.write() {
-            // Evict if at capacity
-            if entries.len() >= self.max_entries && !entries.contains_key(key) {
-                if let Some(first_key) = entries.keys().next().cloned() {
-                    if let Some(old) = entries.remove(&first_key) {
-                        if let Ok(mut tag_index) = self.tag_index.write() {
-                            for tag in old.tags {
-                                if let Some(set) = tag_index.get_mut(&tag) {
-                                    set.remove(&first_key);
-                                }
-                            }
-                        }
-                    }
+        if self.max_entries == 0 {
+            return;
+        }
+        if let Ok(mut state) = self.state.write() {
+            state.remove(key);
+            if state.entries.len() >= self.max_entries {
+                if let Some(victim) = state.entries.keys().next().cloned() {
+                    state.remove(&victim);
                 }
             }
-
-            let entry = CacheEntry {
-                data: value,
-                expires_at,
-                tags: tag_strings.clone(),
-            };
-            entries.insert(key.to_string(), entry);
-        }
-
-        if let Ok(mut tag_index) = self.tag_index.write() {
-            for tag in tag_strings {
-                tag_index.entry(tag).or_default().insert(key.to_string());
+            let tags: Vec<String> = tags.iter().map(|tag| (*tag).to_owned()).collect();
+            for tag in &tags {
+                state
+                    .tag_index
+                    .entry(tag.clone())
+                    .or_default()
+                    .insert(key.to_owned());
             }
+            state.entries.insert(
+                key.to_owned(),
+                CacheEntry {
+                    data: value,
+                    expires_at: ttl.and_then(|d| Instant::now().checked_add(d)),
+                    tags,
+                },
+            );
         }
     }
 
     fn invalidate_tag(&self, tag: &str) {
-        let keys_to_remove: Vec<String> = {
-            if let Ok(mut tag_index) = self.tag_index.write() {
-                tag_index
-                    .remove(tag)
-                    .map(|s| s.into_iter().collect())
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            }
-        };
-
-        if !keys_to_remove.is_empty() {
-            let mut other_tags_to_prune: Vec<(String, String)> = Vec::new();
-            if let Ok(mut entries) = self.entries.write() {
-                for key in &keys_to_remove {
-                    if let Some(entry) = entries.remove(key) {
-                        for t in entry.tags {
-                            if t != tag {
-                                other_tags_to_prune.push((t, key.clone()));
-                            }
-                        }
-                    }
-                }
-            }
-            if !other_tags_to_prune.is_empty() {
-                if let Ok(mut tag_index) = self.tag_index.write() {
-                    for (t, k) in other_tags_to_prune {
-                        if let Some(set) = tag_index.get_mut(&t) {
-                            set.remove(&k);
-                            if set.is_empty() {
-                                tag_index.remove(&t);
-                            }
-                        }
-                    }
+        if let Ok(mut state) = self.state.write() {
+            if let Some(keys) = state.tag_index.remove(tag) {
+                for key in keys {
+                    state.remove(&key);
                 }
             }
         }
     }
 
     fn clear(&self) {
-        if let Ok(mut entries) = self.entries.write() {
-            entries.clear();
-        }
-        if let Ok(mut tag_index) = self.tag_index.write() {
-            tag_index.clear();
+        if let Ok(mut state) = self.state.write() {
+            *state = CacheState::default();
         }
     }
 
     fn len(&self) -> usize {
-        self.entries.read().map(|e| e.len()).unwrap_or(0)
+        let now = Instant::now();
+        self.state
+            .read()
+            .map(|state| {
+                state
+                    .entries
+                    .values()
+                    .filter(|e| e.expires_at.is_none_or(|exp| exp > now))
+                    .count()
+            })
+            .unwrap_or(0)
     }
 }
 
@@ -207,6 +181,81 @@ impl QueryCache for InMemoryCache {
 mod tests {
     use super::*;
     use std::thread::sleep;
+
+    #[test]
+    fn replacing_an_entry_replaces_its_tags() {
+        let cache = InMemoryCache::new(10);
+        cache.set("k", vec![1], None, &["users"]);
+        cache.set("k", vec![2], None, &["posts"]);
+        cache.invalidate_tag("users");
+        assert_eq!(cache.get("k"), Some(vec![2]));
+        cache.invalidate_tag("posts");
+        assert!(cache.get("k").is_none());
+    }
+
+    #[test]
+    fn concurrent_mutations_keep_entries_and_tags_consistent() {
+        let cache = std::sync::Arc::new(InMemoryCache::new(8));
+        std::thread::scope(|scope| {
+            for worker in 0..4 {
+                let cache = &cache;
+                scope.spawn(move || {
+                    for i in 0..1000 {
+                        let key = format!("k{}", i % 16);
+                        cache.set(&key, vec![worker], Some(Duration::ZERO), &["expired"]);
+                        cache.prune_expired();
+                        cache.set(&key, vec![worker], None, &["live"]);
+                        cache.invalidate_tag("expired");
+                        if i % 17 == 0 {
+                            cache.clear();
+                        }
+                    }
+                });
+            }
+        });
+        let state = cache.state.read().unwrap();
+        assert!(state.entries.len() <= 8);
+        for (key, entry) in &state.entries {
+            for tag in &entry.tags {
+                assert!(
+                    state
+                        .tag_index
+                        .get(tag)
+                        .is_some_and(|keys| keys.contains(key))
+                );
+            }
+        }
+        for (tag, keys) in &state.tag_index {
+            assert!(!keys.is_empty());
+            for key in keys {
+                assert!(
+                    state
+                        .entries
+                        .get(key)
+                        .is_some_and(|entry| entry.tags.contains(tag))
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn zero_capacity_does_not_store_entries() {
+        let cache = InMemoryCache::new(0);
+        cache.set("k", vec![1], None, &["users"]);
+        assert!(cache.is_empty());
+        assert!(cache.get("k").is_none());
+    }
+
+    #[test]
+    fn expired_entries_are_not_counted_and_refresh_survives_pruning() {
+        let cache = InMemoryCache::new(10);
+        cache.set("k", vec![1], Some(Duration::ZERO), &["old"]);
+        assert_eq!(cache.len(), 0);
+        cache.set("k", vec![2], None, &["new"]);
+        cache.prune_expired();
+        cache.invalidate_tag("old");
+        assert_eq!(cache.get("k"), Some(vec![2]));
+    }
 
     #[test]
     fn cache_set_and_get() {
@@ -257,17 +306,25 @@ mod tests {
         assert_eq!(cache.get("post_1"), Some(b"data3".to_vec()));
 
         // Ensure "admins" tag index was pruned when user_2 was removed
-        assert!(cache.tag_index.read().unwrap().get("admins").is_none());
+        assert!(
+            cache
+                .state
+                .read()
+                .unwrap()
+                .tag_index
+                .get("admins")
+                .is_none()
+        );
     }
 
     #[test]
     fn cache_secondary_tag_cleanup() {
         let cache = InMemoryCache::new(100);
         cache.set("shared", b"shared_data".to_vec(), None, &["t1", "t2", "t3"]);
-        assert_eq!(cache.tag_index.read().unwrap().len(), 3);
+        assert_eq!(cache.state.read().unwrap().tag_index.len(), 3);
 
         cache.invalidate_tag("t2");
         assert_eq!(cache.get("shared"), None);
-        assert_eq!(cache.tag_index.read().unwrap().len(), 0);
+        assert_eq!(cache.state.read().unwrap().tag_index.len(), 0);
     }
 }
