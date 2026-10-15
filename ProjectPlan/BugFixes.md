@@ -1,5 +1,25 @@
 # Bug Fixes Implementation Plan
 
+## Review follow-up — 2026-10-15
+
+Baseline: `dev-main`, release 1.6.0. Each fix includes regression coverage and a
+separate commit. The older implementation plan below is retained as history.
+
+| ID | Issue / required invariant | Status | Verification |
+|---|---|---|---|
+| REV-01 | SQLite rebuild/reset: disable FK enforcement before BEGIN on the same connection; validate references before commit; never leak disabled enforcement. | Open | Pending |
+| REV-02 | Migration rollback: execute statements and tracking update atomically on one connection where transactional DDL is supported. | Open | Pending |
+| REV-03 | PostgreSQL placeholder rewriting: preserve UTF-8 and quoted/comment text; shift only bind parameters. | Open | Pending |
+| REV-04 | Cache: replacement removes old tags; entries and indexes mutate atomically; pruning never removes a refreshed entry. | Open | Pending |
+| REV-05 | Pagination: offset without limit compiles to valid SQL for SQLite and MySQL across query builders. | Open | Pending |
+| REV-06 | Migration splitting: preserve quoted identifiers and comment markers inside them. | Open | Pending |
+| REV-07 | Documentation: accurately describe standalone caching and deprecated query-cache methods. | Open | Pending |
+| REV-08 | Build instructions: describe portable repository config and per-developer target overrides accurately. | Open | Pending |
+
+Validation notes and any environment limits are recorded with each completed fix.
+
+---
+
 > **Status:** ACTIVE — Phases 1–3 and 5 complete; Phase 4 (FIX-07, FIX-10) and exit criteria still open.
 >
 > **For agentic workers:** REQUIRED SUB-SKILL — use `superpowers:test-driven-development`
