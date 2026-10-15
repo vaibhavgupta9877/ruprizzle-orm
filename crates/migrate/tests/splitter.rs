@@ -3,6 +3,26 @@
 use ruprizzle_migrate::runner::split_statements;
 
 #[test]
+fn quoted_identifiers_preserve_semicolons_and_comment_markers() {
+    for sql in [
+        "CREATE TABLE \"audit;archive--/*\" (\"café\" TEXT);",
+        "CREATE TABLE `audit;archive--/*` (`x``;y` TEXT);",
+        "CREATE TABLE [audit;archive--/*] (id INTEGER);",
+        "CREATE TABLE \"audit\"\";archive\" (id INTEGER);",
+    ] {
+        assert_eq!(split_statements(sql), vec![sql.trim_end_matches(';')]);
+    }
+}
+
+#[test]
+fn nested_block_comments_do_not_expose_statements() {
+    assert_eq!(
+        split_statements("SELECT 1 /* outer /* nested */ ; still comment */; SELECT 2;"),
+        vec!["SELECT 1", "SELECT 2"]
+    );
+}
+
+#[test]
 fn preserves_non_ascii_text() {
     let out = split_statements("INSERT INTO t (name) VALUES ('café');");
     assert_eq!(out, vec!["INSERT INTO t (name) VALUES ('café')"]);

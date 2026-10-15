@@ -642,13 +642,20 @@ pub fn split_statements(sql: &str) -> Vec<String> {
 
     while i < chars.len() {
         match chars[i] {
-            '\'' => {
-                current.push('\'');
+            quote @ ('\'' | '"' | '`' | '[') => {
+                let closing = if quote == '[' { ']' } else { quote };
+                current.push(quote);
                 i += 1;
                 while i < chars.len() {
                     current.push(chars[i]);
-                    if chars[i] == '\'' {
+                    if chars[i] == closing {
                         i += 1;
+                        // Standard SQL quotes escape themselves by doubling.
+                        if quote != '[' && chars.get(i) == Some(&closing) {
+                            current.push(closing);
+                            i += 1;
+                            continue;
+                        }
                         break;
                     }
                     i += 1;
@@ -682,11 +689,17 @@ pub fn split_statements(sql: &str) -> Vec<String> {
             }
             '/' if i + 1 < chars.len() && chars[i + 1] == '*' => {
                 i += 2;
-                while i + 1 < chars.len() && !(chars[i] == '*' && chars[i + 1] == '/') {
-                    i += 1;
-                }
-                if i + 1 < chars.len() {
-                    i += 2;
+                let mut depth = 1usize;
+                while i < chars.len() && depth > 0 {
+                    if chars.get(i) == Some(&'/') && chars.get(i + 1) == Some(&'*') {
+                        depth = depth.saturating_add(1);
+                        i += 2;
+                    } else if chars.get(i) == Some(&'*') && chars.get(i + 1) == Some(&'/') {
+                        depth = depth.saturating_sub(1);
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
                 }
                 current.push(' ');
             }
