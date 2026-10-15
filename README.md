@@ -38,7 +38,7 @@ PostgreSQL, MySQL/MariaDB, and SQLite 3+ are supported from day one behind a `Db
 > `1.0.0`, `1.0.1` and `1.5.0` exist as git tags, not as releases: their publish runs
 > failed before uploading. The feature line they carried shipped as `1.5.1` — array
 > filters, full-text search, soft deletes, offline query checking, nested writes, tree
-> hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and
+> hierarchies, OpenTelemetry, read-replica routing, a standalone query cache, PostGIS and
 > Ruprizzle Studio — described in [What's new in v1.1–v1.5](docs/WhatsNewV1_1ToV1_5.md).
 > Known gap: the Turso/D1 adapters are real drivers over their providers' HTTP APIs and
 > have opt-in live smoke tests, but those have not yet been run against the hosted
@@ -269,7 +269,7 @@ $ cargo add ruprizzle
 
 That gives you the whole v1.1–v1.5 feature line — Studio, array filters, full-text
 search, soft deletes, offline query checking, nested writes, tree hierarchies,
-OpenTelemetry, replica routing, query caching, PostGIS — plus the Turso and D1
+OpenTelemetry, replica routing, a standalone query cache, PostGIS — plus the Turso and D1
 adapters (`cargo add ruprizzle-turso` / `cargo add ruprizzle-d1`).
 
 Ruprizzle Studio is behind the CLI's `studio` feature:
@@ -607,7 +607,7 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 | v1.1 | Array filters, full-text search, soft deletes | ✅ shipped in 1.5.1 |
 | v1.2 | `ruprizzle check`, LSP 2.0, declarative seeding | ✅ shipped in 1.5.1 |
 | v1.3 | Implicit m2m, nested writes, tree hierarchies | ✅ shipped in 1.5.1 |
-| v1.4 | OpenTelemetry, replica routing, query cache, PostGIS | ✅ shipped in 1.5.1 |
+| v1.4 | OpenTelemetry, replica routing, standalone query cache, PostGIS | ✅ shipped in 1.5.1 |
 | v1.5 | Ruprizzle Studio, Turso and D1 adapters | ✅ shipped in 1.5.1 |
 | v1.6 | Studio auth, replica health checks, `with_deleted()` on hierarchies, K11 fix | ✅ shipped in 1.6.0 |
 
@@ -633,6 +633,11 @@ See the [implementation plan](ProjectPlan/ImplementationPlan/MasterPlan.md), the
 
 This is an honest list of boundaries. It is a feature, not an apology: knowing the limits up front is how you decide whether ruprizzle is right for your project today.
 
+- **Query caching is manual.** `InMemoryCache` provides TTL and tag invalidation,
+  but query execution does not read or populate it. Call its `get`/`set` methods
+  around queries and invalidate tags after writes. The deprecated `.cache()`,
+  `.cache_key()` and `.cache_tag()` query methods have no effect. See
+  [the cache example](docs/WhatsNewV1_1ToV1_5.md#query-result-cache).
 - **Heuristic renames** are suggested automatically; add `@renamedFrom` to confirm a data-preserving rename. The diff never guesses silently.
 - **`db push`** does not write migration files and is only for prototyping.
 - **LSP for `schema.ruprizzle`** is available via the `ruprizzle lsp` CLI command and the `ruprizzle-lsp` crate, plus the VS Code extension in `editor/`. Syntax highlighting is also available as a TextMate grammar.

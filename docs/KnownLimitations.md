@@ -4,8 +4,13 @@ This is an honest list of what ruprizzle does and does not do. It is a
 feature, not an apology: knowing the boundaries up front is how you decide
 whether the tool is right for your project.
 
-## Current release (`1.5.1`)
+## Current release (`1.6.0`)
 
+- **Query caching is manual.** `InMemoryCache` is a standalone TTL/tag cache.
+  Query execution does not populate or consult it; applications must call
+  `get`/`set` and invalidate tags after writes. Deprecated `SelectQuery::cache`,
+  `cache_key` and `cache_tag` methods do nothing. Cache hit/miss metrics are not
+  emitted automatically.
 - **Heuristic renames** are suggested automatically. Add `@renamedFrom` to
   confirm or ignore the prompt; the diff never renames silently.
 - **`db push`** does not write migration files and is only for prototyping.
