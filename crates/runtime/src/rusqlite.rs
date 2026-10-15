@@ -270,6 +270,17 @@ impl RusqlitePool {
     /// committed, rolled back, or dropped, guaranteeing that all transaction
     /// statements run on the same physical SQLite connection.
     pub(crate) async fn begin_transaction(&self) -> Result<RusqliteTransaction, Error> {
+        self.begin_with_foreign_keys_disabled(false).await
+    }
+
+    pub(crate) async fn begin_migration(&self) -> Result<RusqliteTransaction, Error> {
+        self.begin_with_foreign_keys_disabled(true).await
+    }
+
+    async fn begin_with_foreign_keys_disabled(
+        &self,
+        migration: bool,
+    ) -> Result<RusqliteTransaction, Error> {
         let pool = self.clone();
         tokio::task::spawn_blocking(move || -> Result<RusqliteTransaction, Error> {
             let conn = pool.checkout_owned()?;
@@ -281,8 +292,20 @@ impl RusqlitePool {
                 let guard = conn
                     .lock()
                     .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
+                if migration {
+                    guard
+                        .execute("PRAGMA foreign_keys = OFF", [])
+                        .map_err(|e| Error::Message(e.to_string()))?;
+                }
                 guard
-                    .execute("BEGIN", [])
+                    .execute(
+                        if migration {
+                            "BEGIN IMMEDIATE"
+                        } else {
+                            "BEGIN"
+                        },
+                        [],
+                    )
                     .map_err(|e| Error::Message(e.to_string()))?;
                 // Each transaction can be the first operation on a connection
                 // after another connection changed the schema; refresh so that
@@ -292,6 +315,9 @@ impl RusqlitePool {
             })();
 
             if let Err(error) = started {
+                if migration {
+                    let _ = end_transaction(&conn, "ROLLBACK", true);
+                }
                 pool.return_conn(conn);
                 return Err(error);
             }
@@ -299,6 +325,7 @@ impl RusqlitePool {
             Ok(RusqliteTransaction {
                 pool,
                 conn: Some(conn),
+                migration,
             })
         })
         .await
@@ -377,6 +404,7 @@ impl RusqlitePool {
 pub(crate) struct RusqliteTransaction {
     pool: RusqlitePool,
     conn: Option<Arc<std::sync::Mutex<rusqlite::Connection>>>,
+    migration: bool,
 }
 
 impl RusqliteTransaction {
@@ -475,7 +503,7 @@ impl RusqliteTransaction {
             return Err(Error::Message("transaction already finished".into()));
         };
 
-        let result = end_transaction(&conn, stmt);
+        let result = end_transaction(&conn, stmt, self.migration);
         self.pool.return_conn(conn);
         result
     }
@@ -501,7 +529,7 @@ impl Drop for RusqliteTransaction {
             "transaction dropped without commit or rollback; rolling back"
         );
 
-        if let Err(error) = end_transaction(&conn, "ROLLBACK") {
+        if let Err(error) = end_transaction(&conn, "ROLLBACK", self.migration) {
             tracing::warn!(
                 target: "ruprizzle::query",
                 error = %error,
@@ -525,6 +553,7 @@ impl Drop for RusqliteTransaction {
 fn end_transaction(
     conn: &std::sync::Mutex<rusqlite::Connection>,
     stmt: &'static str,
+    migration: bool,
 ) -> Result<(), Error> {
     // A poisoned mutex means another task panicked while holding it. The guard
     // is still recoverable, and ending the transaction matters more here than
@@ -553,6 +582,11 @@ fn end_transaction(
     // connection is reused so the next statement recompiles against the
     // current schema.
     guard.flush_prepared_statement_cache();
+    if migration {
+        guard
+            .execute("PRAGMA foreign_keys = ON", [])
+            .map_err(|e| Error::Message(e.to_string()))?;
+    }
 
     result
 }

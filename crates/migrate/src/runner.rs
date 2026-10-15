@@ -258,7 +258,7 @@ impl Migrator {
                 return Err(Error::DestructiveBlocked { id: m.id });
             }
 
-            let tx = Tx::begin(pool).await?;
+            let tx = Tx::begin_migration(pool).await?;
 
             if is_postgres {
                 tx.execute_raw(
@@ -331,6 +331,7 @@ impl Migrator {
             )
             .await?;
 
+            check_sqlite_foreign_keys(&tx).await?;
             tx.commit().await?;
             tracing::info!(
                 target: "ruprizzle::migrate",
@@ -451,31 +452,23 @@ impl Migrator {
             return Ok(());
         }
 
-        if pool.provider() == Provider::Sqlite {
-            let tx = Tx::begin(pool).await?;
-            tx.execute_raw(Cow::Owned("PRAGMA foreign_keys = OFF".into()), Vec::new())
-                .await?;
-            for table in &tables {
-                let sql = format!("DROP TABLE {};", dialect.quote_ident(table));
-                tx.execute_raw(Cow::Owned(sql), Vec::new()).await?;
-            }
-            tx.execute_raw(Cow::Owned("PRAGMA foreign_keys = ON".into()), Vec::new())
-                .await?;
-            tx.commit().await?;
-        } else {
-            let tx = Tx::begin(pool).await?;
-            for table in &tables {
-                let sql = format!("DROP TABLE {} CASCADE;", dialect.quote_ident(table));
-                tx.execute_raw(Cow::Owned(sql), Vec::new()).await?;
-            }
-            tx.commit().await?;
+        let tx = Tx::begin_migration(pool).await?;
+        for table in &tables {
+            let cascade = if pool.provider() == Provider::Postgres {
+                " CASCADE"
+            } else {
+                ""
+            };
+            let sql = format!("DROP TABLE {}{cascade};", dialect.quote_ident(table));
+            tx.execute_raw(Cow::Owned(sql), Vec::new()).await?;
         }
-
-        pool.execute_raw(
-            Cow::Owned("DELETE FROM _ruprizzle_migrations".into()),
+        tx.execute_raw(
+            Cow::Borrowed("DELETE FROM _ruprizzle_migrations"),
             Vec::new(),
         )
         .await?;
+        check_sqlite_foreign_keys(&tx).await?;
+        tx.commit().await?;
 
         Ok(())
     }
@@ -492,6 +485,20 @@ impl Migrator {
         let rows = decode_string_rows(batch)?;
         Ok(rows.into_iter().collect())
     }
+}
+
+async fn check_sqlite_foreign_keys(tx: &Tx) -> Result<(), Error> {
+    if tx.dialect().name() == "sqlite"
+        && !tx
+            .fetch_all_raw(Cow::Borrowed("PRAGMA foreign_key_check"), Vec::new())
+            .await?
+            .is_empty()
+    {
+        return Err(Error::Message(
+            "migration violates SQLite foreign-key constraints".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn tracking_upsert_sql(dialect: &dyn DbDialect, parameter_count: usize) -> String {

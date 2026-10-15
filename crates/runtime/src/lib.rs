@@ -45,6 +45,7 @@ pub mod join;
 pub mod json;
 pub mod m2m;
 pub mod metrics;
+mod migration;
 pub mod model;
 #[doc(hidden)]
 pub mod nested;

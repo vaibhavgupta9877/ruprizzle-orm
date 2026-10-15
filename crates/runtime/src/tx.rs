@@ -47,6 +47,7 @@ impl IsolationLevel {
 
 #[derive(Debug)]
 enum TxInner {
+    SqliteMigration(crate::migration::SqliteMigrationConnection),
     Any(sqlx::Transaction<'static, Any>),
     Postgres(sqlx::Transaction<'static, Postgres>),
     Sqlite(sqlx::Transaction<'static, Sqlite>),
@@ -102,15 +103,40 @@ impl Tx {
             #[cfg(feature = "postgres-tokio-postgres")]
             Pool::PostgresNative(p) => TxInner::PostgresNative(p.begin().await?),
         };
+        Ok(Self::from_inner(pool, tx))
+    }
+
+    /// Begins a migration transaction. SQLite temporarily disables foreign-key
+    /// enforcement before BEGIN and restores it before releasing the connection.
+    /// Callers must validate `PRAGMA foreign_key_check` before committing.
+    ///
+    /// # Errors
+    /// Returns a driver error if acquiring or initializing the connection fails.
+    #[doc(hidden)]
+    pub async fn begin_migration(pool: &Pool) -> Result<Self, Error> {
+        if pool.provider() != Provider::Sqlite {
+            return Self::begin(pool).await;
+        }
+        let tx = match pool {
+            #[cfg(feature = "sqlite-rusqlite")]
+            Pool::SqliteNative(p) => TxInner::SqliteNative(p.begin_migration().await?),
+            _ => TxInner::SqliteMigration(
+                crate::migration::SqliteMigrationConnection::begin(pool).await?,
+            ),
+        };
+        Ok(Self::from_inner(pool, tx))
+    }
+
+    fn from_inner(pool: &Pool, tx: TxInner) -> Self {
         let provider = pool.provider();
-        Ok(Self {
+        Self {
             inner: AsyncMutex::new(Some(tx)),
             provider,
             dialect: dialect_for(provider),
             full_table_include_limit: crate::executor::Executor::full_table_include_limit(pool),
             savepoint_counter: AtomicUsize::new(0),
             pending_rollback: Mutex::new(Vec::new()),
-        })
+        }
     }
 
     /// Begins a new transaction with an explicit isolation level.
@@ -196,6 +222,7 @@ impl Tx {
         let tx = self.inner.lock().await.take();
         if let Some(tx) = tx {
             match tx {
+                TxInner::SqliteMigration(tx) => tx.finish(true).await?,
                 TxInner::Any(tx) => tx.commit().await.map_err(Error::Sqlx)?,
                 TxInner::Postgres(tx) => tx.commit().await.map_err(Error::Sqlx)?,
                 TxInner::Sqlite(tx) => tx.commit().await.map_err(Error::Sqlx)?,
@@ -225,6 +252,7 @@ impl Tx {
         let tx = self.inner.lock().await.take();
         if let Some(tx) = tx {
             match tx {
+                TxInner::SqliteMigration(tx) => tx.finish(false).await?,
                 TxInner::Any(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
                 TxInner::Postgres(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
                 TxInner::Sqlite(tx) => tx.rollback().await.map_err(Error::Sqlx)?,
@@ -357,6 +385,7 @@ impl Tx {
             self.provider == Provider::Mysql && binds.is_empty() && is_savepoint_command(sql);
 
         match tx {
+            TxInner::SqliteMigration(tx) => tx.execute(sql, binds).await,
             // A bare `&str` carries no arguments, which sqlx sends as a text
             // query rather than a prepared statement.
             TxInner::Any(tx) if text_protocol => sqlx::Executor::execute(&mut **tx, sql)
@@ -424,6 +453,9 @@ impl Tx {
             .ok_or_else(|| Error::Message("transaction already finished".into()))?;
 
         match tx {
+            TxInner::SqliteMigration(tx) => {
+                crate::executor::decode_rows(tx.fetch(sql, binds).await?)
+            }
             TxInner::Any(tx) => {
                 let mut q = sqlx::query_as::<Any, T>(sql);
                 for b in binds {
@@ -476,6 +508,7 @@ impl Tx {
             .ok_or_else(|| Error::Message("transaction already finished".into()))?;
 
         match tx {
+            TxInner::SqliteMigration(tx) => tx.fetch(sql, binds).await,
             TxInner::Any(tx) => {
                 let mut q = sqlx::query::<Any>(sql);
                 for b in binds {
