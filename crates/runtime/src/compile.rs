@@ -38,32 +38,130 @@ impl CompiledSql {
         if offset == 0 || self.binds.is_empty() || !self.sql.contains('$') {
             return self.clone();
         }
-        let mut sql = String::with_capacity(self.sql.len());
-        let bytes = self.sql.as_bytes();
-        let mut i = 0;
-        while i < bytes.len() {
-            if bytes[i] == b'$' {
-                let mut j = i + 1;
-                while j < bytes.len() && bytes[j].is_ascii_digit() {
-                    j += 1;
-                }
-                if j > i + 1 {
-                    let n = bytes[i + 1..j]
-                        .iter()
-                        .fold(0usize, |acc, b| acc * 10 + (b - b'0') as usize);
-                    let _ = write!(sql, "${}", n + offset);
-                    i = j;
-                    continue;
-                }
-            }
-            sql.push(bytes[i] as char);
-            i += 1;
-        }
+        let sql = renumber_postgres_parameters(&self.sql, offset);
         Self {
             sql: Cow::Owned(sql),
             binds: self.binds.clone(),
         }
     }
+}
+
+// Rewrite only PostgreSQL bind tokens. Copy quoted strings, identifiers and
+// comments verbatim; all copying is by char so UTF-8 is preserved.
+fn renumber_postgres_parameters(sql: &str, offset: usize) -> String {
+    let mut out = String::with_capacity(sql.len());
+    let mut chars = sql.char_indices().peekable();
+    while let Some((pos, ch)) = chars.next() {
+        out.push(ch);
+        match ch {
+            '\'' | '"' => {
+                let prefix = sql.get(..pos).unwrap_or_default();
+                let mut preceding = prefix.chars().rev();
+                let escapes = ch == '\''
+                    && matches!(preceding.next(), Some('e' | 'E'))
+                    && !preceding.next().is_some_and(is_sql_identifier_char);
+                while let Some((_, c)) = chars.next() {
+                    out.push(c);
+                    if escapes && c == '\\' {
+                        if let Some((_, escaped)) = chars.next() {
+                            out.push(escaped);
+                        }
+                    } else if c == ch {
+                        if chars.peek().is_some_and(|(_, next)| *next == ch) {
+                            chars.next();
+                            out.push(ch);
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+            '-' if chars.peek().is_some_and(|(_, c)| *c == '-') => {
+                for (_, c) in chars.by_ref() {
+                    out.push(c);
+                    if c == '\n' {
+                        break;
+                    }
+                }
+            }
+            '/' if chars.peek().is_some_and(|(_, c)| *c == '*') => {
+                chars.next();
+                out.push('*');
+                let mut depth = 1usize;
+                while let Some((_, c)) = chars.next() {
+                    out.push(c);
+                    if c == '/' && chars.peek().is_some_and(|(_, c)| *c == '*') {
+                        chars.next();
+                        out.push('*');
+                        depth = depth.saturating_add(1);
+                    } else if c == '*' && chars.peek().is_some_and(|(_, c)| *c == '/') {
+                        chars.next();
+                        out.push('/');
+                        depth = depth.saturating_sub(1);
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                }
+            }
+            '$' if !sql
+                .get(..pos)
+                .and_then(|s| s.chars().next_back())
+                .is_some_and(is_sql_identifier_char) =>
+            {
+                if chars.peek().is_some_and(|(_, c)| c.is_ascii_digit()) {
+                    let mut digits = String::new();
+                    while chars.peek().is_some_and(|(_, c)| c.is_ascii_digit()) {
+                        if let Some((_, c)) = chars.next() {
+                            digits.push(c);
+                        }
+                    }
+                    if let Some(n) = digits
+                        .parse::<usize>()
+                        .ok()
+                        .and_then(|n| n.checked_add(offset))
+                    {
+                        let _ = write!(out, "{n}");
+                    } else {
+                        out.push_str(&digits);
+                    }
+                } else {
+                    let mut look = chars.clone();
+                    let mut tag = String::from("$");
+                    for (_, c) in look.by_ref() {
+                        if c == '$' {
+                            tag.push(c);
+                            break;
+                        }
+                        if !(c == '_' || c.is_alphanumeric()) {
+                            break;
+                        }
+                        tag.push(c);
+                    }
+                    if tag.len() > 1 && tag.ends_with('$') {
+                        for _ in tag.chars().skip(1) {
+                            chars.next();
+                        }
+                        out.push_str(tag.get(1..).unwrap_or_default());
+                        let mut body = String::new();
+                        for (_, c) in chars.by_ref() {
+                            body.push(c);
+                            if body.ends_with(&tag) {
+                                break;
+                            }
+                        }
+                        out.push_str(&body);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+fn is_sql_identifier_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_' || c == '$'
 }
 
 /// Compile a `SELECT` for `M`.
@@ -1667,27 +1765,8 @@ impl<'d> Compiler<'d> {
             return;
         }
 
-        let offset = self.binds.len();
-        let bytes = sql.as_bytes();
-        let mut i = 0;
-        while i < bytes.len() {
-            if bytes[i] == b'$' {
-                let mut j = i + 1;
-                while j < bytes.len() && bytes[j].is_ascii_digit() {
-                    j += 1;
-                }
-                if j > i + 1 {
-                    let n = bytes[i + 1..j]
-                        .iter()
-                        .fold(0usize, |acc, b| acc * 10 + (b - b'0') as usize);
-                    self.sql.push_str(&self.dialect.placeholder(offset + n - 1));
-                    i = j;
-                    continue;
-                }
-            }
-            self.sql.push(bytes[i] as char);
-            i += 1;
-        }
+        self.sql
+            .push_str(&renumber_postgres_parameters(sql, self.binds.len()));
         self.binds.extend(subquery.binds.iter().cloned());
     }
 
@@ -2099,6 +2178,30 @@ mod tests {
         const TABLE: &'static str = "users";
     }
     unit_row_decode!(User);
+
+    #[test]
+    fn renumbering_preserves_sql_text_and_unicode() {
+        let sql = "SELECT \"café$1\", '$1', E'escaped\\\'$2', $$ $3 $$, $body$ $4 $body$, café$5 FROM \"日本語\" WHERE id = $1 /* $2 /* $3 */ $4 */ -- $5\nAND x = $2";
+        let compiled = CompiledSql {
+            sql: sql.into(),
+            binds: vec![Value::I64(1), Value::I64(2)],
+        };
+        let expected = sql
+            .replace("id = $1", "id = $4")
+            .replace("x = $2", "x = $5");
+        assert_eq!(compiled.renumbered(3).sql, expected);
+        let mut compiler = Compiler::new(pg());
+        compiler.push_bind(Value::I64(0));
+        compiler.push_subquery(&compiled);
+        assert_eq!(
+            compiler.finish().sql,
+            format!(
+                "$1{}",
+                sql.replace("id = $1", "id = $2")
+                    .replace("x = $2", "x = $3")
+            )
+        );
+    }
 
     #[test]
     fn offset_only_select_uses_dialect_pagination() {
