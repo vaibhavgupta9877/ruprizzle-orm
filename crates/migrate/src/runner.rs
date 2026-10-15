@@ -377,34 +377,42 @@ impl Migrator {
                 dialect.placeholder(0)
             );
 
-            if pool.provider() == Provider::Mysql {
-                // A MySQL down migration for a foreign-key cycle is wrapped in
-                // `SET FOREIGN_KEY_CHECKS = 0/1`, which is session state. Sent
-                // through the pool, each statement may land on a different
-                // connection and the `DROP TABLE`s still see the checks enabled,
-                // so run the whole migration on one connection.
-                let tx = Tx::begin(pool).await?;
-                for stmt in statements {
-                    let sql = stmt.trim();
-                    if !sql.is_empty() && !sql.starts_with("-- ") {
-                        tx.execute_raw(Cow::Owned(sql.to_owned()), Vec::new())
-                            .await?;
-                    }
-                }
-                tx.execute_raw(Cow::Owned(update_sql), vec![Value::Str(id.as_str().into())])
-                    .await?;
-                tx.commit().await?;
-            } else {
-                for stmt in statements {
-                    let sql = stmt.trim();
-                    if !sql.is_empty() && !sql.starts_with("-- ") {
-                        pool.execute_raw(Cow::Owned(sql.to_owned()), Vec::new())
-                            .await?;
-                    }
-                }
-                pool.execute_raw(Cow::Owned(update_sql), vec![Value::Str(id.as_str().into())])
-                    .await?;
+            // Keep DDL/DML, session pragmas and tracking on one connection.
+            // SQLite migration transactions disable FKs before BEGIN and
+            // validate references before COMMIT; Postgres supports atomic DDL.
+            // MySQL DDL still has the server's implicit-commit semantics.
+            let tx = Tx::begin_migration(pool).await?;
+            if pool.provider() == Provider::Postgres {
+                tx.execute_raw(
+                    Cow::Borrowed("SELECT pg_advisory_xact_lock($1)"),
+                    vec![Value::I64(advisory_lock_key())],
+                )
+                .await?;
             }
+            let still_applied_sql = format!(
+                "SELECT id FROM _ruprizzle_migrations WHERE id = {} AND rolled_back_at IS NULL",
+                dialect.placeholder(0)
+            );
+            if tx
+                .fetch_all_raw(
+                    Cow::Owned(still_applied_sql),
+                    vec![Value::Str(id.as_str().into())],
+                )
+                .await?
+                .is_empty()
+            {
+                tx.rollback().await?;
+                continue;
+            }
+            for stmt in statements {
+                if !stmt.trim().is_empty() {
+                    tx.execute_raw(Cow::Owned(stmt), Vec::new()).await?;
+                }
+            }
+            tx.execute_raw(Cow::Owned(update_sql), vec![Value::Str(id.as_str().into())])
+                .await?;
+            check_sqlite_foreign_keys(&tx).await?;
+            tx.commit().await?;
 
             applied.push(id);
         }

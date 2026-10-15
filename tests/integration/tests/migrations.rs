@@ -5,6 +5,22 @@ use std::fs;
 use ruprizzle_migrate::Migrator;
 use ruprizzle_testkit::both_dbs;
 
+both_dbs! {
+    async fn failed_rollback_preserves_data_and_tracking(db: TestDb) {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("001_rollback_failure");
+        fs::create_dir_all(&path)?;
+        fs::write(path.join("up.sql"), "CREATE TABLE rollback_items(id INTEGER PRIMARY KEY); INSERT INTO rollback_items VALUES(1);")?;
+        fs::write(path.join("down.sql"), "DELETE FROM rollback_items; INSERT INTO missing_rollback_table VALUES(1);")?;
+        let migrator = Migrator::new(dir.path());
+        migrator.apply_all(db.pool(), false).await?;
+        assert!(migrator.rollback(db.pool(), 1).await.is_err());
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM rollback_items").fetch_one(db.any_pool()).await?;
+        assert_eq!(count, 1);
+        assert_eq!(migrator.status(db.pool()).await?.applied, ["001_rollback_failure"]);
+    }
+}
+
 fn schema_v1(provider: &str) -> String {
     format!(
         r#"

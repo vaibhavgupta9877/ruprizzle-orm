@@ -208,3 +208,53 @@ async fn abandoned_migration_restores_single_connection_memory_database() {
         pool.close().await;
     }
 }
+
+#[tokio::test]
+async fn failed_rollback_keeps_data_and_migration_tracking() {
+    for (_db, pool) in databases().await {
+        let dir = tempfile::tempdir().unwrap();
+        migration(
+            dir.path(),
+            "001_initial",
+            "CREATE TABLE rollback_items(id INTEGER PRIMARY KEY); INSERT INTO rollback_items VALUES(1);",
+            "DELETE FROM rollback_items; DROP TABLE missing_table;",
+        );
+        let migrator = Migrator::new(dir.path());
+        migrator.apply_all(&pool, false).await.unwrap();
+        assert!(migrator.rollback(&pool, 1).await.is_err());
+        assert_eq!(
+            scalar(&pool, "SELECT count(*) FROM rollback_items").await,
+            1
+        );
+        assert_eq!(
+            migrator.status(&pool).await.unwrap().applied,
+            ["001_initial"]
+        );
+        assert_eq!(scalar(&pool, "PRAGMA foreign_keys").await, 1);
+        pool.close().await;
+    }
+}
+
+#[tokio::test]
+async fn rollback_rebuild_preserves_children_and_updates_tracking() {
+    for (_db, pool) in databases().await {
+        initial_data(&pool).await;
+        let dir = tempfile::tempdir().unwrap();
+        migration(
+            dir.path(),
+            "001_reversible",
+            "UPDATE parent SET label=label;",
+            "PRAGMA foreign_keys=OFF; CREATE TABLE parent__new(id INTEGER PRIMARY KEY, label TEXT); INSERT INTO parent__new SELECT * FROM parent; DROP TABLE parent; ALTER TABLE parent__new RENAME TO parent; PRAGMA foreign_key_check; PRAGMA foreign_keys=ON;",
+        );
+        let migrator = Migrator::new(dir.path());
+        migrator.apply_all(&pool, false).await.unwrap();
+        let report = migrator.rollback(&pool, 1).await.unwrap();
+        assert_eq!(report.applied, ["001_reversible"]);
+        assert_eq!(scalar(&pool, "SELECT count(*) FROM child").await, 1);
+        assert_eq!(scalar(&pool, "PRAGMA foreign_keys").await, 1);
+        let status = migrator.status(&pool).await.unwrap();
+        assert!(status.applied.is_empty());
+        assert_eq!(status.pending, ["001_reversible"]);
+        pool.close().await;
+    }
+}
