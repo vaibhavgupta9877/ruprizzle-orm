@@ -188,6 +188,9 @@ impl DbDialect for SqliteDialect {
             parts.push(format!("LIMIT {l}"));
         }
         if let Some(o) = offset {
+            if limit.is_none() {
+                parts.push("LIMIT -1".to_owned());
+            }
             parts.push(format!("OFFSET {o}"));
         }
         parts.join(" ")

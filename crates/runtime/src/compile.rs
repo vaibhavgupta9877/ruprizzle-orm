@@ -120,14 +120,10 @@ pub fn select<M: Model>(
         c.push_order(order);
     }
 
-    if let Some(n) = limit {
-        c.push_str(" LIMIT ");
-        c.push_str(&n.to_string());
-    }
-
-    if let Some(n) = offset {
-        c.push_str(" OFFSET ");
-        c.push_str(&n.to_string());
+    let pagination = dialect.limit_offset(limit, offset);
+    if !pagination.is_empty() {
+        c.push(' ');
+        c.push_str(&pagination);
     }
 
     c.finish()
@@ -343,14 +339,10 @@ pub(crate) fn join_select_with_columns<M: Model>(
         c.push_order(order);
     }
 
-    if let Some(n) = limit {
-        c.push_str(" LIMIT ");
-        c.push_str(&n.to_string());
-    }
-
-    if let Some(n) = offset {
-        c.push_str(" OFFSET ");
-        c.push_str(&n.to_string());
+    let pagination = dialect.limit_offset(limit, offset);
+    if !pagination.is_empty() {
+        c.push(' ');
+        c.push_str(&pagination);
     }
 
     c.finish()
@@ -428,14 +420,10 @@ pub fn aggregate_select<M: Model>(
         c.push_order(order);
     }
 
-    if let Some(n) = limit {
-        c.push_str(" LIMIT ");
-        c.push_str(&n.to_string());
-    }
-
-    if let Some(n) = offset {
-        c.push_str(" OFFSET ");
-        c.push_str(&n.to_string());
+    let pagination = dialect.limit_offset(limit, offset);
+    if !pagination.is_empty() {
+        c.push(' ');
+        c.push_str(&pagination);
     }
 
     c.finish()
@@ -2111,6 +2099,27 @@ mod tests {
         const TABLE: &'static str = "users";
     }
     unit_row_decode!(User);
+
+    #[test]
+    fn offset_only_select_uses_dialect_pagination() {
+        for (dialect, expected) in [
+            (sqlite(), "LIMIT -1 OFFSET 2"),
+            (mysql(), "LIMIT 18446744073709551615 OFFSET 2"),
+            (pg(), "OFFSET 2"),
+        ] {
+            let query = select::<User>(
+                dialect,
+                "users",
+                &[],
+                &FilterNode::And(vec![]),
+                &[],
+                None,
+                Some(2),
+                false,
+            );
+            assert!(query.sql.ends_with(expected), "{}", query.sql);
+        }
+    }
 
     #[derive(Default)]
     struct JoinUser;

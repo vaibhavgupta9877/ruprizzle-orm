@@ -217,6 +217,18 @@ fn limit_offset_renders() {
 }
 
 #[test]
+fn offset_without_limit_is_valid_for_every_dialect() {
+    assert_eq!(
+        SqliteDialect.limit_offset(None, Some(20)),
+        "LIMIT -1 OFFSET 20"
+    );
+    assert_eq!(
+        MySqlDialect.limit_offset(None, Some(20)),
+        "LIMIT 18446744073709551615 OFFSET 20"
+    );
+}
+
+#[test]
 fn check_schema_capabilities_warns_on_sqlite_decimal_and_json() {
     let source = r#"
         datasource db {

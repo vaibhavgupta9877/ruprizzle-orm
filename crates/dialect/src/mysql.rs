@@ -229,6 +229,9 @@ impl DbDialect for MySqlDialect {
             parts.push(format!("LIMIT {l}"));
         }
         if let Some(o) = offset {
+            if limit.is_none() {
+                parts.push("LIMIT 18446744073709551615".to_owned());
+            }
             parts.push(format!("OFFSET {o}"));
         }
         parts.join(" ")
