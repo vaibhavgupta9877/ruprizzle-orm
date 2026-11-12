@@ -96,7 +96,7 @@ started on 2026-08-17 shows a large number of surviving mutants in
 `Change::description`, `diff_enums`, `diff_columns`, `diff_relations`,
 `diff_indexes`, `split_statements`, and `Migrator::apply_all`. The live log is
 at `local/mutants-migrate.log`. Fixing this is deferred to the W6 hardening
-cycle; for the `0.4.0-beta.1` milestone it is documented as a known gap.
+cycle; for the pre-release `0.4.0-beta.1` milestone it was documented as a known gap.
 
 ## Next steps
 

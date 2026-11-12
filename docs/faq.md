@@ -34,15 +34,15 @@ adapter: Neon is Postgres over TLS, so its connection string goes straight to
 
 ## Which version should I install?
 
-`1.5.1` — the current stable release on crates.io.
+`1.6.0` — the current stable release on crates.io (`1.5.1` was the first stable release).
 
 ```toml
 [dependencies]
-ruprizzle = "1.5"
+ruprizzle = "1.6"
 ```
 
 If you are still on `1.0.0-rc.1`, see
-[Upgrading from 1.0.0-rc.1 to 1.5.1](UpgradingFromRc1.md) — most applications
+[Upgrading from 1.0.0-rc.1 to 1.6.0](UpgradingFromRc1.md) — most applications
 need no code changes.
 
 ## What databases does ruprizzle support?
@@ -115,7 +115,7 @@ Open an issue on the [GitHub repository](https://github.com/vaibhavgupta9877/rup
       "name": "Is it production-ready?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "1.5.1 is the first stable release on crates.io, published 2026-09-13, with the public API covered by semantic versioning. The two-week release-candidate feedback window was waived, with reasons documented in the stability policy, because the project had no external consumers to collect feedback from. The 1.x line is pinned to sqlx 0.8, since ruprizzle re-exports sqlx as part of its own public API."
+        "text": "1.6.0 is the current stable release on crates.io, published 2026-10-03. 1.5.1, published 2026-09-13, was the first stable release, and the public API has been covered by semantic versioning since then. The two-week release-candidate feedback window was waived, with reasons documented in the stability policy, because the project had no external consumers to collect feedback from. The 1.x line is pinned to sqlx 0.8, since ruprizzle re-exports sqlx as part of its own public API."
       }
     },
     {

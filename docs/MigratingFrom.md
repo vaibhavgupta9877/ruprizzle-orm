@@ -75,7 +75,7 @@ ruprizzle follows the Prisma shape most closely — a declarative schema file th
 drives both codegen and migration diffs — so most concepts map one-to-one.
 Feature names differ:
 
-| Prisma / Drizzle | ruprizzle (as of `1.5.1`) |
+| Prisma / Drizzle | ruprizzle (as of `1.6.0`) |
 |---|---|
 | `schema.prisma` / `drizzle-orm` table defs | `schema.ruprizzle` + `ruprizzle generate` |
 | `prisma migrate` / `drizzle-kit` | `ruprizzle migrate dev` |

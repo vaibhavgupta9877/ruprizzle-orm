@@ -14,7 +14,7 @@ This guide uses PostgreSQL. To use SQLite, replace `--provider postgres` with
 
 ## 1. Install the CLI
 
-`1.5.1` is the current release on crates.io, so a bare `cargo install` resolves
+`1.6.0` is the current release on crates.io, so a bare `cargo install` resolves
 to the latest stable:
 
 ```bash
@@ -92,7 +92,7 @@ Or edit `Cargo.toml`:
 
 ```toml
 [dependencies]
-ruprizzle = "1.5"
+ruprizzle = "1.6"
 tokio = { version = "1", features = ["full"] }
 dotenvy = "0.15"
 sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio-rustls", "postgres"] }

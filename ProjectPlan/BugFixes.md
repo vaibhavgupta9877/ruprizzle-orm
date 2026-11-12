@@ -501,12 +501,12 @@ database. Carried from the readiness assessment's finding #11.
 
 ## Release
 
-These fixes warrant `0.1.2-beta.1` rather than waiting for the v1 milestones. BUG-01,
+These fixes were planned for `0.1.2-beta.1`. That release was never cut; the fixes ship on the 1.x line (see the `[Unreleased]` section of CHANGELOG.md) rather than waiting for the v1 milestones. BUG-01,
 BUG-02, and BUG-03 are data-integrity and availability defects in a published crate.
 
-- [ ] Ship Phase 1 and Phase 2 as `0.1.2-beta.1` as soon as they are green — do not hold
+- [ ] (superseded: `0.1.2-beta.1` not cut) Ship Phase 1 and Phase 2 as `0.1.2-beta.1` as soon as they are green — do not hold
       them behind Phases 3–5.
-- [ ] Consider yanking `0.1.1-beta.1` and `0.1.0-alpha.3` if any user is on the `rusqlite`
+- [ ] (superseded: moot, see above) Consider yanking `0.1.1-beta.1` and `0.1.0-alpha.3` if any user is on the `rusqlite`
       path. Downloads are low (43 across all versions), so the cost of yanking is near zero
       and the cost of not yanking is a silent data-integrity bug in the wild.
 - [ ] Add a `docs/KnownLimitations.md` note for anyone on an affected version: on the native

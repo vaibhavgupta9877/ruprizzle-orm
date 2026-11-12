@@ -60,6 +60,13 @@ pauses between uploads to let that indexing propagate. Live publishes are refuse
 when `CI` or `GITHUB_ACTIONS` is set, so the workflow is the only automated path.
 
 
+## 1.5.2 — merged, not published
+
+Prepared on 2026-09-30 and merged into `main`, but never tagged and never uploaded:
+there is no `v1.5.2` tag and no `ruprizzle` 1.5.2 package on crates.io. Its contents
+ship in `1.6.0` below. Recorded in [CHANGELOG.md](CHANGELOG.md#152---2026-09-30--merged-to-main-not-published).
+
+
 ## 1.6.0
 
 Published 2026-10-03 from tag `v1.6.0`. Additive over `1.5.1`, with one behaviour

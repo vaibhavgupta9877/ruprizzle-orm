@@ -91,7 +91,7 @@ Post::find_many().with_deleted().fetch_all(&pool).await?;   // live + deleted
 Post::find_many().only_deleted().fetch_all(&pool).await?;   // the recycle bin
 ```
 
-Until `1.5.2` this did not hold for includes with `.take(n)`, relation filters, joins,
+Until `1.6.0` this did not hold for includes with `.take(n)`, relation filters, joins,
 tree queries or m2m reloads. See the [query guide](QueryGuide.md#soft-deletes) for
 how each of them applies it now.
 
@@ -202,10 +202,10 @@ the primary rather than failing, unless `fallback_to_primary(false)` is set. Hea
 only updated when you call `check_health()`, or, since 1.6, in the background with
 `pool.spawn_health_checks(Duration::from_secs(10))` (keep the returned handle alive).
 
-> **Before 1.5.2**, `fallback_to_primary(false)` was ignored, `LeastConnections`
+> **Before 1.6.0**, `fallback_to_primary(false)` was ignored, `LeastConnections`
 > always chose the first replica (nothing counted in-flight reads), `Random` was a
 > fixed stride, and a raw `INSERT … RETURNING` or `SELECT … FOR UPDATE` run through
-> the router went to a replica. All four are fixed in 1.5.2. `begin()` always opens the transaction on the primary,
+> the router went to a replica. All four are fixed in 1.6.0. `begin()` always opens the transaction on the primary,
 so read-your-writes inside a transaction is never at risk.
 
 ### Query result cache
@@ -231,7 +231,7 @@ in without touching call sites.
 before a query and `set` after it, and `ruprizzle_cache_hits_total` /
 `ruprizzle_cache_misses_total` are not emitted. `SelectQuery::cache`, `cache_key` and
 `cache_tag` exist in the `1.5` API but **do nothing**, and are deprecated since
-`1.5.2`. So are `SelectQuery::use_primary` and `use_replica`. To choose a pool, build
+`1.6.0`. So are `SelectQuery::use_primary` and `use_replica`. To choose a pool, build
 the query on `RoutedPool::primary()`, on the `RoutedPool` itself, or on
 `select_replica()`.
 

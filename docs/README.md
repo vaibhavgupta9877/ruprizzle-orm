@@ -22,9 +22,9 @@ are also available: `sqlite-rusqlite` for synchronous SQLite and an experimental
 
 ## Status
 
-**The current published version is `1.5.1`** — the first stable release, live on
-crates.io since 2026-09-13 for every crate in the workspace, including
-`ruprizzle-turso` and `ruprizzle-d1`. Run `scripts/check-release-state.sh` to
+**The current published version is `1.6.0`** (2026-10-03), live on
+crates.io for every crate in the workspace, including
+`ruprizzle-turso` and `ruprizzle-d1`. `1.5.1` (2026-09-13) was the first stable release. Run `scripts/check-release-state.sh` to
 confirm this against the registry rather than taking this page's word for it.
 
 `1.0.0`, `1.0.1` and `1.5.0` are git tags, not releases: their publish runs
@@ -32,7 +32,7 @@ failed before uploading, so the tags are kept as evidence of the attempts rather
 than moved. `1.0.0-rc.1` remains on crates.io as the previous published version.
 
 **Upgrading from `1.0.0-rc.1`?** Most applications need no code changes. See
-[Upgrading from 1.0.0-rc.1 to 1.5.1](UpgradingFromRc1.md), and pin
+[Upgrading from 1.0.0-rc.1 to 1.6.0](UpgradingFromRc1.md), and pin
 `"=1.0.0-rc.1"` until you are ready, because `"1.0.0-rc.1"` also matches `1.6.0`.
 
 The core P0–P8 implementation is complete and MySQL/MariaDB support is shipped.

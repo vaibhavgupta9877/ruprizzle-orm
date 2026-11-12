@@ -35,8 +35,8 @@ The public API is covered by semantic versioning from the first published stable
 release — `1.5.1` — onward. What counts as public, and what a breaking change is, is
 defined in [Stability](Stability.md).
 
-Crates marked `publish = false` are outside the semver promise: `ruprizzle-testkit`
-and `xtask`. They still carry the workspace version, because they are built from the
+Crates marked `publish = false` are outside the semver promise: `ruprizzle-testkit`,
+`xtask`, `tests/integration`, `local/deep-tests` and `examples/blog`. They still carry the workspace version, because they are built from the
 same tree.
 
 ## Cutting a release

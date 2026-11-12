@@ -215,7 +215,7 @@ where
     /// removed in `2.0`.
     #[must_use]
     #[deprecated(
-        since = "1.5.2",
+        since = "1.6.0",
         note = "has no effect: the query cache is not wired to execution; use InMemoryCache directly"
     )]
     pub fn cache(self, _ttl: std::time::Duration) -> Self {
@@ -225,7 +225,7 @@ where
     /// **Does nothing.** See [`SelectQuery::cache`].
     #[must_use]
     #[deprecated(
-        since = "1.5.2",
+        since = "1.6.0",
         note = "has no effect: the query cache is not wired to execution; use InMemoryCache directly"
     )]
     pub fn cache_key(self, _key: impl Into<String>) -> Self {
@@ -235,7 +235,7 @@ where
     /// **Does nothing.** See [`SelectQuery::cache`].
     #[must_use]
     #[deprecated(
-        since = "1.5.2",
+        since = "1.6.0",
         note = "has no effect: the query cache is not wired to execution; use InMemoryCache directly"
     )]
     pub fn cache_tag(self, _tag: impl Into<String>) -> Self {
@@ -249,7 +249,7 @@ where
     /// will be implemented or removed in `2.0`.
     #[must_use]
     #[deprecated(
-        since = "1.5.2",
+        since = "1.6.0",
         note = "has no effect: build the query on RoutedPool::primary() instead"
     )]
     pub fn use_primary(self) -> Self {
@@ -263,7 +263,7 @@ where
     /// [`RoutedPool::select_replica()`](crate::RoutedPool::select_replica).
     #[must_use]
     #[deprecated(
-        since = "1.5.2",
+        since = "1.6.0",
         note = "has no effect: build the query on a RoutedPool or RoutedPool::select_replica()"
     )]
     pub fn use_replica(self) -> Self {

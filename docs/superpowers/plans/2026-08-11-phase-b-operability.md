@@ -1,5 +1,11 @@
 # Phase B Operability Implementation Plan
 
+> **Status: implemented (historical plan).** PR-04 to PR-07 are in the codebase:
+> query and migration tracing, `PoolConfig`, `PoolStats` with `ping`, and
+> PII-safe error display (`crates/runtime/tests/error_redaction.rs`). The
+> checkboxes below were never ticked as the work landed, so they are left as
+> written. [CHANGELOG.md](../../../CHANGELOG.md) is the record of what shipped.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement Production Readiness Plan PR-04 through PR-07 so the runtime exposes query and migration tracing, configurable pool behavior, pool saturation/readiness APIs, and PII-safe error display.

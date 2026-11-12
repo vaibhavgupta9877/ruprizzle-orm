@@ -86,7 +86,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the `1.5.1` baseline; additive API on the `1.6` line (such as
   `HierarchyQuery::with_deleted`) is still printed but no longer fails the job.
 
-## [1.5.2] - 2026-09-30
+## [1.5.2] - 2026-09-30 — merged to main, NOT published
 
 ### Changed
 

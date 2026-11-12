@@ -75,7 +75,7 @@ whether the tool is right for your project.
   `Authorization: Bearer`. There are no user accounts or roles and no TLS, so off
   loopback the token crosses the network in cleartext. It binds `127.0.0.1` by
   default and refuses `--allow-writes` on a non-loopback host without
-  `--yes-i-know`; do not expose it on an untrusted network. Since `1.5.2` it refuses requests whose `Host`
+  `--yes-i-know`; do not expose it on an untrusted network. Since `1.6.0` it refuses requests whose `Host`
   is not Studio's own name (DNS rebinding) and mutations without Studio's `Origin`
   and session token (CSRF), so a web page open in the same browser cannot drive it.
   Scripted `POST`s from `curl` are refused for the same reason.

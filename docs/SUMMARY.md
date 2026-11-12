@@ -32,9 +32,8 @@
 
 - [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md)
 - [What's new in 1.6](WhatsNewV1_6.md)
-- [Upgrading from 1.0.0-rc.1 to 1.5.1](UpgradingFromRc1.md)
+- [Upgrading from 1.0.0-rc.1 to 1.6.0](UpgradingFromRc1.md)
 - [Migration guide to v1](MigrationGuideToV1.md)
-- [1.0.0 announcement (archived)](announcement.md)
 
 # Reference
 
