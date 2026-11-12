@@ -408,13 +408,18 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
     );
     match scheme {
         "postgres" | "postgresql" => {
-            #[cfg(feature = "postgres-tokio-postgres")]
-            if url
-                .split_once('?')
-                .is_some_and(|(_, q)| q.contains("driver=tokio-postgres"))
-            {
-                let pool = crate::tokio_postgres::TokioPostgresPool::connect(url, config).await?;
-                return Ok(Pool::PostgresNative(pool));
+            if requested_native(
+                url,
+                "tokio-postgres",
+                "postgres-tokio-postgres",
+                cfg!(feature = "postgres-tokio-postgres"),
+            )? {
+                #[cfg(feature = "postgres-tokio-postgres")]
+                {
+                    let pool =
+                        crate::tokio_postgres::TokioPostgresPool::connect(url, config).await?;
+                    return Ok(Pool::PostgresNative(pool));
+                }
             }
 
             let pool = sqlx::postgres::PgPoolOptions::new()
@@ -465,13 +470,17 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
             Ok(Pool::Mysql(pool))
         }
         "sqlite" => {
-            #[cfg(feature = "sqlite-rusqlite")]
-            if url
-                .split_once('?')
-                .is_some_and(|(_, q)| q.contains("driver=rusqlite"))
-            {
-                let pool = crate::rusqlite::RusqlitePool::connect(url, config).await?;
-                return Ok(Pool::SqliteNative(pool));
+            if requested_native(
+                url,
+                "rusqlite",
+                "sqlite-rusqlite",
+                cfg!(feature = "sqlite-rusqlite"),
+            )? {
+                #[cfg(feature = "sqlite-rusqlite")]
+                {
+                    let pool = crate::rusqlite::RusqlitePool::connect(url, config).await?;
+                    return Ok(Pool::SqliteNative(pool));
+                }
             }
 
             let mut connect_opts =
@@ -959,6 +968,51 @@ impl RoutedPoolBuilder {
             rr_index: Arc::new(AtomicUsize::new(0)),
             fallback_to_primary: self.fallback_to_primary,
         }
+    }
+}
+
+/// Returns the value of the `driver=` routing parameter, if present.
+///
+/// Matching is on the whole parameter name and value, so `driver=rusqlite2`
+/// is reported as the value `rusqlite2` rather than matching `rusqlite`.
+fn driver_param(url: &str) -> Option<&str> {
+    let (_, query) = url.split_once('?')?;
+    query
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("driver="))
+}
+
+/// Decides whether a URL asks for a native driver.
+///
+/// This runs whether or not the matching feature is compiled in, so the
+/// outcome never depends on Cargo features:
+///
+/// - no `driver=` parameter: `Ok(false)`, use the sqlx pool;
+/// - `driver=<expected>` with the feature enabled: `Ok(true)`;
+/// - `driver=<expected>` with the feature disabled: an error naming the feature;
+/// - any other `driver=` value: an error listing the accepted value, rather
+///   than silently falling through to sqlx.
+fn requested_native(
+    url: &str,
+    expected: &str,
+    feature: &str,
+    feature_enabled: bool,
+) -> Result<bool, crate::Error> {
+    match driver_param(url) {
+        None => Ok(false),
+        Some(value) if value == expected => {
+            if feature_enabled {
+                Ok(true)
+            } else {
+                Err(crate::Error::Message(format!(
+                    "`driver={expected}` requires the `{feature}` Cargo feature; \
+                     enable it or remove the `driver` parameter"
+                )))
+            }
+        }
+        Some(other) => Err(crate::Error::Message(format!(
+            "unknown driver `{other}`; expected `driver={expected}` or no `driver` parameter"
+        ))),
     }
 }
 
