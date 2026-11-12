@@ -24,6 +24,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   when splitting migration SQL into statements.
 - Clarify manual query caching and deprecated no-op cache methods, and correct
   the shared Cargo target directory instructions.
+- The `driver=` URL parameter is validated the same way whether or not the
+  matching Cargo feature is enabled. An unknown value such as `driver=rusqlit`
+  is now an error listing the accepted value, instead of falling through to
+  sqlx. Requesting `driver=rusqlite` without the `sqlite-rusqlite` feature names
+  the feature to enable.
+- `rusqlite` pool metrics report the last known idle count while the pool lock
+  is held, instead of reading as a fully busy pool.
 
 ## [1.6.0] - 2026-10-03
 

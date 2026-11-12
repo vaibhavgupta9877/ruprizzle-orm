@@ -20,7 +20,7 @@ Validation notes and any environment limits are recorded with each completed fix
 
 ---
 
-> **Status:** ACTIVE — Phases 1–3 and 5 complete; Phase 4 (FIX-07, FIX-10) and exit criteria still open.
+> **Status:** ACTIVE — Phases 1–5 implementation complete; the exit criteria and release items below are still open.
 >
 > **For agentic workers:** REQUIRED SUB-SKILL — use `superpowers:test-driven-development`
 > for every task in this plan, without exception. Each fix below has a **known, reproducible
@@ -373,21 +373,36 @@ input-reachable arithmetic or indexing panic remains in library source.
 
 # Phase 4 — Observability and DX
 
+> **Phase 4 notes (fix/pool-stats-driver-routing).**
+> - **FIX-07:** The zeroed-stats defect described in BUG-07 was already gone at
+>   `f3dccc8`: `Pool::size()` reads `num_total()` for the rusqlite backend. The
+>   remaining gap was that `num_idle()` used `try_lock` and reported `0` while a
+>   checkout held the lock, so a busy moment read as a fully busy pool. It now
+>   returns the last known idle count, updated under the lock on every checkout
+>   and return. Step 1's assertion passes on the old code too, so it guards the
+>   regression rather than showing a red state. Covered by
+>   `crates/runtime/tests/pool_config.rs` (every constructible variant, plus the
+>   FIX-01 abandoned-transaction check) and unit tests in `rusqlite.rs`.
+> - **FIX-10:** Confirmed red before the change: the routing tests failed with
+>   the opaque `unknown query parameter driver` sqlx error. Routing now uses
+>   exact matching on the `driver` value and runs regardless of Cargo features.
+>   Covered by `crates/runtime/tests/driver_routing.rs`.
+
 ## FIX-07 · Real `PoolStats` for the `rusqlite` backend
 
 *Closes BUG-07. 0.5 day.*
 
-- [ ] **Step 1 — Failing test first.** Assert `stats(&pool).size > 0` for a `rusqlite` pool.
+- [x] **Step 1 — Failing test first.** Assert `stats(&pool).size > 0` for a `rusqlite` pool.
       Today every field is 0.
-- [ ] **Step 2.** Implement `size()` from the configured capacity and `num_idle()` from
+- [x] **Step 2.** Implement `size()` from the configured capacity and `num_idle()` from
       `inner.conns.len()`. Both are already tracked; store the capacity on `Inner` at connect
       time.
-- [ ] **Step 3.** Use `try_lock` and fall back to a last-known value — a metrics call must
+- [x] **Step 3.** Use `try_lock` and fall back to a last-known value — a metrics call must
       never block a query.
-- [ ] **Step 4.** Extend `crates/runtime/tests/pool_config.rs` to cover `PoolStats` for
+- [x] **Step 4.** Extend `crates/runtime/tests/pool_config.rs` to cover `PoolStats` for
       *every* `Pool` variant. The existing test only covers `Any`, which is why this was
       missed.
-- [ ] **Step 5.** Cross-check with FIX-01: after the `Drop` fix, `num_idle` must return to
+- [x] **Step 5.** Cross-check with FIX-01: after the `Drop` fix, `num_idle` must return to
       capacity once abandoned transactions are collected. That assertion is the regression
       test for BUG-01 expressed as a metric.
 
@@ -395,16 +410,16 @@ input-reachable arithmetic or indexing panic remains in library source.
 
 *Closes BUG-10. 0.5 day.*
 
-- [ ] **Step 1 — Failing test first.** In a default build, `connect` with
+- [x] **Step 1 — Failing test first.** In a default build, `connect` with
       `?driver=rusqlite` returns `"unknown query parameter `driver`"`.
-- [ ] **Step 2.** Parse the `driver` parameter unconditionally, outside the `#[cfg]`.
-- [ ] **Step 3.** When the matching feature is off, return an error naming the exact Cargo
+- [x] **Step 2.** Parse the `driver` parameter unconditionally, outside the `#[cfg]`.
+- [x] **Step 3.** When the matching feature is off, return an error naming the exact Cargo
       feature (`sqlite-rusqlite` / `postgres-tokio-postgres`). When it is on, strip the
       parameter as today.
-- [ ] **Step 4.** Reject unknown `driver` values explicitly rather than silently falling
+- [x] **Step 4.** Reject unknown `driver` values explicitly rather than silently falling
       through to the `sqlx` path — a typo'd `driver=rusqlit` should not quietly cost the user
       the performance they asked for.
-- [ ] **Step 5.** Test all four combinations of feature × parameter.
+- [x] **Step 5.** Test all four combinations of feature × parameter.
 
 ---
 
