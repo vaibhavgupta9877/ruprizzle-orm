@@ -732,7 +732,7 @@ The same predicate applies wherever a soft-deletable model is read as a *related
   nodes and their subtrees too.
 - **The rows an m2m write reloads** onto the parent.
 
-Before `1.5.2`, the `.take(n)` include, relation filters, joins, tree queries and m2m
+Before `1.6.0`, the `.take(n)` include, relation filters, joins, tree queries and m2m
 reloads returned soft-deleted rows.
 
 ## Prepared statements
