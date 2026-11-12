@@ -49,7 +49,25 @@ RUST_DIR = REPO_ROOT / "local" / "cross-orm-bench" / "rust"
 BENCH_DIR = REPO_ROOT / "local" / "cross-orm-bench"
 DOCS_PATH = REPO_ROOT / "docs" / "BenchmarkResults.md"
 DB_PATH = NODE_DIR / "bench.sqlite3"
-RUST_EXE = REPO_ROOT / "target" / "release" / "examples" / "cross_orm_bench.exe"
+def cargo_target_dir(cwd: Path) -> Path:
+    """Cargo's real target directory for the workspace containing `cwd`.
+
+    The target directory is often configured globally (`[build] target-dir` or
+    CARGO_TARGET_DIR), so hard-coding `<crate>/target` points at a file that
+    does not exist.
+    """
+    out = subprocess.run(
+        ["cargo", "metadata", "--format-version", "1", "--no-deps"],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return Path(json.loads(out.stdout)["target_directory"])
+
+
+def ruprizzle_exe() -> Path:
+    return cargo_target_dir(REPO_ROOT) / "release" / "examples" / "cross_orm_bench.exe"
 SEED_PY = BENCH_DIR / "seed.py"
 
 DRIVER_ORDER = [
@@ -137,7 +155,7 @@ def package_name(crate_dir: Path) -> str:
 
 
 def rust_orm_exe(crate_dir: Path) -> Path:
-    return crate_dir / "target" / "release" / f"{package_name(crate_dir)}.exe"
+    return cargo_target_dir(crate_dir) / "release" / f"{package_name(crate_dir)}.exe"
 
 
 def seed_db() -> None:
@@ -241,7 +259,7 @@ def run_rust_trials(
     for i in range(WARMUP_TRIALS + MEASURE_TRIALS):
         trial_label = "warmup" if i < WARMUP_TRIALS else f"measure-{i - WARMUP_TRIALS + 1}"
         print(f"  ruprizzle ({label}) {trial_label}")
-        run_cmd([str(RUST_EXE)], cwd=REPO_ROOT, env_extra=env_extra, env_unset=env_unset)
+        run_cmd([str(ruprizzle_exe())], cwd=REPO_ROOT, env_extra=env_extra, env_unset=env_unset)
         if i >= WARMUP_TRIALS:
             trials.append(read_json(results_dir / results_json))
         if i < WARMUP_TRIALS + MEASURE_TRIALS - 1:
@@ -821,24 +839,32 @@ def _run_harness_worker_loop(
 ) -> List[List[dict]]:
     """Repeatedly run the harness for `duration` seconds and return all trials."""
     worker_dir.mkdir(parents=True, exist_ok=True)
+    # Each worker gets its own copy of the database. Workers sharing one file
+    # collide: `bulk_insert_1000` deletes and re-inserts the same primary keys,
+    # so concurrent workers hit UniqueViolation and exit with status 101.
+    worker_db = worker_dir / "bench.sqlite3"
+    shutil.copyfile(DB_PATH, worker_db)
     results: List[List[dict]] = []
     start = time.perf_counter()
     run_id = 0
-    while time.perf_counter() - start < duration:
+    # Always complete at least one run: the full harness suite takes longer
+    # than a short throughput window, and a window-sized timeout used to kill
+    # every run and leave the throughput table empty.
+    while run_id == 0 or time.perf_counter() - start < duration:
         run_dir = worker_dir / f"run-{run_id}"
         run_dir.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
         if env_unset:
             for key in env_unset:
                 env.pop(key, None)
-        env.setdefault("BENCH_SQLITE_PATH", str(DB_PATH))
+        env["BENCH_SQLITE_PATH"] = str(worker_db)
         if env_extra:
             env.update(env_extra)
         env["BENCH_RESULTS_DIR"] = str(run_dir)
-        remaining = max(0.1, start + duration - time.perf_counter())
+        run_timeout = max(120.0, duration * 4)
         try:
             subprocess.run(
-                [str(RUST_EXE)],
+                [str(ruprizzle_exe())],
                 cwd=REPO_ROOT,
                 env=env,
                 check=True,
@@ -846,7 +872,7 @@ def _run_harness_worker_loop(
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=remaining,
+                timeout=run_timeout,
             )
             results.append(read_json(run_dir / "ruprizzle-results.json"))
         except subprocess.TimeoutExpired:
