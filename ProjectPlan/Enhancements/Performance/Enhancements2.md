@@ -1,6 +1,6 @@
 # Performance enhancements, round 2
 
-**Status:** in progress — Phase A (default `test_before_acquire=false` and `Executor` trimming) and Phase B (native Postgres/Sqlite backends) implemented; Phase C and D still open.
+**Status:** in progress — Phase A and Phase B implemented. Phase C is largely implemented (`SqliteNative`/`RusqlitePool`, transactions pinned to one connection); the blocking-model and verification items are closed as noted in §5 Phase C. Phase D (live Postgres measurement) remains open.
 **Date:** 2026-08-11
 **Baseline:** `e513f7e` (post Phase 1 + P2-3), `docs/BenchmarkResults.md`
 **Supersedes the attribution in:** [`Enhancements1.md`](Enhancements1.md) §3
@@ -393,6 +393,16 @@ configuration change. Costs and risks:
   `sqlx-sqlite`. If Phase C ships, that pin becomes a real compatibility
   constraint on both crates' upgrade cadence — or `sqlx-sqlite` is dropped
   entirely and the constraint disappears.
+
+**Status after the rusqlite-finish pass (branch `feature/sqlite-rusqlite-backend`):**
+
+- **C-1, C-2, C-3:** implemented (`Pool::SqliteNative`, `RusqlitePool`, `Value` and `Row` decode).
+- **C-4:** implemented. A transaction owns one connection for its lifetime. Its statements now run on `spawn_blocking` (previously inline on the Tokio worker). Covered by `transaction_lifecycle.rs`, which runs on every backend.
+- **C-5:** migrations use `RusqliteTransaction::begin_migration`, the same backend.
+- **C-6:** the integration suite runs under both drivers (`RUPRIZZLE_TEST_RUSQLITE=1`) and passes. Parity is enforced by `both_dbs!`, not by a dedicated row-for-row diff.
+- **C-7:** not done. The cross-ORM benchmark was not re-run in this pass, so `docs/BenchmarkResults.md` is unchanged.
+- **Blocking-pool sizing under mixed read/write load:** still open (§6).
+- **Also fixed:** `sqlite::memory:?driver=rusqlite` opened a real file named `sqlx-in-memory-N`. Regression test: `driver_routing.rs::rusqlite_in_memory_url_creates_no_file`.
 
 **Recommendation:** A and B are done; C is next. C-0 was the gate and it has been measured (§3.2b) — the advantage
 holds at ≥11× under concurrent load, so Phase C is justified. The remaining
