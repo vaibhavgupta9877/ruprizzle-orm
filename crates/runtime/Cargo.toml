@@ -90,3 +90,7 @@ harness = false
 # See ProjectPlan/v1/V1StableRelease.md S1-03.
 [package.metadata.docs.rs]
 all-features = true
+
+[[example]]
+name = "rusqlite_mixed_load"
+required-features = ["sqlite-rusqlite"]
