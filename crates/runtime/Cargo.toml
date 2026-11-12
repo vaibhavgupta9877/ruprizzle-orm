@@ -94,3 +94,7 @@ all-features = true
 [[example]]
 name = "rusqlite_mixed_load"
 required-features = ["sqlite-rusqlite"]
+
+[[example]]
+name = "sqlite_breakdown"
+required-features = ["sqlite-rusqlite"]

@@ -982,6 +982,110 @@ where
     }
 }
 
+/// Synchronous execution for the native rusqlite backend.
+///
+/// These methods run the statement on the calling thread, with no
+/// `spawn_blocking` hop and no async state machine. They return an error unless
+/// the executor is the native rusqlite pool (`connect` with `driver=rusqlite`).
+///
+/// They do not support `.include(...)`. Includes issue several dependent
+/// queries and group them in memory; use the async `exec` path for those.
+///
+/// **Blocking:** calling these from an async task parks that Tokio worker for
+/// the whole statement. Use them from synchronous code, or from work already on
+/// a blocking thread.
+#[cfg(feature = "sqlite-rusqlite")]
+impl<'db, M: Model, Out> SelectQuery<'db, M, Out, ()> {
+    fn sync_pool(&self) -> Result<&crate::rusqlite::RusqlitePool, Error> {
+        self.exec.as_rusqlite().ok_or_else(|| {
+            Error::Message(
+                "synchronous queries need the native rusqlite pool; connect with driver=rusqlite"
+                    .into(),
+            )
+        })
+    }
+
+    /// Runs the query on the calling thread and returns every row.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the executor is not the native rusqlite pool, or on
+    /// SQL or decode failures.
+    pub fn fetch_all_blocking(self) -> Result<Vec<Out>, Error>
+    where
+        Out: crate::rusqlite::FromRusqliteRow,
+    {
+        self.check_join_support()?;
+        let compiled = self.to_sql()?;
+        let pool = self.sync_pool()?;
+        self.exec.on_query();
+        pool.fetch_decoded_blocking::<Out>(&compiled.sql, &compiled.binds)
+    }
+
+    /// Runs the query on the calling thread and returns the first row, if any.
+    ///
+    /// # Errors
+    ///
+    /// As for [`Self::fetch_all_blocking`].
+    pub fn fetch_optional_blocking(mut self) -> Result<Option<Out>, Error>
+    where
+        Out: crate::rusqlite::FromRusqliteRow,
+    {
+        self.limit = Some(1);
+        Ok(self.fetch_all_blocking()?.into_iter().next())
+    }
+
+    /// Runs the query on the calling thread and returns exactly one row.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no row matches, or as for [`Self::fetch_all_blocking`].
+    pub fn fetch_one_blocking(self) -> Result<Out, Error>
+    where
+        Out: crate::rusqlite::FromRusqliteRow,
+    {
+        self.fetch_optional_blocking()?
+            .ok_or_else(|| Error::Message("no row found for query".into()))
+    }
+
+    /// Counts matching rows on the calling thread.
+    ///
+    /// # Errors
+    ///
+    /// As for [`Self::fetch_all_blocking`].
+    pub fn count_blocking(self) -> Result<i64, Error> {
+        self.check_join_support()?;
+        let dialect = self.exec.dialect();
+        let eff_filter = self.effective_filter();
+        let compiled = crate::compile::count::<M>(dialect, M::TABLE, &eff_filter.node);
+        let compiled = crate::compile::with_cte_prefix(dialect, &self.ctes, compiled);
+        let pool = self.sync_pool()?;
+        self.exec.on_query();
+        let mut counts = pool.fetch_decoded_blocking::<(i64,)>(&compiled.sql, &compiled.binds)?;
+        let (count,) = counts
+            .pop()
+            .ok_or_else(|| Error::Message("COUNT(*) returned no row".into()))?;
+        Ok(count)
+    }
+
+    /// Whether any row matches, on the calling thread.
+    ///
+    /// # Errors
+    ///
+    /// As for [`Self::fetch_all_blocking`].
+    pub fn exists_blocking(self) -> Result<bool, Error> {
+        self.check_join_support()?;
+        let dialect = self.exec.dialect();
+        let eff_filter = self.effective_filter();
+        let compiled = crate::compile::exists::<M>(dialect, M::TABLE, &eff_filter.node);
+        let compiled = crate::compile::with_cte_prefix(dialect, &self.ctes, compiled);
+        let pool = self.sync_pool()?;
+        self.exec.on_query();
+        let rows = pool.fetch_decoded_blocking::<(i64,)>(&compiled.sql, &compiled.binds)?;
+        Ok(!rows.is_empty())
+    }
+}
+
 /// A SQL set operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SetOp {
