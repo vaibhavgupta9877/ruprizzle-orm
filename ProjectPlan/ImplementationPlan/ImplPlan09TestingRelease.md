@@ -100,14 +100,14 @@ discovery.
 
 **Owner:** Vaibhav Gupta · **Est:** 4h
 
-- [ ] `cargo deny check` — licences, advisories, duplicate versions
-- [ ] `cargo semver-checks` baseline recorded (matters from 0.2 onward)
-- [ ] MSRV verified and documented (`rust-version` in workspace)
-- [ ] `#![forbid(unsafe_code)]` in every crate — verify no crate needs an exception
-- [ ] `cargo doc` renders with no broken intra-doc links
-- [ ] `cargo publish --dry-run` for all published crates, in dependency order
-- [ ] README badges accurate (CI, crates.io, docs.rs, licence, MSRV)
-- [ ] SQL-injection review: grep for any string interpolation of a `Value` into SQL;
+- [x] `cargo deny check` — licences, advisories, duplicate versions (2026-11-12: exit 0; one reviewed advisory exception, see deny.toml)
+- [x] `cargo semver-checks` baseline recorded (2026-11-12: nine public crates pass against 1.6.0)
+- [x] MSRV verified and documented (2026-11-12: `cargo +1.85.0 check --workspace --all-targets` passes)
+- [x] `#![forbid(unsafe_code)]` in every crate (2026-11-12: all thirteen lib.rs files)
+- [x] `cargo doc` renders with no broken intra-doc links (2026-11-12: RUSTDOCFLAGS=-D warnings passes)
+- [x] `cargo publish --dry-run` for all published crates, in dependency order (2026-11-12: `cargo xtask release`, dry run)
+- [x] README badges accurate (CI badge now a live GitHub Actions badge)
+- [x] SQL-injection review: grep for any string interpolation of a `Value` into SQL; (2026-11-12: docs/SqlSafety.md, zero Value interpolation)
       there must be zero hits outside test fixtures
 - [ ] Panic audit: no `unwrap()` / `expect()` on any path reachable from user input.
       `Related::get()` is the single sanctioned panic, and it is documented as such.
@@ -186,7 +186,7 @@ before the post, not after.
   - `trybuild` suite expanded to 9 cases covering wrong type, cross-model
     filter, projection, contains on non-string, is-null on required, and
     delete guard.
-- [~] P8-02 benchmarks run, selected targets within limits
+- [~] P8-02 benchmarks run; two targets exceed their limits and one re-run is over target (PERF-FU-1 to PERF-FU-3 in docs/performance.md)
   - `criterion` benches added for query construction (`select_by_pk` ~600 ns,
     `select_with_filter_and_order` ~1.8 µs) and 50-model codegen (~16 ms).
   - I/O overhead benches and generated-crate cold-compile time are recorded

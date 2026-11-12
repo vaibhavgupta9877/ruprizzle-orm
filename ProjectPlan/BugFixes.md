@@ -266,7 +266,7 @@ rolls back, returns the connection, and leaves the pool at full capacity.
 baseline (`crates/runtime/examples/layer_attribution.rs`, `examples/pg_any_types.rs`) and
 untouched by this work. Every file Phase 1 modified is formatted.
 
-**Pre-existing failure, not caused by Phase 1.** `ruprizzle-migrate`'s
+**Pre-existing failure, not caused by Phase 1 (resolved).** The test now runs in its own schema (`IsolatedSchema`, `crates/migrate/tests/roundtrip_prop.rs`). On 2026-11-12 it was re-run with a leftover `public.events` table present and passed, so the original failure no longer reproduces. The original note follows. `ruprizzle-migrate`'s
 `applied_diff_reaches_the_target_schema` fails against this developer's local Postgres
 because the `public` schema still holds `bench_*`, `conc_a`/`conc_b` and `events` tables
 left behind by earlier benchmark and test runs; the property asserts a clean schema and
@@ -487,15 +487,15 @@ database. Carried from the readiness assessment's finding #11.
 
 ## Exit criteria
 
-- [ ] All 15 findings closed or explicitly justified as won't-fix with a recorded reason.
-- [ ] Every fix has a committed regression test that fails before it and passes after.
-- [ ] Test count ≥ 245 (from 218).
-- [ ] Full verification command green, including `--features sqlite-rusqlite` and a live
+- [x] All 15 findings closed or explicitly justified with a recorded reason (PERF-04 is partial by design, see its entry; closed 2026-11-12).
+- [x] Every fix has a committed regression test that fails before it and passes after (checked per fix above).
+- [x] Test count ≥ 245 (from 218): 631 workspace tests pass against Postgres, 268 in the runtime crate with rusqlite.
+- [x] Full verification command green, including `--features sqlite-rusqlite` and a live
       Postgres with `RUPRIZZLE_REQUIRE_DB=1`.
-- [ ] `cargo xtask harden` green with the arithmetic and indexing categories enabled.
+- [x] `cargo xtask harden` green with the arithmetic and indexing categories enabled (2026-11-12).
 - [ ] `cargo bench -p ruprizzle --bench end_to_end` shows no regression beyond noise; any
       change to `docs/BenchmarkResults.md` numbers is re-measured and republished.
-- [ ] `CHANGELOG.md` records every fix; the FIX-04 API change is called out as breaking.
+- [x] `CHANGELOG.md` records every fix; the FIX-04 API change is called out as breaking (1.6.0 changelog).
 - [ ] `ProductionReadiness.md` re-run. Correctness and operability should both rise; expect
       **86–88/100**.
 
@@ -509,7 +509,7 @@ BUG-02, and BUG-03 are data-integrity and availability defects in a published cr
 - [ ] (superseded: moot, see above) Consider yanking `0.1.1-beta.1` and `0.1.0-alpha.3` if any user is on the `rusqlite`
       path. Downloads are low (43 across all versions), so the cost of yanking is near zero
       and the cost of not yanking is a silent data-integrity bug in the wild.
-- [ ] Add a `docs/KnownLimitations.md` note for anyone on an affected version: on the native
+- [x] Add a `docs/KnownLimitations.md` note for anyone on an affected version (2026-11-12, "Pre-1.x releases"): on the native
       driver paths, always `commit()` or `rollback()` explicitly and never rely on drop.
 
 ---

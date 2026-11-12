@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `RawFragment::try_new`, which returns an error instead of panicking when the
+  number of literal parts does not match the number of binds. `RawFragment::new`
+  keeps its behaviour and now documents its panic.
+
+### Security
+
+- Updated `rustls` to 0.23.46 (RUSTSEC-2026-0346 and RUSTSEC-2026-0347),
+  `rustls-webpki` to 0.103.16 (RUSTSEC-2026-0382) and `webpki-roots` to 1.0.12
+  (RUSTSEC-2026-0381). These reach users through the Turso and D1 adapters.
+- Accepted RUSTSEC-2026-0459 (bundled SQLite before 3.54.0) as a documented
+  exception in `deny.toml`. The patched release needs the sqlx 0.9 upgrade, which
+  is planned for 2.0.0. See `SECURITY.md`.
+
+### Changed
+
+- The `criterion` dev-dependency is pinned to 0.7 so the workspace stays on the
+  declared MSRV of Rust 1.85. Criterion 0.8 requires Rust 1.86. This affects only
+  benchmarks.
+- Removed stale `cargo deny` allowances for licences that no crate in the graph uses.
+
 ### Fixed
 
 - Preserve referencing rows during SQLite table rebuilds. Migration and reset

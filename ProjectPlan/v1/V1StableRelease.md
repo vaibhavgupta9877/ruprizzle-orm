@@ -233,7 +233,12 @@ docs.rs after publish.
 **S3 gate:** `release-check` passes; no `1.0.0-rc.1` remains in `README.md`, `docs/`, or any
 manifest except historical `CHANGELOG.md` entries and compare links.
 
-### S4 — Publish *(maintainer action, not automated here)*
+### S4 — Publish *(superseded, closed 2026-11-12)*
+
+> **Superseded.** The `1.0.0` tag was never published: its publish run uploaded nothing.
+> The stable line shipped as `1.5.1` (2026-09-13) and `1.6.0` (2026-10-03). S4-01 to S4-05
+> are closed as not applicable. The docs.rs check for the shipped version is recorded in
+> §6 below.
 
 Left explicitly to the maintainer: these are irreversible and outward-facing, and one of them
 spends a crates.io token.
@@ -276,9 +281,9 @@ maintainer-gated throughout.
 - [x] `cargo deny check advisories licenses bans sources` — green.
 - [x] `cargo xtask harden` — exit 0.
 - [x] `cargo xtask release-check --tag v1.0.0` — exit 0.
-- [ ] All ten publishable crates report `doc_status: true` on docs.rs at `1.0.0`.
+- [x] All publishable crates report `doc_status: true` on docs.rs at `1.6.0` (checked 2026-11-12; `1.0.0` was never published).
 - [x] `docs/Stability.md` records the D1 waiver and the D2 public-dependency list.
-- [ ] Production readiness rescored against published `1.0.0` at ≥ 92 / 100. *(W6-05)*
+- [ ] Production readiness rescored against the published release at ≥ 92 / 100. *(W6-05; not re-run on 2026-11-12, so this stays open.)*
 - [ ] ~~Two-week RC feedback window~~ — **waived under D1**, waiver recorded in
       `docs/Stability.md`.
 - [ ] ~~At least one external project reporting a successful upgrade~~ — **waived under D1**;
