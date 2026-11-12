@@ -67,3 +67,6 @@ local/mutants-*.err
 # CI / release log downloads
 /ci_*.log
 /release_*.log
+
+# Generated per-worker benchmark databases and run output
+local/cross-orm-bench/throughput/
