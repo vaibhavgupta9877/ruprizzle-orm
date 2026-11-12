@@ -413,8 +413,8 @@ real server's mixed read/write load.
 
 | # | task |
 |---|---|
-| **P0-1** | Start local Postgres; run `pg_any_types` (round 1's F2) **and** measure `test_before_acquire` RTT against a real server (§3.3) |
-| **P0-2** | Rich-type round-trip test per dialect, as a regression guard for B-5 |
+| **P0-1** | **Done (2026-11-12).** Live Postgres 17 on localhost. `pg_any_types`: 6 of 12 DDL types (NUMERIC, TIMESTAMPTZ, DATE, TIME, UUID, JSONB) fail through `sqlx::Any`, confirming F2. `test_before_acquire` ping: **+25.8 µs/query (+32%)** on a `SELECT 1` (`examples/pg_pool_ping.rs`). Over a real network the RTT is larger. |
+| **P0-2** | **Done (2026-11-12).** `tests/native_pg_types.rs` reads every DDL type through the native Postgres pool and passes live. Also `rich_types` and `json` pass with `RUPRIZZLE_REQUIRE_DB=1`. |
 
 Both were carried over unresolved from round 1. §3.3 has now added a second,
 larger reason to care.
@@ -427,7 +427,7 @@ larger reason to care.
 |---|---|
 | A-1 makes a dead connection surface as a query error | Document it; keep the `PoolConfig` field; recommend `true` behind aggressive proxies |
 | ~~Phase C's 13× does not survive concurrency~~ | **Closed.** Measured at ≥11× in every cell across 1–16 tasks (§3.2b) |
-| Blocking-pool sizing under mixed read/write load | Still open. §3.2b is read-only; measure with writers before C-1 ships |
+| Blocking-pool sizing under mixed read/write load | **Measured (2026-11-12, `examples/rusqlite_mixed_load.rs`).** No errors up to 1,024 clients with 8 pooled connections, with and without 25% writes. Pressure appears as tail latency (write p99 about 41 ms at 1,024 clients), not failures. The Tokio default of 512 blocking threads is adequate; no change needed. |
 | Two SQLite backends drift | C-6: the whole suite runs against both, and they must agree |
 | `libsqlite3-sys` version pin between `rusqlite` and `sqlx-sqlite` | Either accept the pin or drop `sqlx-sqlite` for SQLite entirely |
 | All numbers are one Windows box, SQLite, single-threaded | Stated on every table; §7 corrections; C-0 adds the concurrency axis |
