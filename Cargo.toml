@@ -50,7 +50,7 @@ insta        = { version = "1", features = ["json"] }
 dotenvy      = "0.15"
 notify       = "8"
 walkdir      = "2"
-criterion    = "0.8"
+criterion    = "0.7"
 tower-lsp    = { version = "0.20", default-features = false, features = ["runtime-tokio"] }
 # The edge adapters speak HTTP. `rustls` rather than the platform TLS stack so a
 # `cargo build` needs no OpenSSL headers on any of the three release targets.
