@@ -306,14 +306,7 @@ mod tests {
         assert_eq!(cache.get("post_1"), Some(b"data3".to_vec()));
 
         // Ensure "admins" tag index was pruned when user_2 was removed
-        assert!(
-            !cache
-                .state
-                .read()
-                .unwrap()
-                .tag_index
-                .contains_key("admins")
-        );
+        assert!(!cache.state.read().unwrap().tag_index.contains_key("admins"));
     }
 
     #[test]
