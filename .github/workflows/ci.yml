@@ -398,19 +398,17 @@ jobs:
           package: ruprizzle-core, ruprizzle-dialect, ruprizzle-parser, ruprizzle-codegen, ruprizzle-migrate, ruprizzle-macros, ruprizzle-check, ruprizzle-lsp, ruprizzle
 
   public-api:
-    name: public API diff vs 1.5.1
+    name: public API diff vs 1.6.0
     runs-on: ubuntu-latest
     # `cargo semver-checks` above catches the changes it has lints for.
     # `cargo public-api` is the complementary check: it prints *every* item
-    # added, changed or removed from the public surface. On the 1.6 minor line
-    # additions are semver-compatible (e.g. `HierarchyQuery::with_deleted`), so
-    # only changed or removed items fail the job; additions are still printed.
+    # added, changed or removed from the public surface. Additions
+    # are semver-compatible (e.g. `HierarchyQuery::with_deleted`), so only changed
+    # or removed items fail the job; additions are still printed.
     #
-    # The baseline must be a version crates.io actually serves — that is
-    # `1.5.1`, the first published stable. (During the RC -> stable gap this job
-    # diffed against `1.0.0-rc.1` report-only, because the v1.1-v1.5 line
-    # intentionally added hundreds of items; that exception ended when 1.5.1
-    # published.)
+    # The baseline is the latest version crates.io serves, `1.6.0`. Bump it in the
+    # same change that publishes a new version, so each release is diffed against
+    # what users actually have installed.
     #
     # Deliberately not run against `ruprizzle-testkit` or `xtask`: both are
     # `publish = false` and out of scope for semver, per docs/Stability.md.
@@ -437,8 +435,8 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-public-api
-      - name: Diff public API against the 1.5.1 baseline
-        run: cargo public-api -p ${{ matrix.package }} diff 1.5.1 --deny=changed --deny=removed
+      - name: Diff public API against the 1.6.0 baseline
+        run: cargo public-api -p ${{ matrix.package }} diff 1.6.0 --deny=changed --deny=removed
 
   feature-powerset:
     name: feature powerset (depth 2)
