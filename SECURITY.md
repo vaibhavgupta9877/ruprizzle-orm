@@ -23,6 +23,14 @@ move to the published `1.6.0`: that tag records a failed release.
 
 ## Known accepted dependency risk
 
+`libsqlite3-sys` 0.30.1 bundles a SQLite older than 3.54.0, which is affected by
+[RUSTSEC-2026-0459](https://rustsec.org/advisories/RUSTSEC-2026-0459). The patched
+`libsqlite3-sys` 0.39 requires `rusqlite` 0.41 and Rust 1.89, and `sqlx` 0.8 cannot
+use it at all, so the fix waits on the sqlx 0.9 upgrade planned for `2.0.0`. Exposure
+needs a process that opens a database together with a `-wal` file written by a less
+trusted party. Do not open untrusted SQLite files with the bundled build; link a
+system SQLite instead. The exception is recorded in `deny.toml`.
+
 `sqlx-mysql` depends on `rsa 0.9.x`, which is affected by
 [RUSTSEC-2023-0071](https://rustsec.org/advisories/RUSTSEC-2023-0071). No patched
 release is available; the exception is recorded in `deny.toml`. It is reachable

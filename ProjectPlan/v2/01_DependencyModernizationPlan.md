@@ -2,7 +2,11 @@
 
 **Date:** 2026-08-22  
 **Author:** Vaibhav Gupta <vaibhavgupta9877@gmail.com>  
-**Status:** Ready for Execution  
+**Status:** Deferred to the v2.0.0 milestone; not started on the 1.x line (updated 2026-11-12).
+The 1.x line keeps MSRV 1.85 and stays on sqlx 0.8 / rusqlite 0.32. Two exceptions in
+`deny.toml` depend on this plan: `RUSTSEC-2023-0071` (MySQL RSA) and `RUSTSEC-2026-0459`
+(bundled SQLite, patched only in `libsqlite3-sys` 0.39, which needs sqlx 0.9). Remove both
+exceptions when this plan lands.  
 **Milestone:** v2.0.0 (Major Breaking Milestone)  
 **Primary Crates:** `crates/runtime`, `crates/migrate`, `crates/cli`, `crates/dialect`, `crates/testkit`  
 **Dependencies Baseline:** `sqlx 0.9.0`, `rusqlite 0.40.0`, Rust 1.86.0

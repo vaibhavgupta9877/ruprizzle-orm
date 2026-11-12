@@ -23,6 +23,13 @@ pub struct RawFragment {
 
 impl RawFragment {
     /// Creates a new raw fragment.
+    ///
+    /// Prefer [`RawFragment::try_new`] when the parts come from anywhere other
+    /// than the `raw!` macro, which always produces a valid shape.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `parts` does not hold exactly one more element than `binds`.
     #[must_use]
     pub fn new(parts: Vec<String>, binds: Vec<Value>) -> Self {
         assert_eq!(
@@ -31,6 +38,25 @@ impl RawFragment {
             "RawFragment parts must split the format string around each placeholder"
         );
         Self { parts, binds }
+    }
+
+    /// Creates a new raw fragment, returning an error instead of panicking when
+    /// `parts` does not hold exactly one more element than `binds`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::Message`] if the number of literal parts is not
+    /// one more than the number of bound values.
+    pub fn try_new(parts: Vec<String>, binds: Vec<Value>) -> Result<Self, crate::Error> {
+        if parts.len() != binds.len() + 1 {
+            return Err(crate::Error::Message(format!(
+                "RawFragment needs {} literal parts for {} binds, got {}",
+                binds.len() + 1,
+                binds.len(),
+                parts.len()
+            )));
+        }
+        Ok(Self { parts, binds })
     }
 
     /// Returns the SQL fragment with `$1`, `$2`, ... placeholders.
@@ -490,4 +516,38 @@ fn flatten_or(nodes: Vec<FilterNode>) -> FilterNode {
         }
     }
     FilterNode::Or(out)
+}
+
+#[cfg(test)]
+mod raw_fragment_tests {
+    use super::RawFragment;
+    use crate::value::Value;
+
+    #[test]
+    fn try_new_accepts_matching_shape() {
+        let frag = RawFragment::try_new(
+            vec!["a = ".into(), " AND b = ".into(), String::new()],
+            vec![Value::I64(1), Value::I64(2)],
+        )
+        .expect("two binds need three parts");
+        assert_eq!(frag.sql(), "a = $1 AND b = $2");
+        assert_eq!(frag.binds().len(), 2);
+    }
+
+    #[test]
+    fn try_new_rejects_mismatched_shape_without_panicking() {
+        let err = RawFragment::try_new(vec!["x = ".into()], vec![Value::I64(1)])
+            .expect_err("one bind needs two parts");
+        let msg = match err {
+            crate::Error::Message(m) => m,
+            other => panic!("unexpected error: {other:?}"),
+        };
+        assert!(msg.contains("2 literal parts"), "{msg}");
+    }
+
+    #[test]
+    #[should_panic(expected = "split the format string")]
+    fn new_still_panics_on_mismatch() {
+        let _ = RawFragment::new(vec!["x".into()], vec![Value::I64(1)]);
+    }
 }

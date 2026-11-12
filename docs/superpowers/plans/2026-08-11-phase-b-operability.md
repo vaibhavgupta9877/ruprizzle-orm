@@ -3,8 +3,7 @@
 > **Status: implemented (historical plan).** PR-04 to PR-07 are in the codebase:
 > query and migration tracing, `PoolConfig`, `PoolStats` with `ping`, and
 > PII-safe error display (`crates/runtime/tests/error_redaction.rs`). The
-> checkboxes below were never ticked as the work landed, so they are left as
-> written. [CHANGELOG.md](../../../CHANGELOG.md) is the record of what shipped.
+> checkboxes below were ticked on 2026-11-12, after the work was verified: merges `9bdc18e` and `30ffe2a`, plus the tests named above.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -52,7 +51,7 @@
 
 **Files:** None.
 
-- [ ] **Step 1: Confirm the branch and clean tree**
+- [x] **Step 1: Confirm the branch and clean tree**
 
 Run:
 
@@ -63,7 +62,7 @@ git status --short --branch
 
 Expected: branch `feat/p1-schema-parser`; only the already-committed design and no uncommitted files.
 
-- [ ] **Step 2: Run formatting and workspace tests before implementation**
+- [x] **Step 2: Run formatting and workspace tests before implementation**
 
 Run sequentially:
 
@@ -94,7 +93,7 @@ Expected: formatting clean, clippy exit 0, and the existing workspace test suite
 - Produces `ruprizzle::query` debug success/warn failure events with SQL, bind count, result count where applicable, elapsed milliseconds, and error on failure.
 - Produces `ruprizzle::migrate` info events with migration ID, statement count, and elapsed milliseconds.
 
-- [ ] **Step 1: Add the direct dependencies required by the tests and implementation**
+- [x] **Step 1: Add the direct dependencies required by the tests and implementation**
 
 Add to `[dependencies]` in both `crates/runtime/Cargo.toml` and `crates/migrate/Cargo.toml`:
 
@@ -108,7 +107,7 @@ Add to `[dev-dependencies]` in `crates/runtime/Cargo.toml`:
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 ```
 
-- [ ] **Step 2: Write the failing tracing tests**
+- [x] **Step 2: Write the failing tracing tests**
 
 Create `crates/runtime/tests/tracing.rs`:
 
@@ -172,7 +171,7 @@ fn failed_query_emits_a_query_event() {
 }
 ```
 
-- [ ] **Step 3: Run the focused tests and verify the expected red failure**
+- [x] **Step 3: Run the focused tests and verify the expected red failure**
 
 Run:
 
@@ -182,7 +181,7 @@ cargo test -p ruprizzle --test tracing
 
 Expected: the tests compile but fail because no `ruprizzle::query` events are emitted.
 
-- [ ] **Step 4: Instrument pool execution at the Executor choke point**
+- [x] **Step 4: Instrument pool execution at the Executor choke point**
 
 In `crates/runtime/src/executor.rs`, replace `Pool`'s `fetch_all_raw` and `execute_raw` bodies with the following pattern. Keep `stream_raw` delegating to `fetch_all_raw`:
 
@@ -260,7 +259,7 @@ fn execute_raw(&self, sql: String, binds: Vec<Value>) -> BoxFuture<'_, Result<u6
 }
 ```
 
-- [ ] **Step 5: Instrument transaction execution and lifecycle events**
+- [x] **Step 5: Instrument transaction execution and lifecycle events**
 
 In `crates/runtime/src/tx.rs`, keep the existing transaction behavior and add the same post-completion event pattern to the `Executor for Tx` implementations. For `fetch_all_raw`, record `bind_count`, call `self.fetch_all_rows(&sql, binds).await`, then emit `query`/`query failed` with `rows` or `error`. For `execute_raw`, call `self.execute(&sql, binds).await`, then emit `execute`/`execute failed` with `rows_affected` or `error`. Do not emit bind values.
 
@@ -271,7 +270,7 @@ tracing::debug!(target: "ruprizzle::query", "transaction committed");
 tracing::debug!(target: "ruprizzle::query", "transaction rolled back");
 ```
 
-- [ ] **Step 6: Instrument migration application**
+- [x] **Step 6: Instrument migration application**
 
 In `crates/migrate/src/runner.rs`, immediately after `let statements = split_statements(&m.up);`, add:
 
@@ -295,7 +294,7 @@ tracing::info!(
 );
 ```
 
-- [ ] **Step 7: Run focused tests and verify green**
+- [x] **Step 7: Run focused tests and verify green**
 
 Run:
 
@@ -305,7 +304,7 @@ cargo test -p ruprizzle --test tracing
 
 Expected: both tracing tests pass.
 
-- [ ] **Step 8: Document the observability contract**
+- [x] **Step 8: Document the observability contract**
 
 Append to `docs/query-guide.md`:
 
@@ -328,7 +327,7 @@ sensitive literals in raw SQL because raw SQL text is intentionally observable.
 
 Remove `Connection pool metrics and query logging.` from the 0.2 deferral list in `docs/known-limitations.md`.
 
-- [ ] **Step 9: Update the production plan status**
+- [x] **Step 9: Update the production plan status**
 
 In `ProjectPlan/ProductionReadinessPlan.md`:
 
@@ -341,7 +340,7 @@ In `ProjectPlan/ProductionReadinessPlan.md`:
 
 Do not mark PR-05, PR-06, or PR-07 complete in this task.
 
-- [ ] **Step 10: Run the PR-04 verification gate**
+- [x] **Step 10: Run the PR-04 verification gate**
 
 Run sequentially:
 
@@ -353,7 +352,7 @@ $env:RUPRIZZLE_REQUIRE_DB = "1"; $env:RUPRIZZLE_TEST_PG_URL = "postgres://rupriz
 
 Expected: all commands exit 0.
 
-- [ ] **Step 11: Review and commit PR-04**
+- [x] **Step 11: Review and commit PR-04**
 
 Run `git diff --check`, inspect the diff for bind-value logging and accidental unrelated edits, then commit:
 
@@ -380,7 +379,7 @@ After committing, verify `git status --short` is clean before starting Task 2.
 - Produces `connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate::Error>`.
 - Retains `connect(url: &str) -> Result<Pool, crate::Error>` as a default-config delegate.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `crates/runtime/tests/pool_config.rs`:
 
@@ -411,7 +410,7 @@ async fn configured_pool_connects() {
 }
 ```
 
-- [ ] **Step 2: Run the focused test and verify the expected red failure**
+- [x] **Step 2: Run the focused test and verify the expected red failure**
 
 Run:
 
@@ -421,7 +420,7 @@ cargo test -p ruprizzle --test pool_config
 
 Expected: compilation fails because `PoolConfig` and `connect_with` do not exist.
 
-- [ ] **Step 3: Implement `PoolConfig` and connection functions**
+- [x] **Step 3: Implement `PoolConfig` and connection functions**
 
 Replace `crates/runtime/src/pool.rs` with:
 
@@ -495,7 +494,7 @@ pub async fn connect_with(url: &str, config: &PoolConfig) -> Result<Pool, crate:
 }
 ```
 
-- [ ] **Step 4: Re-export the additive API**
+- [x] **Step 4: Re-export the additive API**
 
 Change the pool re-export in `crates/runtime/src/lib.rs` to:
 
@@ -503,7 +502,7 @@ Change the pool re-export in `crates/runtime/src/lib.rs` to:
 pub use pool::{Pool, PoolConfig, connect, connect_with};
 ```
 
-- [ ] **Step 5: Run focused tests and verify green**
+- [x] **Step 5: Run focused tests and verify green**
 
 Run:
 
@@ -513,7 +512,7 @@ cargo test -p ruprizzle --test pool_config
 
 Expected: both tests pass. If sqlx 0.8 does not expose `pool.options().get_max_connections()`, remove only that options assertion and retain the default-value and successful-connect assertions; document the API limitation in the task commit.
 
-- [ ] **Step 6: Document connection sizing**
+- [x] **Step 6: Document connection sizing**
 
 Append to `docs/query-guide.md`:
 
@@ -536,7 +535,7 @@ Set `max_connections` below the database's `max_connections` after accounting fo
 the number of application instances and other database clients.
 ```
 
-- [ ] **Step 7: Update the production plan status**
+- [x] **Step 7: Update the production plan status**
 
 Change all PR-05 checklist markers to `- [x]` and add below its heading:
 
@@ -544,7 +543,7 @@ Change all PR-05 checklist markers to `- [x]` and add below its heading:
 **Status: COMPLETE.** Verified 2026-08-11 with pool configuration tests and the full workspace gate. `connect(url)` remains backward compatible and `connect_with` applies all `PoolConfig` fields.
 ```
 
-- [ ] **Step 8: Run the full gate, review, and commit PR-05**
+- [x] **Step 8: Run the full gate, review, and commit PR-05**
 
 Run:
 
@@ -579,7 +578,7 @@ Verify the tree is clean before Task 3.
 - Produces `stats(&Pool) -> PoolStats`.
 - Produces `ping(&Pool) -> Result<(), crate::Error>`.
 
-- [ ] **Step 1: Add failing tests to the existing pool test file**
+- [x] **Step 1: Add failing tests to the existing pool test file**
 
 Append to `crates/runtime/tests/pool_config.rs`:
 
@@ -603,7 +602,7 @@ async fn ping_reports_an_unreachable_database() {
 }
 ```
 
-- [ ] **Step 2: Run the focused tests and verify the expected red failure**
+- [x] **Step 2: Run the focused tests and verify the expected red failure**
 
 Run:
 
@@ -613,7 +612,7 @@ cargo test -p ruprizzle --test pool_config
 
 Expected: compilation fails because `stats` and `ping` do not exist.
 
-- [ ] **Step 3: Implement `PoolStats`, `stats`, and `ping`**
+- [x] **Step 3: Implement `PoolStats`, `stats`, and `ping`**
 
 Append to `crates/runtime/src/pool.rs`:
 
@@ -656,7 +655,7 @@ pub async fn ping(pool: &Pool) -> Result<(), crate::Error> {
 }
 ```
 
-- [ ] **Step 4: Re-export the operational APIs**
+- [x] **Step 4: Re-export the operational APIs**
 
 Change the pool re-export in `crates/runtime/src/lib.rs` to:
 
@@ -664,7 +663,7 @@ Change the pool re-export in `crates/runtime/src/lib.rs` to:
 pub use pool::{Pool, PoolConfig, PoolStats, connect, connect_with, ping, stats};
 ```
 
-- [ ] **Step 5: Run focused tests and verify green**
+- [x] **Step 5: Run focused tests and verify green**
 
 Run:
 
@@ -674,7 +673,7 @@ cargo test -p ruprizzle --test pool_config
 
 Expected: all four pool tests pass.
 
-- [ ] **Step 6: Update the production plan status**
+- [x] **Step 6: Update the production plan status**
 
 Change all PR-06 checklist markers to `- [x]` and add below its heading:
 
@@ -682,7 +681,7 @@ Change all PR-06 checklist markers to `- [x]` and add below its heading:
 **Status: COMPLETE.** Verified 2026-08-11 with live-pool stats/ping tests and the full workspace gate. Readiness uses `SELECT 1`; metrics expose total, idle, and in-use connections.
 ```
 
-- [ ] **Step 7: Run the full gate, review, and commit PR-06**
+- [x] **Step 7: Run the full gate, review, and commit PR-06**
 
 Run:
 
@@ -716,7 +715,7 @@ Verify the tree is clean before Task 4.
 - Changes `Error::UniqueViolation` display to omit `value`.
 - Produces `Error::conflicting_value(&self) -> Option<&str>`.
 
-- [ ] **Step 1: Write the failing redaction tests**
+- [x] **Step 1: Write the failing redaction tests**
 
 Create `crates/runtime/tests/error_redaction.rs`:
 
@@ -749,7 +748,7 @@ fn conflicting_value_is_available_explicitly() {
 }
 ```
 
-- [ ] **Step 2: Run the focused tests and verify the expected red failure**
+- [x] **Step 2: Run the focused tests and verify the expected red failure**
 
 Run:
 
@@ -759,7 +758,7 @@ cargo test -p ruprizzle --test error_redaction
 
 Expected: the display test fails because the value is present, and the accessor test fails to compile because `conflicting_value` is missing.
 
-- [ ] **Step 3: Redact display output and add the explicit accessor**
+- [x] **Step 3: Redact display output and add the explicit accessor**
 
 In `crates/runtime/src/error.rs`, change the `UniqueViolation` attribute to:
 
@@ -784,7 +783,7 @@ impl Error {
 }
 ```
 
-- [ ] **Step 4: Run focused tests and verify green**
+- [x] **Step 4: Run focused tests and verify green**
 
 Run:
 
@@ -794,7 +793,7 @@ cargo test -p ruprizzle --test error_redaction
 
 Expected: both tests pass.
 
-- [ ] **Step 5: Document the error policy**
+- [x] **Step 5: Document the error policy**
 
 Append to `docs/query-guide.md`:
 
@@ -808,7 +807,7 @@ PII. If an application has an explicit policy for using the value, call
 than logging the complete error blindly.
 ```
 
-- [ ] **Step 6: Update PR-07 and Phase B status in the production plan**
+- [x] **Step 6: Update PR-07 and Phase B status in the production plan**
 
 Change all PR-07 checklist markers to `- [x]` and add below its heading:
 
@@ -822,7 +821,7 @@ Immediately below the Phase B exit-gate paragraph, add:
 **Status: COMPLETE.** Verified 2026-08-11: PR-04 query/migration tracing, PR-05 pool configuration, PR-06 pool stats/readiness, and PR-07 default error redaction are implemented and tested.
 ```
 
-- [ ] **Step 7: Run the final full gate and review the complete phase**
+- [x] **Step 7: Run the final full gate and review the complete phase**
 
 Run:
 
@@ -836,7 +835,7 @@ git status --short
 
 Expected: all verification commands exit 0 and only intended files are present before the PR-07 commit.
 
-- [ ] **Step 8: Commit PR-07**
+- [x] **Step 8: Commit PR-07**
 
 ```powershell
 git add crates/runtime/src/error.rs crates/runtime/tests/error_redaction.rs docs/query-guide.md ProjectPlan/ProductionReadinessPlan.md
@@ -851,7 +850,7 @@ Verify the branch is clean and capture `git log --oneline -5`.
 
 **Files:** None beyond the already committed Phase B changes.
 
-- [ ] **Step 1: Verify the feature branch commit and clean tree**
+- [x] **Step 1: Verify the feature branch commit and clean tree**
 
 Run:
 
@@ -862,7 +861,7 @@ git log --oneline --decorate -8
 
 Expected: clean `feat/p1-schema-parser` with separate commits for the design and PR-04 through PR-07.
 
-- [ ] **Step 2: Switch to `main` only after the tree is clean**
+- [x] **Step 2: Switch to `main` only after the tree is clean**
 
 Run:
 
@@ -872,7 +871,7 @@ git switch main
 
 Do not use force, reset, or checkout-overwrite flags.
 
-- [ ] **Step 3: Merge the feature branch locally**
+- [x] **Step 3: Merge the feature branch locally**
 
 Run:
 
@@ -882,7 +881,7 @@ git merge --no-ff feat/p1-schema-parser -m "merge: Phase B operability"
 
 Expected: merge completes without conflicts. If a conflict occurs, stop and inspect it rather than discarding either side.
 
-- [ ] **Step 4: Verify the merged main branch**
+- [x] **Step 4: Verify the merged main branch**
 
 Run:
 

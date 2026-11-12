@@ -26,6 +26,7 @@
 - [Known limitations](KnownLimitations.md)
 - [Stability and semantic versioning](Stability.md)
 - [Versioning policy](Versioning.md)
+- [SQL safety review](SqlSafety.md)
 - [Soak test report](SoakReport.md)
 
 # Releases

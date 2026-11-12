@@ -57,6 +57,21 @@ in the ORM path; the 2-level include grouping has improved substantially.
 P8-02 measures this overhead against the thresholds; actually optimising the
 remaining per-row decode cost belongs to a separate work item.
 
+These numbers are the current record. An earlier note in `.superpowers/sdd/progress.md`
+quoted different figures (+5.2% and +32.5%) and called the bulk insert unmeasured; both
+are superseded by the table above.
+
+### Open follow-ups
+
+Tracked here rather than as GitHub issues, so the record lives with the code. Each one
+should be opened as an issue before the next release that touches the relevant path.
+
+| ID | Finding | Status |
+|---|---|---|
+| PERF-FU-1 | Single-row select by primary key is +7.2% over hand-written sqlx; the acceptance target is 5%. | Open. Per-row decode cost in the ORM path. |
+| PERF-FU-2 | 1 000-row select is +12.0% over hand-written sqlx; the acceptance target is 5%. | Open. Same root cause as PERF-FU-1. |
+| PERF-FU-3 | Bulk insert of 10 000 rows: +11.2% median on the 2026-11-12 re-run, against a 10% target. The earlier run was +1.8%. | Open. Repeat on an idle machine before deciding whether this is a regression. |
+
 ## Prepared statements
 
 `SelectQuery::prepare()` compiles a `SELECT` once and returns a `PreparedSelect` that
@@ -104,3 +119,17 @@ against hand-written `sqlx::query` using the same native `sqlx::Postgres` pool.
   benchmark run.
 - [Feature master comparison](FeaturesMasterComparison.md) — full feature and
   architecture comparison, including the advanced SQL builder feature matrix.
+
+## Bulk insert re-run (2026-11-12)
+
+`cargo bench -p ruprizzle --bench end_to_end -- "end_to_end/.*bulk"` against the local
+PostgreSQL 17 service on the same workstation, on the `1.6.0` tree:
+
+| Benchmark | Median | 95% interval |
+|---|---|---|
+| sqlx `sqlx_bulk_insert_10000` | 29.38 ms | 26.30 – 33.38 ms |
+| ruprizzle `ruprizzle_bulk_insert_10000` | 32.66 ms | 28.77 – 37.48 ms |
+
+Median overhead is +11.2%, which is over the 10% acceptance target. The intervals overlap,
+so a single run cannot separate a real regression from noise, and the earlier recorded run
+was +1.8%. The two results are kept side by side and not averaged. Tracked as PERF-FU-3.

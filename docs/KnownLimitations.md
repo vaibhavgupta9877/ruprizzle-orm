@@ -98,6 +98,16 @@ whether the tool is right for your project.
 - **Studio templates use `askama` 0.14**, not the latest 0.15+/0.16, because
   those need Rust 1.88 and the workspace MSRV is 1.85.
 
+## Pre-1.x releases: explicit transaction end
+
+Releases `0.1.0-alpha.3` and `0.1.1-beta.1` shipped native `rusqlite` and
+`tokio-postgres` transaction types that did not roll back when a transaction was dropped
+without `commit()` or `rollback()`. On the `rusqlite` path the connection was leaked; on
+the `tokio-postgres` path it went back to the pool with its transaction still open. Both
+were fixed on 2026-08-13 and every later release has the fix, so upgrade to `1.5.1` or
+newer. If you cannot upgrade yet, call `commit()` or `rollback()` explicitly on every
+transaction path.
+
 ## Deferred / not implemented
 
 - Polymorphic relations.
