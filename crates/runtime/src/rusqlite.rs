@@ -82,6 +82,10 @@ struct Inner {
     next: AtomicUsize,
     size: usize,
     waiters: AtomicUsize,
+    /// Idle count as of the last mutation or successful sample. Metrics reads
+    /// fall back to it when the pool lock is held, so a contended `try_lock`
+    /// never reports an empty pool.
+    last_idle: AtomicUsize,
     /// Maximum time a caller blocks waiting for a free connection before
     /// [`Error::PoolExhausted`] is returned.
     acquire_timeout: Duration,
@@ -155,6 +159,7 @@ impl RusqlitePool {
                 next: AtomicUsize::new(0),
                 size: capacity,
                 waiters: AtomicUsize::new(0),
+                last_idle: AtomicUsize::new(capacity),
                 acquire_timeout: config.acquire_timeout,
             })
         })
@@ -230,7 +235,9 @@ impl RusqlitePool {
                 return Err(exhausted());
             }
         }
-        conns.pop().ok_or_else(exhausted)
+        let conn = conns.pop().ok_or_else(exhausted)?;
+        self.inner.last_idle.store(conns.len(), Ordering::Relaxed);
+        Ok(conn)
     }
 
     /// Number of connections in the pool.
@@ -242,7 +249,17 @@ impl RusqlitePool {
     /// Number of idle connections available for checkout.
     #[must_use]
     pub fn num_idle(&self) -> usize {
-        self.inner.conns.try_lock().map_or(0, |conns| conns.len())
+        match self.inner.conns.try_lock() {
+            Ok(conns) => {
+                let idle = conns.len();
+                self.inner.last_idle.store(idle, Ordering::Relaxed);
+                idle
+            }
+            // The lock is held by a checkout or return in progress. Report the
+            // last known value rather than blocking a metrics call or claiming
+            // that every connection is in use.
+            Err(_) => self.inner.last_idle.load(Ordering::Relaxed),
+        }
     }
 
     /// Number of threads currently waiting for a connection.
@@ -260,6 +277,7 @@ impl RusqlitePool {
     fn return_conn(&self, conn: Arc<std::sync::Mutex<rusqlite::Connection>>) {
         if let Ok(mut conns) = self.inner.conns.lock() {
             conns.push(conn);
+            self.inner.last_idle.store(conns.len(), Ordering::Relaxed);
         }
         self.inner.available.notify_one();
     }
@@ -1218,5 +1236,46 @@ fn strip_driver_param(url: &str) -> String {
         }
     } else {
         url.to_owned()
+    }
+}
+
+#[cfg(test)]
+mod pool_metrics_tests {
+    use super::*;
+
+    async fn pool(max_connections: u32) -> RusqlitePool {
+        let config = PoolConfig {
+            max_connections,
+            ..PoolConfig::default()
+        };
+        RusqlitePool::connect("sqlite::memory:", &config)
+            .await
+            .expect("connect")
+    }
+
+    /// FIX-07 step 3: a metrics read while the pool lock is held must return the
+    /// last known idle count, not zero, which would read as a fully busy pool.
+    #[tokio::test]
+    async fn num_idle_falls_back_to_last_known_value_when_locked() {
+        let pool = pool(2).await;
+        assert_eq!(pool.num_idle(), 2);
+
+        let guard = pool.inner.conns.lock().expect("lock");
+        assert_eq!(pool.num_idle(), 2, "contended read must not report 0");
+        drop(guard);
+    }
+
+    #[tokio::test]
+    async fn last_known_value_tracks_checkouts_while_locked() {
+        let pool = pool(2).await;
+        let tx = pool.begin_transaction().await.expect("begin");
+        assert_eq!(pool.num_idle(), 1);
+
+        let guard = pool.inner.conns.lock().expect("lock");
+        assert_eq!(pool.num_idle(), 1);
+        drop(guard);
+
+        drop(tx);
+        assert_eq!(pool.num_idle(), 2);
     }
 }
