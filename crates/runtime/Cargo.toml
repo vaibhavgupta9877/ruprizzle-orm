@@ -98,3 +98,7 @@ required-features = ["sqlite-rusqlite"]
 [[example]]
 name = "sqlite_breakdown"
 required-features = ["sqlite-rusqlite"]
+
+[[example]]
+name = "include_phases"
+required-features = ["sqlite-rusqlite"]

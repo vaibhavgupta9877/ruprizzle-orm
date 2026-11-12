@@ -716,6 +716,108 @@ async fn sync_read_results(pool: &ruprizzle::Pool) -> Vec<BenchResult> {
         })
         .await,
     );
+    // Same filters, orderings and assertions as the async rows above.
+    let pool2 = pool.clone();
+    results.push(
+        bench_async("find_filtered_ordered_sync", 50, move || {
+            let pool = pool2.clone();
+            async move {
+                let counter = CountingExecutor::new(&pool);
+                let rows = SelectQuery::<User>::new(&counter)
+                    .filter(USER_AGE.gt(18i64))
+                    .order_by(USER_AGE.asc())
+                    .order_by(USER_EMAIL.asc())
+                    .fetch_all_blocking()
+                    .expect("fetch filtered users");
+                assert!(
+                    rows.len() >= 980,
+                    "expected ~1000 users, got {}",
+                    rows.len()
+                );
+                BenchOutcome {
+                    rows: rows.len(),
+                    queries: counter.count(),
+                }
+            }
+        })
+        .await,
+    );
+
+    let pool2 = pool.clone();
+    results.push(
+        bench_async("find_filtered_paginated_sync", 50, move || {
+            let pool = pool2.clone();
+            async move {
+                let counter = CountingExecutor::new(&pool);
+                let rows = SelectQuery::<User>::new(&counter)
+                    .filter(USER_AGE.gt(18i64))
+                    .order_by(USER_AGE.asc())
+                    .order_by(USER_EMAIL.asc())
+                    .limit(20)
+                    .offset(500)
+                    .fetch_all_blocking()
+                    .expect("fetch paginated users");
+                assert_eq!(rows.len(), 20);
+                BenchOutcome {
+                    rows: rows.len(),
+                    queries: counter.count(),
+                }
+            }
+        })
+        .await,
+    );
+
+    let ids_50: Vec<i64> = (1..=50).collect();
+    let pool2 = pool.clone();
+    results.push(
+        bench_async("find_in_list_sync", 100, move || {
+            let pool = pool2.clone();
+            let ids = ids_50.clone();
+            async move {
+                let counter = CountingExecutor::new(&pool);
+                let rows = SelectQuery::<User>::new(&counter)
+                    .filter(USER_ID.in_set(ids))
+                    .order_by(USER_ID.asc())
+                    .fetch_all_blocking()
+                    .expect("fetch users by id list");
+                assert_eq!(rows.len(), 50);
+                BenchOutcome {
+                    rows: rows.len(),
+                    queries: counter.count(),
+                }
+            }
+        })
+        .await,
+    );
+
+    let pool2 = pool.clone();
+    results.push(
+        bench_async("find_complex_filter_sync", 50, move || {
+            let pool = pool2.clone();
+            async move {
+                let counter = CountingExecutor::new(&pool);
+                let rows = SelectQuery::<User>::new(&counter)
+                    .filter(
+                        USER_AGE
+                            .gt(18i64)
+                            .and(USER_EMAIL.contains("example.com"))
+                            .and(USER_ID.between(100i64, 900i64)),
+                    )
+                    .order_by(USER_AGE.asc())
+                    .order_by(USER_EMAIL.asc())
+                    .limit(100)
+                    .fetch_all_blocking()
+                    .expect("fetch complex filtered users");
+                assert_eq!(rows.len(), 100);
+                BenchOutcome {
+                    rows: rows.len(),
+                    queries: counter.count(),
+                }
+            }
+        })
+        .await,
+    );
+
     results
 }
 
