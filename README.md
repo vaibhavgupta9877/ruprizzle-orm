@@ -4,7 +4,7 @@
 [![docs.rs](https://docs.rs/ruprizzle/badge.svg)](https://docs.rs/ruprizzle)
 [![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](./Cargo.toml)
 [![License](https://img.shields.io/crates/l/ruprizzle.svg)](./LICENSE-MIT)
-[![CI](https://img.shields.io/badge/CI-cargo%20xtask%20ci-success)](./xtask/src/main.rs)
+[![CI](https://github.com/vaibhavgupta9877/ruprizzle-orm/actions/workflows/ci.yml/badge.svg)](https://github.com/vaibhavgupta9877/ruprizzle-orm/actions/workflows/ci.yml)
 
 📖 **Documentation site:** <https://vaibhavgupta9877.github.io/ruprizzle-orm/> · [Quickstart](https://vaibhavgupta9877.github.io/ruprizzle-orm/quickstart.html) · [ruprizzle vs Diesel, SeaORM, SQLx and Prisma](https://vaibhavgupta9877.github.io/ruprizzle-orm/FeaturesMasterComparison.html)
 
