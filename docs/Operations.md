@@ -183,7 +183,7 @@ Redis or any other shared store — nothing in the trait assumes a single proces
 before a query and `set` after it, and `ruprizzle_cache_hits_total` /
 `ruprizzle_cache_misses_total` are not emitted. `SelectQuery::cache`, `cache_key` and
 `cache_tag` exist in the `1.5` API but **do nothing**, and are deprecated since
-`1.5.2`. So are `SelectQuery::use_primary` and `use_replica`. To choose a pool, build
+`1.6.0`. So are `SelectQuery::use_primary` and `use_replica`. To choose a pool, build
 the query on `RoutedPool::primary()`, on the `RoutedPool` itself, or on
 `select_replica()`.
 
@@ -201,7 +201,7 @@ Suggested thresholds for a health dashboard:
 
 ```toml
 [dependencies]
-ruprizzle = { version = "1.5", features = ["metrics"] }
+ruprizzle = { version = "1.6", features = ["metrics"] }
 metrics-exporter-prometheus = "0.15"
 ```
 
