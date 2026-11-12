@@ -372,40 +372,60 @@ impl RusqlitePool {
         T: FromRusqliteRow + Send + 'static,
     {
         let pool = self.clone();
-        tokio::task::spawn_blocking(move || {
-            let conn = pool.checkout()?;
+        tokio::task::spawn_blocking(move || pool.fetch_decoded_blocking::<T>(&sql, &binds))
+            .await
+            .map_err(|e| Error::Message(e.to_string()))?
+    }
 
-            let guard = conn
-                .conn()
-                .lock()
-                .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
-            if is_ddl(sql.as_ref()) {
-                force_schema_reload(&guard);
-            }
-            let mut stmt = guard
-                .prepare_cached(sql.as_ref())
+    /// Run `sql` with `binds` on a pooled connection and decode every row,
+    /// **on the calling thread**.
+    ///
+    /// This is the synchronous read path. It does no `spawn_blocking` hop, so
+    /// a point query costs little more than the statement itself. Use it only
+    /// from code that may block: a synchronous caller, or a task already on a
+    /// blocking thread. Calling it from an async task parks that Tokio worker
+    /// for the whole statement.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::PoolExhausted`] if no connection frees up in time, and
+    /// [`Error::Message`] for SQL or decode failures.
+    pub fn fetch_decoded_blocking<T: FromRusqliteRow>(
+        &self,
+        sql: &str,
+        binds: &[Value],
+    ) -> Result<Vec<T>, Error> {
+        let conn = self.checkout()?;
+
+        let guard = conn
+            .conn()
+            .lock()
+            .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
+        let ddl = is_ddl(sql);
+        if ddl {
+            force_schema_reload(&guard);
+        }
+        let mut stmt = guard
+            .prepare_cached(sql)
+            .map_err(|e| Error::Message(e.to_string()))?;
+
+        let mut out = Vec::new();
+
+        {
+            let mut rows = stmt
+                .query(rusqlite::params_from_iter(binds))
                 .map_err(|e| Error::Message(e.to_string()))?;
-
-            let mut out = Vec::new();
-
-            {
-                let mut rows = stmt
-                    .query(rusqlite::params_from_iter(&binds))
-                    .map_err(|e| Error::Message(e.to_string()))?;
-                while let Some(row) = rows.next().map_err(|e| Error::Message(e.to_string()))? {
-                    out.push(T::from_rusqlite_row(row)?);
-                }
+            while let Some(row) = rows.next().map_err(|e| Error::Message(e.to_string()))? {
+                out.push(T::from_rusqlite_row(row)?);
             }
+        }
 
-            if is_ddl(sql.as_ref()) {
-                stmt.discard();
-                guard.flush_prepared_statement_cache();
-            }
+        if ddl {
+            stmt.discard();
+            guard.flush_prepared_statement_cache();
+        }
 
-            Ok(out)
-        })
-        .await
-        .map_err(|e| Error::Message(e.to_string()))?
+        Ok(out)
     }
 }
 

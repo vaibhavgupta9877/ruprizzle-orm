@@ -632,6 +632,99 @@ where
     record_result(name, iters, start, before, after, &last)
 }
 
+/// Synchronous variants of the four simple reads. They use the native
+/// rusqlite pool's blocking API, with no spawn_blocking hop, and are reported as
+/// separate rows so the async rows stay comparable with earlier runs.
+#[cfg(feature = "sqlite-rusqlite")]
+async fn sync_read_results(pool: &ruprizzle::Pool) -> Vec<BenchResult> {
+    let mut results = Vec::new();
+    let pool2 = pool.clone();
+    results.push(
+        bench_async("select_by_pk_sync", 1000, move || {
+            let pool = pool2.clone();
+            async move {
+                let counter = CountingExecutor::new(&pool);
+                let row = SelectQuery::<User>::new(&counter)
+                    .filter(USER_ID.eq(500i64))
+                    .fetch_one_blocking()
+                    .expect("fetch one user");
+                assert_eq!(row.id, 500);
+                BenchOutcome {
+                    rows: 1,
+                    queries: counter.count(),
+                }
+            }
+        })
+        .await,
+    );
+
+    let pool2 = pool.clone();
+    results.push(
+        bench_async("find_many_1000_sync", 50, move || {
+            let pool = pool2.clone();
+            async move {
+                let counter = CountingExecutor::new(&pool);
+                let rows = SelectQuery::<User>::new(&counter)
+                    .fetch_all_blocking()
+                    .expect("fetch all users");
+                assert_eq!(rows.len(), 1000);
+                BenchOutcome {
+                    rows: rows.len(),
+                    queries: counter.count(),
+                }
+            }
+        })
+        .await,
+    );
+
+    let pool2 = pool.clone();
+    results.push(
+        bench_async("count_filtered_sync", 100, move || {
+            let pool = pool2.clone();
+            async move {
+                let counter = CountingExecutor::new(&pool);
+                let count = SelectQuery::<User>::new(&counter)
+                    .filter(USER_AGE.gt(18i64))
+                    .count_blocking()
+                    .expect("count users");
+                assert!(count >= 980, "expected ~1000 users, got {}", count);
+                BenchOutcome {
+                    rows: count as usize,
+                    queries: counter.count(),
+                }
+            }
+        })
+        .await,
+    );
+
+    let pool2 = pool.clone();
+    results.push(
+        bench_async("exists_filtered_sync", 100, move || {
+            let pool = pool2.clone();
+            async move {
+                let counter = CountingExecutor::new(&pool);
+                let exists = SelectQuery::<User>::new(&counter)
+                    .filter(USER_AGE.gt(18i64))
+                    .exists_blocking()
+                    .expect("exists users");
+                assert!(exists);
+                BenchOutcome {
+                    rows: 1,
+                    queries: counter.count(),
+                }
+            }
+        })
+        .await,
+    );
+    results
+}
+
+/// Without the rusqlite feature there is no synchronous path to measure.
+#[cfg(not(feature = "sqlite-rusqlite"))]
+async fn sync_read_results(_pool: &ruprizzle::Pool) -> Vec<BenchResult> {
+    Vec::new()
+}
+
 #[tokio::main]
 async fn main() -> Result<(), ruprizzle::Error> {
     let native = std::env::var("RUST_BENCH_DRIVER").is_ok_and(|v| v == "rusqlite");
@@ -1019,6 +1112,10 @@ async fn main() -> Result<(), ruprizzle::Error> {
         })
         .await,
     );
+
+    if native {
+        results.extend(sync_read_results(&pool).await);
+    }
 
     // End-to-end: include posts for all users.
     let pool2 = pool.clone();

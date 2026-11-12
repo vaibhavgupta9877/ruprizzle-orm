@@ -61,6 +61,67 @@ impl ruprizzle::rusqlite::FromOwnedRow for User {
 
 const ID: ruprizzle::Column<User, i64> = ruprizzle::Column::new("users", "id");
 
+#[derive(Debug, Clone, Default, sqlx::FromRow)]
+struct Post {
+    id: i64,
+    author_id: i64,
+    category_id: i64,
+    title: String,
+    published_at: i64,
+    views: i64,
+}
+
+impl Model for Post {
+    const TABLE: &'static str = "posts";
+    const PRIMARY_KEY: &'static str = "id";
+}
+
+impl ruprizzle::rusqlite::FromRusqliteRow for Post {
+    fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: ruprizzle::rusqlite::get_i64(row, 0)?,
+            author_id: ruprizzle::rusqlite::get_i64(row, 1)?,
+            category_id: ruprizzle::rusqlite::get_i64(row, 2)?,
+            title: ruprizzle::rusqlite::get_text(row, 3)?,
+            published_at: ruprizzle::rusqlite::get_i64(row, 4)?,
+            views: ruprizzle::rusqlite::get_i64(row, 5)?,
+        })
+    }
+}
+
+impl ruprizzle::rusqlite::FromOwnedRow for Post {
+    fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+        Ok(Self {
+            id: row.get::<i64>(0)?,
+            author_id: row.get::<i64>(1)?,
+            category_id: row.get::<i64>(2)?,
+            title: row.get::<String>(3)?,
+            published_at: row.get::<i64>(4)?,
+            views: row.get::<i64>(5)?,
+        })
+    }
+}
+
+/// Reads all posts with raw rusqlite, inline. The floor for a posts decode.
+fn raw_posts(conn: &rusqlite::Connection) -> Vec<Post> {
+    let mut stmt = conn
+        .prepare_cached("SELECT id, author_id, category_id, title, published_at, views FROM posts")
+        .expect("prepare");
+    stmt.query_map([], |row| {
+        Ok(Post {
+            id: row.get(0)?,
+            author_id: row.get(1)?,
+            category_id: row.get(2)?,
+            title: row.get(3)?,
+            published_at: row.get(4)?,
+            views: row.get(5)?,
+        })
+    })
+    .expect("query")
+    .collect::<Result<Vec<_>, _>>()
+    .expect("rows")
+}
+
 const SQL: &str = "SELECT id, email, age, name, created_at FROM users";
 
 fn db_path() -> String {
@@ -304,5 +365,72 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         point_orm.min - point_raw.min,
         (point_orm.min - point_raw.min) / point_raw.min * 100.0
     );
+
+    // ---- posts: 10,000 rows, the dominant cost of include_posts ----
+    const POST_ITERS: usize = 20;
+    async fn time_posts<F, Fut>(mut f: F) -> Timing
+    where
+        F: FnMut() -> Fut,
+        Fut: std::future::Future<Output = ()>,
+    {
+        for _ in 0..2 {
+            f().await;
+        }
+        let mut samples = Vec::new();
+        for _ in 0..REPEATS {
+            let start = Instant::now();
+            for _ in 0..POST_ITERS {
+                f().await;
+            }
+            samples.push(start.elapsed().as_secs_f64() * 1e6 / POST_ITERS as f64);
+        }
+        summarise(samples)
+    }
+    let posts_raw = {
+        let mut samples = Vec::new();
+        for _ in 0..2 {
+            std::hint::black_box(raw_posts(&conn));
+        }
+        for _ in 0..REPEATS {
+            let start = Instant::now();
+            for _ in 0..POST_ITERS {
+                std::hint::black_box(raw_posts(&conn));
+            }
+            samples.push(start.elapsed().as_secs_f64() * 1e6 / POST_ITERS as f64);
+        }
+        summarise(samples)
+    };
+    let posts_sync = {
+        let mut samples = Vec::new();
+        for _ in 0..2 {
+            std::hint::black_box(
+                SelectQuery::<Post>::new(&pool)
+                    .fetch_all_blocking()
+                    .unwrap(),
+            );
+        }
+        for _ in 0..REPEATS {
+            let start = Instant::now();
+            for _ in 0..POST_ITERS {
+                std::hint::black_box(
+                    SelectQuery::<Post>::new(&pool)
+                        .fetch_all_blocking()
+                        .unwrap(),
+                );
+            }
+            samples.push(start.elapsed().as_secs_f64() * 1e6 / POST_ITERS as f64);
+        }
+        summarise(samples)
+    };
+    let posts_async = time_posts(|| async {
+        std::hint::black_box(SelectQuery::<Post>::new(&pool).fetch_all().await.unwrap());
+    })
+    .await;
+
+    println!();
+    println!("posts, 10,000 rows, us per call");
+    row("raw rusqlite inline (floor)", posts_raw);
+    row("ruprizzle SelectQuery::fetch_all_blocking", posts_sync);
+    row("ruprizzle SelectQuery::fetch_all (async)", posts_async);
     Ok(())
 }
