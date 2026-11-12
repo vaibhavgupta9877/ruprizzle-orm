@@ -111,11 +111,18 @@ impl RusqlitePool {
             let opts =
                 sqlx::sqlite::SqliteConnectOptions::from_str(&sqlx_url).map_err(Error::Sqlx)?;
             let filename = opts.get_filename().to_string_lossy().into_owned();
+            // sqlx reports `sqlite::memory:` under a generated `sqlx-in-memory-N`
+            // name, not `:memory:`. Opening that name as a file created stray
+            // database files in the working directory.
+            let in_memory = filename == ":memory:"
+                || filename.starts_with("sqlx-in-memory-")
+                || sqlx_url.contains(":memory:")
+                || sqlx_url.contains("mode=memory");
             let capacity = config.max_connections.max(1) as usize;
             let mut conns = Vec::with_capacity(capacity);
 
             for _ in 0..capacity {
-                let conn = if filename == ":memory:" {
+                let conn = if in_memory {
                     rusqlite::Connection::open_in_memory()
                 } else {
                     rusqlite::Connection::open_with_flags(
@@ -146,10 +153,8 @@ impl RusqlitePool {
                     }
                 })?;
 
-                apply_pragmas(&conn, filename == ":memory:").map_err(|e| {
-                    Error::ConnectionFailure {
-                        reason: e.to_string(),
-                    }
+                apply_pragmas(&conn, in_memory).map_err(|e| Error::ConnectionFailure {
+                    reason: e.to_string(),
                 })?;
 
                 conns.push(Arc::new(std::sync::Mutex::new(conn)));
