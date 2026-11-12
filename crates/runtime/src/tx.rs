@@ -437,7 +437,7 @@ impl Tx {
                     .map_err(Error::Sqlx)
             }
             #[cfg(feature = "sqlite-rusqlite")]
-            TxInner::SqliteNative(tx) => tx.execute_sync(sql, binds),
+            TxInner::SqliteNative(tx) => tx.execute_async(sql, binds).await,
             #[cfg(feature = "postgres-tokio-postgres")]
             TxInner::PostgresNative(tx) => tx.execute(sql, binds).await,
         }
@@ -486,7 +486,7 @@ impl Tx {
             }
             #[cfg(feature = "sqlite-rusqlite")]
             TxInner::SqliteNative(tx) => {
-                let batch = tx.fetch_all_sync(sql, binds)?;
+                let batch = tx.fetch_all_async(sql, binds).await?;
                 crate::executor::decode_rows::<T>(batch)
             }
             #[cfg(feature = "postgres-tokio-postgres")]
@@ -550,7 +550,7 @@ impl Tx {
                     .map_err(Error::Sqlx)
             }
             #[cfg(feature = "sqlite-rusqlite")]
-            TxInner::SqliteNative(tx) => tx.fetch_all_sync(sql, binds),
+            TxInner::SqliteNative(tx) => tx.fetch_all_async(sql, binds).await,
             #[cfg(feature = "postgres-tokio-postgres")]
             TxInner::PostgresNative(tx) => tx.fetch_all(sql, binds).await,
         }

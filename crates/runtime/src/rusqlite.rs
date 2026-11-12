@@ -43,8 +43,10 @@ pub struct Row {
 /// A pool of synchronous `rusqlite` connections.
 ///
 /// This type is intentionally cheap to clone and holds a shared set of
-/// `std::sync::Mutex<rusqlite::Connection>` handles. Queries run synchronously
-/// on the calling task to avoid the dispatch cost of `spawn_blocking`.
+/// `std::sync::Mutex<rusqlite::Connection>` handles. Every statement runs on a
+/// blocking thread via `spawn_blocking`, so a slow query never parks a Tokio
+/// worker. The per-query hop costs about 15 µs and is amortised on any query
+/// that returns more than a handful of rows.
 #[derive(Clone)]
 pub struct RusqlitePool {
     inner: Arc<Inner>,
@@ -433,72 +435,35 @@ impl RusqliteTransaction {
             .ok_or_else(|| Error::Message("transaction already finished".into()))
     }
 
-    /// Execute `sql` with `binds`, returning the number of affected rows.
-    pub(crate) fn execute_sync(&self, sql: &str, binds: &[Value]) -> Result<u64, Error> {
-        let guard = self
-            .conn()?
-            .lock()
-            .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
-        if is_ddl(sql) {
-            force_schema_reload(&guard);
-        }
-        let mut stmt = guard
-            .prepare_cached(sql)
-            .map_err(|e| Error::Message(e.to_string()))?;
-
-        let rows = stmt
-            .execute(rusqlite::params_from_iter(binds))
-            .map_err(|e| Error::Message(e.to_string()))?;
-
-        if is_ddl(sql) {
-            stmt.discard();
-            guard.flush_prepared_statement_cache();
-        }
-
-        Ok(rows as u64)
+    /// Execute `sql` with `binds` on this transaction's connection, returning
+    /// the number of affected rows.
+    ///
+    /// The statement runs on a blocking thread. Running it inline would park
+    /// the Tokio worker for the whole statement, and a long write under WAL
+    /// contention would stall every other task scheduled on that worker.
+    pub(crate) async fn execute_async(&self, sql: &str, binds: &[Value]) -> Result<u64, Error> {
+        let conn = self.conn()?.clone();
+        let sql = sql.to_owned();
+        let binds = binds.to_vec();
+        tokio::task::spawn_blocking(move || execute_on(&conn, &sql, &binds))
+            .await
+            .map_err(|e| Error::Message(e.to_string()))?
     }
 
-    /// Fetch all rows from `sql` with `binds`.
-    pub(crate) fn fetch_all_sync(&self, sql: &str, binds: &[Value]) -> Result<RowBatch, Error> {
-        let guard = self
-            .conn()?
-            .lock()
-            .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
-        if is_ddl(sql) {
-            force_schema_reload(&guard);
-        }
-        let mut stmt = guard
-            .prepare_cached(sql)
-            .map_err(|e| Error::Message(e.to_string()))?;
-
-        let column_count = stmt.column_count();
-        let column_names: Vec<String> = stmt
-            .column_names()
-            .into_iter()
-            .map(|s| s.to_string())
-            .collect();
-
-        let rows = stmt
-            .query_map(rusqlite::params_from_iter(binds), |row| {
-                let mut values = Vec::with_capacity(column_count);
-                for i in 0..column_count {
-                    values.push(row.get::<_, RusqliteValue>(i)?);
-                }
-                Ok(Row {
-                    values,
-                    names: column_names.clone(),
-                })
-            })
+    /// Fetch all rows from `sql` with `binds` on this transaction's
+    /// connection. Runs on a blocking thread for the same reason as
+    /// [`Self::execute_async`].
+    pub(crate) async fn fetch_all_async(
+        &self,
+        sql: &str,
+        binds: &[Value],
+    ) -> Result<RowBatch, Error> {
+        let conn = self.conn()?.clone();
+        let sql = sql.to_owned();
+        let binds = binds.to_vec();
+        tokio::task::spawn_blocking(move || fetch_on(&conn, &sql, &binds))
+            .await
             .map_err(|e| Error::Message(e.to_string()))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| Error::Message(e.to_string()))?;
-
-        if is_ddl(sql) {
-            stmt.discard();
-            guard.flush_prepared_statement_cache();
-        }
-
-        Ok(RowBatch::Rusqlite(rows))
     }
 
     /// Commit the transaction and return the connection to the pool.
@@ -667,6 +632,82 @@ impl Executor for RusqlitePool {
             async move { self.fetch_all_raw(sql, binds).await },
         )))
     }
+}
+
+/// Run `sql` with `binds` on an already-owned connection, returning the
+/// affected row count. Used by transactions, which keep their connection for
+/// their whole lifetime instead of checking one out per statement.
+fn execute_on(
+    conn: &std::sync::Mutex<rusqlite::Connection>,
+    sql: &str,
+    binds: &[Value],
+) -> Result<u64, Error> {
+    let guard = conn
+        .lock()
+        .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
+    if is_ddl(sql) {
+        force_schema_reload(&guard);
+    }
+    let mut stmt = guard
+        .prepare_cached(sql)
+        .map_err(|e| Error::Message(e.to_string()))?;
+
+    let rows = stmt
+        .execute(rusqlite::params_from_iter(binds))
+        .map_err(|e| Error::Message(e.to_string()))?;
+
+    if is_ddl(sql) {
+        stmt.discard();
+        guard.flush_prepared_statement_cache();
+    }
+
+    Ok(rows as u64)
+}
+
+/// Fetch every row of `sql` on an already-owned connection. See [`execute_on`].
+fn fetch_on(
+    conn: &std::sync::Mutex<rusqlite::Connection>,
+    sql: &str,
+    binds: &[Value],
+) -> Result<RowBatch, Error> {
+    let guard = conn
+        .lock()
+        .map_err(|_| Error::Message("rusqlite connection mutex poisoned".into()))?;
+    if is_ddl(sql) {
+        force_schema_reload(&guard);
+    }
+    let mut stmt = guard
+        .prepare_cached(sql)
+        .map_err(|e| Error::Message(e.to_string()))?;
+
+    let column_count = stmt.column_count();
+    let column_names: Vec<String> = stmt
+        .column_names()
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect();
+
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(binds), |row| {
+            let mut values = Vec::with_capacity(column_count);
+            for i in 0..column_count {
+                values.push(row.get::<_, RusqliteValue>(i)?);
+            }
+            Ok(Row {
+                values,
+                names: column_names.clone(),
+            })
+        })
+        .map_err(|e| Error::Message(e.to_string()))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| Error::Message(e.to_string()))?;
+
+    if is_ddl(sql) {
+        stmt.discard();
+        guard.flush_prepared_statement_cache();
+    }
+
+    Ok(RowBatch::Rusqlite(rows))
 }
 
 fn fetch_all(
