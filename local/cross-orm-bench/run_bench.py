@@ -76,6 +76,7 @@ DRIVER_ORDER = [
     "prax",
     "sea-orm",
     "diesel",
+    "turso",
     "prisma",
     "drizzle",
 ]
@@ -971,7 +972,7 @@ def main() -> int:
         env_unset=unset_for_sqlite,
     )
 
-    for crate_name in ["prax", "sea-orm", "diesel"]:
+    for crate_name in ["prax", "sea-orm", "diesel", "turso"]:
         print(f"Building and running {crate_name} trials...")
         crate_dir = RUST_DIR / f"{crate_name}-bench"
         build_rust_orm(crate_name)
