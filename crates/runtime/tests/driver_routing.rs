@@ -100,3 +100,38 @@ async fn rusqlite_driver_with_feature_routes_to_native_pool() {
         "expected native rusqlite pool"
     );
 }
+
+/// An in-memory URL on the native rusqlite driver must stay in memory. sqlx
+/// reports it under a generated `sqlx-in-memory-N` name, which used to be
+/// opened as a real file in the working directory.
+#[cfg(feature = "sqlite-rusqlite")]
+#[tokio::test]
+async fn rusqlite_in_memory_url_creates_no_file() {
+    use ruprizzle::Executor;
+
+    let stray = |dir: &std::path::Path| {
+        std::fs::read_dir(dir)
+            .expect("read cwd")
+            .filter_map(Result::ok)
+            .any(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("sqlx-in-memory")
+            })
+    };
+    let cwd = std::env::current_dir().expect("cwd");
+    let before = stray(&cwd);
+
+    let pool = connect_with("sqlite::memory:?driver=rusqlite", &PoolConfig::default())
+        .await
+        .expect("connect");
+    assert!(
+        pool.as_rusqlite().is_some(),
+        "expected native rusqlite pool"
+    );
+    pool.execute_raw("CREATE TABLE t (x INTEGER)".into(), Vec::new())
+        .await
+        .expect("in-memory database is usable");
+
+    assert_eq!(stray(&cwd), before, "in-memory URL created a file on disk");
+}
