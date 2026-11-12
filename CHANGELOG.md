@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Preserve referencing rows during SQLite table rebuilds. Migration and reset
+  transactions disable foreign-key enforcement before `BEGIN`, check references
+  before commit, and restore enforcement before returning connections to the pool.
+- Roll back migration statements and their tracking update together on SQLite
+  and PostgreSQL. SQLite down migrations retain one connection for their pragmas
+  and rebuild statements. MySQL DDL still follows server implicit-commit rules.
+- Preserve UTF-8, quoted text and comments when renumbering PostgreSQL bind
+  parameters in CTEs, set operations and subqueries.
+- Update cache entries and tag indexes atomically; replacement removes old tags,
+  expiration pruning respects refreshed entries, and zero capacity stores nothing.
+- Render valid offset-only pagination on SQLite and MySQL for SELECT, JOIN and
+  aggregate queries.
+- Preserve quoted identifiers, doubled quote escapes and nested block comments
+  when splitting migration SQL into statements.
+- Clarify manual query caching and deprecated no-op cache methods, and correct
+  the shared Cargo target directory instructions.
+
 ## [1.6.0] - 2026-10-03
 
 ### Added
