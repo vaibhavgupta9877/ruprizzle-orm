@@ -923,3 +923,88 @@ Fix #1 cost on the hot path, `sqlite_breakdown` release run, min µs (before →
 **Weighted total: 8.40 → 8.60 / 10 → 84 → 86 / 100.**
 
 **Verdict:** shippable as 1.7.0 once the CI gate runs green on the pushed tip. To reach ≥ 92: typed not-found error, a CI-gated merge path for `dev-main`, and a MySQL/MariaDB re-run before tagging.
+
+---
+
+## 19. Implementation pass on the §18 next actions — 2026-11-13
+
+**Code changed:** none. Everything below was verified against `dev-main` at `96eb3bc`, whose
+tree is unchanged by this pass. The score stays at **86/100**; the ≥ 92 bar still needs the
+MySQL/MariaDB re-run.
+
+### Actions and outcomes
+
+| §18 item | Outcome |
+|---|---|
+| Blocking-misuse guard (`debug_assert` on `task::try_id()`) | **Not shipped; reverted.** The check is wrong in both directions. Code inside `spawn_blocking` has a task id, so the documented-legitimate pattern panicked. The `#[tokio::test]` root future has no task id, so the real misuse was not caught. Tokio's public API has no "is this an async worker" test. The `*_blocking` docs remain the only guard. A type-level split (a sync-only executor handle) would be the reliable fix and is a design decision, not a one-line change. |
+| CI not gating `dev-main` merges | **Local gate enabled.** `cargo xtask pre-merge` passes (fmt, clippy `-D warnings`, lint-drivers). `git config core.hooksPath .githooks` is set for this clone. It must be set in each clone, and CI must still be checked on the pushed tip. |
+| MySQL/MariaDB re-run before tagging | **Blocked.** The MySQL 8.4.9 and MariaDB 11.4.8 portable zips were downloaded and MySQL was initialized, but starting the server on port 3306 was denied by the sandbox. Not run; see the open item below. |
+| Flaky `arrays::array_filters_work` | **Already fixed in code.** Each call gets its own SQLite file (`FILE_COUNTER` in `crates/runtime/tests/arrays.rs`). It passed in the default-parallel full run below. |
+| "No Prometheus exporter" wording | **Clarified.** The `metrics` feature emits `ruprizzle_query_duration_seconds` and `ruprizzle_pool_connections_active` through the `metrics` facade. The library ships no exporter, so applications attach their own (`docs/Operations.md`). The v1.4 roadmap's "Prometheus exporter" wording overstates this. |
+| Stale roadmap | `ProjectPlan/Roadmap.md` now carries an archive banner pointing to the v1 and v2 plans. The file was not moved. |
+
+### Verification (HEAD, `.env` loaded)
+
+| Check | Result |
+|---|---|
+| `cargo xtask pre-merge` | ✅ fmt, clippy `-D warnings`, lint-drivers |
+| `RUPRIZZLE_REQUIRE_DB=1 cargo test --workspace --no-fail-fast` (Postgres) | ✅ 639 passed, 0 failed, 5 ignored, 122 test binaries |
+| `RUPRIZZLE_REQUIRE_DB=1 RUPRIZZLE_TEST_RUSQLITE=1 cargo test -p ruprizzle --features "sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite"` | ✅ 277 passed, 0 failed |
+| MySQL 8.4 / MariaDB 11.4 workspace suite | ⏸ not run (see below) |
+
+**Count note:** §18 recorded 656 passed with Postgres. This pass counts 639 passed plus 5 ignored.
+The difference is unexplained and not a failure.
+
+**Process finding:** the first Postgres run failed 10 tests with `RUPRIZZLE_TEST_PG_URL is not set`.
+The shell does not load `.env` on its own. Use `set -a; . ./.env; set +a` before any DB-backed run,
+or the suite fails with a misleading message.
+
+### Open item (needs the user)
+
+The MySQL/MariaDB leg is the one remaining requirement before tagging. Starting the local
+`mysqld` on `127.0.0.1:3306`, and creating the `ruprizzle` user it needs, was denied by the
+sandbox as exposing a local service. The artefacts are in
+`D:\ollama\models\temp\mysql` (`mysql-8.4.9-winx64`, initialized data in `data-mysql`). To run it,
+approve starting the server, or start it yourself with `mysqld --datadir=... --port=3306`.
+Then run the commands in `memory/ruprizzle-local-mysql-mariadb.md` and
+`cargo test --workspace --no-fail-fast` with `RUPRIZZLE_TEST_MYSQL_URL` set.
+
+---
+
+## 20. Completion of §19 — MySQL and MariaDB legs run — 2026-11-13
+
+§19's open item is closed. The servers were started with approval, the full workspace suite was
+run against each, and the servers were then stopped. Still no code changed; HEAD is `96eb3bc`.
+
+| Leg | Server | Result |
+|---|---|---|
+| Postgres | 16 on `localhost:5432` (`.env`) | ✅ 639 passed, 0 failed, 5 ignored |
+| MySQL | 8.4.9 on `127.0.0.1:3306` | ✅ 639 passed, 0 failed, 5 ignored |
+| MariaDB | 11.4.8 on `127.0.0.1:3307` | ✅ 639 passed, 0 failed, 5 ignored (after a disk-space fix below) |
+| Native rusqlite | in-process | ✅ 277 passed, 0 failed |
+| `cargo xtask pre-merge` | fmt, clippy `-D warnings`, lint-drivers | ✅ |
+
+### Issues hit during the run
+
+- **MariaDB first run: 6 failures, all `database or disk is full` (SQLite error 13) plus one
+  doctest link failure.** The D: drive had 0.13 GB free. The cause was the Cargo cache
+  (`D:\SaaS\rust\rustdev\target`, 97 GB), not the code. After deleting the MySQL and MariaDB
+  installer zips and the regenerable `target/debug/incremental` directory (21 GB), the rerun
+  passed 639/0. Treat this as a local environment issue, not a regression. Keep several GB
+  free before a full multi-database run.
+- **MySQL download URL:** the `cdn.mysql.com/Downloads/...` link recorded in memory returns 404 for
+  8.4.4 through 8.4.9. Use `https://cdn.mysql.com/archives/mysql-8.4/mysql-8.4.9-winx64.zip`.
+- **MariaDB install:** `mariadb-install-db.exe` rejects `--basedir` and `--no-defaults`. Bootstrap
+  from `share/mariadb_system_tables.sql` and `share/mariadb_system_tables_data.sql` with
+  `mariadbd --no-defaults --bootstrap` instead (one statement per line, `CREATE DATABASE mysql`
+  first). Root has no password, so create the `ruprizzle` user after startup.
+- **`.env` is not loaded automatically.** Earlier runs failed on `RUPRIZZLE_TEST_PG_URL is not set`.
+
+### Still open
+
+- **Blocking-call guard (§18):** not implemented. Tokio's public API cannot separate an async
+  task from a `spawn_blocking` thread, so no runtime assertion is reliable (see §19). A real fix
+  is a sync-only executor type, a public API change that needs a decision. The `*_blocking` docs
+  remain the only guard.
+- **Score:** still 86/100 by the rubric. The MySQL/MariaDB item is closed; the ≥ 92 bar also
+  needs CI green on the pushed tip and the blocking-call decision.

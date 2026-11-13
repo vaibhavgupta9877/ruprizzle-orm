@@ -1,5 +1,11 @@
 # Master 12-Week Roadmap: T3-for-Rust Stack (Command Center)
 
+> **Archived (2026-11-13). Do not use this file for planning.** It is the original
+> 12-week plan for a broader T3-for-Rust stack (Dioxus UI, rustauth, rRPC), which
+> is not in this repository. The ORM's current plans are
+> [`v1/PathToStableV1.md`](v1/PathToStableV1.md) for 1.x and
+> [`v2/00_MasterV2RoadmapPlan.md`](v2/00_MasterV2RoadmapPlan.md) for 2.0.
+
 **Start:** Monday, Week 1  
 **Ship:** Friday, Week 12  
 **Team:** Vaibhav Gupta (architecture, design docs) + Vaibhav Gupta (implementation)  
