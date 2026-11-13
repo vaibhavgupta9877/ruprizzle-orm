@@ -14,6 +14,10 @@
 //! ```
 //! `BENCH_SQLITE_PATH` selects the database (defaults to the checked-in bench db).
 
+// The models mirror the benchmark structs; their fields are decoded for the
+// measurement and never read afterwards.
+#![allow(dead_code)]
+
 use std::time::Instant;
 
 use ruprizzle::{Model, PoolConfig, SelectQuery, connect_with};
@@ -34,6 +38,9 @@ impl Model for User {
     const TABLE: &'static str = "users";
     const PRIMARY_KEY: &'static str = "id";
 }
+
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(User);
 
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
     fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
@@ -75,6 +82,9 @@ impl Model for Post {
     const TABLE: &'static str = "posts";
     const PRIMARY_KEY: &'static str = "id";
 }
+
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Post);
 
 impl ruprizzle::rusqlite::FromRusqliteRow for Post {
     fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
@@ -302,8 +312,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     })
     .await;
     let conn = std::sync::Arc::try_unwrap(shared)
-        .ok()
-        .expect("sole owner")
+        .unwrap_or_else(|_| panic!("sole owner"))
         .into_inner()
         .unwrap();
 

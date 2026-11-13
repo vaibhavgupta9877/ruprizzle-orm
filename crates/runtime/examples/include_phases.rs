@@ -17,6 +17,9 @@
 //! ```
 
 #![cfg(feature = "sqlite-rusqlite")]
+// The models mirror the benchmark structs field-for-field so their size matches;
+// several fields exist only for that and are never read.
+#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::time::Instant;
@@ -41,6 +44,9 @@ impl Model for User {
     const TABLE: &'static str = "users";
     const PRIMARY_KEY: &'static str = "id";
 }
+
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(User);
 
 impl ruprizzle::rusqlite::FromRusqliteRow for User {
     fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
@@ -115,6 +121,9 @@ impl Model for Post {
     const TABLE: &'static str = "posts";
     const PRIMARY_KEY: &'static str = "id";
 }
+
+#[cfg(feature = "postgres-tokio-postgres")]
+ruprizzle::tokio_postgres_default_row!(Post);
 
 impl ruprizzle::rusqlite::FromRusqliteRow for Post {
     fn from_rusqlite_row(row: &ruprizzle::rusqlite::RusqliteRow) -> Result<Self, ruprizzle::Error> {
