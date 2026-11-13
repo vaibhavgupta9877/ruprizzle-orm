@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-13
+
 ### Added
 
 - `RawFragment::try_new`, which returns an error instead of panicking when the
@@ -25,6 +27,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Accepted RUSTSEC-2026-0459 (bundled SQLite before 3.54.0) as a documented
   exception in `deny.toml`. The patched release needs the sqlx 0.9 upgrade, which
   is planned for 2.0.0. See `SECURITY.md`.
+- Accepted RUSTSEC-2026-0385 (`ctutils` 0.4.2, non-constant-time mask generation,
+  reached through `digest`) as a documented exception in `deny.toml`. The patched
+  `ctutils` 0.4.4 and later declare Rust 1.87, above the workspace MSRV of 1.85. The
+  exception is removed when the MSRV is raised.
 
 ### Changed
 
@@ -839,7 +845,8 @@ Initial alpha release of **ruprizzle-orm**: a schema-first ORM for Rust. Write a
 
 See `docs/KnownLimitations.md` for the full list.
 
-[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.5.2...v1.6.0
 [1.5.2]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/vaibhavgupta9877/ruprizzle-orm/compare/v1.5.0...v1.5.1

@@ -201,7 +201,7 @@ Suggested thresholds for a health dashboard:
 
 ```toml
 [dependencies]
-ruprizzle = { version = "1.6", features = ["metrics"] }
+ruprizzle = { version = "1.7", features = ["metrics"] }
 metrics-exporter-prometheus = "0.15"
 ```
 

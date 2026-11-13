@@ -610,6 +610,7 @@ The `rusqlite` backend swaps the SQLite driver from `sqlx::Any` to the synchrono
 | v1.4 | OpenTelemetry, replica routing, standalone query cache, PostGIS | ✅ shipped in 1.5.1 |
 | v1.5 | Ruprizzle Studio, Turso and D1 adapters | ✅ shipped in 1.5.1 |
 | v1.6 | Studio auth, replica health checks, `with_deleted()` on hierarchies, K11 fix | ✅ shipped in 1.6.0 |
+| 1.7 | Synchronous SQLite reads, typed `NotFound`, rusqlite observability fix, advisory updates | ✅ prepared for 1.7.0 — see [What's new in 1.7](docs/WhatsNewV1_7.md) |
 
 Before release this line was assessed at 56/100 and **blocked**: the edge adapter crates and most of Studio's data plane returned fabricated results rather than querying a database, and Studio's "migration safety diff" reported `SAFE` unconditionally. §8 and §10 of [`ProjectPlan/v2/ProductionReadinessV1_5.md`](ProjectPlan/v2/ProductionReadinessV1_5.md) record what each of those became — Studio queries the database on every screen, and the adapters are real HTTP drivers tested end-to-end against local servers. The `v1.5.0` tag records a publish run that failed in the pre-publish gate; the line shipped under `1.5.1` instead.
 

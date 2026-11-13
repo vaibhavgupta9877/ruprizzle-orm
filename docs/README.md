@@ -43,7 +43,7 @@ filters, full-text search, soft deletes, offline query checking, nested writes,
 tree hierarchies, OpenTelemetry, read-replica routing, query caching, PostGIS and
 Ruprizzle Studio. See [What's new in v1.1–v1.5](WhatsNewV1_1ToV1_5.md). The current
 release is `1.6.0`: Studio authentication, `with_deleted()` on hierarchies, background
-replica health checks and the K11 rename fix — see [What's new in 1.6](WhatsNewV1_6.md).
+replica health checks and the K11 rename fix — see [What's new in 1.6](WhatsNewV1_6.md). `1.7.0` adds synchronous SQLite reads, a typed not-found error and a rusqlite observability fix — see [What's new in 1.7](WhatsNewV1_7.md).
 Known gap: the Turso/D1 live smoke tests have not yet been run against the hosted services.
 
 Two things were waived on the way here, both in writing rather than by omission:

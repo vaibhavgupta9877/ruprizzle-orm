@@ -73,7 +73,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ruprizzle = "1.6"
+ruprizzle = "1.7"
 dotenvy = "0.15"
 tokio = { version = "1", features = ["full"] }
 

@@ -38,7 +38,7 @@ adapter: Neon is Postgres over TLS, so its connection string goes straight to
 
 ```toml
 [dependencies]
-ruprizzle = "1.6"
+ruprizzle = "1.7"
 ```
 
 If you are still on `1.0.0-rc.1`, see

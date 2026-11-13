@@ -67,6 +67,35 @@ there is no `v1.5.2` tag and no `ruprizzle` 1.5.2 package on crates.io. Its cont
 ship in `1.6.0` below. Recorded in [CHANGELOG.md](CHANGELOG.md#152---2026-09-30--merged-to-main-not-published).
 
 
+## 1.7.0
+
+Prepared 2026-11-13 for tag `v1.7.0`. Not described as published until
+`scripts/check-release-state.sh --expect 1.7.0` confirms the registry serves it. Additive
+over `1.6.0`; no breaking changes.
+
+- **Synchronous SQLite reads** on the native rusqlite backend: `fetch_all_blocking`,
+  `fetch_optional_blocking`, `fetch_one_blocking`, `count_blocking` and `exists_blocking`.
+  They block the calling thread, so use them from synchronous code or from work already on
+  a blocking thread. Do not call them from an async task.
+- **Typed not-found:** `fetch_one`, `fetch_one_blocking`, `exec_one` and `Tx::fetch_one`
+  return `Error::NotFound` (kind `not_found`) instead of `Error::Message`. Match on the
+  variant, not the message text.
+- **Observability fix:** the native rusqlite read path emits spans, query metrics and
+  slow-query warnings again.
+- **Security:** `rustls`, `rustls-webpki` and `webpki-roots` updated. Two documented
+  `cargo deny` exceptions: RUSTSEC-2026-0459 (bundled SQLite, waiting on sqlx 0.9) and
+  RUSTSEC-2026-0385 (`ctutils`, whose patched versions need Rust 1.87 against the MSRV of 1.85).
+
+**Upgrading from `1.6.0`.** No code changes unless you match on `Error::Message` for missing
+rows. Switch those matches to `Error::NotFound`.
+
+**Known gaps.** The `ctutils` exception stays until the MSRV is raised. The Turso and D1
+adapters are still tested only against local fakes; the live smoke tests have not run
+against the hosted services.
+
+Full detail in [CHANGELOG.md](CHANGELOG.md#170---2026-11-13).
+
+
 ## 1.6.0
 
 Published 2026-10-03 from tag `v1.6.0`. Additive over `1.5.1`, with one behaviour
