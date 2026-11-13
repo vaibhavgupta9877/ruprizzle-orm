@@ -110,7 +110,9 @@ transaction path.
 
 ## Deferred / not implemented
 
-- Polymorphic relations.
+- Polymorphic relations (a relation that targets one of several models). `filter_type`
+  is only an equality filter on a discriminator column, for single-table inheritance;
+  it does not create or resolve polymorphic relations.
 - Row-level security and multi-tenancy (`@@tenant`/`@@policy` are rejected at
   validation; they were removed from the LSP so they cannot appear to work).
 - Vector / pgvector search.

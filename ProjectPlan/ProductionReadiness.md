@@ -1008,3 +1008,42 @@ run against each, and the servers were then stopped. Still no code changed; HEAD
   remain the only guard.
 - **Score:** still 86/100 by the rubric. The MySQL/MariaDB item is closed; the ≥ 92 bar also
   needs CI green on the pushed tip and the blocking-call decision.
+
+---
+
+## 21. CI on the pushed tip, and the remaining §18 items — 2026-11-13
+
+### CI on `0112747` (first run on the pushed tip)
+
+27 of 30 jobs passed. Three failed, each for a different reason:
+
+| Job | Cause | Fix |
+|---|---|---|
+| `advisories and licences`, `pre-release hardening` | RUSTSEC-2026-0385 in `ctutils 0.4.2`, via `digest`. Patched in `>= 0.4.4`, but those declare `rust-version = 1.87`. The workspace MSRV is 1.85. | Documented exception in `deny.toml`, with a revisit note. The alternative is to raise the MSRV to 1.87 (see below). |
+| `feature matrix () on mysql` | `REQUIRE_DB=1` was set for the mysql job, but it has no Postgres URL. `native_pg_types` (added in `ec70738`) panics under that combination. | `ci.yml`: `REQUIRE_DB` now applies to `postgres` and `all` only. The MySQL URL is hardcoded in the workflow, so it cannot go missing. Reproduced locally: the test skips cleanly. |
+
+The `cargo-deny` job's toolchain error seen in the October runs did not recur. The duplicate-crate
+warnings are informational.
+
+### Decision needed: RUSTSEC-2026-0385
+
+The exception keeps the MSRV at 1.85 but leaves a known non-constant-time issue in the
+dependency tree. Raising the MSRV to 1.87 removes it. The v2.0 plan already raises the MSRV, so
+the exception can be removed when that happens. Choose one before tagging.
+
+### §18 items, closed
+
+- **Blocking-call guard: closed, docs only.** The earlier recommendation (a sync-only executor
+  type) was wrong: a synchronous function can still be called from an async task, so a type split
+  does not prevent the misuse. The only compile-time option is removing the sync API. Keeping the
+  `*_blocking` docs as the guard is the chosen outcome.
+- **Polymorphic relations wording:** `docs/KnownLimitations.md` now says that `filter_type` is an
+  equality filter on a discriminator column for single-table inheritance. It does not implement
+  polymorphic relations.
+
+### Still open
+
+- **1.7.0 release:** not cut. Publishing is irreversible, and the version number is your call.
+- **Live Turso and D1 checks:** need the provider credentials.
+- **v2.0 dependency upgrade:** not started. The sqlx 0.9 and rusqlite upgrades raise the MSRV
+  (rusqlite 0.41 needs Rust 1.89), so they depend on the MSRV decision above.

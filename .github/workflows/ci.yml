@@ -250,7 +250,9 @@ jobs:
     env:
       RUPRIZZLE_TEST_PG_URL: ${{ (matrix.db == 'postgres' || matrix.db == 'all') && 'postgres://ruprizzle:ruprizzle@localhost:5432/ruprizzle_test' || '' }}
       RUPRIZZLE_TEST_MYSQL_URL: ${{ (matrix.db == 'mysql' || matrix.db == 'all') && 'mysql://root:root@localhost:3306/ruprizzle_test' || '' }}
-      RUPRIZZLE_REQUIRE_DB: ${{ (matrix.db == 'postgres' || matrix.db == 'mysql' || matrix.db == 'all') && '1' || '' }}
+      # Only jobs that configure Postgres. `native_pg_types` panics under
+      # REQUIRE_DB without a Postgres URL, and the mysql job has none.
+      RUPRIZZLE_REQUIRE_DB: ${{ (matrix.db == 'postgres' || matrix.db == 'all') && '1' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
