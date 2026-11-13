@@ -1015,7 +1015,7 @@ run against each, and the servers were then stopped. Still no code changed; HEAD
 
 ### CI on `0112747` (first run on the pushed tip)
 
-27 of 30 jobs passed. Three failed, each for a different reason:
+31 of 34 jobs passed. Three failed, each for a different reason:
 
 | Job | Cause | Fix |
 |---|---|---|
@@ -1047,3 +1047,8 @@ the exception can be removed when that happens. Choose one before tagging.
 - **Live Turso and D1 checks:** need the provider credentials.
 - **v2.0 dependency upgrade:** not started. The sqlx 0.9 and rusqlite upgrades raise the MSRV
   (rusqlite 0.41 needs Rust 1.89), so they depend on the MSRV decision above.
+
+### Result on the fix commit `3190681`
+
+All 34 jobs passed (run `43479404953`), including the advisory, pre-release hardening and MySQL
+feature-matrix jobs that failed on `0112747`.
