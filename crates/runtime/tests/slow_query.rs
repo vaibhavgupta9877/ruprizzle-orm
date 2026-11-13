@@ -106,3 +106,110 @@ fn slow_query_emits_warn_with_sql_shape_and_bind_count() {
     assert_eq!(field(slow, "binds"), Some("0"));
     assert!(field(slow, "elapsed_ms").is_some());
 }
+
+/// The native rusqlite read path decodes rows straight from the driver, outside
+/// the executor's `fetch_all_raw`. It must still be observed: a regression left
+/// every rusqlite `SELECT` without a `db.query` span, metrics, or slow-query
+/// warning.
+#[cfg(feature = "sqlite-rusqlite")]
+mod rusqlite_reads {
+    use super::*;
+    use ruprizzle::{Model, SelectQuery};
+
+    #[derive(Debug, Clone, Default, sqlx::FromRow)]
+    struct Item {
+        id: i64,
+    }
+
+    impl Model for Item {
+        const TABLE: &'static str = "items";
+        const PRIMARY_KEY: &'static str = "id";
+    }
+
+    #[cfg(feature = "postgres-tokio-postgres")]
+    ruprizzle::tokio_postgres_default_row!(Item);
+
+    impl ruprizzle::rusqlite::FromRusqliteRow for Item {
+        fn from_rusqlite_row(
+            row: &ruprizzle::rusqlite::RusqliteRow,
+        ) -> Result<Self, ruprizzle::Error> {
+            Ok(Self {
+                id: ruprizzle::rusqlite::get_i64(row, 0)?,
+            })
+        }
+    }
+
+    impl ruprizzle::rusqlite::FromOwnedRow for Item {
+        fn from_owned_row(row: &ruprizzle::rusqlite::Row) -> Result<Self, ruprizzle::Error> {
+            Ok(Self {
+                id: row.get::<i64>(0)?,
+            })
+        }
+    }
+
+    async fn seeded_pool() -> ruprizzle::Pool {
+        let mut config = PoolConfig::default();
+        config.slow_query_threshold = Some(std::time::Duration::from_nanos(1));
+        let pool = ruprizzle::connect_with("sqlite::memory:?driver=rusqlite", &config)
+            .await
+            .expect("connect");
+        pool.execute_raw(
+            "CREATE TABLE items (id INTEGER PRIMARY KEY)"
+                .to_owned()
+                .into(),
+            Vec::new(),
+        )
+        .await
+        .expect("create");
+        pool.execute_raw(
+            "INSERT INTO items (id) VALUES (7)".to_owned().into(),
+            Vec::new(),
+        )
+        .await
+        .expect("insert");
+        pool
+    }
+
+    fn slow_selects(events: &[EventRecord]) -> usize {
+        events
+            .iter()
+            .filter(|e| e.target == "ruprizzle::slow_query")
+            .filter(|e| field(e, "sql").is_some_and(|s| s.contains("SELECT")))
+            .count()
+    }
+
+    #[test]
+    fn async_rusqlite_select_is_observed() {
+        let captured = Captured::default();
+        let events = captured.0.clone();
+        run_with_capture(captured, async {
+            let pool = seeded_pool().await;
+            let rows = SelectQuery::<Item>::new(&pool)
+                .fetch_all()
+                .await
+                .expect("select");
+            assert_eq!(rows[0].id, 7);
+        });
+        assert_eq!(slow_selects(&events.lock().expect("lock")), 1);
+    }
+
+    #[test]
+    fn blocking_rusqlite_select_is_observed() {
+        let captured = Captured::default();
+        let events = captured.0.clone();
+        run_with_capture(captured, async {
+            let pool = seeded_pool().await;
+            let rows = SelectQuery::<Item>::new(&pool)
+                .fetch_all_blocking()
+                .expect("select");
+            assert_eq!(rows[0].id, 7);
+            assert_eq!(
+                SelectQuery::<Item>::new(&pool)
+                    .count_blocking()
+                    .expect("count"),
+                1
+            );
+        });
+        assert_eq!(slow_selects(&events.lock().expect("lock")), 2);
+    }
+}

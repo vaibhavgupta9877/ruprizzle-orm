@@ -372,9 +372,18 @@ impl RusqlitePool {
         T: FromRusqliteRow + Send + 'static,
     {
         let pool = self.clone();
-        tokio::task::spawn_blocking(move || pool.fetch_decoded_blocking::<T>(&sql, &binds))
-            .await
-            .map_err(|e| Error::Message(e.to_string()))?
+        // Subscribers and spans are thread-local: carry the caller's onto the
+        // blocking thread so the query's `db.query` span and events land in the
+        // same trace as the code that awaited it.
+        let dispatch = tracing::dispatcher::get_default(Clone::clone);
+        let parent = tracing::Span::current();
+        tokio::task::spawn_blocking(move || {
+            tracing::dispatcher::with_default(&dispatch, || {
+                parent.in_scope(|| pool.fetch_decoded_blocking::<T>(&sql, &binds))
+            })
+        })
+        .await
+        .map_err(|e| Error::Message(e.to_string()))?
     }
 
     /// Run `sql` with `binds` on a pooled connection and decode every row,
@@ -391,6 +400,17 @@ impl RusqlitePool {
     /// Returns [`Error::PoolExhausted`] if no connection frees up in time, and
     /// [`Error::Message`] for SQL or decode failures.
     pub fn fetch_decoded_blocking<T: FromRusqliteRow>(
+        &self,
+        sql: &str,
+        binds: &[Value],
+    ) -> Result<Vec<T>, Error> {
+        crate::executor::trace_and_record_query_sync(sql, binds.len(), || {
+            self.fetch_decoded_unobserved(sql, binds)
+        })
+    }
+
+    /// The body of [`Self::fetch_decoded_blocking`], without metrics or tracing.
+    fn fetch_decoded_unobserved<T: FromRusqliteRow>(
         &self,
         sql: &str,
         binds: &[Value],

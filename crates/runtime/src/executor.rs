@@ -335,39 +335,39 @@ fn infer_operation_and_table(sql: &str) -> (&'static str, String) {
     }
 }
 
-/// Observes a completed `fut` for metrics, debug tracing, and slow-query warnings.
+/// The `db.query` span every observed read runs inside.
 ///
-/// This is the single place where query execution is observed so that pools and
-/// transactions cannot drift. `sql` is logged by shape only; `binds` is the
-/// placeholder count, never the values.
-pub(crate) async fn trace_and_record_query<F>(
-    sql: Cow<'static, str>,
-    bind_count: usize,
-    fut: F,
-) -> Result<RowBatch, Error>
-where
-    F: std::future::Future<Output = Result<RowBatch, Error>>,
-{
-    let (op, table) = infer_operation_and_table(&sql);
-    let sanitized_sql = crate::compile::sanitize_sql(&sql);
-    let span = tracing::info_span!(
+/// Building it sanitizes the SQL and infers the table, which allocates; skip
+/// that entirely when no subscriber would record the span.
+fn query_span(sql: &str) -> tracing::Span {
+    if !tracing::enabled!(tracing::Level::INFO) {
+        return tracing::Span::none();
+    }
+    let (op, table) = infer_operation_and_table(sql);
+    let sanitized_sql = crate::compile::sanitize_sql(sql);
+    tracing::info_span!(
         "db.query",
         "db.system" = "rdbms",
         "db.statement" = %sanitized_sql,
         "db.operation" = %op,
         "db.table" = %table,
-    );
-    let _guard = span.enter();
+    )
+}
 
-    crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
-    let started = std::time::Instant::now();
-    let result = fut.await;
-    let elapsed = started.elapsed();
+/// Records metrics, debug tracing, and slow-query warnings for a finished read.
+///
+/// `outcome` is the row count on success. Called inside the query's span.
+fn record_query_outcome(
+    sql: &str,
+    bind_count: usize,
+    elapsed: std::time::Duration,
+    outcome: Result<usize, &Error>,
+) {
     crate::metrics::histogram(
         crate::metrics::QUERY_DURATION_SECONDS,
         elapsed.as_secs_f64(),
     );
-    if let Err(error) = &result {
+    if let Err(error) = outcome {
         crate::metrics::counter_with(
             crate::metrics::QUERY_ERRORS_TOTAL,
             [("kind", error.kind())],
@@ -378,12 +378,12 @@ where
 
     if tracing::enabled!(target: "ruprizzle::query", tracing::Level::DEBUG) {
         let elapsed_ms = elapsed.as_millis() as u64;
-        match &result {
-            Ok(batch) => tracing::debug!(
+        match outcome {
+            Ok(rows) => tracing::debug!(
                 target: "ruprizzle::query",
                 sql = %sql,
                 binds = bind_count,
-                rows = batch.len(),
+                rows,
                 elapsed_ms,
                 "query"
             ),
@@ -410,7 +410,54 @@ where
             );
         }
     }
+}
 
+/// Observes a completed `fut` for metrics, debug tracing, and slow-query warnings.
+///
+/// This is the single place where query execution is observed so that pools and
+/// transactions cannot drift. `sql` is logged by shape only; `binds` is the
+/// placeholder count, never the values.
+pub(crate) async fn trace_and_record_query<F>(
+    sql: Cow<'static, str>,
+    bind_count: usize,
+    fut: F,
+) -> Result<RowBatch, Error>
+where
+    F: std::future::Future<Output = Result<RowBatch, Error>>,
+{
+    let span = query_span(&sql);
+    let _guard = span.enter();
+
+    crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
+    let started = std::time::Instant::now();
+    let result = fut.await;
+    let elapsed = started.elapsed();
+    record_query_outcome(
+        &sql,
+        bind_count,
+        elapsed,
+        result.as_ref().map(RowBatch::len),
+    );
+    result
+}
+
+/// Synchronous counterpart of [`trace_and_record_query`], for reads that decode
+/// rows straight from a driver (the native rusqlite path) and so never pass
+/// through [`Executor::fetch_all_raw`].
+#[cfg(feature = "sqlite-rusqlite")]
+pub(crate) fn trace_and_record_query_sync<T>(
+    sql: &str,
+    bind_count: usize,
+    run: impl FnOnce() -> Result<Vec<T>, Error>,
+) -> Result<Vec<T>, Error> {
+    let span = query_span(sql);
+    let _guard = span.enter();
+
+    crate::metrics::counter(crate::metrics::QUERY_TOTAL, 1);
+    let started = std::time::Instant::now();
+    let result = run();
+    let elapsed = started.elapsed();
+    record_query_outcome(sql, bind_count, elapsed, result.as_ref().map(Vec::len));
     result
 }
 
