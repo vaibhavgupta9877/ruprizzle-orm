@@ -11,6 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `RawFragment::try_new`, which returns an error instead of panicking when the
   number of literal parts does not match the number of binds. `RawFragment::new`
   keeps its behaviour and now documents its panic.
+- Synchronous reads for the native rusqlite backend (`sqlite-rusqlite`):
+  `SelectQuery::fetch_all_blocking`, `fetch_optional_blocking`,
+  `fetch_one_blocking`, `count_blocking` and `exists_blocking` run the statement
+  on the calling thread with no `spawn_blocking` hop. They error on any other
+  backend, do not support `.include(...)`, and block the calling thread.
 
 ### Security
 
@@ -30,6 +35,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Reads on the native rusqlite backend are observed again. Its direct-decode
+  fast path skipped the executor's observer, so `SELECT`, `count` and `exists`
+  on `driver=rusqlite` emitted no `db.query` span, no query metrics and no
+  slow-query warning. The async path now also carries the caller's tracing
+  span onto the blocking thread.
 - Preserve referencing rows during SQLite table rebuilds. Migration and reset
   transactions disable foreign-key enforcement before `BEGIN`, check references
   before commit, and restore enforcement before returning connections to the pool.

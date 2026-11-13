@@ -1,3 +1,5 @@
+> **Note (2026-11-13):** **Read §18 first** — reassessment of the post-1.6.0 `dev-main` features (sync SQLite reads, rusqlite fixes, bench harnesses): **86/100** after fixing an observability gap on the native rusqlite read path and a CI-breaking lint failure.
+
 > **Note (2026-08-21):** The section immediately below is a historical snapshot of `0.1.1-beta.1` at `7636f44`. The repository has since moved to `1.0.0-rc.1`. Reassessments follow in §11 (2026-08-18, 86/100), §12 (2026-08-19, 84/100), §13 (2026-08-20, 71/100), §14 (2026-08-21, W4-02 soak waived), §15 (2026-08-21, 92/100 pre-RC), §16 (2026-08-21, 87/100), and **§17 (2026-08-21 — current, 89/100)**. **Read §17 first:** it records that §16's test-isolation blocker and the `metrics` CI gap are both fixed and verified end to end — `cargo test --workspace` against a database is now green (476 passed / 0 failed), leaves no tables in `public`, and leaks no schemas. **§16 for the analysis:** it independently re-ran every §15 gate and confirms the mechanical ones green, but records that §15 never ran the suite against a database. With Postgres attached, `cargo test --workspace` fails reproducibly on a pre-existing test-isolation defect in `crates/migrate/tests/roundtrip_prop.rs`. §16 supersedes §15's 92/100; the project's ≥ 92 definition of done is **not** met today. The §13 gate breaks are genuinely closed and the W4-02 soak waiver in §14 stands.
 
 # Production Readiness Assessment — ruprizzle-orm
@@ -853,3 +855,71 @@ but CI still has not run on this tip and the tag remains 38 commits stale). Othe
 
 The remaining gap to the project's ≥ 92 target is entirely release process: push the branch,
 re-tag, publish the RC, and run the two-week feedback window.
+
+---
+
+## 18. Reassessment of the post-1.6.0 features — 2026-11-13
+
+**Version assessed:** `1.6.0` + unreleased work on `dev-main` (base `10f4905`)
+**Assessor:** Claude (static review + live gates against local PostgreSQL)
+**Scope:** The 42 commits on `dev-main` not in `main`: native rusqlite backend
+fixes, synchronous SQLite reads (`*_blocking`), native Postgres type
+verification, pool/cache/compile changes, and the cross-ORM bench harnesses
+(including the Turso driver baseline).
+
+### Defects found and fixed this pass
+
+| # | Severity | Defect | Fix |
+|---|---|---|---|
+| 1 | **High (operability)** | Every read on `driver=rusqlite` bypassed `trace_and_record_query`: no `db.query` span, no `ruprizzle_query_*` metrics, no slow-query warning. Affected async `fetch_*`/`count`/`exists` (since the direct-decode fast path `c2458cb`, so it shipped in 1.6.0) and all new `*_blocking` methods. A production SQLite deployment on the fast driver was blind. | `aee6ad8` — sync observer shared by both paths; caller's dispatcher and span carried onto the blocking thread; span built only when INFO is enabled. Two regression tests in `crates/runtime/tests/slow_query.rs` (red before, green after). |
+| 2 | **Medium (CI)** | Two merged bench examples (`sqlite_breakdown`, `include_phases`) fail `clippy -D warnings` in the CI `native-driver-workspace` and `feature-combination` jobs — missing tokio-postgres row impls under both drivers, dead fields, `clippy::ok_expect`. CI on `dev-main` would be red. | `8fef449` |
+| 3 | Low (release hygiene) | New public `*_blocking` API and fix #1 absent from `CHANGELOG.md`. | Unreleased entries added. |
+
+Fix #1 cost on the hot path, `sqlite_breakdown` release run, min µs (before → after):
+`fetch_one` 13.08 → 13.26, `fetch_all` 1 000 rows 322.9 → 319.8, `fetch_all_blocking`
+10 000 rows 2 717 → 2 775. All within run-to-run noise.
+
+### Reviewed, no change needed
+
+- `exists_blocking` / `exists`: `compile::exists` emits `SELECT 1 … LIMIT 1`, so `!rows.is_empty()` is correct.
+- `*_blocking` methods are only implemented for `SelectQuery<…, ()>`, so `.include(...)` is rejected at compile time rather than silently returning unloaded relations.
+- Turso harness lives in `local/cross-orm-bench`, outside the workspace — no shipped surface, no effect on `cargo deny`.
+
+### Open items (not fixed — need a decision)
+
+- **Stringly-typed not-found.** `fetch_one`/`fetch_one_blocking` return `Error::Message("no row found for query")`. Callers must string-match to tell "missing" from "broken". A typed `Error::NotFound` is a public API change; schedule for 2.0.0 or add as a non-breaking variant with a deprecation window.
+- **Blocking misuse is undetected.** `*_blocking` called from an async task parks a Tokio worker; only docs warn. Consider a `debug_assert!` on `tokio::runtime::Handle::try_current()` with a `block_in_place` hint.
+- **CI is not gating `dev-main` merges.** Defect #2 merged twice. Merges are done locally; run `cargo clippy --workspace --all-targets --all-features -- -D warnings` before each merge, or merge through PRs.
+- MySQL/MariaDB suites not re-run this pass (no change touched the MySQL path).
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `cargo fmt --all -- --check` | ✅ |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | ✅ 0 errors (was 30+) |
+| clippy, `-p ruprizzle` × {`sqlite-rusqlite`, `postgres-tokio-postgres`, both} | ✅ |
+| clippy, CI's `native-driver-workspace` sqlite-rusqlite feature list | ✅ |
+| `RUSTDOCFLAGS=-D warnings cargo doc --workspace --no-deps --all-features` | ✅ |
+| `cargo deny check` | ✅ advisories, bans, licenses, sources ok |
+| `cargo test --workspace` (default features) | ✅ 638 passed, 0 failed |
+| `cargo test -p ruprizzle` × {default, `sqlite-rusqlite`, `metrics,sqlite-rusqlite`} | ✅ 260 / 275 / 275, 0 failed |
+| `RUPRIZZLE_REQUIRE_DB=1` + Postgres, workspace, both native drivers | ✅ **656 passed, 0 failed** |
+
+### Score
+
+| # | Dimension | Weight | Before fixes | After fixes | Note |
+|---|---|---|---|---|---|
+| 1 | Correctness & testing | 20% | 9.0 | 9.0 | Full DB-backed suite green with both native drivers. |
+| 2 | Security | 15% | 9.0 | 9.0 | deny clean; one documented SQLite advisory exception. |
+| 3 | Operability & observability | 15% | 7.5 | 8.5 | Fast driver was unobservable; now matches the sqlx path. |
+| 4 | Data safety & migrations | 15% | 8.5 | 8.5 | Migration rollback/rebuild fixes on this branch are tested. |
+| 5 | Architecture & design | 10% | 8.5 | 8.5 | Sync API is a clean, compile-time-scoped addition; not-found is still stringly. |
+| 6 | CI/CD & release engineering | 10% | 7.0 | 7.5 | Gates green now, but red code reached `dev-main` twice. |
+| 7 | Documentation | 5% | 9.0 | 9.0 | |
+| 8 | API stability & semver | 5% | 7.5 | 8.0 | New API now in the CHANGELOG; additive, minor-version safe. |
+| 9 | Performance | 5% | 9.0 | 9.0 | Sync reads at the raw-rusqlite floor for 10k rows. |
+
+**Weighted total: 8.40 → 8.60 / 10 → 84 → 86 / 100.**
+
+**Verdict:** shippable as 1.7.0 once the CI gate runs green on the pushed tip. To reach ≥ 92: typed not-found error, a CI-gated merge path for `dev-main`, and a MySQL/MariaDB re-run before tagging.
