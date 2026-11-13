@@ -12,10 +12,22 @@ use syn::spanned::Spanned;
 use syn::visit::Visit;
 use syn::{BinOp, Expr, ExprBinary, ExprIndex, ExprUnary, ItemFn, ItemMod, UnOp};
 
+/// Every crate's native-driver features, as CI's `native-driver-workspace`
+/// "both native drivers" row enables them. Keep in sync with `ci.yml`.
+const NATIVE_DRIVER_FEATURES: &str = "ruprizzle/sqlite-rusqlite,ruprizzle-migrate/sqlite-rusqlite,ruprizzle-cli/sqlite-rusqlite,ruprizzle-testkit/sqlite-rusqlite,ruprizzle-integration-tests/sqlite-rusqlite,ruprizzle-deep-tests/sqlite-rusqlite,ruprizzle/postgres-tokio-postgres,ruprizzle-integration-tests/postgres-tokio-postgres,ruprizzle-deep-tests/postgres-tokio-postgres";
+
 const TASKS: &[(&str, &str)] = &[
     ("ci", "everything CI runs, in CI order"),
     ("fmt", "check formatting"),
     ("lint", "clippy with warnings denied"),
+    (
+        "lint-drivers",
+        "clippy with both native drivers on, as CI's native-driver job",
+    ),
+    (
+        "pre-merge",
+        "fmt, lint and lint-drivers: the gate before merging",
+    ),
     ("test", "unit and snapshot tests"),
     ("docs", "build documentation with warnings denied"),
     ("examples", "compile generated code for all example schemas"),
@@ -115,9 +127,11 @@ fn main() -> ExitCode {
     let rest: Vec<String> = args.collect();
 
     match task.as_deref() {
-        Some("ci") => run_all(&["fmt", "lint", "test", "docs"]),
+        Some("ci") => run_all(&["fmt", "lint", "lint-drivers", "test", "docs"]),
+        Some("pre-merge") => run_all(&["fmt", "lint", "lint-drivers"]),
         Some("fmt") => run_all(&["fmt"]),
         Some("lint") => run_all(&["lint"]),
+        Some("lint-drivers") => run_all(&["lint-drivers"]),
         Some("test") => run_all(&["test"]),
         Some("docs") => run_all(&["docs"]),
         Some("examples") => run_examples(),
@@ -149,6 +163,21 @@ fn run_all(tasks: &[&str]) -> ExitCode {
                     "clippy",
                     "--workspace",
                     "--all-targets",
+                    "--",
+                    "-D",
+                    "warnings",
+                ],
+            ),
+            // Default-feature clippy does not compile the native-driver code
+            // paths, examples and tests; mirror CI's "both native drivers" job.
+            "lint-drivers" => (
+                "cargo",
+                vec![
+                    "clippy",
+                    "--workspace",
+                    "--all-targets",
+                    "--features",
+                    NATIVE_DRIVER_FEATURES,
                     "--",
                     "-D",
                     "warnings",
