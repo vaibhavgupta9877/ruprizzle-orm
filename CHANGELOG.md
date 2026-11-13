@@ -32,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   declared MSRV of Rust 1.85. Criterion 0.8 requires Rust 1.86. This affects only
   benchmarks.
 - Removed stale `cargo deny` allowances for licences that no crate in the graph uses.
+- `fetch_one`, `fetch_one_blocking`, `exec_one`, and `Tx::fetch_one` return the new
+  `Error::NotFound` (kind `not_found`) when no row matches, instead of
+  `Error::Message`. Match on the variant rather than the message text. The
+  message is unchanged.
 
 ### Fixed
 

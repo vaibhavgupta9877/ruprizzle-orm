@@ -300,7 +300,8 @@ impl Tx {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Sqlx`] for database errors or [`Error::Message`] if the
+    /// Returns [`Error::NotFound`] if the statement returns no row,
+    /// [`Error::Sqlx`] for database errors, or [`Error::Message`] if the
     /// transaction has already been finished.
     pub async fn fetch_one<T>(&self, sql: &str, binds: &[Value]) -> Result<T, Error>
     where
@@ -308,9 +309,7 @@ impl Tx {
     {
         self.flush_pending_rollback().await?;
         let rows = self.fetch_all_unchecked::<T>(sql, binds).await?;
-        rows.into_iter()
-            .next()
-            .ok_or_else(|| Error::Message("no row found".into()))
+        rows.into_iter().next().ok_or(Error::NotFound)
     }
 
     /// Fetches one row from a raw statement inside the transaction.

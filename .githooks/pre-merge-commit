@@ -1,0 +1,7 @@
+#!/bin/sh
+# Blocks a local merge commit unless the workspace passes the same fmt and
+# clippy gates CI runs, including the native-driver feature set that default
+# clippy never compiles. Enable once per clone:
+#   git config core.hooksPath .githooks
+# Bypass in an emergency with `git merge --no-verify`.
+exec cargo xtask pre-merge

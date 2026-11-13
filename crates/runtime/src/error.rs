@@ -55,6 +55,11 @@ pub enum Error {
     #[error("operation not yet implemented")]
     NotImplemented,
 
+    /// A query that must return a row (`fetch_one`, `exec_one`, and their
+    /// blocking and transaction forms) matched none.
+    #[error("no row found for query")]
+    NotFound,
+
     #[error("{0}")]
     Message(String),
 }
@@ -77,6 +82,7 @@ impl Error {
             #[cfg(feature = "postgres-tokio-postgres")]
             Self::TokioPostgres(_) => "tokio_postgres",
             Self::NotImplemented => "not_implemented",
+            Self::NotFound => "not_found",
             Self::Message(_) => "message",
         }
     }

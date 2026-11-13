@@ -887,7 +887,7 @@ Fix #1 cost on the hot path, `sqlite_breakdown` release run, min µs (before →
 
 ### Open items (not fixed — need a decision)
 
-- **Stringly-typed not-found.** `fetch_one`/`fetch_one_blocking` return `Error::Message("no row found for query")`. Callers must string-match to tell "missing" from "broken". A typed `Error::NotFound` is a public API change; schedule for 2.0.0 or add as a non-breaking variant with a deprecation window.
+- ~~**Stringly-typed not-found.**~~ **Resolved (unreleased).** `fetch_one`, `fetch_one_blocking`, `exec_one` and `Tx::fetch_one` now return the non-breaking `Error::NotFound` variant (`Error` is `#[non_exhaustive]`). Covered by `crates/runtime/tests/not_found.rs`.
 - **Blocking misuse is undetected.** `*_blocking` called from an async task parks a Tokio worker; only docs warn. Consider a `debug_assert!` on `tokio::runtime::Handle::try_current()` with a `block_in_place` hint.
 - **CI is not gating `dev-main` merges.** Defect #2 merged twice. Merges are done locally; run `cargo clippy --workspace --all-targets --all-features -- -D warnings` before each merge, or merge through PRs.
 - MySQL/MariaDB suites not re-run this pass (no change touched the MySQL path).

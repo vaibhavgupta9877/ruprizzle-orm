@@ -976,9 +976,7 @@ where
     where
         Out: Send + Unpin + RowDecode,
     {
-        self.fetch_optional()
-            .await?
-            .ok_or_else(|| Error::Message("no row found for query".into()))
+        self.fetch_optional().await?.ok_or(Error::NotFound)
     }
 }
 
@@ -1039,13 +1037,13 @@ impl<'db, M: Model, Out> SelectQuery<'db, M, Out, ()> {
     ///
     /// # Errors
     ///
-    /// Returns an error if no row matches, or as for [`Self::fetch_all_blocking`].
+    /// Returns [`Error::NotFound`] if no row matches, or as for
+    /// [`Self::fetch_all_blocking`].
     pub fn fetch_one_blocking(self) -> Result<Out, Error>
     where
         Out: crate::rusqlite::FromRusqliteRow,
     {
-        self.fetch_optional_blocking()?
-            .ok_or_else(|| Error::Message("no row found for query".into()))
+        self.fetch_optional_blocking()?.ok_or(Error::NotFound)
     }
 
     /// Counts matching rows on the calling thread.
@@ -1334,9 +1332,7 @@ where
     where
         Out: Send + Unpin,
     {
-        self.fetch_optional()
-            .await?
-            .ok_or_else(|| Error::Message("no row found for query".into()))
+        self.fetch_optional().await?.ok_or(Error::NotFound)
     }
 }
 
@@ -1433,9 +1429,7 @@ where
     where
         Out: Send + Unpin + RowDecode,
     {
-        self.fetch_optional()
-            .await?
-            .ok_or_else(|| Error::Message("no row found for query".into()))
+        self.fetch_optional().await?.ok_or(Error::NotFound)
     }
 }
 
@@ -1527,9 +1521,7 @@ where
     /// Returns [`Error::Sqlx`] for database errors, including the case where no
     /// row matches.
     pub async fn exec_one(self) -> Result<M, Error> {
-        self.exec_optional()
-            .await?
-            .ok_or_else(|| Error::Message("no row found for query".into()))
+        self.exec_optional().await?.ok_or(Error::NotFound)
     }
 }
 
